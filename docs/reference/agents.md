@@ -269,7 +269,7 @@ agent clients** on again.
 ### Remove a client
 
 1. In **Settings → Agents**, under **Agent clients**, choose **Revoke** on a client you no longer
-   use. Its row then reads **Revoked**.
+   use, then **Revoke** again to confirm. Its row then reads **Revoked**.
 2. Choose **Remove** on that row.
 
 Removing forgets the client's name, folders and capabilities, and its **Activity** is no longer
@@ -428,7 +428,7 @@ Calls fail with these:
 | `This agent client has no … capability.`                                                                | Turn the capability on under **Permissions**                                                |
 | `The shared connection has no … capability. Allow it in Settings → Agents.`                             | Turn it on under **What the connection may do**                                             |
 | `Use a named client with content permission.`                                                           | A content tool called through the shared connection                                         |
-| `Focus a granted folder plane in Viewer first.` or `Open a workspace in Viewer first.`                  | The person's active plane is not in the folders                                             |
+| `Focus a granted files plane in Viewer first.` or `Open a workspace in Viewer first.`                   | The person's active plane is not in the folders                                             |
 | `Command is unavailable in the captured context.`                                                       | The ID is not in the current `list_commands`                                                |
 | `Agents cannot propose “…”. Ask the person to run it themselves.`                                       | The command is not on the agent list                                                        |
 | `Selection changed. Ask the agent for a new proposal.`                                                  | A file changed identity before the proposal ran                                             |

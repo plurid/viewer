@@ -36,4 +36,4 @@ export type MenuAction = {
   run(): void;
 };
 export const originUnavailable =
-  "Viewer doesn't know where this came from. Use Restore To… to pick a folder.";
+  "Viewer doesn't know where this came from. Use Put Back To… to pick a folder.";

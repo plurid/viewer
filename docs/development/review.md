@@ -16,7 +16,7 @@ in a browser. People, agents and the owner read the same sheet.
 
 3. Open the `index.html` the run prints, in `packages/viewer-electron/app/out/review/<run>/`.
 
-A full run takes about 15 minutes. Narrow it while you work:
+A full run takes about 12 minutes with three hidden apps at once. Narrow it while you work:
 
 | Option                | What it does                                                                |
 | --------------------- | --------------------------------------------------------------------------- |
@@ -26,37 +26,51 @@ A full run takes about 15 minutes. Narrow it while you work:
 | `--binary <path>`     | Another packaged binary, such as a retained candidate.                      |
 | `--accept`            | Make this run the baseline once it finishes.                                |
 | `--accept-run <name>` | Make an earlier run the baseline, without running anything.                 |
+| `--parallel <n>`      | How many hidden apps run at once, 1 to 3; 3 by default.                     |
 | `--list`              | List the areas and scenes.                                                  |
 
 `VIEWER_TEST_BINARY` also chooses the binary.
 
 A run never shows a window on your screen. Each capture starts the app in hidden offscreen windows,
-out of the Dock and never active, on a new profile and a generated sample home. It never reads your
-profile, your files or your Trash. One run at a time: `out/review/review.lock` names the run in
+out of the Dock and never active, on a new profile and a generated sample home. Up to three apps run
+at once, each on its own profile; each capture is a fresh launch, so no capture inherits another's
+state. It never opens your profile, your folders or your Trash; Columns lists only the system
+folders above the sample home. One run at a time: `out/review/review.lock` names the run in
 progress. If the app does not start or does not quit cleanly, the run stops at once and the sheet
 says why; it never retries.
 
+A scene that shows a feature the build under review does not have reports **Needs a newer build**
+with what is missing, instead of failing.
+
 ## Read the review sheet
+
+The summary at the top counts distinct problems: areas down, checks across. Click a count to show
+only that area's scenes with that check, or an area's name to show its scenes; **Show every area**
+returns.
 
 The sheet groups scenes by area. Each scene shows:
 
-- its title and id, and the lines that **must be true**, in plain words, for a person to check;
-- every variant side by side; click a capture to enlarge it;
-- the automatic checks' findings in red, each with the element's selector and text, and the element
-  outlined on the capture. Point at a finding to brighten its outline. Known false alarms show gray,
-  with the reason;
+- its title and id, and the lines that **must be true**, in plain words. Press a line's button to
+  mark it **Pass**, **Fail** or **Not checked** after you look;
+- its captures in one row per scene choice, such as short and long names, all at one height; click a
+  capture to enlarge it to its true pixels;
+- the automatic checks' findings in red, one line per distinct problem: the check, what is wrong,
+  how many elements share it, such as "4 file names", and the variants it occurs in, or "all 4".
+  **Elements and text** opens each element's selector and text. Point at a line to brighten its
+  outlines on the captures. Known false alarms show gray, with the reason;
 - against the accepted baseline: **Same as baseline**, **Changed** with the share of pixels, or
   **Size changed**. **Baseline** shows the accepted capture and **Difference** marks the changed
   pixels in red;
-- a note box. **Copy note** copies the scene id and the note, ready to paste into a chat. **Copy all
-  notes** copies every note on the sheet. Notes stay in the browser for that run.
+- a note box. **Copy note** copies the scene id, the note and the marked lines, ready to paste into
+  a chat. **Copy all notes** copies them for every scene. Notes and marks stay in the browser for
+  that run.
 
 The filters show only scenes with problems or scenes that changed. **Coverage**, at the end, lists
 every registry command, dialog, Settings section and preview kind, marked covered or not covered by
 a scene.
 
-Look at every capture yourself. The checks find wrapped labels, clipped text, overflow, long paths
-and layout shift; they do not judge spacing, alignment, color or wording.
+Look at every capture yourself. The checks find wrapped labels, clipped text, overflow, long paths,
+layout shift and the sizes a scene measures; they do not judge spacing, alignment or color.
 
 ## Accept a baseline
 
@@ -71,6 +85,10 @@ own scenes only. Accepting never deletes: a scene's previous baseline moves to
 `out/review/baseline-retired/<time>/`. Move retired baselines to the Trash when you no longer need
 them.
 
+Each run's sample home has its own random folder name. A path the app shows from the disk root
+instead of `~` therefore differs between runs and shows as **Changed**; the **Full home path** check
+reports the same text.
+
 ## What the checks catch
 
 The checks run in the page right after each capture.
@@ -83,12 +101,15 @@ The checks run in the page right after each capture.
 | Scrolls sideways       | A container that scrolls sideways although it is not listed as a horizontal scroller.                                                                                                                   |
 | Dialog scrolls         | A horizontal scroll bar inside a dialog.                                                                                                                                                                |
 | Menu covers its button | An open menu or popover over the control that opened it.                                                                                                                                                |
+| Search on a short list | An open menu of 8 or fewer choices with a search field; such a list moves by type-ahead.                                                                                                                |
 | Full home path         | Visible text or a field showing the home folder as a full path instead of `~`.                                                                                                                          |
 | Em dash                | An em dash in visible text.                                                                                                                                                                             |
 | Broken value           | `undefined`, `NaN` or `[object Object]` in visible text.                                                                                                                                                |
 | One with a plural      | A count of one with a plural noun, such as "1 files".                                                                                                                                                   |
 | Name loses extension   | A file name cell cut at its end, so its extension does not show, or a file name field that opens a long name at its start.                                                                              |
-| Layout shift           | The title bar, a toolbar, a footer or list columns that move or resize when a scene changes the selection.                                                                                              |
+| Layout shift           | The title bar, a toolbar, a footer or list columns that move or resize when a scene changes the selection, or an element a scene clicks that moves.                                                     |
+| Wrong size or place    | A box, gap or text a scene measures against DESIGN.md or a checklist: a footer's height, a menu's gap from its button, a field that stops short of its row.                                             |
+| Wording                | A retry button that does not read Try Again, or a raw code such as `ENOENT` or `mkdir` in visible text.                                                                                                 |
 
 Text inside a file's own content, such as a PDF page, an editor or a terminal, is left out. Planes
 the camera leaves partly outside the window are framing, not layout, and are left out of the window
@@ -123,6 +144,13 @@ A change to the interface adds or updates the scenes that show it.
    - `focus`: the scene's subject, such as `dialog[open]`; `planeInView` stands for the plane the
      space shows.
    - `blocked`: why the scene cannot run yet. The sheet lists it as not captured.
+   - `requires`: what the scene needs from the build, checked before its steps: a palette command,
+     an element, a text, or the QA runtime's hooks. Inside the steps, `page.needs(selector, what)`
+     does the same for an element a step reveals.
+   - Measurements: `page.expectBox` (a size, or a distance from the window's or a container's
+     edges), `page.expectGap`, `page.expectAligned`, `page.expectFillsRow`, `page.expectWidth`,
+     `page.expectInsideWindow`, `page.expectStill` (what a click must not move), `page.expectText`,
+     `page.expectPresent` and `page.expectNone`. Each records a finding when the screen differs.
 3. Run it alone with `pnpm review --scene <id>` and look at every capture.
 
 Prefer roles, accessible names and palette labels to class names: they survive restyling. Palette
@@ -142,9 +170,28 @@ kind; a folder twenty levels deep with long names; names with spaces and in Japa
 Cyrillic and Arabic script. The app runs with this folder as its home, so shown paths should start
 with `~`. The folder lies in `/tmp` because Columns lists every folder above the one it shows.
 
-The Trash scene is listed but not captured: the Trash lists the system Trash of every mounted
-volume, and the packaged app's interface cannot be answered with generated items. It runs once a
-review run can limit the Trash to the sample home's own generated `.Trash`.
+It also holds one file for each preview kind from the [playground](playground.md) (a system font for
+fonts), models with each axis convention and one that cannot be read, a 2400 × 900 picture, a
+picture with a 200-character name and a generated `.Trash`.
+
+## What the app does in the QA runtime
+
+Review runs and native tests start the app in its hidden QA runtime: `VIEWER_RENDER_TEST=1`,
+`VIEWER_BACKGROUND_TEST=1` and an isolated `VIEWER_DATA_DIRECTORY` (`backgroundTest` in
+`src/main.ts`, passed to the desktop as `qaRuntime`). A normal launch never sets them. In that
+runtime only:
+
+- the Trash lists the home folder's `.Trash` and no mounted volume's, so a review shows the sample
+  home's generated Trash (`src/desktop/operations/trash.ts`);
+- Locations, the Copy to places and the folder chooser's places are the home folder's own folders,
+  not the macOS ones (`src/desktop/bridge.ts`);
+- the window lists its registered commands to review runs for exact coverage, read only
+  (`src/renderer/App.tsx`).
+
+In every runtime, the app marks the plane in view (`data-plane-in-view` on its pane marker) and
+every file name with `data-file-name`; the checks read both. Builds without these hooks still run:
+the Trash scene and the scenes that need them report **Needs a newer build**, the checks read the
+space's status text and class names, and coverage scans the source for commands.
 
 Each scene's profile starts from the settings the packaged app reports on a first launch, so an
 older or newer build accepts it. The run's folder is kept and listed in

@@ -100,7 +100,7 @@ export interface SpokenOffer {
   after?: string[];
 }
 export interface SpokenContext {
-  /** The active folder plane's path. */
+  /** The active files plane's path. */
   folder?: string;
   /** The selected items' names, at most 50. */
   selection: string[];

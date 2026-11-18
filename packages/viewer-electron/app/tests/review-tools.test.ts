@@ -153,6 +153,8 @@ describe('review coverage and sheet', () => {
       version: 1,
       run: '20261117-120000',
       binary: 'Viewer',
+      parallel: 3,
+      commandSource: 'source',
       started: '2026-11-17T12:00:00.000Z',
       milliseconds: 61000,
       samples: 'samples',

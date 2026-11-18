@@ -757,7 +757,7 @@ try {
     Boolean,
     'the empty workspace after closing its initial plane',
   );
-  await evaluate(pressButton('New folder plane'));
+  await evaluate(pressButton('New Files Plane'));
   await until(
     () => evaluate(pageCall(pageIncludes, 'Allow folder access')),
     Boolean,

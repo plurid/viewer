@@ -5,6 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import { lstat, mkdir, open, readFile, realpath, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -17,17 +18,38 @@ import { checkSelectors, runChecks } from './checks';
 import { coverage, readCatalog } from './coverage';
 import { launchHidden, quit, readTemplate, RunStop } from './launch';
 import type { ReviewConnection } from './launch';
-import { ReviewPage } from './page';
+import { NewerBuildNeeded, ReviewPage } from './page';
 import { writeProfile } from './profile';
 import type { ProfileTemplate } from './profile';
 import { reviewSheet } from './report';
-import { createSamples } from './samples';
+import { createKindSamples, createSamples } from './samples';
 import { reviewAreas } from './scenes';
-import type { Capture, Finding, RunResults, Scene, SceneResult, Variant } from './types';
+import type {
+  Capture,
+  Finding,
+  Requirement,
+  RunResults,
+  Scene,
+  SceneResult,
+  Variant,
+} from './types';
 import { standardVariants } from './variants';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const reviewRoot = path.join(appRoot, 'out/review');
+const repositoryRoot = path.resolve(appRoot, '../../..');
+
+/** A path as the sheet prints it: from the repository when inside it, else from ~, never from
+ * the disk root of someone's home folder. */
+function displayPath(file: string): string {
+  const relative = path.relative(repositoryRoot, file);
+  if (!relative.startsWith('..') && !path.isAbsolute(relative)) return relative;
+  const home = os.homedir();
+  return file === home || file.startsWith(home + path.sep) ? '~' + file.slice(home.length) : file;
+}
+
+/** At most this many hidden apps run at once, each on its own profile. */
+const maximumParallel = 3;
 
 interface Options {
   areas: string[];
@@ -37,6 +59,7 @@ interface Options {
   accept: boolean;
   acceptRun?: string;
   list: boolean;
+  parallel: number;
 }
 
 function parseOptions(argv: string[]): Options {
@@ -49,6 +72,7 @@ function parseOptions(argv: string[]): Options {
       path.join(appRoot, `out/Viewer-darwin-${process.arch}/Viewer.app/Contents/MacOS/Viewer`),
     accept: false,
     list: false,
+    parallel: maximumParallel,
   };
   for (let index = 0; index < argv.length; index++) {
     const name = argv[index]!;
@@ -69,7 +93,12 @@ function parseOptions(argv: string[]): Options {
     else if (name === '--accept') options.accept = true;
     else if (name === '--accept-run') options.acceptRun = value();
     else if (name === '--list') options.list = true;
-    else throw new Error('Unknown option ' + name + '. See docs/development/review.md.');
+    else if (name === '--parallel') {
+      options.parallel = Number(value());
+      if (!Number.isInteger(options.parallel) || options.parallel < 1)
+        throw new Error('--parallel takes a whole number from 1 to ' + maximumParallel + '.');
+      options.parallel = Math.min(options.parallel, maximumParallel);
+    } else throw new Error('Unknown option ' + name + '. See docs/development/review.md.');
   }
   return options;
 }
@@ -152,6 +181,37 @@ interface RunContext {
   binary: string;
   runFolder: string;
   template: ProfileTemplate;
+  /** Whether the binary has the QA runtime's hooks (launch.ts readTemplate). */
+  qaHooks: boolean;
+  /** Every command the app listed during the run, by id. */
+  commands: Map<string, string>;
+}
+
+/** What a scene needs and this build lacks, or undefined when it has everything. */
+async function missing(
+  page: ReviewPage,
+  context: RunContext,
+  requirements: readonly Requirement[],
+): Promise<string | undefined> {
+  for (const requirement of requirements) {
+    if ('qaHooks' in requirement && !context.qaHooks)
+      return 'The QA runtime’s Trash, places, markers and command list.';
+    if ('command' in requirement && !(await page.offers(requirement.command)))
+      return 'The command “' + requirement.command + '”.';
+    if ('text' in requirement && !(await page.shows(requirement.text))) return requirement.what;
+    if ('selector' in requirement)
+      try {
+        await page.needs(requirement.selector, requirement.what);
+      } catch (error) {
+        return (error as Error).message;
+      }
+  }
+  return undefined;
+}
+
+/** The commands the app lists, in a build with the QA runtime's hooks. */
+interface ReviewCommandsWindow {
+  viewerReviewCommands?: () => { id: string; label: string }[];
 }
 
 const homeSpellings = (home: string) => [home, home.replace(/^\/private\//, '/')];
@@ -174,6 +234,8 @@ async function captureVariant(
     await page.applyViewport();
     await page.waitFor('[data-file-path]', 1, 30000);
     await page.settle(600);
+    const lacking = await missing(page, context, scene.requires ?? []);
+    if (lacking) throw new NewerBuildNeeded(lacking);
     const timer = new AbortController();
     try {
       await Promise.race([
@@ -191,10 +253,11 @@ async function captureVariant(
       throw new RunStop(
         `The app exited during ${scene.id} (${app.child.exitCode ?? app.child.signalCode}).`,
       );
-    capture.error = (error as Error).message.slice(0, 2000);
+    if (error instanceof NewerBuildNeeded) capture.newerBuild = error.message;
+    else capture.error = (error as Error).message.slice(0, 2000);
   }
   try {
-    if (page) {
+    if (page && !capture.newerBuild) {
       const image = path.join(scene.id, variant.id + '.png');
       await mkdir(path.join(context.runFolder, scene.id), { recursive: true });
       await screenshot(page.connection, path.join(context.runFolder, image));
@@ -225,6 +288,10 @@ async function captureVariant(
       ];
       capture.findings = applyAllowances(findings, scene.id, variant.id);
       capture.commands = [...page.commands];
+      const listed = await page.main.evaluate(
+        pageCall(() => (window as ReviewCommandsWindow).viewerReviewCommands?.() ?? []),
+      );
+      for (const command of listed) context.commands.set(command.id, command.label);
     }
   } catch (error) {
     capture.error = [capture.error, 'Capture: ' + (error as Error).message]
@@ -236,7 +303,14 @@ async function captureVariant(
   return capture;
 }
 
-async function writeSheet(runFolder: string, results: RunResults): Promise<void> {
+async function writeSheet(runFolder: string, written: RunResults): Promise<void> {
+  // nothing the sheet prints starts at the operator's home folder
+  const home = os.homedir();
+  const results = JSON.parse(
+    JSON.stringify(written)
+      .split(JSON.stringify(home).slice(1, -1) + '/')
+      .join('~/'),
+  ) as RunResults;
   const hasBaseline = await lstat(path.join(reviewRoot, 'baseline', 'index.json')).then(
     () => true,
     () => false,
@@ -285,10 +359,13 @@ async function main(): Promise<void> {
   const root = await realpath(await temporaryRoot('viewer-review-', '/tmp'));
   const home = path.join(root, 'Home');
   await createSamples(home, appRoot);
+  await createKindSamples(home);
   const results: RunResults = {
     version: 1,
     run,
-    binary,
+    binary: displayPath(binary),
+    parallel: options.parallel,
+    commandSource: 'source',
     started: new Date(started).toISOString(),
     milliseconds: 0,
     samples: root,
@@ -296,40 +373,79 @@ async function main(): Promise<void> {
     scenes: [],
     coverage: { commands: [], dialogs: [], settings: [], previews: [] },
   };
+  // every scene has its place in the sheet before the workers fill them in, in any order
+  const queue = selected.map(({ area, scene }) => {
+    const result: SceneResult = {
+      id: scene.id,
+      area,
+      title: scene.title,
+      mustBeTrue: scene.mustBeTrue,
+      captures: [],
+      covers: scene.covers ?? {},
+      ...(scene.blocked ? { blocked: scene.blocked } : {}),
+    };
+    results.scenes.push(result);
+    return { scene, result };
+  });
   const log = await open(path.join(runFolder, 'progress.log'), 'wx');
+  const say = async (line: string) => {
+    console.log(line);
+    await log.write(line + '\n');
+  };
+  let context: RunContext | undefined;
   try {
     const template = await readTemplate(root, home, binary);
-    const context: RunContext = { root, home, binary, runFolder, template };
-    for (const { area, scene } of selected) {
-      const variants = (scene.variants ?? standardVariants).filter(
-        (item) => !options.variants.length || options.variants.includes(item.id),
-      );
-      const result: SceneResult = {
-        id: scene.id,
-        area,
-        title: scene.title,
-        mustBeTrue: scene.mustBeTrue,
-        captures: [],
-        covers: scene.covers ?? {},
-        ...(scene.blocked ? { blocked: scene.blocked } : {}),
-      };
-      results.scenes.push(result);
-      if (scene.blocked) {
-        console.log(`${scene.id}: not captured. ${scene.blocked}`);
-        continue;
+    context = {
+      root,
+      home,
+      binary,
+      runFolder,
+      template: template.profile,
+      qaHooks: template.qaHooks,
+      commands: new Map(),
+    };
+    const shared = context;
+    let next = 0;
+    // Each worker takes the next scene and captures its variants one launch at a time; a stop
+    // in any worker lets the others finish their capture and take no more.
+    const worker = async () => {
+      while (!results.stopped && next < queue.length) {
+        const { scene, result } = queue[next++]!;
+        if (scene.blocked) {
+          await say(`${scene.id}: not captured. ${scene.blocked}`);
+          continue;
+        }
+        const variants = (scene.variants ?? standardVariants).filter(
+          (item) => !options.variants.length || options.variants.includes(item.id),
+        );
+        for (const variant of variants) {
+          if (results.stopped) return;
+          let capture: Capture;
+          try {
+            capture = await captureVariant(shared, scene, variant);
+          } catch (error) {
+            if (!(error instanceof RunStop)) throw error;
+            results.stopped = error.message;
+            await say('Stopped: ' + error.message);
+            return;
+          }
+          result.captures.push(capture);
+          if (capture.newerBuild) {
+            // the same build lacks it in every variant
+            result.newerBuild = capture.newerBuild;
+            await say(`${scene.id}: needs a newer build. ${capture.newerBuild}`);
+            break;
+          }
+          const open = capture.findings.filter((finding) => !finding.allowed).length;
+          await say(
+            `${scene.id} ${variant.id}: ${open} problems` +
+              (capture.error ? ', failed: ' + capture.error.split('\n')[0] : '') +
+              ` (${(capture.milliseconds / 1000).toFixed(1)} s)`,
+          );
+        }
       }
-      for (const variant of variants) {
-        const capture = await captureVariant(context, scene, variant);
-        result.captures.push(capture);
-        const open = capture.findings.filter((finding) => !finding.allowed).length;
-        const line =
-          `${scene.id} ${variant.id}: ${open} problems` +
-          (capture.error ? ', failed: ' + capture.error.split('\n')[0] : '') +
-          ` (${(capture.milliseconds / 1000).toFixed(1)} s)`;
-        console.log(line);
-        await log.write(line + '\n');
-      }
-    }
+    };
+    await Promise.all(Array.from({ length: options.parallel }, worker));
   } catch (error) {
     if (!(error instanceof RunStop)) throw error;
     results.stopped = error.message;
@@ -337,7 +453,14 @@ async function main(): Promise<void> {
   } finally {
     await log.close();
     results.milliseconds = Date.now() - started;
-    results.coverage = coverage(await readCatalog(appRoot), results.scenes);
+    const catalog = await readCatalog(appRoot);
+    if (context?.commands.size) {
+      results.commandSource = 'runtime';
+      catalog.commands = [...context.commands]
+        .map(([id, label]) => ({ id, label, source: 'runtime' }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+    }
+    results.coverage = coverage(catalog, results.scenes);
     await compareWithBaseline(reviewRoot, runFolder, results);
     await writeSheet(runFolder, results);
     await release('finished');

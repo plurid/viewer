@@ -13,6 +13,9 @@ import { contextMenuSections, type MenuSection } from '../src/renderer/commands/
 import { textEditFor } from '../src/renderer/commands/editing';
 import { copyPathCommand } from '../src/renderer/commands/copy-path';
 import { programCommands } from '../src/renderer/commands/programs';
+import { paletteRows } from '../src/renderer/commands/palette-sections';
+import { windowCommands } from '../src/renderer/commands/window';
+import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
 import { planOrigin } from '../src/renderer/actions/commands';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import {
@@ -172,6 +175,9 @@ describe('contextual commands', () => {
       'rotate-copy-left',
     ]);
     expect(offered('Photo.heic')).toEqual(['convert-png', 'convert-jpeg', 'rotate-copy-left']);
+    // A GIF or TIFF gets one too: an animated or multipage one is refused, saying why, as made.
+    expect(offered('Loop.gif')).toEqual(['convert-png', 'convert-jpeg', 'rotate-copy-left']);
+    expect(offered('Scan.tiff')).toEqual(['convert-png', 'convert-jpeg', 'rotate-copy-left']);
   });
   const commandsIn = (sections: MenuSection[]): string[] =>
     sections.flatMap((section) =>
@@ -261,6 +267,36 @@ describe('contextual commands', () => {
     expect(rankCommands(rows, 'nf', [])[0].id).toBe('new-folder');
     expect(rankCommands(rows, 're', [])[0].id).toBe('rename');
     expect(rankCommands(rows, 'zz', [])).toEqual([]);
+  });
+  it('finds New Files Plane by its earlier name, and New Folder… first by "folder"', () => {
+    const controller: Record<string, unknown> = {
+      parentPaneID: () => undefined,
+      isDocked: () => false,
+      arrangementHistory: () => ({ canUndo: false, canRedo: false }),
+      hasRepeatedPreviews: () => false,
+      planePinState: () => ({ pinnable: false, pinned: false, collapsed: false }),
+      selectedPaneIDs: () => [],
+      planeStacks: () => [],
+    };
+    const windowActions = {
+      workspace: new Proxy(controller, { get: (target, key: string) => target[key] ?? vi.fn() }),
+      ready: true,
+      tool: null,
+    } as unknown as WindowActions;
+    registry.register('window', {
+      context: () => context,
+      definitions: () => windowCommands(windowActions),
+    });
+    const rows = registry.list({ paneID: context.paneID });
+    const ranked = (query: string) => paletteRows(rows, query, []).rows.map((row) => row.id);
+    for (const query of ['folder plane', 'new folder plane', 'files plane', 'new files plane'])
+      expect(ranked(query)[0], query).toBe('new-root-folder');
+    // the plane's earlier name does not take "folder" from the commands that make one
+    for (const query of ['folder', 'new folder']) {
+      const order = ranked(query);
+      expect(order.indexOf('new-folder'), query).toBeGreaterThanOrEqual(0);
+      expect(order.indexOf('new-folder'), query).toBeLessThan(order.indexOf('new-root-folder'));
+    }
   });
   it('drops commands that only scatter the letters of a word another command contains', () => {
     const row = (id: string, label: string, aliases: string[] = []) =>

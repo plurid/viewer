@@ -14,7 +14,7 @@
   gap: 12px;
   flex: none;
   margin: 0;
-  padding: 8px 20px;
+  padding: var(--gap-inline) var(--gap-dialog);
   border-bottom: 1px solid var(--line);
 }
 .capabilities-context > strong {
@@ -36,7 +36,7 @@
   flex: none;
   align-items: center;
   gap: 12px;
-  padding: 10px 20px;
+  padding: var(--gap-content) var(--gap-dialog);
   flex-wrap: wrap;
 }
 .capabilities-search > input {
@@ -56,7 +56,7 @@
 .capabilities-pins {
   flex: none;
   border-block: 1px solid var(--line);
-  padding: 0 20px;
+  padding: 0 var(--gap-dialog);
   max-height: 150px;
   overflow: auto;
 }
@@ -89,13 +89,16 @@
   min-height: 0;
   flex: 1;
   overflow: auto;
-  scrollbar-gutter: stable;
 }
-:root[data-scrollbars='always'] .capabilities-action-scroll {
-  overflow-y: scroll;
+/* the row Return runs, as the palette's active row */
+.capabilities-results li[aria-selected='true'] {
+  background: var(--selection);
+}
+.capability-pin[aria-pressed='true'] {
+  color: var(--accent);
 }
 .capabilities-empty {
-  padding: 16px 20px;
+  padding: var(--gap-panel) var(--gap-dialog);
 }
 .capabilities-empty p {
   color: var(--muted);
@@ -149,7 +152,7 @@
   line-height: 1.4;
 }
 .capabilities-results > p {
-  padding: 0 20px;
+  padding: 0 var(--gap-dialog);
   font-size: var(--text-compact);
   color: var(--muted);
 }
@@ -157,7 +160,7 @@
   display: flex;
   gap: 10px;
   align-items: center;
-  padding: 12px 20px;
+  padding: var(--gap-content) var(--gap-dialog);
   border-bottom: 1px solid var(--line);
 }
 .capabilities-results li > div {
@@ -177,19 +180,20 @@
   flex: none;
   max-height: 130px;
   overflow: auto;
-  padding: 0 20px;
+  padding: 0 var(--gap-dialog);
   border-top: 1px solid var(--line);
 }
 .capabilities-help dd {
   color: var(--muted);
   margin: 4px 0 12px;
 }
+/* All eight pins fit; the header's own overflow gives way first, and only a header narrower than
+   the pins scrolls them. */
 .plane-pinned-tools {
   display: flex;
   align-items: center;
   flex: 0 1 auto;
   min-width: 28px;
-  max-width: 150px;
   overflow-x: auto;
 }
 .plane-pinned-tools > button {

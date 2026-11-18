@@ -74,6 +74,7 @@ type Tool = ReactElement<ToolProps>;
 const actionIcons: Record<string, IconName> = {
   optimize: 'sliders',
   'image-tools': 'image',
+  'rotated-copy': 'rotate',
   'pdf-tools': 'pdf',
   'edit-media': 'video',
   wireframe: 'wireframe',
@@ -212,8 +213,13 @@ function overflowChoices(
   const choices = [...new Set(lead.flat())].flatMap((id): Choice[] => {
     const definition = registered.find((command) => `preview.${command.id}` === id);
     const control = controlFor(toolbar, id);
-    // a control that opens a menu of its own cannot open it from a hidden place
-    const pressable = control && !control.disabled && !control.hasAttribute('aria-haspopup');
+    // a control that opens a menu of its own cannot open it from a hidden place; one that waits
+    // does nothing yet
+    const pressable =
+      control &&
+      !control.disabled &&
+      control.getAttribute('aria-disabled') !== 'true' &&
+      !control.hasAttribute('aria-haspopup');
     if (definition ? definition.available === false : !pressable) return [];
     runs.set(id, () => {
       if (definition)
@@ -284,11 +290,16 @@ export function usePreviewControlsSlot(id?: string): HTMLElement | undefined {
   );
 }
 
+/** A toolbar of a table's or view's own, under its format's: it stands where it is, measured by
+ * itself with its own "…", never in the plane's header. */
+export const standaloneToolbar: Pick<PreviewContext, 'commands'> = {};
+
 export function PreviewToolbar({
   context,
   children,
 }: {
-  context: PreviewContext;
+  /** The format's context: its plane's header, where it has one, holds the toolbar. */
+  context: Pick<PreviewContext, 'commands'>;
   children: ReactNode;
 }) {
   const header = context.commands?.header;

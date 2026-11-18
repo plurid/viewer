@@ -61,7 +61,7 @@ const descriptions: Record<string, string[]> = {
   ],
   'settings.browsing.columnWidth': ['Width in pixels of each browsing column in Columns view.'],
   'settings.browsing.newPlaneLocation': [
-    'The workspace + button and Cmd+Shift+N create an independent root here when planes are already open.',
+    'The workspace + button and Cmd+N create an independent root here when planes are already open.',
     'current uses the active folder, terminal directory or preview parent, with Home as fallback.',
     'custom uses newPlanePath; other values select the named folder in the user home directory.',
   ],
@@ -71,7 +71,7 @@ const descriptions: Record<string, string[]> = {
   ],
   'settings.browsing.emptyWorkspaceLocation': [
     'Independent starting folder for the first plane when the workspace has no planes.',
-    'Used by the empty-workspace New Folder Plane button, +, and Cmd+Shift+N. There is no current folder here.',
+    'Used by the empty-workspace New Files Plane button, +, and Cmd+N. There is no current folder here.',
   ],
   'settings.browsing.emptyWorkspacePath': [
     'Required absolute folder path when emptyWorkspaceLocation is custom. Does not affect newPlanePath.',
@@ -92,7 +92,7 @@ const descriptions: Record<string, string[]> = {
   'settings.folders': [
     'Sparse per-folder overrides, keyed by absolute path. Omitted fields inherit the defaults.',
     'Example: "/absolute/path/Downloads": { "mode": "list", "sort": "modified", "descending": true }.',
-    'Allowed fields: mode, sort, descending, group, density, foldersFirst, showHidden, columnWidth, previewWidth and list.',
+    'Allowed fields: mode, sort, descending, group, density, foldersFirst, showHidden, columnWidth and list.',
     'list accepts visible, widths, order and wrapNames, using the same fields as ui.list.',
     'Remove a folder entry to reset its view. The override applies to that path in every workspace/root.',
   ],
@@ -379,8 +379,8 @@ const descriptions: Record<string, string[]> = {
 /** Reworded guidance: a documented file has its earlier line replaced in place, not repeated. */
 const revisedGuidance: [RegExp, string][] = [
   [
-    /^([\t ]*\/\/ )New folder plane, the workspace \+ button and Cmd\+N create an independent root here\.(?=\r?$)/m,
-    '$1The workspace + button and Cmd+Shift+N create an independent root here when planes are already open.',
+    /^([\t ]*\/\/ )(?:New folder plane, the workspace \+ button and Cmd\+N create an independent root here|The workspace \+ button and Cmd\+Shift\+N create an independent root here when planes are already open)\.(?=\r?$)/m,
+    '$1The workspace + button and Cmd+N create an independent root here when planes are already open.',
   ],
   [
     /^([\t ]*\/\/ )Example: "pdf": "plane", "mkv": "native"\. (Office extensions default to native|New settings preview docx and xlsx in planes)\.(?=\r?$)/m,
@@ -428,8 +428,8 @@ const revisedGuidance: [RegExp, string][] = [
   ],
   // the interface’s wording: US spelling and menu names in Title Case
   [
-    /^([\t ]*\/\/ )Used by the empty-workspace New folder plane button, \+, and Cmd\+Shift\+N\. There is no current folder here\.(?=\r?$)/m,
-    '$1Used by the empty-workspace New Folder Plane button, +, and Cmd+Shift+N. There is no current folder here.',
+    /^([\t ]*\/\/ )Used by the empty-workspace New (?:folder plane|Folder Plane) button, \+, and Cmd\+Shift\+N\. There is no current folder here\.(?=\r?$)/m,
+    '$1Used by the empty-workspace New Files Plane button, +, and Cmd+N. There is no current folder here.',
   ],
   [
     /^([\t ]*\/\/ )Extension, without the dot, that New file… names a file with: md, txt, json, …\.(?=\r?$)/m,

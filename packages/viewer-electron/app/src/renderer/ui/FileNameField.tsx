@@ -23,8 +23,6 @@ export function fileNameError(stem: string, extension: string, numberedSuffix = 
   if (stem === '.' || stem === '..') return 'Enter a name other than “.” or “..”.';
   if (stem.includes('/')) return "A file name can't contain “/”.";
   if (invisible.test(stem)) return 'Remove the invisible control character from the name.';
-  if (stem.startsWith('.') && getState().bootstrap.platform !== 'win32')
-    return 'A name that starts with “.” makes a hidden file. Remove the dot.';
   if (getState().bootstrap.platform === 'win32' && /[<>:"\\|?*]/.test(stem))
     return 'On Windows, a file name can\'t contain < > : " \\ | ? *.';
   if ((stem + numberedSuffix + '.' + extension).length > 255)
@@ -32,20 +30,29 @@ export function fileNameError(stem: string, extension: string, numberedSuffix = 
   return '';
 }
 
+/** Whether a name will be hidden: macOS and Linux hide a name that starts with a dot. */
+export function hiddenFileName(stem: string): boolean {
+  return stem.startsWith('.') && getState().bootstrap.platform !== 'win32';
+}
+
 /**
- * The stem as export writes it: without spaces at either end, which Finder lists out of order,
- * and without the extension already shown beside it, as a pasted full name has.
+ * The stem as export writes it: without trailing spaces, and without the extension already shown
+ * beside it (any of its spellings, as many times as typed: "photo.jpeg.jpg"). A leading space
+ * stays: it is how a person makes a name sort first.
  */
 function cleanStem(value: string, extension: string): string {
-  const stem = value.trim();
   const lower = extension.toLowerCase();
-  const names = extensionAliases.find((group) => group.includes(lower)) ?? [lower];
-  for (const name of names) {
-    const suffix = '.' + name;
-    if (stem.toLowerCase().endsWith(suffix) && stem.length > suffix.length)
-      return stem.slice(0, -suffix.length).trimEnd();
+  const suffixes = (extensionAliases.find((group) => group.includes(lower)) ?? [lower]).map(
+    (name) => '.' + name,
+  );
+  let stem = value.trimEnd();
+  for (;;) {
+    const suffix = suffixes.find(
+      (item) => stem.toLowerCase().endsWith(item) && stem.length > item.length,
+    );
+    if (!suffix) return stem;
+    stem = stem.slice(0, -suffix.length).trimEnd();
   }
-  return stem;
 }
 
 /** What is already at the output path, so the message names it. */
@@ -126,6 +133,8 @@ export function FileNameField({
 
   // A check still running for a new name must not show the last name's answer.
   const conflict = !!target && existing?.path === target ? existing : undefined;
+  const hidden = !error && hiddenFileName(value);
+  const notes = [hidden && id + '-hidden', conflict && id + '-message'].filter(Boolean).join(' ');
   return (
     <FormField label={label} htmlFor={id} as="div">
       <div className="file-name-control">
@@ -134,7 +143,7 @@ export function FileNameField({
           ref={input}
           aria-label={`${label}: ${fullName}`}
           aria-invalid={!!error}
-          aria-describedby={error || conflict ? id + '-message' : undefined}
+          aria-describedby={error ? id + '-message' : notes || undefined}
           title={fullName}
           value={value}
           disabled={disabled}
@@ -149,16 +158,22 @@ export function FileNameField({
           .{extension}
         </span>
       </div>
-      {error ? (
+      {error && (
         <p id={id + '-message'} className="dialog-field-error" role="alert">
           {error}
         </p>
-      ) : conflict ? (
+      )}
+      {hidden && (
+        <p id={id + '-hidden'} className="dialog-field-help" role="status">
+          Starts with a dot, so the file will be hidden.
+        </p>
+      )}
+      {!error && conflict && (
         <p id={id + '-message'} className="dialog-field-help" role="status">
           A {conflict.directory ? 'folder' : 'file'} named “{firstName}” is already here. Export
           adds “copy” to the new name.
         </p>
-      ) : null}
+      )}
     </FormField>
   );
 }

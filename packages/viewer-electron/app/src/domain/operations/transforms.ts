@@ -36,6 +36,10 @@ export const imageTransformSchema = z
       .strict()
       .optional(),
     rotate: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]).default(0),
+    /** A JPEG saved again as a JPEG, as a rotated copy is, at its own quality and colour detail,
+     * read from its quantization tables, so it neither grows nor loses any: `quality` is what a
+     * picture of another format gets. */
+    keepQuality: z.boolean().optional(),
     metadata: z.enum(['safe', 'strip', 'all']).default('safe'),
     background: z
       .string()

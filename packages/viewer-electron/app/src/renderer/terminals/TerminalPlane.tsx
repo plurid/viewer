@@ -225,12 +225,13 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
       }}
     >
       {header ? createPortal(find, header) : find}
+      <div className="terminal-container" ref={container} />
+      {/* under the terminal, in its own row: it never covers the rows the shell wrote last */}
       {error && (
         <p className="terminal-error" role="alert">
           {error}
         </p>
       )}
-      <div className="terminal-container" ref={container} />
     </div>
   );
 }

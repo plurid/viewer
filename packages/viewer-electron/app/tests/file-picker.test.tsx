@@ -249,7 +249,15 @@ it('keeps a newer desktop prompt when an older handshake or answer completes', a
   act(() => receive({ type: 'dialog', prompt: question }));
   await act(async () => initial({ prompt: null }));
   expect(screen.getByRole('button', { name: 'Save' }).className).toBe('primary');
-  expect(screen.getByRole('button', { name: 'Don’t Save' }).className).toBe('danger');
+  expect(screen.getByRole('button', { name: 'Don’t Save' }).className).toBe(
+    'danger dialog-leading-action',
+  );
+  // a Mac's order: Don't Save apart at the left, then Cancel, then Save
+  expect(
+    [...document.querySelectorAll('.viewer-message-dialog footer button')].map(
+      (button) => button.textContent,
+    ),
+  ).toEqual(['Don’t Save', 'Cancel', 'Save']);
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   act(() => receive({ type: 'dialog', prompt: next }));
   await act(async () => answered({}));
@@ -257,4 +265,29 @@ it('keeps a newer desktop prompt when an older handshake or answer completes', a
   expect(dialog).toHaveBeenCalledWith({ kind: 'answer', id: question.id, button: 0 });
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   expect(dialog).toHaveBeenCalledWith({ kind: 'answer', id: next.id, button: 2 });
+});
+
+it('jumps to a name by its letters, opens with ⌘↓ and goes up with ⌘↑, as Finder does', async () => {
+  const dialog = setup();
+  render(<FilePicker prompt={prompt()} />);
+  await screen.findByRole('option', { name: /First.pdf/ });
+  const list = screen.getByRole('listbox');
+  list.focus();
+  fireEvent.keyDown(list, { key: 'f' });
+  expect(screen.getByRole('option', { selected: true }).textContent).toContain('Folder');
+  // letters typed together search together
+  fireEvent.keyDown(list, { key: 'i' });
+  fireEvent.keyDown(list, { key: 'r' });
+  expect(screen.getByRole('option', { selected: true }).textContent).toContain('First.pdf');
+  fireEvent.keyDown(list, { key: 'ArrowUp' });
+  fireEvent.keyDown(list, { key: 'ArrowDown', metaKey: true });
+  await waitFor(() =>
+    expect(dialog).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'browse', path: '/fixture/Folder' }),
+    ),
+  );
+  fireEvent.keyDown(list, { key: 'ArrowUp', metaKey: true });
+  await waitFor(() =>
+    expect(dialog).toHaveBeenCalledWith(expect.objectContaining({ kind: 'browse', path: '/' })),
+  );
 });

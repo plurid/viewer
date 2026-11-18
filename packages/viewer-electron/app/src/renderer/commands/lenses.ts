@@ -33,7 +33,7 @@ export const lensGroupMenuIDs = [
   'lens.expand-all',
   'lens.delete-group',
 ];
-/** The lens picker in a folder plane's header. */
+/** The lens picker in a files plane's header. */
 export function lensMenuIDs(data: LensFolder | null): string[] {
   return [
     ...(data?.lenses ?? []).map((document) => 'group.lens.' + document.lens.id),
@@ -52,7 +52,7 @@ export function lensMenuIDs(data: LensFolder | null): string[] {
 
 const plain = (context: CommandContext) =>
   !!context.folder && ['folder', 'files', 'window'].includes(context.scope) && !context.lensGroup;
-/** Lens editing commands for one folder plane. None of them move, rename or remove files. */
+/** Lens editing commands for one files plane. None of them move, rename or remove files. */
 export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
   const editable = () => {
     const document = actions.document();

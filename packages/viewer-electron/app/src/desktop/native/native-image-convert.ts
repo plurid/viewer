@@ -1,7 +1,9 @@
 import { nativeImage, type NativeImage } from 'electron';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { imagesToPDF, rotateBitmap, type ImageConverter } from '../operations/image-convert';
+import { exifSegment, heicExif, withSegment } from '../operations/photo-metadata';
+import { imageCaptureTime, imageCredits } from '../transforms/image';
 
 const maximumPixels = 100_000_000;
 
@@ -20,8 +22,23 @@ function decode(file: string): {
   return { image, width, height, scale };
 }
 
+/** The quality a HEIC photo's JPEG copy is encoded at: a HEIC holds about twice what a JPEG does
+ * in a byte, so 90 keeps it as it looked. */
+const photoQuality = 90;
+/**
+ * `jpeg`, a copy of the HEIC photo `source`, with what the default policy keeps of its EXIF: who
+ * made it and when it was taken. The system decoder hands back pixels only.
+ */
+async function withPhotoDetails(jpeg: Buffer, source: string): Promise<Buffer> {
+  if (!/\.(?:heic|heif)$/i.test(source)) return jpeg;
+  const exif = heicExif(await readFile(source));
+  const segment = exifSegment({ IFD0: imageCredits(exif), IFD2: imageCaptureTime(exif) });
+  return segment ? withSegment(jpeg, segment) : jpeg;
+}
+
 /** Quick actions decode with the system image reader in this process, so they work in the
- * App Store sandbox too. Outputs are re-encoded; image metadata is not copied. */
+ * App Store sandbox too. Outputs are re-encoded; of a HEIC photo's details a JPEG copy keeps who
+ * made it and when it was taken, and nothing else. */
 export const nativeImageConverter: ImageConverter = {
   async convert(conversion, sources, output, signal) {
     signal.throwIfAborted();
@@ -38,7 +55,9 @@ export const nativeImageConverter: ImageConverter = {
       const [source] = sources;
       if (!source) throw new Error('Choose an image.');
       const { image, width, height, scale } = decode(source);
-      if (conversion === 'jpeg') data = image.toJPEG(92);
+      const photo = /\.(?:heic|heif)$/i.test(source);
+      if (conversion === 'jpeg')
+        data = await withPhotoDetails(image.toJPEG(photo ? photoQuality : 92), source);
       else if (conversion === 'png') data = image.toPNG({ scaleFactor: scale });
       else {
         // a half turn is two quarters, the picture as wide as it was
@@ -54,7 +73,9 @@ export const nativeImageConverter: ImageConverter = {
           width: half ? width : height,
           height: half ? height : width,
         });
-        data = /\.jpe?g$/i.test(output) ? rotated.toJPEG(92) : rotated.toPNG();
+        data = /\.jpe?g$/i.test(output)
+          ? await withPhotoDetails(rotated.toJPEG(photo ? photoQuality : 92), source)
+          : rotated.toPNG();
       }
     }
     signal.throwIfAborted();

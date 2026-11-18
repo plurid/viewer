@@ -5,7 +5,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import type { ApplicationSettings } from '../../domain/services';
 import type { UIPreferences } from '../../domain/contracts';
-import { defaultShortcuts, accelerator, menuShortcuts } from '../../domain/preferences/shortcuts';
+import { accelerator, resolvedShortcut, shortcutFor } from '../../domain/preferences/shortcuts';
 import { planeAlignments, planeSizePresets } from '../../domain/workspaces/plane-layout';
 import type { InstalledRelease } from '../../domain/updates/feed';
 import { installedRelease } from './about';
@@ -55,6 +55,10 @@ export function installApplicationMenu(
   copyReport: () => void = () => {},
   chrome?: MenuChrome,
 ): void {
+  // each item's key as the keymap has it: as the person set it, else as shipped, unless they gave
+  // the shipped key to something else; before settings are read, as shipped
+  const keyOf = (id: string) =>
+    accelerator(settings ? resolvedShortcut(settings, id) : shortcutFor(undefined, id));
   const quitItem: MenuItemConstructorOptions = {
     label: 'Quit Viewer',
     accelerator: 'CmdOrCtrl+Q',
@@ -79,7 +83,7 @@ export function installApplicationMenu(
                 { type: 'separator' as const },
                 {
                   label: 'Settings…',
-                  accelerator: accelerator(settings?.shortcuts['settings'] ?? 'Cmd+,'),
+                  accelerator: keyOf('settings'),
                   click: command('settings'),
                 },
                 { type: 'separator' as const },
@@ -97,56 +101,40 @@ export function installApplicationMenu(
       {
         label: 'File',
         submenu: [
-          { label: 'New Window', click: command('new-native-window') },
-          { label: 'Create Project…', click: command('project-create') },
-          { label: 'Workflows…', click: command('workflows') },
-          { label: 'Open Project…', click: command('project-open') },
-          { label: 'Save Project', click: command('project-save') },
-          { label: 'Reload Project…', click: command('project-reload') },
-          { type: 'separator' },
           {
-            label: 'New Folder Plane',
-            accelerator: accelerator(
-              settings?.shortcuts['new-root-folder'] ?? defaultShortcuts['new-root-folder'] ?? '',
-            ),
+            label: 'New Window',
+            accelerator: keyOf('new-native-window'),
+            click: command('new-native-window'),
+          },
+          {
+            label: 'New Files Plane',
+            accelerator: keyOf('new-root-folder'),
             click: command('new-root-folder'),
           },
           {
             label: 'New Scratch Plane',
-            accelerator: accelerator(
-              settings?.shortcuts['new-scratch-plane'] ??
-                defaultShortcuts['new-scratch-plane'] ??
-                '',
-            ),
+            accelerator: keyOf('new-scratch-plane'),
             click: command('new-scratch-plane'),
           },
           {
             label: 'New Terminal Plane',
-            accelerator: accelerator(settings?.shortcuts['new-terminal-plane'] ?? ''),
+            accelerator: keyOf('new-terminal-plane'),
             click: command('new-terminal-plane'),
           },
           { label: 'Start Local Server', click: command('start-local-server') },
           {
             label: 'Open Folder…',
-            accelerator: accelerator(
-              settings?.shortcuts['choose-folder'] ?? menuShortcuts['choose-folder'] ?? '',
-            ),
+            accelerator: keyOf('choose-folder'),
             click: command('choose-folder'),
           },
           {
             label: 'New Folder…',
-            accelerator: accelerator(
-              settings?.shortcuts['new-folder'] ?? defaultShortcuts['new-folder'] ?? '',
-            ),
+            accelerator: keyOf('new-folder'),
             click: command('new-folder'),
           },
           {
             label: 'Open Selection',
-            accelerator: accelerator(
-              settings?.shortcuts['open-selection'] ??
-                defaultShortcuts['open-selection'] ??
-                'Cmd+O',
-            ),
+            accelerator: keyOf('open-selection'),
             click: command('open-selection'),
           },
           { label: 'Open in Default App', click: command('open-default') },
@@ -154,50 +142,44 @@ export function installApplicationMenu(
           { label: 'Quick Preview', click: command('quick-preview') },
           {
             label: 'Get Info…',
-            accelerator: accelerator(
-              settings?.shortcuts['info'] ?? defaultShortcuts['info'] ?? 'Cmd+I',
-            ),
+            accelerator: keyOf('info'),
             click: command('info'),
           },
           { label: 'Calculate Size', click: command('calculate-size') },
           { type: 'separator' },
           {
             label: 'Edit Text',
-            accelerator: accelerator(
-              settings?.shortcuts['edit-file'] ?? defaultShortcuts['edit-file'] ?? '',
-            ),
+            accelerator: keyOf('edit-file'),
             click: command('edit-file'),
           },
           {
             label: 'Save',
-            accelerator: accelerator(
-              settings?.shortcuts['save-file'] ?? defaultShortcuts['save-file'] ?? '',
-            ),
+            accelerator: keyOf('save-file'),
             click: command('save-file'),
           },
           {
             label: 'Save As…',
-            accelerator: accelerator(
-              settings?.shortcuts['save-file-as'] ?? defaultShortcuts['save-file-as'] ?? '',
-            ),
+            accelerator: keyOf('save-file-as'),
             click: command('save-file-as'),
           },
           { label: 'Revert to Saved…', click: command('revert-file') },
           { type: 'separator' },
+          { label: 'Create Project…', click: command('project-create') },
+          { label: 'Workflows…', click: command('workflows') },
+          { label: 'Open Project…', click: command('project-open') },
+          { label: 'Save Project', click: command('project-save') },
+          { label: 'Reload Project…', click: command('project-reload') },
+          { type: 'separator' },
           {
             label: 'Duplicate',
-            accelerator: accelerator(
-              settings?.shortcuts['duplicate'] ?? defaultShortcuts['duplicate'] ?? 'Cmd+D',
-            ),
+            accelerator: keyOf('duplicate'),
             click: command('duplicate'),
           },
           { label: 'Copy To…', click: command('copy-to') },
           { label: 'Move To…', click: command('move-to') },
           {
             label: settings?.browsing.confirmTrash === false ? 'Move to Trash' : 'Move to Trash…',
-            accelerator: accelerator(
-              settings?.shortcuts['trash'] ?? defaultShortcuts['trash'] ?? 'Cmd+Backspace',
-            ),
+            accelerator: keyOf('trash'),
             click: command('trash'),
           },
           { type: 'separator' },
@@ -211,52 +193,38 @@ export function installApplicationMenu(
         submenu: [
           {
             label: 'Undo',
-            accelerator: accelerator(
-              settings?.shortcuts['undo-file'] ?? menuShortcuts['undo-file'] ?? '',
-            ),
+            accelerator: keyOf('undo-file'),
             click: command('undo-file'),
           },
           {
             label: 'Redo',
-            accelerator: accelerator(
-              settings?.shortcuts['redo-file'] ?? menuShortcuts['redo-file'] ?? '',
-            ),
+            accelerator: keyOf('redo-file'),
             click: command('redo-file'),
           },
           { type: 'separator' },
           {
             label: 'Cut',
-            accelerator: accelerator(
-              settings?.shortcuts['cut'] ?? defaultShortcuts['cut'] ?? 'Cmd+X',
-            ),
+            accelerator: keyOf('cut'),
             click: command('cut'),
           },
           {
             label: 'Copy',
-            accelerator: accelerator(
-              settings?.shortcuts['copy'] ?? defaultShortcuts['copy'] ?? 'Cmd+C',
-            ),
+            accelerator: keyOf('copy'),
             click: command('copy'),
           },
           {
             label: 'Paste',
-            accelerator: accelerator(
-              settings?.shortcuts['paste'] ?? defaultShortcuts['paste'] ?? 'Cmd+V',
-            ),
+            accelerator: keyOf('paste'),
             click: command('paste'),
           },
           {
             label: 'Move Copied Items Here',
-            accelerator: accelerator(
-              settings?.shortcuts['paste-move'] ?? defaultShortcuts['paste-move'] ?? '',
-            ),
+            accelerator: keyOf('paste-move'),
             click: command('paste-move'),
           },
           {
             label: 'Select All',
-            accelerator: accelerator(
-              settings?.shortcuts['select-all'] ?? defaultShortcuts['select-all'] ?? 'Cmd+A',
-            ),
+            accelerator: keyOf('select-all'),
             click: command('select-all'),
           },
         ],
@@ -266,7 +234,7 @@ export function installApplicationMenu(
         submenu: [
           {
             label: 'Commands…',
-            accelerator: accelerator(settings?.shortcuts['palette'] ?? 'Cmd+K'),
+            accelerator: keyOf('palette'),
             click: command('palette'),
           },
           {
@@ -275,43 +243,43 @@ export function installApplicationMenu(
           },
           {
             label: 'Find File…',
-            accelerator: accelerator(settings?.shortcuts['find-file'] ?? 'Cmd+F'),
+            accelerator: keyOf('find-file'),
             click: command('find-file'),
           },
           {
             label: 'Go to Folder…',
-            accelerator: accelerator(settings?.shortcuts['go-to'] ?? 'Cmd+L'),
+            accelerator: keyOf('go-to'),
             click: command('go-to'),
           },
           {
             label: showOrHide(chrome?.windowNavigation, 'Window Navigation'),
-            accelerator: accelerator(settings?.shortcuts['toggle-sidebar'] ?? 'Cmd+Alt+S'),
+            accelerator: keyOf('toggle-sidebar'),
             click: command('toggle-sidebar'),
           },
           {
             label: showOrHide(chrome?.titleBar, 'Title Bar'),
-            accelerator: accelerator(settings?.shortcuts['toggle-titlebar'] ?? 'Cmd+Alt+T'),
+            accelerator: keyOf('toggle-titlebar'),
             click: command('toggle-titlebar'),
           },
           // every setting is a command: the space's own chrome, here too
           {
             label: showOrHide(chrome?.spaceToolbar, 'Space Toolbar'),
-            accelerator: accelerator(settings?.shortcuts['setting.ui.space.toolbar'] ?? ''),
+            accelerator: keyOf('setting.ui.space.toolbar'),
             click: command('setting.ui.space.toolbar'),
           },
           {
             label: showOrHide(chrome?.minimap, 'Minimap'),
-            accelerator: accelerator(settings?.shortcuts['setting.ui.space.minimap'] ?? ''),
+            accelerator: keyOf('setting.ui.space.minimap'),
             click: command('setting.ui.space.minimap'),
           },
           {
             label: showOrHide(chrome?.viewcube, 'Viewcube'),
-            accelerator: accelerator(settings?.shortcuts['setting.ui.space.viewcube'] ?? ''),
+            accelerator: keyOf('setting.ui.space.viewcube'),
             click: command('setting.ui.space.viewcube'),
           },
           {
             label: showOrHide(chrome?.grid, 'Background Grid'),
-            accelerator: accelerator(settings?.shortcuts['setting.ui.space.grid'] ?? ''),
+            accelerator: keyOf('setting.ui.space.grid'),
             click: command('setting.ui.space.grid'),
           },
           // a plane's and a folder's own state lives in the window: the menu names both ways
@@ -343,34 +311,28 @@ export function installApplicationMenu(
           },
           {
             label: 'Show or Hide Hidden Files',
-            accelerator: accelerator(
-              settings?.shortcuts['toggle-hidden'] ?? defaultShortcuts['toggle-hidden'] ?? '',
-            ),
+            accelerator: keyOf('toggle-hidden'),
             click: command('hidden'),
           },
           { type: 'separator' },
           {
             label: 'Frame All Planes',
-            accelerator: accelerator(settings?.shortcuts['frame-all'] ?? 'Cmd+0'),
+            accelerator: keyOf('frame-all'),
             click: command('frame-all'),
           },
           {
             label: 'Dock Plane or Reveal Space',
-            accelerator: accelerator(settings?.shortcuts['dock'] ?? 'Cmd+Return'),
+            accelerator: keyOf('dock'),
             click: command('dock'),
           },
           {
             label: 'Undo Arrangement',
-            accelerator: accelerator(
-              settings?.shortcuts['undo-arrangement'] ?? menuShortcuts['undo-arrangement'] ?? '',
-            ),
+            accelerator: keyOf('undo-arrangement'),
             click: command('undo-arrangement'),
           },
           {
             label: 'Redo Arrangement',
-            accelerator: accelerator(
-              settings?.shortcuts['redo-arrangement'] ?? menuShortcuts['redo-arrangement'] ?? '',
-            ),
+            accelerator: keyOf('redo-arrangement'),
             click: command('redo-arrangement'),
           },
           { label: 'Arrange Planes Horizontally', click: command('arrange-horizontal') },

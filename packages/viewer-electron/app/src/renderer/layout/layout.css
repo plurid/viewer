@@ -8,13 +8,28 @@
   color: var(--ink);
   container-type: inline-size;
 }
+/* One fixed line: the summary gives way to an ellipsis (the whole summary is its tooltip) and the
+   modes scroll as the last resort, so a new plan never moves the sheet under the toolbar. */
 .layout-toolbar {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .layout-modes {
   display: flex;
-  flex-wrap: wrap;
+  flex: 0 1 auto;
+  min-width: 0;
   gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.layout-modes > button {
+  flex: none;
+}
+.layout-summary {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .layout-notice {
   margin: 0;

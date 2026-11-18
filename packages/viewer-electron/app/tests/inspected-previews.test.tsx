@@ -240,7 +240,9 @@ describe('torrents and profiles', () => {
     expect(view.getByText('241 files', { exact: false })).toBeTruthy();
     const files = view.getByRole('list', { name: 'Files' });
     expect(files.textContent).toContain('README.txt');
-    expect(files.textContent).toContain('notes/part-001.txt');
+    // a file's own name first, the folders inside the torrent after it, the whole path on hover
+    expect(files.textContent).toContain('part-001.txtnotes');
+    expect(files.querySelector('[title="notes/part-001.txt"]')).not.toBeNull();
   });
 
   it('shows a profile’s app, team, devices, entitlements and certificates, unchecked', async () => {

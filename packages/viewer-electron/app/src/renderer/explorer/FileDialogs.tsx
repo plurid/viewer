@@ -47,13 +47,20 @@ export function TrashContents({ context }: { context: CommandContext }) {
     };
   }, [context, folders, paths]);
   const task = size?.task;
-  if (!folders || (task?.status !== 'running' && task?.status !== 'completed')) return null;
-  const counts = `${plural(task.files, 'file')} in ${plural(task.folders || folders, 'folder')}, ${formatBytes(task.bytes)}`;
+  if (!folders) return null;
+  const counted = task?.status === 'running' || task?.status === 'completed';
+  const counts =
+    counted &&
+    `${plural(task.files, 'file')} in ${plural(task.folders || folders, 'folder')}, ${formatBytes(task.bytes)}`;
+  // Two lines are kept from the start, so the count arriving or growing never moves the buttons
+  // under the pointer.
   return (
-    <p className="dialog-copy muted" role="status">
-      {task.status === 'running'
-        ? `Counting folder contents… ${counts}`
-        : `Including folder contents: ${counts}${task.skipped ? ` (${plural(task.skipped, 'item')} not readable)` : ''}.`}
+    <p className="dialog-copy muted" role="status" style={{ minHeight: '2lh' }}>
+      {!counted
+        ? ''
+        : task.status === 'running'
+          ? `Counting folder contents… ${counts}`
+          : `Including folder contents: ${counts}${task.skipped ? ` (${plural(task.skipped, 'item')} not readable)` : ''}.`}
     </p>
   );
 }
@@ -207,6 +214,7 @@ export function useFileDialogs(): {
                       : 'Go to Folder'
             }
             label="Name"
+            selection={name.kind === 'rename' ? 'stem' : 'all'}
             initial={
               name.kind === 'rename'
                 ? name.context.selection[0]?.name

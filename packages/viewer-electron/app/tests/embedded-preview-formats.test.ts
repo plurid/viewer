@@ -61,7 +61,7 @@ describe('documents shown by the picture they saved', () => {
       expect([name, previewsAsFile(file(name, true))]).toEqual([name, false]);
   });
 
-  it('opens a document package in a document plane, and other folders in folder planes', () => {
+  it('opens a document package in a document plane, and other folders in files planes', () => {
     for (const name of ['Report.pages', 'Budget.numbers', 'Slides.key'])
       expect([name, itemPlaneType(file(name, true))]).toEqual([name, 'preview']);
     expect(itemPlaneType(file('Notes.txt'))).toBe('preview');

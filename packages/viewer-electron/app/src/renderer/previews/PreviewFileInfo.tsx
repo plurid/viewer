@@ -129,7 +129,7 @@ export function PreviewFacts({
   return (
     <div className="preview-file-info" ref={root} role="group" title={full} aria-label={full}>
       {name !== undefined && (
-        <span className="preview-filename" aria-hidden="true">
+        <span className="preview-filename" aria-hidden="true" data-file-name={name}>
           {current?.name ?? name}
         </span>
       )}

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { PreviewContext } from './contracts';
 import { usePreviewState } from './state';
@@ -10,7 +11,9 @@ import {
   type TreeExpansion,
 } from '../../domain/previews/data/structured';
 import { copyText, report } from '../state/store';
-import { ChoiceButton } from '../ui/ChoiceMenu';
+import { MenuButton } from '../ui/ChoiceMenu';
+import { PreviewToolbar, usePreviewCommands } from './controls';
+import { headerItem } from '../workspace/header-overflow';
 
 export function StructuredTree({
   context,
@@ -58,6 +61,25 @@ export function StructuredTree({
     virtual.scrollToIndex(index, { align: 'auto' });
   };
   const copy = (value: string) => void copyText(value).catch(report);
+  const expand = useCallback(
+    (all: boolean) => setExpansion({ all, open: [], closed: [] }),
+    [setExpansion],
+  );
+  usePreviewCommands(
+    context,
+    useMemo(
+      () => [
+        { id: 'tree-expand', label: 'Expand All', aliases: ['open all'], run: () => expand(true) },
+        {
+          id: 'tree-collapse',
+          label: 'Collapse All',
+          aliases: ['close all'],
+          run: () => expand(false),
+        },
+      ],
+      [expand],
+    ),
+  );
   const copyValue = () => {
     if (!node) return;
     try {
@@ -68,19 +90,18 @@ export function StructuredTree({
   };
   return (
     <div className="structured-viewer">
-      <div className="preview-toolbar">
+      {/* the one toolbar every preview has: in a plane's header, or measured where it stands, its
+          buttons giving way into "…" rather than hiding by width */}
+      <PreviewToolbar context={context}>
         {viewControls}
-        <button
-          className="tree-expand-inline"
-          onClick={() => setExpansion({ all: true, open: [], closed: [] })}
-        >
-          Expand all
+        <button {...headerItem('expand', 7, ['preview.tree-expand'])} onClick={() => expand(true)}>
+          Expand All
         </button>
         <button
-          className="tree-expand-inline"
-          onClick={() => setExpansion({ all: false, open: [], closed: [] })}
+          {...headerItem('collapse', 7, ['preview.tree-collapse'])}
+          onClick={() => expand(false)}
         >
-          Collapse all
+          Collapse All
         </button>
         <input
           type="search"
@@ -90,28 +111,20 @@ export function StructuredTree({
           onChange={(event) => setQuery(event.target.value)}
         />
         <span className="toolbar-spacer" />
-        <ChoiceButton
-          label="Tree actions"
-          value=""
-          placeholder="More"
-          choices={[
-            { value: 'expand', label: 'Expand All' },
-            { value: 'collapse', label: 'Collapse All' },
-            ...(node
-              ? [
-                  { value: 'path', label: 'Copy Path' },
-                  { value: 'value', label: 'Copy Value' },
-                ]
-              : []),
+        {/* always here, so choosing a row moves no control; it copies the row chosen */}
+        <MenuButton
+          label="Copy"
+          disabled={!node}
+          items={[
+            { value: 'path', label: 'Copy Path' },
+            { value: 'value', label: 'Copy Value' },
           ]}
           onChoose={(action) => {
-            if (action === 'expand' || action === 'collapse')
-              setExpansion({ all: action === 'expand', open: [], closed: [] });
-            else if (action === 'path' && node) copy(node.path || '/');
+            if (action === 'path' && node) copy(node.path || '/');
             else if (action === 'value') copyValue();
           }}
         />
-      </div>
+      </PreviewToolbar>
       {data.limited && (
         <p className="inline-warning">
           Tree limit reached. The complete readable text remains in Source.

@@ -21,8 +21,10 @@ import {
   formatBytes,
   groupEntries,
   kindLabel,
+  listDate,
   sortEntries,
 } from '../../domain/files/entries';
+import { FileName } from '../ui/FileName';
 import { Icon, type IconName } from '../ui/Icon';
 import { HeldPreview } from '../previews/HeldPreview';
 import { useFolder } from './useFolder';
@@ -59,6 +61,9 @@ import { cachedThumbnail, thumbnail } from './thumbnail-cache';
 
 export interface FileViewProps {
   paneID?: string;
+  /** Where the rows' DOM ids start, so the focused list can name its cursor row through
+   * aria-activedescendant. */
+  idPrefix?: string;
   presentation?: FolderPresentation;
   depths?: ReadonlyMap<string, number>;
   expanded?: string[];
@@ -79,11 +84,16 @@ export interface FileViewProps {
   /** Group headings; entries are ordered to match. */
   sections?: ViewSections;
 }
-const date = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
+/** A row's DOM id: its list's prefix and its path, for aria-activedescendant. */
+export function fileRowID(prefix: string, path: string): string {
+  // FNV-1a: a path's id stays the same as rows mount and unmount in a virtual list
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < path.length; index++) {
+    hash ^= path.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${prefix}-row-${(hash >>> 0).toString(36)}`;
+}
 export function FileIcon({ entry, size = 18 }: { entry: FileEntry; size?: number }) {
   const family = fileFamily(entry);
   const symbol = <Icon name={family as IconName} size={size} />;
@@ -103,20 +113,32 @@ export const FileRow = memo(function FileRow({
   props,
   compact = false,
   columns = ['name', 'modified', 'kind', 'size'],
+  wrapName = false,
 }: {
   entry: FileEntry;
   selected: boolean;
   ancestor?: boolean;
   props: Pick<
     FileViewProps,
-    'select' | 'open' | 'context' | 'drag' | 'toggle' | 'expanded' | 'depths' | 'paneID'
+    | 'select'
+    | 'open'
+    | 'context'
+    | 'drag'
+    | 'toggle'
+    | 'expanded'
+    | 'depths'
+    | 'paneID'
+    | 'idPrefix'
   >;
   compact?: boolean;
   columns?: readonly ListColumn[];
+  /** List with "Wrap long filenames" on: the whole name, over as many lines as it takes. */
+  wrapName?: boolean;
 }) {
   return (
     <div
       className={`file-row ${selected ? 'is-selected' : ''} ${ancestor ? 'is-path-ancestor' : ''} ${compact ? 'compact-row' : ''}`}
+      id={props.idPrefix ? fileRowID(props.idPrefix, entry.path) : undefined}
       role="option"
       aria-selected={selected}
       data-file-path={entry.path}
@@ -125,7 +147,8 @@ export const FileRow = memo(function FileRow({
       aria-expanded={
         browsable(entry) && props.toggle ? props.expanded?.includes(entry.path) : undefined
       }
-      title={entry.error || entry.path}
+      // the name shows: a tooltip only says what the row cannot, as a read error
+      title={entry.error || undefined}
       onClick={(event) => props.select(entry, event)}
       onDoubleClick={(event) => props.open(entry, event.metaKey || event.altKey || event.ctrlKey)}
       onContextMenu={(event) => props.context(entry, event)}
@@ -143,6 +166,8 @@ export const FileRow = memo(function FileRow({
         {props.toggle && browsable(entry) && (
           <button
             className="folder-disclosure"
+            // the row is the list's one keyboard stop: ← and → open and close it
+            tabIndex={-1}
             style={{ left: 2 + (props.depths?.get(entry.path) || 0) * 18 }}
             aria-label={`${props.expanded?.includes(entry.path) ? 'Collapse' : 'Expand'} ${entry.name}`}
             onClick={(event) => {
@@ -154,9 +179,7 @@ export const FileRow = memo(function FileRow({
           </button>
         )}
         <FileIcon entry={entry} />
-        <span className="filename" title={entry.name}>
-          {entry.name}
-        </span>
+        <FileName name={entry.name} className="filename" fit={wrapName ? 'wrap' : 'line'} />
         <LinkedPlaneButton paneID={props.paneID} entry={entry} />
         {entry.error && <Icon name="warning" size={14} />}
       </span>
@@ -173,7 +196,7 @@ export const FileRow = memo(function FileRow({
                 <GitColumn entry={entry} />
               ) : column === 'modified' || column === 'created' ? (
                 entry[column] ? (
-                  date.format(entry[column])
+                  listDate(entry[column])
                 ) : (
                   ''
                 )
@@ -277,8 +300,9 @@ export function ListView(props: FileViewProps) {
       expanded: props.expanded,
       depths: props.depths,
       paneID: props.paneID,
+      idPrefix: props.idPrefix,
     }),
-    [actions, props.toggle, props.expanded, props.depths, props.paneID],
+    [actions, props.toggle, props.expanded, props.depths, props.paneID, props.idPrefix],
   );
   const defaultCompact = useViewer(
     (state) => effectiveWindowSettings(state).browsing.density === 'compact',
@@ -380,6 +404,7 @@ export function ListView(props: FileViewProps) {
                 selected={props.selectionSet.has(entry.path)}
                 props={rowProps}
                 columns={columns}
+                wrapName={list.wrapNames}
               />
             </div>
           );
@@ -461,7 +486,6 @@ const FileTile = memo(function FileTile({
       role="option"
       aria-selected={selected}
       className={`file-tile ${selected ? 'is-selected' : ''}`}
-      title={entry.path}
       data-file-path={entry.path}
       data-directory-path={browsable(entry) ? entry.path : undefined}
       onClick={(event) => actions.select(entry, event)}
@@ -474,7 +498,7 @@ const FileTile = memo(function FileTile({
         <Thumbnail entry={entry} />
       </div>
       <span className="file-linked-label">
-        <span>{entry.name}</span>
+        <FileName name={entry.name} fit="two-lines" />
         <LinkedPlaneButton paneID={actions.paneID} entry={entry} />
       </span>
       <small>{entry.directory ? kindLabel(entry) : formatBytes(entry.size)}</small>
@@ -518,7 +542,7 @@ export function GridView(props: FileViewProps) {
       return row?.kind === 'header' ? 'section:' + row.section.key : `tiles:${row?.start}`;
     },
     getScrollElement: () => scroll.current,
-    estimateSize: (index) => (rows[index]?.kind === 'header' ? 34 : 140),
+    estimateSize: (index) => (rows[index]?.kind === 'header' ? 34 : 157),
     overscan: 3,
   });
   useEffect(() => {
@@ -684,7 +708,10 @@ function Column({
 function ListViewCompact({ props }: { props: FileViewProps }) {
   const actions = useRowActions(props);
   // One stable object, so memoized rows skip re-rendering when nothing they show changed.
-  const rowProps = useMemo(() => ({ ...actions, paneID: props.paneID }), [actions, props.paneID]);
+  const rowProps = useMemo(
+    () => ({ ...actions, paneID: props.paneID, idPrefix: props.idPrefix }),
+    [actions, props.paneID, props.idPrefix],
+  );
   const defaultCompact = useViewer(
     (state) => effectiveWindowSettings(state).browsing.density === 'compact',
   );
@@ -752,6 +779,18 @@ function ListViewCompact({ props }: { props: FileViewProps }) {
     </div>
   );
 }
+/**
+ * What a view's own preview shows: the selected item, except while Quick Preview shows this plane's
+ * selection, when it keeps the item it showed then. Stepping through files there loads none of
+ * them behind it.
+ */
+function useViewPreview(paneID: string | undefined, item: FileEntry | undefined) {
+  const quick = useViewer((state) => !!paneID && state.quickPreview?.paneID === paneID);
+  const [held, setHeld] = useState(item);
+  // by path: a listing read again gives the same item as a new object
+  if (!quick && held?.path !== item?.path) setHeld(item);
+  return quick ? held : item;
+}
 export function ColumnsView({
   path,
   navigation,
@@ -759,12 +798,14 @@ export function ColumnsView({
 }: FileViewProps & { path: string; navigation: ColumnNavigation }) {
   const scroll = useRef<HTMLDivElement>(null);
   const activity = useContext(PreviewActivity);
-  const selected =
+  const selected = useViewPreview(
+    props.paneID,
     props.selection.length === 1
       ? navigation
           .scope()
           .find((entry) => entry.path === props.selection[0] && previewsAsFile(entry))
-      : undefined;
+      : undefined,
+  );
   const directory = navigation.directory();
   const hasPreview = !!selected;
   // The current column stays in view, with as much of the preview as fits beside it, when the
@@ -811,7 +852,8 @@ export function ColumnsView({
         ),
       )}
       {selected && (
-        <PreviewColumn folder={directory} path={selected.path}>
+        // the width is the plane's, whichever folder the file is in
+        <PreviewColumn paneID={props.paneID} path={selected.path}>
           <HeldPreview path={selected.path} {...activity} />
         </PreviewColumn>
       )}
@@ -848,10 +890,9 @@ const GalleryItem = memo(function GalleryItem({
         onContextMenu={(event) => actions.context(entry, event)}
         draggable
         onDragStart={(event) => actions.drag(entry, event)}
-        title={entry.name}
       >
         <Thumbnail entry={entry} />
-        <span>{entry.name}</span>
+        <FileName name={entry.name} />
       </button>
       {section && (
         <span className="gallery-section" title={section}>
@@ -869,7 +910,8 @@ export function GalleryView(props: FileViewProps) {
     [actions, props.paneID],
   );
   const activity = useContext(PreviewActivity);
-  const selected = props.entries.find((entry) => entry.path === props.cursor);
+  const current = props.entries.find((entry) => entry.path === props.cursor);
+  const selected = useViewPreview(props.paneID, current);
   const starts = useMemo(() => {
     const map = new Map<number, ViewSection>();
     let heading: ViewSection | undefined;
@@ -892,9 +934,10 @@ export function GalleryView(props: FileViewProps) {
   });
   useFileReveal(scroll, props.entries, (index) => virtual.scrollToIndex(index, { align: 'auto' }));
   useEffect(() => {
-    const index = props.entries.indexOf(selected!);
+    // the strip follows the cursor, Quick Preview or not
+    const index = props.entries.indexOf(current!);
     if (index >= 0) virtual.scrollToIndex(index, { align: 'auto' });
-  }, [selected, props.entries, virtual]);
+  }, [current, props.entries, virtual]);
   return (
     <div className="gallery-view">
       <div className="gallery-preview" ref={keepPreviewKeys}>

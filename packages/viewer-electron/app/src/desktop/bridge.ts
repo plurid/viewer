@@ -77,8 +77,6 @@ import {
   svgPreviewProcess,
 } from './transforms/image-process';
 import { MediaDocuments } from './transforms/media-documents';
-import { imageTransformSchema } from '../domain/operations/transforms';
-import { conversionTurns } from '../domain/operations/image-conversions';
 import { namedLines } from '../domain/command-line/prompt';
 import { emptySessionKeys, type SessionKeys } from '../domain/preferences/session-keys';
 import type { FileChange } from '../domain/files/changes';
@@ -137,6 +135,7 @@ import type {
 } from '../domain/contracts';
 import { absolute } from './files/filesystem';
 import { nativeImageConverter } from './native/native-image-convert';
+import { rotatedCopyPlan } from './operations/image-convert';
 import { imageDecoder } from './native/quick-look-render';
 import { Operations } from './operations/operations';
 import { TextFiles } from './editing/text-files';
@@ -353,7 +352,7 @@ export class Desktop {
           stored.state = restoration.state;
         } catch (error) {
           restoration.warnings.push(
-            'Earlier profile preferences were retained because their restoration could not be saved.',
+            'Viewer couldn’t save the restored profile preferences, so the earlier ones stay. Set them again in Settings.',
           );
           this.diagnoseFailure(error);
         }
@@ -414,6 +413,12 @@ export class Desktop {
       applications: string;
       fileBackend?: 'process' | 'thread';
       shellCommandHome?: string;
+      /**
+       * The hidden QA runtime (main.ts `backgroundTest`: VIEWER_RENDER_TEST=1,
+       * VIEWER_BACKGROUND_TEST=1 and an isolated VIEWER_DATA_DIRECTORY). Its Trash and places
+       * stay inside the generated home, and the renderer lists its commands for review runs.
+       */
+      qaRuntime?: boolean;
       settingsChanged?(): void;
       /** Remembers the Settings window's category with its frame. */
       settingsCategory?(category: string): void;
@@ -487,6 +492,7 @@ export class Desktop {
     );
     this.pasteboard = new Pasteboard(this.fileAccess, this.nativeSelections);
     this.trash = new Trash(this.home, this.fileAccess, {
+      homeOnly: options.qaRuntime === true,
       origins: () => this.operations.trashOrigins(),
       preview: (file) => this.resources.grant(file),
       release: (id) => this.resources.release(id),
@@ -885,14 +891,7 @@ export class Desktop {
             sources.some((source) => /\.(?:bmp|heic|heif)$/i.test(source))
           )
             return nativeImageConverter.convert(conversion, sources, output, signal);
-          const turn = conversionTurns[conversion];
-          const plan = imageTransformSchema.parse({
-            kind: 'image',
-            format: conversion === 'jpeg' || (turn && /\.jpe?g$/i.test(output)) ? 'jpeg' : 'png',
-            rotate: turn ?? 0,
-            // a turned photo stays as sharp as a camera saves it, not the 85 a new export gets
-            ...(turn ? { quality: 92 } : {}),
-          });
+          const plan = rotatedCopyPlan(conversion, output);
           return this.transforms.execute(plan, sources, output, signal, () => {}).then(() => {});
         },
       },
@@ -1246,7 +1245,7 @@ export class Desktop {
         relationships: async (file, content) => {
           const result = await this.relationships.request({ kind: 'read', file, content });
           if (!result || !('relations' in result))
-            throw new Error('The relationship result is unavailable.');
+            throw new Error('Viewer couldn’t read this file’s relationships. Try again.');
           return result;
         },
       },
@@ -1409,7 +1408,7 @@ export class Desktop {
           const role = this.requireRecord(event.sender.id).role;
           const allowed = methodWindows[name];
           if (role === 'settings' && allowed === 'viewer')
-            throw new Error('This API is unavailable in Settings.');
+            throw new Error('The Settings window can’t do this. Use a workspace window.');
           if (role !== 'settings' && allowed === 'settings')
             throw new Error('Manage credentials in Settings.');
           return {
@@ -1713,7 +1712,8 @@ export class Desktop {
           const locations = defaultSidebarLocations(
             process.platform as DesktopPlatform,
             this.home,
-            process.mas ? undefined : (folder) => app.getPath(folder),
+            // the QA runtime's places are its generated home's folders
+            process.mas || this.options.qaRuntime ? undefined : (folder) => app.getPath(folder),
             process.env.ProgramFiles,
           );
           const places: DialogPlace[] = [
@@ -1844,6 +1844,7 @@ export class Desktop {
     if (event.type === 'file-changes') {
       this.workspaceSessions.remapFolderHistory(event.changes);
       void this.foundWorkspaces?.remap(event.changes).catch(() => {});
+      void this.definitions?.remapOffers(event.changes).catch(() => {});
       this.folderChecks.remap(event.changes);
       event = { ...event, folderHistoryRevision: this.workspaceSessions.folderHistoryRevision };
     }
@@ -1877,7 +1878,7 @@ export class Desktop {
     const owner = window.webContents.id;
     const record = this.windows.get(owner);
     if (!record || record.role !== 'viewer')
-      throw new Error('The workspace window is unavailable.');
+      throw new Error('This isn’t an open workspace window, so it has nothing to save.');
     await this.chats.stopOwner(owner);
     await this.saveRenderer(owner, record);
     await this.flushWindowStores();
@@ -2056,7 +2057,9 @@ export class Desktop {
     const record = owner === undefined ? undefined : this.windows.get(owner);
     const window = record?.window;
     if (target.originID && record?.originID !== target.originID)
-      throw new Error('The originating window closed. Request a new proposal.');
+      throw new Error(
+        'The window this request came from has closed. Ask again from an open window.',
+      );
     if (!window || window.isDestroyed())
       throw new Error('Open the workspace before running this action.');
     const action = this.settings
@@ -2215,10 +2218,11 @@ export class Desktop {
       license: await this.options.license?.status(),
       settings: this.settings.snapshot(this.credentials.ids()),
       platform: process.platform as DesktopPlatform,
+      ...(this.options.qaRuntime ? { qaRuntime: true } : {}),
       locations: defaultSidebarLocations(
         process.platform as DesktopPlatform,
         home,
-        process.mas ? undefined : (folder) => app.getPath(folder),
+        process.mas || this.options.qaRuntime ? undefined : (folder) => app.getPath(folder),
         process.env.ProgramFiles,
       ),
       openPaths: paths,
@@ -2286,6 +2290,16 @@ export class Desktop {
       emit,
     });
   }
+  /** Clear recent folders: what Viewer learned from folder history goes with it. */
+  private async clearHistoryRecords(): Promise<void> {
+    const results = await Promise.allSettled([
+      Promise.resolve().then(() => this.declaredCommands.clearHistory()),
+      Promise.resolve().then(() => this.foundWorkspaces?.clearHistory()),
+      Promise.resolve().then(() => this.definitions?.clearFoundOffers()),
+    ]);
+    for (const result of results)
+      if (result.status === 'rejected') this.diagnoseFailure(result.reason);
+  }
   private async saveWorkspaces(
     input: SavedState,
     sender: number,
@@ -2326,14 +2340,8 @@ export class Desktop {
       this.folderHistoryPrepared.clear();
       this.folderChecks.clear(forgotten);
     }
-    if (visitSave?.clear) {
-      const results = await Promise.allSettled([
-        Promise.resolve().then(() => this.declaredCommands.clearHistory()),
-        Promise.resolve().then(() => this.foundWorkspaces?.clearHistory()),
-      ]);
-      for (const result of results)
-        if (result.status === 'rejected') this.diagnoseFailure(result.reason);
-    } else this.foundWorkspaces?.historyChanged();
+    if (visitSave?.clear) await this.clearHistoryRecords();
+    else this.foundWorkspaces?.historyChanged();
     state.visits = history.visits;
     this.emit(
       {
@@ -2370,7 +2378,10 @@ export class Desktop {
       }),
       dialog: ([request], owner) => {
         const dialogs = windowDialogs(requireWindow(owner), false);
-        if (!dialogs) throw new Error('The dialog window is unavailable.');
+        if (!dialogs)
+          throw new Error(
+            'That window has closed, so its dialog can’t open. Try again from an open window.',
+          );
         return dialogs.request(request);
       },
       ...createLicenseHandlers({ license: this.options?.license, isSettings }),

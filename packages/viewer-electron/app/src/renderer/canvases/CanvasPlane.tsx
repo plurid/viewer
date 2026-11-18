@@ -10,7 +10,7 @@ import { useWorkspace } from '../workspace/context';
 import { updatePane, report } from '../state/store';
 import { Empty, Loading } from '../ui/primitives';
 import { Disclosure } from '../ui/Disclosure';
-import { ChoiceButton } from '../ui/ChoiceMenu';
+import { MenuButton } from '../ui/ChoiceMenu';
 import { CanvasSources } from './CanvasSources';
 import { ResultReview } from './ResultReview';
 import type { PendingCanvasResult } from './ResultReview';
@@ -360,12 +360,11 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
         </button>
         <span className="canvas-revision">Revision {document.revision}</span>
         <button onClick={() => workspace.openToolLibrary(pane.id)}>Tool Library</button>
-        <ChoiceButton
-          label="Canvas tools"
-          value=""
-          placeholder="Tools"
+        <MenuButton
+          label="Tools"
+          className="canvas-tools"
           disabled={busy}
-          choices={[
+          items={[
             { value: 'source', label: source ? 'Hide Source Code' : 'Show Source Code' },
             { value: 'reload', label: 'Reload' },
             ...(document.history.length ? [{ value: 'undo', label: 'Undo Revision' }] : []),

@@ -1,5 +1,6 @@
 import { getState, savePatch } from '../state/core';
 import { changePreferences } from '../state/preferences';
+import { hasHiddenOffers, showHiddenOffers } from '../workspace/workspace-offer';
 
 /** Commands share the existing preference queue; command lines use saved session history. */
 export function clearRecentCommands(): void {
@@ -13,11 +14,12 @@ export function forgetSuggestions(): void {
   );
 }
 
-/** Insight cards dismissed in any folder show again. */
-export function showHiddenInsights(): void {
+/** Insight cards dismissed in any folder show again, and so do dismissed workspace offers. */
+export async function showHiddenInsights(): Promise<void> {
   changePreferences((ui) =>
     Object.keys(ui.insightsDismissed ?? {}).length ? { ...ui, insightsDismissed: {} } : ui,
   );
+  if (hasHiddenOffers()) await showHiddenOffers();
 }
 
 export function clearLineHistory(): void {

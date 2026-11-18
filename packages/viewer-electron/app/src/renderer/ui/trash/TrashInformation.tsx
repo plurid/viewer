@@ -18,7 +18,12 @@ export function TrashInformation({
   restore(item: TrashItem): void;
 }) {
   return (
-    <Dialog title={`“${item.name}” Info`} className="trash-info-dialog" onClose={onClose}>
+    <Dialog
+      title={`“${item.name}” Info`}
+      className="trash-info-dialog"
+      onClose={onClose}
+      closeOnBackdrop
+    >
       <dl>
         <dt>Kind</dt>
         <dd>{kindLabel(asFile(item))}</dd>
@@ -67,7 +72,7 @@ export function TrashInformation({
             restore(item);
           }}
         >
-          {item.originalPath ? 'Restore' : 'Restore To…'}
+          {item.originalPath ? 'Put Back' : 'Put Back To…'}
         </button>
         <button onClick={onClose}>Done</button>
       </footer>

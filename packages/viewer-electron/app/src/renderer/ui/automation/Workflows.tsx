@@ -222,8 +222,9 @@ export function WorkflowControls() {
           <button disabled={busy} onClick={() => void perform(() => choose('open'))}>
             Open Workflow…
           </button>
-          <label>
-            New workflow
+          {/* a div: a click on its words would open the menu */}
+          <div className="workflow-template">
+            <span>New workflow</span>
             <ChoiceButton
               label="New workflow"
               value={template}
@@ -237,7 +238,7 @@ export function WorkflowControls() {
               ]}
               onChoose={(value) => setTemplate(value as typeof template)}
             />
-          </label>
+          </div>
           <button disabled={busy} onClick={() => void perform(() => choose('create'))}>
             Create…
           </button>

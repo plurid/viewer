@@ -90,7 +90,7 @@ export const verbs: readonly Verb[] = [
     usage: '[path]',
     args: [0, 1],
     complete: 'path',
-    help: 'Show a folder in this folder plane; home without one',
+    help: 'Show a folder in this files plane; home without one',
   },
   { key: 'pwd', names: ['pw[d]'], help: 'Show this plane’s folder' },
   {
@@ -133,7 +133,7 @@ export const verbs: readonly Verb[] = [
     usage: '[query]',
     rest: true,
     complete: 'query',
-    help: 'Filter this folder plane: words, ext:md, size>10mb, modified<7d, tag:red; none clears',
+    help: 'Filter this files plane: words, ext:md, size>10mb, modified<7d, tag:red; none clears',
   },
   {
     key: 'find',

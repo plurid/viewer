@@ -411,7 +411,12 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
         <button disabled={!snapshot?.url} onClick={() => action('native-window')}>
           Open Page in Window
         </button>
-        <button aria-label="Actual size" title="Actual size" onClick={() => action('zoom-reset')}>
+        <button
+          className="readout"
+          aria-label="Actual size"
+          title="Actual size"
+          onClick={() => action('zoom-reset')}
+        >
           {Math.round((snapshot?.zoom ?? 1) * 100)}%
         </button>
       </footer>

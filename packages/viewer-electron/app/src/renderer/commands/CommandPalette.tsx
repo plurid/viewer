@@ -57,7 +57,7 @@ import {
 import { palettePrefixes, type PaletteMode } from './palette-modes';
 import { clearRecentCommands } from './history';
 import { commandFolders } from './folders';
-import { offerSuggestions, suggestionsFor } from './suggestions';
+import { paletteSuggested } from './suggestions';
 import { offerToForgetFolder } from '../state/places';
 import { useShortcutGlyphs } from '../keys/hints';
 import { useWorkspaceOffer } from '../workspace/workspace-offer';
@@ -116,21 +116,22 @@ export function CommandPalette({
     <Dialog
       title={
         mode === 'files'
-          ? 'Find file'
+          ? 'Find File'
           : mode === 'workspaces'
-            ? 'Change workspace'
+            ? 'Change Workspace'
             : mode === 'settings'
               ? 'Settings'
               : mode === 'line'
-                ? 'Command line'
+                ? 'Command Line'
                 : mode === 'shell'
-                  ? 'Quick command'
+                  ? 'Quick Command'
                   : mode === 'prompt'
-                    ? 'Ask in words'
+                    ? 'Ask in Words'
                     : 'Commands'
       }
       onClose={onClose}
       className="command-palette"
+      closeOnBackdrop
     >
       {mode === 'shell' ? (
         <QuickCommand
@@ -282,7 +283,7 @@ function CommandFinder({
       : !query.trim()
         ? withSuggested(
             paletteRows(commands, query, recent, workspaceChoices),
-            [...suggestionsFor(commands, context.selection), ...offerSuggestions(commands, offer)],
+            paletteSuggested(commands, context.selection, offer),
             recent,
           )
         : paletteRows(commands, query, recent, workspaceChoices);
@@ -807,9 +808,15 @@ function FileFinder({
       {content && indexed.result?.indexed === false && (
         <p className="inline-warning">This folder is outside the indexed locations.</p>
       )}
-      {(indexed.result?.status.running || search.running) && (
-        <p className="inline-warning">Still searching…</p>
-      )}
+      {/* its line stays while nothing is searching, so the palette keeps its height as results
+          arrive */}
+      <p
+        className="inline-warning palette-searching"
+        role="status"
+        data-active={!!(indexed.result?.status.running || search.running)}
+      >
+        {indexed.result?.status.running || search.running ? 'Still searching…' : ''}
+      </p>
       {indexed.error && indexedMode && (
         <p className="inline-warning" role="alert">
           {indexed.error}

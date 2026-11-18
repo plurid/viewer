@@ -238,7 +238,11 @@ export function normalizePreferences(value?: unknown): UIPreferences {
     insightsDismissed: Object.fromEntries(
       Object.entries(object(ui.insightsDismissed))
         .filter(([folder]) => paths([folder]).length)
-        .map(([folder, ids]) => [folder, strings(ids, 20, 60)] as const)
+        // the workspace offer's dismissals live in a private file, never in configuration
+        .map(
+          ([folder, ids]) =>
+            [folder, strings(ids, 20, 60).filter((id) => id !== 'workspace.open')] as const,
+        )
         .filter(([, ids]) => ids.length)
         .slice(-200),
     ),

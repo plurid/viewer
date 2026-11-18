@@ -31,6 +31,9 @@ import './notes.css';
 import { DictationButton } from '../speech/DictationButton';
 
 const TextEditor = lazy(() => import('../previews/editor/TextEditor'));
+/** A note's save states, widest first: each is drawn, only the current one shown. */
+const saveStates = ['Not saved', 'Saving…', 'Saved'] as const;
+
 export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; visible: boolean }) {
   useSyncExternalStore(subscribeNotes, noteGeneration);
   const session = noteSession(pane.id);
@@ -113,6 +116,7 @@ export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; vis
   const items = checklistItems(session.text);
   const changed =
     session.text !== session.document.text || session.title !== session.document.title;
+  const saveState = session.error ? 'Not saved' : changed || session.pending ? 'Saving…' : 'Saved';
   const toolbar = (
     <div className="preview-toolbar">
       <button aria-pressed={!source} onClick={() => setSource(false)}>
@@ -121,11 +125,17 @@ export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; vis
       <button aria-pressed={source} onClick={() => setSource(true)}>
         Source
       </button>
-      <span className="muted" role="status">
-        {session.error ? 'Not saved' : changed || session.pending ? 'Saving…' : 'Saved'}
+      {/* the three states share one width, so typing never resizes the header */}
+      <span className="note-save-state muted" role="status">
+        {saveStates.map((state) => (
+          <span key={state} aria-hidden={state !== saveState || undefined}>
+            {state}
+          </span>
+        ))}
       </span>
       <span className="toolbar-spacer" />
       <DictationButton
+        compact
         target={JSON.stringify([pane.id, documentID, session.text])}
         destination={`Append to ${session.title || 'note'}`}
         disabled={!visible || noteLocked(session.document.id)}
@@ -144,8 +154,8 @@ export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; vis
           });
         }}
       />
-      <button onClick={() => void exportNote().catch(report)}>Export…</button>
-      <button onClick={() => setTrashing(true)}>Move to Trash…</button>
+      <IconButton icon="share" label="Export…" onClick={() => void exportNote().catch(report)} />
+      <IconButton icon="trash" label="Move to Trash…" onClick={() => setTrashing(true)} />
     </div>
   );
   const markdown = (text: string) => (

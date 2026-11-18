@@ -10,17 +10,21 @@ const trash: Scene = {
     'Column headings line up with their rows and sort when pressed.',
     'A long name keeps its extension; original locations show from ~ with the folder’s own name.',
     'An unknown origin says so plainly.',
-    'The count, Empty Trash in the centre and Refresh and Done at the right stay on one line.',
+    'The count, Empty Trash in the center and Refresh and Done at the right stay on one line.',
+    'The original-location strip keeps its height whatever is selected; Quick Look and Put Back never move.',
   ],
   setup: { folder: sampleFolders.samples, view: 'list' },
   covers: { dialogs: ['Trash'] },
   nameCells: ['.trash-filename > span:not(.file-icon)'],
-  // The packaged app's API is frozen, so a run cannot answer Trash calls itself, and the real
-  // Trash lists every mounted volume's Trash as well as the home folder's.
-  blocked:
-    'The Trash lists the system Trash of every mounted volume. It needs a review-run hook that ' +
-    'limits Trash to the sample home’s generated .Trash before a run may open it.',
-  async steps() {},
+  // Only a build whose QA runtime keeps the Trash to the sample home's own .Trash may open it:
+  // elsewhere it lists every mounted volume's Trash (src/desktop/operations/trash.ts).
+  requires: [{ qaHooks: true }],
+  focus: ['dialog[open]'],
+  async steps(page) {
+    await page.palette('Trash');
+    await page.waitFor('dialog[open] .trash-footer, dialog[open][aria-label*="trash" i]');
+    await page.settle(800);
+  },
 };
 
 const info: Scene = {

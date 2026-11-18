@@ -1,6 +1,7 @@
 import type { CustomAction, ActionInput, WorkflowStep } from '../../../domain/automation/actions';
 import { Field } from './SettingField';
 import { ChoiceButton } from '../ChoiceMenu';
+import { useConfirmation } from './ConfirmAction';
 
 export function CommandFields({
   action,
@@ -11,6 +12,7 @@ export function CommandFields({
   actions: CustomAction[];
   change(patch: Partial<CustomAction>): void;
 }) {
+  const confirmation = useConfirmation();
   const update = (index: number, patch: Partial<ActionInput>) =>
     change({
       inputs: action.inputs!.map((input, row) => (row === index ? { ...input, ...patch } : input)),
@@ -131,9 +133,17 @@ export function CommandFields({
                 Required
               </label>
               <button
-                onClick={() => change({ inputs: action.inputs!.filter((_, row) => row !== index) })}
+                className="danger"
+                onClick={() =>
+                  confirmation.ask({
+                    title: `Remove parameter ${index + 1}?`,
+                    detail: `The command no longer asks for “${input.label || input.name}”.`,
+                    action: 'Remove',
+                    run: () => change({ inputs: action.inputs!.filter((_, row) => row !== index) }),
+                  })
+                }
               >
-                Remove parameter {index + 1}
+                Remove Parameter {index + 1}
               </button>
             </fieldset>
           ))}
@@ -167,6 +177,7 @@ export function CommandFields({
           change={(steps) => change({ executor: { kind: 'workflow', steps } })}
         />
       )}
+      {confirmation.dialog}
     </>
   );
 }

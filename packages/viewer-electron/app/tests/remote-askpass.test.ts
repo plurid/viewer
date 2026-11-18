@@ -3,10 +3,10 @@ import { connect } from 'node:net';
 import type { Socket } from 'node:net';
 import { mkdir, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { AskpassRelay, remotePromptText } from '../src/desktop/remote/askpass';
+import { AskpassRelay, UnexpectedQuestionError } from '../src/desktop/remote/askpass';
 import type { RemotePrompt } from '../src/desktop/remote/askpass';
 import { remoteEnvironment } from '../src/desktop/remote/environment';
-import { secretPlaceholder } from '../src/desktop/remote/native-prompts';
+import { describePrompt, remotePromptText, secretPlaceholder } from '../src/domain/remote/prompts';
 import { privateSocketFolder } from '../src/desktop/remote/socket-folder';
 import { validateControlPath } from '../src/domain/remote/ssh-arguments';
 import { remoteLimits } from '../src/domain/remote/limits';
@@ -123,7 +123,7 @@ describe('private askpass relay', () => {
     expect(answer).not.toHaveBeenCalled();
   });
 
-  it('classifies host key confirmation and ends an attempt when its sheet is cancelled', async () => {
+  it('classifies host key confirmation and ends an attempt when its sheet is canceled', async () => {
     const answer = vi.fn(async (_prompt: RemotePrompt) => null);
     const server = await relay(answer);
     const attempt = await server.begin('server01', 'Build', 2);
@@ -137,21 +137,51 @@ describe('private askpass relay', () => {
     ).toBeNull();
     expect(answer.mock.calls[0]![0]).toMatchObject({
       kind: 'host-key',
+      title: 'Trust the host key of “Build”?',
       text:
-        "“The authenticity of host 'build-box (192.0.2.10)' can't be established. " +
-        'Are you sure you want to continue connecting (yes/no/[fingerprint])?”',
+        "The authenticity of host 'build-box (192.0.2.10)' can't be established. " +
+        'Are you sure you want to continue connecting (yes/no/[fingerprint])?',
     });
     expect(attempt.signal.aborted).toBe(true);
   });
 
-  it('asks OpenSSH yes or no questions as confirmations', async () => {
-    const answer = vi.fn(async (prompt: RemotePrompt) =>
-      prompt.kind === 'confirm' ? 'yes' : null,
-    );
+  it('answers a shared-connection question no without asking, and ends the sign-in as an error', async () => {
+    const answer = vi.fn(async () => 'yes');
     const server = await relay(answer);
     const attempt = await server.begin('server01', 'Build', 2);
     const { socket, token } = attempt.environment;
-    expect(await ask(socket, token, 'Allow use of key?', 'confirm')).toBe('yes');
+    expect(await ask(socket, token, 'Allow shared connection to build-box?', 'confirm')).toBe('no');
+    expect(answer).not.toHaveBeenCalled();
+    expect(attempt.signal.aborted).toBe(true);
+    expect(attempt.signal.reason).toBeInstanceOf(UnexpectedQuestionError);
+  });
+
+  it('never hands OpenSSH an answer with a line break or NUL in it', async () => {
+    for (const typed of ['first line\nsecond', 'carriage\rreturn', 'nul\u0000byte']) {
+      const server = await relay(async () => typed);
+      const attempt = await server.begin('server01', 'Build', 2);
+      const { socket, token } = attempt.environment;
+      expect(await ask(socket, token, 'Password:'), JSON.stringify(typed)).toBeNull();
+    }
+  });
+
+  it('turns away helpers beyond its connection cap', async () => {
+    const server = await relay(async () => new Promise<string | null>(() => {}));
+    const attempt = await server.begin('server01', 'Build', 2);
+    const { socket, token } = attempt.environment;
+    const open = Array.from({ length: remoteLimits.promptSockets }, () =>
+      question(socket, token, 'Password:'),
+    );
+    await vi.waitFor(() =>
+      expect(open.every((item) => item.client.readyState === 'open')).toBe(true),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const extra = question(socket, token, 'Password:');
+    expect(await extra.answer).toBeNull();
+    expect(open.every((item) => !item.client.destroyed)).toBe(true);
+    for (const item of open) {
+      item.client.destroy();
+    }
   });
 
   it('closes a notice when OpenSSH ends it, and keeps the sign-in going', async () => {
@@ -201,6 +231,81 @@ describe('private socket folders', () => {
     expect((await readdir(short)).sort()).toEqual(
       [path.basename(preferred), path.basename(fallback)].sort(),
     );
+  });
+});
+
+describe('prompt presentation', () => {
+  const context = { name: 'Build box', key: 'id_ed25519' };
+
+  it('words OpenSSH’s own questions as Viewer’s, never as the server’s', () => {
+    expect(
+      describePrompt(
+        "Enter passphrase for key '/Users/someone/.ssh/id_ed2551': ",
+        undefined,
+        context,
+      ),
+    ).toEqual({
+      kind: 'secret',
+      title: 'Passphrase for key “id_ed25519”',
+      text: 'Enter it to connect to “Build box”.',
+      placeholder: 'Passphrase',
+    });
+    expect(
+      describePrompt("Enter passphrase for key '/keys/work key': ", undefined, {
+        name: 'Build box',
+      }),
+    ).toMatchObject({ title: 'Passphrase for key “work key”' });
+    expect(describePrompt("builder@build-box's password: ", undefined, context)).toMatchObject({
+      kind: 'secret',
+      title: 'Password for “builder”',
+      placeholder: 'Password',
+    });
+    expect(
+      describePrompt('Enter PIN for ED25519-SK key /keys/id_sk: ', undefined, context),
+    ).toMatchObject({ kind: 'secret', title: 'PIN for your security key', placeholder: 'PIN' });
+    expect(
+      describePrompt(
+        "The authenticity of host 'build-box (192.0.2.10)' can't be established.\r\n" +
+          'ED25519 key fingerprint is SHA256:dF7v73VCVA52XCCI0LR7unENWy9rIM/25/r7c9Hgh4g.\r\n' +
+          'This key is not known by any other names.\r\n' +
+          'Are you sure you want to continue connecting (yes/no/[fingerprint])? ',
+        undefined,
+        context,
+      ),
+    ).toEqual({
+      kind: 'host-key',
+      title: 'First connection to “Build box”',
+      text:
+        'Its ED25519 key fingerprint is SHA256:dF7v73VCVA52XCCI0LR7unENWy9rIM/25/r7c9Hgh4g. ' +
+        'Trust it only if it matches the fingerprint the server’s administrator gives you.',
+      placeholder: 'Answer',
+    });
+    expect(
+      describePrompt('Confirm user presence for key ED25519-SK SHA256:abc', 'none', context),
+    ).toMatchObject({ kind: 'notice', title: 'Touch your security key' });
+  });
+
+  it('quotes and attributes everything a server asks, however it is worded', () => {
+    expect(describePrompt('(builder@build-box) Verification code: ', undefined, context)).toEqual({
+      kind: 'secret',
+      title: 'Build box asks:',
+      text: '“Verification code:”',
+      placeholder: 'Verification code',
+    });
+    for (const forged of [
+      "(builder@build-box) Enter passphrase for key '/keys/id': ",
+      "(builder@build-box) The authenticity of host 'x' can't be established. Are you sure you want to continue connecting (yes/no)? ",
+      "(builder@build-box) builder@build-box's password: ",
+    ]) {
+      expect(describePrompt(forged, undefined, context)).toMatchObject({
+        kind: 'secret',
+        title: 'Build box asks:',
+      });
+    }
+    expect(describePrompt('Password:', undefined, context)).toMatchObject({
+      title: 'Build box asks:',
+      text: '“Password:”',
+    });
   });
 });
 

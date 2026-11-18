@@ -14,7 +14,7 @@ import { taskLineDraft } from './task';
  * told the language, the commands available here, the folder's path and the selected names.
  */
 export interface PromptContext {
-  /** The active folder plane's path, if one is active. */
+  /** The active files plane's path, if one is active. */
   folder?: string;
   /** The selected items' names, at most 50. */
   selection: string[];
@@ -188,7 +188,7 @@ export function promptInstructions(context: PromptContext): string {
     .join('\n');
   return `Turn the person's request into ONE line of Viewer's command language, which they will review before running.
 
-Viewer is a macOS file manager whose folders, previews and terminals are planes in a 3D space. Planes tile as tmux's panes; workspaces are as tmux's windows and vim's tabs. Two folder planes may be a commander's pair.
+Viewer is a macOS file manager whose folders, previews and terminals are planes in a 3D space. Planes tile as tmux's panes; workspaces are as tmux's windows and vim's tabs. Two files planes may be a commander's pair.
 
 THE LANGUAGE
 A line is steps separated by |. A step is [count]name [words]. A count repeats the step. Words are bare, 'quoted' or "quoted". In paths, ~ is home, % the active plane's path, %:h its folder.

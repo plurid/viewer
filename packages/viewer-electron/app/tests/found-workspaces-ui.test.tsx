@@ -15,6 +15,7 @@ import { windowScopes } from '../src/renderer/commands/window-commands/scope';
 import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
 import { initialize, activeWorkspace } from '../src/renderer/state/store';
 import { getState, savePatch } from '../src/renderer/state/core';
+import { clearRecentFolders, undoClearRecentFolders } from '../src/renderer/state/places';
 import { flushState } from '../src/renderer/state/persistence';
 import { foundDefinitions } from '../src/domain/workspaces/found/catalog';
 import { rankWorkspaceChoices } from '../src/domain/workspaces/definitions/query';
@@ -208,14 +209,24 @@ describe('Not a Workspace', () => {
     hashDefinition,
   );
   const [cli, notes] = definitions as [WorkspaceDefinition, WorkspaceDefinition];
+  const found = (hidden: number): DefinitionCatalog['found'] => ({
+    state: 'ready',
+    count: 2 - hidden,
+    hidden,
+  });
+  /** The notice: only its words are live, Undo and Forget Planes… sit beside them. */
+  const notice = (view: ReturnType<typeof render>) =>
+    view.container.querySelector<HTMLElement>('.workspace-catalog-count')!;
 
   it('hides a found row with the person’s request and offers Undo for eight seconds', async () => {
-    const { view, workspaceDefinitionFile } = manage(catalogOf(definitions), (request) =>
-      request.kind === 'not-a-workspace'
-        ? catalogOf([notes], 2, { state: 'ready', count: 1, hidden: 1 })
-        : request.kind === 'show-found'
-          ? catalogOf(definitions, 3)
-          : catalogOf(definitions),
+    const { view, workspaceDefinitionFile } = manage(
+      catalogOf(definitions, 1, found(0)),
+      (request) =>
+        request.kind === 'not-a-workspace'
+          ? catalogOf([notes], 2, found(1))
+          : request.kind === 'show-found'
+            ? catalogOf(definitions, 3, found(0))
+            : catalogOf(definitions, 1, found(0)),
     );
     // found rows have no workspaces.jsonc entry to edit
     expect(
@@ -224,30 +235,115 @@ describe('Not a Workspace', () => {
     fireEvent.click(view.getByRole('button', { name: 'Not a Workspace: sample-cli' }));
     await waitFor(() => expect(view.queryByText('sample-cli')).toBeNull());
     expect(workspaceDefinitionFile).toHaveBeenCalledWith({ kind: 'not-a-workspace', key: cli.key });
-    const status = view.getByText('Hid “sample-cli”').closest('[role="status"]')!;
-    const undo = within(status as HTMLElement).getByRole('button', { name: 'Undo' });
+    const status = within(notice(view)).getByRole('status');
+    expect(status.textContent).toBe('Hid “sample-cli”');
+    // a long name gives way in the footer: the whole notice is on hover
+    expect(status.getAttribute('title')).toBe('Hid “sample-cli”');
+    expect(within(status).queryByRole('button')).toBeNull();
+    const undo = within(notice(view)).getByRole('button', { name: 'Undo' });
     await waitFor(() => expect(document.activeElement).toBe(undo));
     fireEvent.click(undo);
     await waitFor(() => expect(view.getByText('sample-cli')).toBeTruthy());
     expect(workspaceDefinitionFile).toHaveBeenCalledWith({ kind: 'show-found', root: cli.root });
-    expect(view.queryByText('Hid “sample-cli”')).toBeNull();
-    expect(document.activeElement).toBe(
-      view.getByRole('searchbox', { name: 'Search definitions' }),
+    expect(within(notice(view)).getByRole('status').textContent).toBe('2 definitions');
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        view.getByRole('searchbox', { name: 'Search definitions' }),
+      ),
     );
+    expect(getState().notice).toBeNull();
+  });
+
+  it('says so when the desktop answers that Undo showed nothing', async () => {
+    // another window showed it already, then hid another: the counts alone would not say so
+    const { view } = manage(catalogOf(definitions, 1, found(0)), (request) =>
+      request.kind === 'not-a-workspace'
+        ? catalogOf([notes], 2, found(1))
+        : { ...catalogOf(definitions, 3, found(0)), changed: 0 },
+    );
+    fireEvent.click(view.getByRole('button', { name: 'Not a Workspace: sample-cli' }));
+    fireEvent.click(await within(notice(view)).findByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(getState().notice).toBe('“sample-cli” was already shown again.'));
+  });
+
+  it('waits while Forget Planes… asks, so Cancel leaves Undo', async () => {
+    const remembering = { ...cli, remembered: { at: 5, basis: cli.basis, planes: 4 } };
+    const { view } = manage(catalogOf([remembering, notes], 1, found(0)), (request) =>
+      request.kind === 'not-a-workspace'
+        ? catalogOf([notes], 2, found(1))
+        : catalogOf([remembering, notes], 1, found(0)),
+    );
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(view.getByRole('button', { name: 'Not a Workspace: sample-cli' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+      fireEvent.click(within(notice(view)).getByRole('button', { name: 'Forget Planes…' }));
+      const confirmation = view.getByRole('dialog', { name: 'Forget remembered planes?' });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+      fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(7900);
+      });
+      expect(within(notice(view)).getByRole('button', { name: 'Undo' })).toBeTruthy();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+      expect(within(notice(view)).queryByRole('button', { name: 'Undo' })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the notice across tabs and offers to forget remembered planes', async () => {
+    const remembering = { ...cli, remembered: { at: 5, basis: cli.basis, planes: 4 } };
+    const forget = vi.fn(async () => ({ kind: 'forgotten' as const }));
+    const { view } = manage(catalogOf([remembering, notes], 1, found(0)), (request) =>
+      request.kind === 'not-a-workspace'
+        ? catalogOf([notes], 2, found(1))
+        : catalogOf([notes], 2, found(1)),
+    );
+    Object.assign(window.viewer, { workspaceDefinitions: forget });
+    expect(view.getByText('Remembers 4 planes')).toBeTruthy();
+    fireEvent.click(view.getByRole('button', { name: 'Not a Workspace: sample-cli' }));
+    await waitFor(() =>
+      expect(within(notice(view)).getByRole('status').textContent).toBe(
+        'Hid “sample-cli” · remembers 4 planes',
+      ),
+    );
+    fireEvent.click(view.getByRole('tab', { name: /^Open/ }));
+    expect(within(notice(view)).getByRole('status').textContent).toBe(
+      'Hid “sample-cli” · remembers 4 planes',
+    );
+    expect(within(notice(view)).getByRole('button', { name: 'Undo' })).toBeTruthy();
+    fireEvent.click(view.getByRole('tab', { name: /^Defined/ }));
+    fireEvent.click(within(notice(view)).getByRole('button', { name: 'Forget Planes…' }));
+    const confirmation = view.getByRole('dialog', { name: 'Forget remembered planes?' });
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Forget Remembered Planes' }));
+    await waitFor(() => expect(forget).toHaveBeenCalledWith({ kind: 'forget', key: cli.key }));
+    await waitFor(() =>
+      expect(within(notice(view)).getByRole('status').textContent).toBe('Hid “sample-cli”'),
+    );
+    expect(within(notice(view)).queryByRole('button', { name: 'Forget Planes…' })).toBeNull();
   });
 
   it('lets the notice go after eight seconds', async () => {
     const { view } = manage(catalogOf(definitions), (request) =>
       request.kind === 'not-a-workspace' ? catalogOf([notes], 2) : catalogOf(definitions),
     );
-    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // fake time alone: a busy machine cannot move the eight seconds
+    vi.useFakeTimers();
     try {
       fireEvent.click(view.getByRole('button', { name: 'Not a Workspace: sample-cli' }));
-      await waitFor(() =>
-        expect(document.activeElement).toBe(view.getByRole('button', { name: 'Undo' })),
-      );
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(7900);
+        await vi.advanceTimersByTimeAsync(50);
+      });
+      expect(document.activeElement).toBe(view.getByRole('button', { name: 'Undo' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(7850);
       });
       expect(view.getByText('Hid “sample-cli”')).toBeTruthy();
       await act(async () => {
@@ -281,36 +377,144 @@ describe('Not a Workspace', () => {
 });
 
 describe('found workspaces in Settings', () => {
-  it('counts found and hidden workspaces and shows hidden ones again', async () => {
-    const workspaceDefinitionFile = vi.fn(async (request: { kind: string }) =>
-      request.kind === 'show-found'
-        ? catalogOf([], 3, { state: 'ready', count: 14, hidden: 0 })
-        : catalogOf([], 2, { state: 'ready', count: 12, hidden: 2 }),
-    );
-    Object.assign(window, {
-      viewer: { workspaceDefinitionFile, onEvent: () => () => {}, save: vi.fn() },
-    });
-    const view = render(<FoundWorkspacesDetail />);
-    await waitFor(() => expect(view.getByText('12 found · 2 hidden')).toBeTruthy());
-    fireEvent.click(view.getByRole('button', { name: 'Show Hidden Again' }));
-    await waitFor(() => expect(view.getByText('14 found')).toBeTruthy());
-    expect(workspaceDefinitionFile).toHaveBeenCalledWith({ kind: 'show-found' });
-    expect(view.queryByRole('button', { name: 'Show Hidden Again' })).toBeNull();
-  });
-
-  it('keeps hidden roots reachable while finding is off', async () => {
+  let listener: ((event: { type: string; catalog?: DefinitionCatalog }) => void) | undefined;
+  function settings(reply: (request: { kind: string }) => Promise<DefinitionCatalog>) {
+    const workspaceDefinitionFile = vi.fn(reply);
     Object.assign(window, {
       viewer: {
-        workspaceDefinitionFile: vi.fn(async () =>
-          catalogOf([], 2, { state: 'off', count: 0, hidden: 2 }),
-        ),
-        onEvent: () => () => {},
+        workspaceDefinitionFile,
+        onEvent: (next: typeof listener) => {
+          listener = next;
+          return () => {};
+        },
         save: vi.fn(),
       },
     });
-    const view = render(<FoundWorkspacesDetail />);
+    return { workspaceDefinitionFile, view: render(<FoundWorkspacesDetail />) };
+  }
+
+  it('names the count it shows again, with Undo for eight seconds', async () => {
+    // the desktop says how many it showed: one of the two was shown elsewhere meanwhile
+    const { view, workspaceDefinitionFile } = settings(async (request) =>
+      request.kind === 'show-found'
+        ? { ...catalogOf([], 3, { state: 'ready', count: 14, hidden: 0 }), changed: 1 }
+        : request.kind === 'hide-found-again'
+          ? { ...catalogOf([], 4, { state: 'ready', count: 12, hidden: 2 }), changed: 1 }
+          : catalogOf([], 2, { state: 'ready', count: 12, hidden: 2 }),
+    );
+    await waitFor(() => expect(view.getByText('12 found · 2 hidden')).toBeTruthy());
+    fireEvent.click(view.getByRole('button', { name: 'Show 2 Hidden Workspaces' }));
+    await waitFor(() => expect(view.getByText('14 found · 1 shown again')).toBeTruthy());
+    expect(workspaceDefinitionFile).toHaveBeenCalledWith({ kind: 'show-found' });
+    const undo = view.getByRole('button', { name: 'Undo' });
+    await waitFor(() => expect(document.activeElement).toBe(undo));
+    fireEvent.click(undo);
+    await waitFor(() => expect(view.getByText('12 found · 2 hidden')).toBeTruthy());
+    expect(workspaceDefinitionFile).toHaveBeenCalledWith({ kind: 'hide-found-again' });
+    expect(view.getByRole('button', { name: 'Show 2 Hidden Workspaces' })).toBeTruthy();
+  });
+
+  it('keeps the newest counts when a pass and a reply cross', async () => {
+    let finish!: (catalog: DefinitionCatalog) => void;
+    const { view } = settings((request) =>
+      request.kind === 'show-found'
+        ? new Promise((resolve) => (finish = resolve))
+        : Promise.resolve(catalogOf([], 2, { state: 'ready', count: 1, hidden: 1 })),
+    );
+    await waitFor(() => expect(view.getByText('1 found · 1 hidden')).toBeTruthy());
+    fireEvent.click(view.getByRole('button', { name: 'Show 1 Hidden Workspace' }));
+    // a pass reports first, then the older reply arrives: the counts do not step back
+    act(() =>
+      listener?.({
+        type: 'workspace-definitions',
+        catalog: catalogOf([], 5, { state: 'ready', count: 3, hidden: 0 }),
+      }),
+    );
+    await act(async () =>
+      finish({ ...catalogOf([], 4, { state: 'ready', count: 2, hidden: 0 }), changed: 1 }),
+    );
+    expect(view.getByRole('status').textContent).toBe('3 found · 1 shown again');
+  });
+
+  it('moves focus from an expired Undo to the finding switch, never the page', async () => {
+    const { workspaceDefinitionFile } = settings(async (request) =>
+      request.kind === 'show-found'
+        ? { ...catalogOf([], 3, { state: 'ready', count: 14, hidden: 0 }), changed: 2 }
+        : catalogOf([], 2, { state: 'ready', count: 12, hidden: 2 }),
+    );
+    cleanup();
+    const view = render(
+      <>
+        <label data-setting-path="settings.browsing.findWorkspaces">
+          Suggest workspaces from folders you open
+          <input type="checkbox" role="switch" />
+        </label>
+        <FoundWorkspacesDetail />
+      </>,
+    );
+    await waitFor(() => expect(view.getByText('12 found · 2 hidden')).toBeTruthy());
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(view.getByRole('button', { name: 'Show 2 Hidden Workspaces' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+      expect(workspaceDefinitionFile).toHaveBeenCalledWith({ kind: 'show-found' });
+      expect(document.activeElement).toBe(view.getByRole('button', { name: 'Undo' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(8000);
+      });
+      expect(view.queryByRole('button', { name: 'Undo' })).toBeNull();
+      expect(document.activeElement).toBe(view.getByRole('switch'));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps focus in its row when Undo leaves and no switch is beside it', async () => {
+    const { view } = settings(async (request) =>
+      request.kind === 'show-found'
+        ? { ...catalogOf([], 3, { state: 'ready', count: 14, hidden: 0 }), changed: 2 }
+        : catalogOf([], 2, { state: 'ready', count: 12, hidden: 2 }),
+    );
+    await waitFor(() => expect(view.getByText('12 found · 2 hidden')).toBeTruthy());
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(view.getByRole('button', { name: 'Show 2 Hidden Workspaces' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+      expect(document.activeElement).toBe(view.getByRole('button', { name: 'Undo' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(8000);
+      });
+      expect(document.activeElement).toBe(
+        view.container.querySelector('.settings-found-workspaces'),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says so when its Undo finds the roots hidden already', async () => {
+    const { view } = settings(async (request) =>
+      request.kind === 'show-found'
+        ? { ...catalogOf([], 3, { state: 'ready', count: 14, hidden: 0 }), changed: 2 }
+        : request.kind === 'hide-found-again'
+          ? { ...catalogOf([], 4, { state: 'ready', count: 12, hidden: 2 }), changed: 0 }
+          : catalogOf([], 2, { state: 'ready', count: 12, hidden: 2 }),
+    );
+    fireEvent.click(await view.findByRole('button', { name: 'Show 2 Hidden Workspaces' }));
+    fireEvent.click(await view.findByRole('button', { name: 'Undo' }));
+    await waitFor(() =>
+      expect(view.getByRole('status').textContent).toBe('Those folders are hidden already.'),
+    );
+  });
+
+  it('keeps hidden roots reachable while finding is off', async () => {
+    const { view } = settings(async () => catalogOf([], 2, { state: 'off', count: 0, hidden: 2 }));
     await waitFor(() => expect(view.getByText('2 hidden')).toBeTruthy());
-    expect(view.getByRole('button', { name: 'Show Hidden Again' })).toBeTruthy();
+    expect(view.getByRole('button', { name: 'Show 2 Hidden Workspaces' })).toBeTruthy();
   });
 });
 
@@ -386,5 +590,19 @@ describe('an empty Change workspace…', () => {
         found,
       ).rows,
     ).toEqual([]);
+  });
+});
+
+describe('Clear Recent Folders and dismissed offers', () => {
+  it('brings back with its Undo the dismissals Clear removed', async () => {
+    const workspaceDefinitionFile = vi.fn(async () => catalogOf([], 9));
+    Object.assign(window, { viewer: { workspaceDefinitionFile, save: vi.fn() } });
+    initialize({ home, platform: 'darwin', state: null, openPaths: [], locations: [] });
+    clearRecentFolders();
+    expect(workspaceDefinitionFile).not.toHaveBeenCalled();
+    undoClearRecentFolders();
+    await waitFor(() =>
+      expect(workspaceDefinitionFile).toHaveBeenCalledWith({ kind: 'restore-offers' }),
+    );
   });
 });

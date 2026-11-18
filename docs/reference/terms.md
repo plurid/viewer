@@ -11,11 +11,11 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 [Command language](#commands-and-automation) · [Curated definition](#workspace-definitions) ·
 [Declared command](#commands-and-automation) · [Defined workspace](#workspace-definitions) ·
 [Definition key](#workspace-definitions) · [Docked](#planes-and-the-space) ·
-[File overview](#suggestions) · [Folder access](#three-separate-permissions) ·
-[Found workspace](#workspace-definitions) · [Insight](#suggestions) · [Job](#changes-and-recovery) ·
-[Journal](#changes-and-recovery) · [Layout of planes](#planes-and-the-space) ·
-[Layout template](#workspace-definitions) · [Lens](#looking-at-files) ·
-[Linked plane](#planes-and-the-space) · [Model](#models-and-agents) ·
+[File overview](#suggestions) · [Files plane](#planes-and-the-space) ·
+[Folder access](#three-separate-permissions) · [Found workspace](#workspace-definitions) ·
+[Insight](#suggestions) · [Job](#changes-and-recovery) · [Journal](#changes-and-recovery) ·
+[Layout of planes](#planes-and-the-space) · [Layout template](#workspace-definitions) ·
+[Lens](#looking-at-files) · [Linked plane](#planes-and-the-space) · [Model](#models-and-agents) ·
 [Model data](#three-separate-permissions) · [Model data levels](#models-and-agents) ·
 [Note](#text-notes-and-tasks) · [Open workspace](#workspace-definitions) ·
 [Plane](#planes-and-the-space) · [Prefix key](#commands-and-automation) ·
@@ -33,7 +33,7 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 ## Workspace definitions
 
 - **Found workspace**: a defined workspace Viewer recognizes from folders you use. It opens one
-  folder plane and shows **Found** with its root in search and Manage. Finding stays private and
+  files plane and shows **Found** with its root in search and Manage. Finding stays private and
   never runs a command. _In Viewer:_ **Not a Workspace** in Manage hides one. _Learn:_
   [Workspaces Viewer finds](../guides/workspaces.md#workspaces-viewer-finds)
 
@@ -68,14 +68,18 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   file stays, and a note keeps its text. _In Viewer:_ each plane's header, with its title, **Frame
   plane**, **Dock plane** and **Close plane** (**×**). _Learn:_
   [Keep your work together](../guides/workspaces.md)
+- **Files plane**: a plane that browses a folder: its files in a view such as List or Columns, with
+  its own navigation, history, selection and search. It shows a folder; **New Folder…** creates one
+  on disk. _In Viewer:_ **New Files Plane**, **+** in the title bar, **Open in Another Plane**.
+  _Learn:_ [Browse and organize](../guides/files.md)
 - **Linked plane**: a plane opened from another, such as a file opened from its folder. It is that
   plane's child: a line joins them, **Back to parent plane** (**⌥⌘↑**) returns to the parent, and
   opening the same file again in that branch shows the plane it already has. _In Viewer:_ **Open
   linked plane**, **Related planes** in the header, **View linked plane** beside a file's name.
   _Learn:_ [Keep your work together](../guides/workspaces.md)
 - **Root plane**: a plane with no parent, the start of its own branch of linked planes. A file
-  opened again in another root gets a plane of its own there. _In Viewer:_ **New Folder Plane**
-  (**⇧⌘N**), **Open in Another Plane**, **Open in New Root Plane** in the sidebar. _Learn:_
+  opened again in another root gets a plane of its own there. _In Viewer:_ **New Files Plane**
+  (**⌘N**), **Open in Another Plane**, **Open in New Root Plane** in the sidebar. _Learn:_
   [Keep your work together](../guides/workspaces.md)
 - **Docked** and **tiled**: docked, one plane fills the window while the rest wait in the space;
   **⌘Return** switches between that plane and all of them. Tiled, the planes in view sit face-on in
@@ -114,14 +118,15 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 
 ## Looking at files
 
-- **Quick Preview**: a look inside the selected files over the folder, opened with **Space**. **←**
-  and **→** step through the selection; **Space** or **Escape** closes it. Its footer offers
-  **Edit** for text, the best **Suggested** action and **Open linked plane**. _In Viewer:_
-  **Space**, **File → Quick Preview**, **Quick Preview** in **⌘K**. _Learn:_
+- **Quick Preview**: a look inside the selected files over the folder, opened with **Space**. With
+  several selected, **←** and **→** step through them; otherwise the arrows move the folder's
+  selection and Quick Preview follows. **Space** or **Escape** closes it. Its footer offers **Edit**
+  for text, the best **Suggested** action and **Open Linked Plane**. In a picture, **⌘L** and **⌘R**
+  turn it. _In Viewer:_ **Space**, **File → Quick Preview**, **Quick Preview** in **⌘K**. _Learn:_
   [Read and inspect files](../guides/previews.md)
-- **Linked plane from a preview**: **Open linked plane** in Quick Preview, or
+- **Linked plane from a preview**: **Open Linked Plane** in Quick Preview, or
   **Option**-double-click on a file, keeps the file open in a plane of its own, linked to the folder
-  it came from. _In Viewer:_ **Open linked plane**. _Learn:_
+  it came from. _In Viewer:_ **Open Linked Plane**. _Learn:_
   [Your first five minutes](../guides/getting-started.md)
 - **Columns preview**: in Columns view (**⌘3**), the selected file's preview sits beside the folder
   trail, so you browse and read at once. _In Viewer:_ **Columns view**. _Learn:_

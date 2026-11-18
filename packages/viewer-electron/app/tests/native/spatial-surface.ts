@@ -283,7 +283,7 @@ async function measure(name: string) {
 }
 
 try {
-  await until(() => main.evaluate(exists('.plane-heading')), Boolean, 'generated folder plane');
+  await until(() => main.evaluate(exists('.plane-heading')), Boolean, 'generated files plane');
   await main.evaluate(pageCall(resize, 1000, 700));
   const before = await measure('before-drag');
   const point = await main.evaluate(pageCall(headingPoint));

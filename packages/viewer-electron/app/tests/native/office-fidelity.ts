@@ -173,7 +173,7 @@ async function capture(connection: Connection, name: string) {
 /** Shows workbook values formatted or as stored, from the toolbar's More menu. */
 async function showValues(connection: Connection, values: WorkbookValues) {
   const choice = `.choice-menu [data-menu-id="choice:${values}"]`;
-  await connection.evaluate(click('button[aria-label="Preview options"]'));
+  await connection.evaluate(click('button.office-more'));
   await until(() => connection.evaluate(exists(choice)), Boolean, 'Preview options');
   await connection.evaluate(click(choice));
 }

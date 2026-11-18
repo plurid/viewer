@@ -116,7 +116,11 @@ export function rootFor(
   probes: ReadonlyMap<string, RootProbe>,
   context: FoundRootContext,
 ): string | undefined {
-  const paths = rootAncestors(folder, context).filter((path) => !context.hidden?.includes(path));
+  // Not a Workspace: a hidden root's folders belong to no found workspace at or around it, only to
+  // roots inside it, such as the inner repositories of a hidden monorepo.
+  const ancestors = rootAncestors(folder, context);
+  const hiddenAt = ancestors.findIndex((path) => context.hidden?.includes(path));
+  const paths = hiddenAt < 0 ? ancestors : ancestors.slice(0, hiddenAt);
   const known = paths.filter((path) => probes.has(path));
   const recognized = known.filter((path) => {
     const facts = probes.get(path)!;
@@ -140,8 +144,11 @@ export function rootFor(
     )
   )
     return;
+  // A hidden inner repository still counts toward the outer one giving way: hiding one of two
+  // inner repositories must not fold the other into the outer repository. Hidden roots are left
+  // out only as roots themselves.
   const gitRoots = [...probes]
-    .filter(([path, facts]) => facts.git === 'directory' && !context.hidden?.includes(path))
+    .filter(([, facts]) => facts.git === 'directory')
     .map(([path]) => path);
   return (
     known.findLast(

@@ -25,7 +25,7 @@ volume quarantine. Store discovery borrows active scopes and never asks for one.
 root can itself be a project; the walk never goes above it. FolderFacts times active work, so queue
 time behind an interactive read is not a probe timeout.
 
-Found definitions contain one folder plane. Explicit definitions win by path and known canonical
+Found definitions contain one files plane. Explicit definitions win by path and known canonical
 root. Found roots never become ROOT token targets. Shared ownership helpers index ancestor roots
 without rescanning the whole definition catalog for each plane.
 
@@ -62,8 +62,12 @@ Finding opens no workspace and executes no command. Search and Manage show the F
 Recently closed includes a found definition only when it remembers planes. Turning finding off
 empties entries and probes by rewriting metadata, while keeping hidden roots.
 
-Hiding controls, contextual offers and learned arrangements are separate work packages. The source
-tag, ownership helpers and private hidden list provide their foundations.
+Not a Workspace adds a root to the private hidden list. A hidden root's folders belong to no found
+root at or around it, so its visits never make the folder around it a workspace; roots inside it can
+still be found. A hidden repository still counts toward an outer repository giving way to inner
+ones, so hiding one never folds its siblings into the outer one. The workspace offer keeps its
+dismissals in a private file of its own, never in configuration. Learned arrangements are a separate
+work package; the source tag and ownership helpers provide their foundations.
 
 See [workspace instructions](../guides/workspaces.md#workspaces-viewer-finds) and
 [configuration](../reference/configuration.md#found-workspaces).

@@ -28,7 +28,8 @@ export interface PathLabelOptions {
   remote?: RemoteLabels;
   /**
    * The folder the label is read against, such as the folder a group of copies shares: the label
-   * starts at the folder that tells the item apart (`Job 1042/…/part.dxf`).
+   * starts at the folder that tells the item apart (`Job 1042/…/part.dxf`). A base that is a root
+   * or holds home (`/`, `/Users`) is ignored: `~` and the root read better (`sharedFolder`).
    */
   base?: string;
 }
@@ -41,7 +42,8 @@ const windowsPath = /^[A-Za-z]:[\\/]|^\\\\/;
 /** Only a short tail without spaces is an extension: "Release 1.0 notes" has none. */
 const extensionTail = /\.[A-Za-z0-9]{1,8}$/;
 /** Hebrew, Arabic and the other right-to-left scripts, with their presentation forms. */
-const rightToLeft = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}]/u;
+const rightToLeft =
+  /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}]/u;
 /** Where a server location starts before its connection is known. */
 const unknownServer = 'server:';
 
@@ -73,16 +75,12 @@ export function pathLabelParts(
   const separator: PathSeparator = windows ? '\\' : '/';
   // A backslash is an ordinary character in a POSIX name.
   const split = (value: string) => value.split(windows ? /[\\/]/ : /\//).filter(Boolean);
-  const inside = (folder: string) => {
-    const relative = relativePathLabel(folder, path);
-    return relative !== path && !/^\.\.(?:[\\/]|$)/.test(relative) ? relative : undefined;
-  };
-  const fromBase = options.base ? inside(options.base) : undefined;
+  const inside = (folder: string) => within(folder, path);
+  const fromBase =
+    options.base && usableBase(options.base, home) ? inside(options.base) : undefined;
   if (fromBase && fromBase !== '.') {
     const names = split(fromBase);
-    return names.length > 1
-      ? { anchor: names[0]!, separator, names: names.slice(1) }
-      : { anchor: '', separator, names };
+    return { anchor: names[0]!, separator, names: names.slice(1) };
   }
   const fromHome = home ? inside(home) : undefined;
   if (fromHome === '.') return { anchor: '~', separator, names: [] };
@@ -90,6 +88,29 @@ export function pathLabelParts(
   const root =
     path.match(windows ? /^(?:[A-Za-z]:[\\/]?|[\\/]{2}[^\\/]+[\\/][^\\/]+)/ : /^\//)?.[0] ?? '';
   return { anchor: root, separator, names: split(path.slice(root.length)) };
+}
+
+/** `path` read from `folder` (`.` for the folder itself), or nothing when it is outside it. */
+function within(folder: string, path: string): string | undefined {
+  const relative = relativePathLabel(folder, path);
+  return relative !== path && !/^\.\.(?:[\\/]|$)/.test(relative) ? relative : undefined;
+}
+
+/**
+ * Whether labels can be read from `base`: home or a folder inside it, or a folder elsewhere that
+ * is not a root and does not hold home. From `/` or `/Users`, copies at home and on a backup
+ * volume would read `Users/al/…` and `Volumes/Backup/…`.
+ */
+function usableBase(base: string, home: string): boolean {
+  if (home && within(home, base) !== undefined) return true;
+  if (home && within(base, home) !== undefined) return false;
+  return pathAncestry(base).length > 1;
+}
+
+/** The folder `paths` share when labels can be read from it (`usableBase`), or nothing. */
+export function sharedFolder(paths: readonly string[], home: string): string {
+  const folder = commonFolder(paths);
+  return folder && usableBase(folder, home) ? folder : '';
 }
 
 /** A right-to-left name keeps its own direction without reordering the names around it. */
@@ -121,8 +142,22 @@ export function pathText(path: string, home: string, options: PathLabelOptions =
   return pathLabelText(pathLabelParts(path, home, options));
 }
 
-/** What copying a path gives: the path itself, or a server location as `al@build:/path`. */
+/**
+ * A server location as people type it (`al@build:/home/al/Jobs`) once its connection is known;
+ * the location itself before that, so a copy is never a made-up address.
+ */
 export function pathCopyText(path: string, remote?: RemoteLabels): string {
+  if (!hasRemoteLocationScheme(path)) return path;
+  try {
+    const known = remote?.(parseRemoteLocation(path).connectionID);
+    return known ? displayLocation(path, known) : path;
+  } catch {
+    return path;
+  }
+}
+
+/** The whole path for a tooltip or a screen reader: as copied, or `server:/path` until known. */
+export function pathWholeText(path: string, remote?: RemoteLabels): string {
   if (!hasRemoteLocationScheme(path)) return path;
   try {
     const location = parseRemoteLocation(path);
@@ -154,13 +189,13 @@ export function fitPathLabel(parts: PathLabelParts, room: number, measure: TextM
     return pathLabelText(parts, low);
   }
   const name = count ? parts.names[count - 1]! : parts.anchor;
-  const within = (compose: (text: string) => string) => {
+  const shortened = (compose: (text: string) => string) => {
     const text = compose(middleName(name, (candidate) => fits(compose(candidate))));
     return fits(text) ? text : undefined;
   };
   return (
-    (count ? within((text) => pathLabelText(parts, 1, text)) : undefined) ??
-    within(isolate) ??
+    (count ? shortened((text) => pathLabelText(parts, 1, text)) : undefined) ??
+    shortened(isolate) ??
     (fits(ellipsis) ? ellipsis : '')
   );
 }
@@ -186,7 +221,9 @@ export function middleName(name: string, fits: (text: string) => boolean): strin
   const shorten = (stem: readonly string[], end: string) => (count: number) => {
     const start = Math.ceil(count * 0.6);
     const kept = count - start;
-    return stem.slice(0, start).join('') + ellipsis + (kept ? stem.slice(-kept).join('') : '') + end;
+    return (
+      stem.slice(0, start).join('') + ellipsis + (kept ? stem.slice(-kept).join('') : '') + end
+    );
   };
   const longest = (make: (count: number) => string, total: number) => {
     let low = 0;
@@ -210,18 +247,15 @@ export function commonFolder(paths: readonly string[]): string {
   const chains = paths.map((path) => pathAncestry(path).slice(0, -1));
   const first = chains[0] ?? [];
   let index = -1;
-  while (
-    index + 1 < first.length &&
-    chains.every((chain) => chain[index + 1] === first[index + 1])
-  )
+  while (index + 1 < first.length && chains.every((chain) => chain[index + 1] === first[index + 1]))
     index++;
   return index < 0 ? '' : first[index]!;
 }
 
 /**
- * A message's paths with home as `~`: a sentence cannot drop names from a path, but it need not
- * spell out the home folder. A quoted or assigned word stays whole, since a shell would not expand
- * `~` there (`cp '/Users/al/a b'`).
+ * A message's paths with home as `~`, quoted ones too (`open '~/Private/a.txt'`): a sentence cannot
+ * drop names from a path, but it need not spell out the home folder. Not for a command line a
+ * person may run: a shell expands `~` only at the start of an unquoted word.
  */
 export function homeText(text: string, home: string): string {
   const base = home.replace(/[\\/]+$/, '');
@@ -230,7 +264,7 @@ export function homeText(text: string, home: string): string {
   const flags = windowsPath.test(base) ? 'gi' : 'g';
   return text.replace(
     new RegExp(
-      `(?<![\\w.\\-/\\\\'"=])${escaped}(?=[\\\\/]|$|[\\s"'\u201d\u2019),:;\\]}>]|[.!?](?:\\s|$))`,
+      `(?<![\\w.\\-/\\\\])${escaped}(?=[\\\\/]|$|[\\s"'\u201d\u2019),:;\\]}>]|[.!?](?:\\s|$))`,
       flags,
     ),
     '~',

@@ -135,6 +135,16 @@ export async function writeProfile(
       },
     };
   }
+  for (let index = 1; index <= (setup.extraWorkspaces ?? 0); index++)
+    workspaces.push(
+      folderWorkspace(
+        'project-' + index,
+        'Project ' + index + ' for the north workshop',
+        path.join(home, sampleFolders.projects),
+        'list',
+        false,
+      ),
+    );
   if (setup.otherWorkspace)
     workspaces.push(
       folderWorkspace(

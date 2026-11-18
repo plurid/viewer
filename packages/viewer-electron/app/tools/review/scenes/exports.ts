@@ -27,7 +27,7 @@ const imageTools: Scene = {
   async steps(page) {
     await page.select(page.path(...deep(longName('jpg'))));
     await page.palette('Image tools…');
-    await page.waitFor('.image-tools-dialog[open]');
+    await page.waitFor('dialog[open][aria-label^="image tools" i]');
     await page.settle(800);
   },
 };
@@ -46,7 +46,7 @@ const optimize: Scene = {
   async steps(page) {
     await page.select(page.path(...deep(longName('jpg'))));
     await page.palette('Optimize…');
-    await page.waitFor('.optimize-dialog[open]');
+    await page.waitFor('dialog[open][aria-label^="optimize" i]');
     await page.settle(800);
   },
 };
@@ -80,7 +80,7 @@ const pdfTools: Scene = {
   async steps(page) {
     await page.select(page.path(...deep(longName('pdf'))));
     await page.palette('PDF tools…');
-    await page.waitFor('.pdf-tools-dialog[open]');
+    await page.waitFor('dialog[open][aria-label="pdf tools" i]');
     await page.settle(1200);
   },
 };
@@ -105,7 +105,7 @@ const projectFolders: Scene = {
   focus: ['dialog[open]'],
   async steps(page) {
     await page.palette('Project folders…');
-    await page.waitFor('dialog[open] .project-controls');
+    await page.waitFor('dialog[open][aria-label="project folders" i]');
     await page.settle(600);
   },
 };
@@ -127,7 +127,7 @@ const copyTo: Scene = {
   async steps(page) {
     await page.select(page.path(...deep(longName('txt'))));
     await page.palette('Copy to…');
-    await page.waitFor('dialog[open]');
+    await page.waitFor('dialog[open][aria-label^="copy to" i]');
     await page.settle(600);
   },
 };

@@ -314,19 +314,17 @@ export function FileEditor({
     );
   if (!loaded) return <Loading label="Opening for editing…" />;
   const toolbar = (
-    // Save only while something is unsaved; Save As and Revert are in the plane's ⋯ menu, and
-    // ⇧⌘S and ⌘Z, rather than buttons
+    // Save is always there, dimmed with nothing unsaved, so the first keystroke moves nothing in
+    // the header; Save As and Revert are in the plane's ⋯ menu, and ⇧⌘S and ⌘Z
     <div className="preview-toolbar text-editing-toolbar">
-      {dirty && (
-        <button
-          className="primary"
-          disabled={saving}
-          title={withShortcut('Save', saveKeys)}
-          onClick={() => void save()}
-        >
-          Save
-        </button>
-      )}
+      <button
+        className="primary"
+        disabled={!dirty || saving}
+        title={withShortcut('Save', saveKeys)}
+        onClick={() => void save()}
+      >
+        Save
+      </button>
       <button title="Done editing" onClick={() => void done().catch(report)}>
         Done
       </button>

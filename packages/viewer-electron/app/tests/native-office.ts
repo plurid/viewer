@@ -213,11 +213,12 @@ async function capture(
 /** Chooses in a choice menu (ui/ChoiceMenu.tsx) as a person does: its button, then the value's row. */
 async function choose(
   evaluate: <R>(expression: PageExpression<R>) => Promise<Awaited<R>>,
-  label: string,
+  button: string,
   value: string,
 ) {
   const row = `.choice-menu [data-menu-id=${JSON.stringify('choice:' + value)}]`;
-  await evaluate(click(`button[aria-label=${JSON.stringify(label)}]`));
+  const label = button;
+  await evaluate(click(button));
   await until(() => evaluate(exists(row)), Boolean, label + ' menu');
   await evaluate(click(row));
 }
@@ -277,7 +278,7 @@ async function checkBook() {
     evidence.push(
       'Packaged XLSX preview selects evidence sheet B61, marks saved formula value, filters without renumbering source row 61, and shows missing cached values without executing formulas.',
     );
-    await choose(evaluate, 'Preview options', 'details');
+    await choose(evaluate, '.office-more', 'details');
     await until(
       () => evaluate(pageCall(coverageVisible)),
       Boolean,
@@ -297,7 +298,7 @@ async function checkBook() {
       mobile: false,
     });
     await capture(connection, 'workbook-compact-light');
-    await choose(evaluate, 'Preview options', 'details');
+    await choose(evaluate, '.office-more', 'details');
     await evaluate(pageCall(sheetTab, 'Hidden'));
     await until(
       () => evaluate(textOf('.data-scroll')),

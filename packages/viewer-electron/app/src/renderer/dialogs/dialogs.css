@@ -138,12 +138,9 @@
   flex: none;
   color: var(--accent);
 }
-.file-picker-row > span {
-  flex: 1;
+.file-picker-row > .file-name-label {
+  flex: 1 1 0;
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .file-picker-row small {
   color: var(--muted);
@@ -188,6 +185,8 @@
 .file-picker-name input,
 .file-picker-type .choice-button {
   width: 100%;
+  /* a file type fills its row as File name does */
+  max-width: none;
   min-width: 0;
 }
 .file-picker-fields .error {
@@ -196,13 +195,16 @@
 }
 .viewer-file-picker .file-picker-new-folder {
   display: flex;
-  align-items: end;
+  align-items: center;
   gap: var(--gap-inline);
   padding: 0;
 }
 .file-picker-new-folder label {
+  /* the label beside its field, as File name and File type */
   display: grid;
-  gap: var(--gap-small);
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--gap-content);
   flex: 1;
   min-width: 0;
 }

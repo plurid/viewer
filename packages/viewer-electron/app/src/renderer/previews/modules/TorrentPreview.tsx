@@ -11,6 +11,7 @@ import { PreviewToolbar } from '../controls';
 import { usePreviewScroll } from '../scroll';
 import { dateText, useInspected } from '../useInspected';
 import './inspection.css';
+import { FileName } from '../../ui/FileName';
 
 const rowHeight = 28;
 const versions: Readonly<Record<TorrentFacts['version'], string>> = {
@@ -63,7 +64,13 @@ function Files({ torrent, context }: { torrent: TorrentFacts; context: PreviewCo
                 height: rowHeight,
               }}
             >
-              <span title={file.path}>{file.path}</span>
+              {/* its own name first, losing its middle; the folders in the torrent after it */}
+              <span className="torrent-file-name" title={file.path}>
+                <FileName name={file.path.slice(file.path.lastIndexOf('/') + 1) || file.path} />
+                {file.path.includes('/') && (
+                  <small className="muted">{file.path.slice(0, file.path.lastIndexOf('/'))}</small>
+                )}
+              </span>
               <span className="tabular">{formatBytes(file.size)}</span>
             </div>
           );

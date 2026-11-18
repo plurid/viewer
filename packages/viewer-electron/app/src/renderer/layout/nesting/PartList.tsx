@@ -1,4 +1,5 @@
 import { areaText, sizeText } from '../../../domain/layout/nesting/format';
+import { NumberField } from '../../ui/NumberField';
 import type { LengthUnit, RotationMode } from '../../../domain/layout/nesting/plan';
 import { rotationLabels, rotationModes } from '../../../domain/layout/nesting/plan';
 import type { PartChoice } from '../../../domain/layout/nesting/problem';
@@ -80,21 +81,12 @@ export function PartList({
                   <div className="nesting-part-controls">
                     <label>
                       Quantity
-                      <input
-                        type="number"
+                      <NumberField
                         min={0}
                         max={20000}
-                        step={1}
                         aria-label={`Quantity of ${part.name}`}
                         value={choice.quantity}
-                        onChange={(event) =>
-                          choose(key, {
-                            quantity: Math.max(
-                              0,
-                              Math.min(20000, Math.floor(Number(event.target.value) || 0)),
-                            ),
-                          })
-                        }
+                        onCommit={(quantity) => choose(key, { quantity })}
                       />
                       {origin && <span className="muted">{origin}</span>}
                     </label>

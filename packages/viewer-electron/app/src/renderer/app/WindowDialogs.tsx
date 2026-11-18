@@ -422,6 +422,7 @@ export function WindowDialogs({
             label="Server address"
             maxLength={2048}
             initial="smb://"
+            selection="end"
             action="Connect"
             onClose={() => onClose()}
             onSubmit={(address) => window.viewer.connectServer(address.trim())}

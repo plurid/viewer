@@ -235,10 +235,43 @@
   justify-content: space-between;
   gap: var(--gap-inline);
   min-width: 120px;
-  max-width: 260px;
+  /* a form row's choice fills its row (form-fields.css, Settings rows); in a bar it stops at
+     260 px so one long value never pushes the bar's other controls out */
+  max-width: 100%;
   border-color: var(--line);
   background: var(--field);
   text-align: left;
+}
+:is(.preview-toolbar, .plane-controls, .palette-context, .panel-header, .toolbar) .choice-button {
+  max-width: 260px;
+}
+.choice-button > span {
+  min-width: 0;
+}
+/* an action menu's button shows its name, not a value: it is as wide as that name */
+.choice-button.menu-button {
+  min-width: 0;
+}
+/* SEGMENTED CONTROLS (ChoiceMenu.tsx): the choices side by side in one field, the current one
+   filled */
+.segmented-control {
+  display: inline-flex;
+  flex: none;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--field);
+}
+.segmented-control > button {
+  border-radius: 0;
+  padding: var(--gap-tight) var(--gap-inline);
+  font-size: var(--text-compact);
+}
+.segmented-control > button[aria-checked='true'] {
+  background: var(--selection);
+  color: var(--ink);
 }
 .choice-button > span {
   overflow: hidden;
@@ -488,4 +521,12 @@
     SFMono-Regular,
     Menlo,
     monospace;
+}
+
+/* Find File's search status keeps its line while it is quiet (CommandPalette.tsx). */
+.palette-searching {
+  min-height: 1lh;
+}
+.palette-searching[data-active='false'] {
+  visibility: hidden;
 }

@@ -3,16 +3,23 @@ import type { DuplicateGroup, DuplicateResult } from '../../../domain/comparison
 import { sourceVersion } from '../../../domain/files/inspection';
 import { formatBytes } from '../../../domain/files/entries';
 import { Dialog, Loading } from '../primitives';
-import { PathLabel } from '../PathLabel';
+import { PathLabel, useHome } from '../PathLabel';
 import { prepareOperationReview } from '../operations/OperationReview';
 import { errorMessage } from '../../../domain/errors';
-import { commonFolder } from '../../../domain/files/path-label';
+import { pathText, sharedFolder } from '../../../domain/files/path-label';
 import { useWindowEvent } from '../../app/window-events';
 import { plural } from '../../../domain/plural';
 
 const page = 100;
-/** The folder a group's copies share: each copy is read from it, so two copies never read alike. */
-const groupFolder = (group: DuplicateGroup) => commonFolder(group.files.map((file) => file.path));
+/**
+ * The folder a group's copies share, when they read better from it than from `~` or the root:
+ * each copy is read from it, so two copies never read alike.
+ */
+const groupFolder = (group: DuplicateGroup, home: string) =>
+  sharedFolder(
+    group.files.map((file) => file.path),
+    home,
+  );
 const reclaimable = (groups: readonly DuplicateGroup[], chosen?: ReadonlySet<string>) =>
   groups.reduce(
     (total, group) =>
@@ -31,6 +38,7 @@ export function DuplicateControls() {
   const [roots, setRoots] = useState<string[]>([]);
   const [running, setRunning] = useState('');
   const [result, setResult] = useState<DuplicateResult>();
+  const home = useHome();
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [shown, setShown] = useState(page);
   const [error, setError] = useState('');
@@ -102,8 +110,10 @@ export function DuplicateControls() {
     <Dialog wide title="Find Duplicates" onClose={close}>
       <div className="dialog-body duplicates-body">
         <p className="muted">
-          Searches {roots.length ? roots.join(', ') : 'no folder yet'} for files with identical
-          contents (SHA-256). Links are not followed and nothing is changed by searching.
+          Searches{' '}
+          {roots.length ? roots.map((root) => pathText(root, home)).join(', ') : 'no folder yet'}{' '}
+          for files with identical contents (SHA-256). Links are not followed and nothing is changed
+          by searching.
         </p>
         <div className="project-control-row">
           <button disabled={!!running} onClick={() => void choose()}>
@@ -144,8 +154,8 @@ export function DuplicateControls() {
                   <legend>
                     {group.files.length} identical files · {formatBytes(group.size)} each
                   </legend>
-                  {groupFolder(group) && (
-                    <PathLabel className="duplicate-folder muted" path={groupFolder(group)} />
+                  {groupFolder(group, home) && (
+                    <PathLabel className="duplicate-folder muted" path={groupFolder(group, home)} />
                   )}
                   {group.files.map((file) => {
                     const last =
@@ -159,7 +169,7 @@ export function DuplicateControls() {
                           disabled={last}
                           onChange={() => toggle(group, file.path)}
                         />
-                        <PathLabel path={file.path} base={groupFolder(group)} />
+                        <PathLabel path={file.path} base={groupFolder(group, home) || undefined} />
                         <small className="muted">{new Date(file.modified).toLocaleString()}</small>
                       </label>
                     );

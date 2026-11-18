@@ -5,6 +5,7 @@ import GitChanges from '../src/renderer/git/GitChanges';
 import { activeWorkspace, flushState, initialize } from '../src/renderer/state/store';
 import { addContentPane } from '../src/renderer/state/panes';
 import type { ViewerAPI } from '../src/domain/contracts';
+import { choiceLabel } from './support/choice-button';
 
 const workspace = vi.hoisted(() => ({
   rootID: () => 'review',
@@ -78,8 +79,8 @@ it('retains file selection and mode, stages only the chosen hunk and navigates f
       hunks: ['hunk-second'],
     }),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Staged' }));
+  fireEvent.click(screen.getByRole('button', { name: choiceLabel('Review changes') }));
+  fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Staged' }));
   await screen.findByRole('button', { name: 'Unstage Hunk 1' });
   expect(activeWorkspace().panes.find((pane) => pane.id === 'review')).toMatchObject({
     review: { mode: 'staged', selectedPath: 'b.txt' },
@@ -90,8 +91,8 @@ it('retains file selection and mode, stages only the chosen hunk and navigates f
   expect(api.mock.calls.filter(([request]) => request.kind === 'file').at(-1)?.[0]).toMatchObject({
     fileID: 'second',
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Against base' }));
+  fireEvent.click(screen.getByRole('button', { name: choiceLabel('Review changes') }));
+  fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Against base' }));
   await waitFor(() =>
     expect(api).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'read', mode: 'branch', baseID: 'base' }),

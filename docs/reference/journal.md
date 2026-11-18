@@ -54,7 +54,7 @@ it, and agents have no route to read it.
 | **Event time range**      | **All time**, **Last 15 minutes**, **Last hour**, **Last 24 hours**, **Time range…** |
 | **Journal workspace**     | **All workspaces** or one; a closed one shows as **Closed workspace**                |
 | **Journal plane**         | **All planes** or one; a closed one shows as **Closed plane**                        |
-| **Filters…**              | Presets and your saved filters                                                       |
+| **Filters**               | A menu of presets and your saved filters                                             |
 | **Save Journal filters**  | Saves the current filters by name, up to 80 characters; 20 per Journal plane         |
 | **Clear Journal filters** | Removes every filter                                                                 |
 

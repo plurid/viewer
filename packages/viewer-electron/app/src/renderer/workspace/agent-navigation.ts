@@ -80,14 +80,14 @@ export async function executeAgentNavigation(
   if (request.kind === 'open-path') {
     const entry = await window.viewer.stat(request.path);
     origin();
-    if (!pane && request.placement === 'linked') throw new Error('Focus a folder plane first.');
+    if (!pane && request.placement === 'linked') throw new Error('Focus a files plane first.');
     if (request.placement === 'current' && entry.directory && pane?.type === 'folder') {
       navigate(pane.id, entry.path);
       controller.focusPane(pane.id);
     } else controller.open(entry, pane?.id, { another: !pane || request.placement === 'root' });
     return;
   }
-  if (pane?.type !== 'folder') throw new Error('Focus a folder plane before selecting files.');
+  if (pane?.type !== 'folder') throw new Error('Focus a files plane before selecting files.');
   const entries = [];
   for (const expected of request.files) {
     const actual = await window.viewer.stat(expected.path);

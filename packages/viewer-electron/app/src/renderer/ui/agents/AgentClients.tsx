@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useConfirmation } from '../settings/ConfirmAction';
 import {
   agentCapabilities,
   clientLimitReached,
@@ -12,6 +13,7 @@ import { CopyButton, IconButton, PathField } from '../primitives';
 import { Disclosure } from '../Disclosure';
 import { errorMessage } from '../../../domain/errors';
 import { statusLabel } from '../status-labels';
+import { NumberField } from '../NumberField';
 
 const descriptions = {
   metadata: [
@@ -56,6 +58,7 @@ export function AgentClientSettings({
   const [history, setHistory] = useState<AgentAudit[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const confirmation = useConfirmation();
   const load = async () => {
     const value = await window.viewer.agentClients({ kind: 'list' });
     setClients(value as AgentClient[]);
@@ -137,15 +140,22 @@ export function AgentClientSettings({
                 </button>
                 <button
                   disabled={busy}
+                  className="danger"
                   onClick={() =>
-                    void run(async () => {
-                      await window.viewer.agentClients({
-                        kind: 'revoke',
-                        id: client.id,
-                        revision: client.revision,
-                      });
-                      if (editing?.id === client.id) edit();
-                      await load();
+                    confirmation.ask({
+                      title: `Revoke the client “${client.name}”?`,
+                      detail: 'Its key stops working and its tasks stop.',
+                      action: 'Revoke',
+                      run: () =>
+                        void run(async () => {
+                          await window.viewer.agentClients({
+                            kind: 'revoke',
+                            id: client.id,
+                            revision: client.revision,
+                          });
+                          if (editing?.id === client.id) edit();
+                          await load();
+                        }),
                     })
                   }
                 >
@@ -263,30 +273,28 @@ export function AgentClientSettings({
         ))}
         <label className="settings-row">
           <span>Maximum returned content (MiB)</span>
-          <input
-            type="number"
+          <NumberField
             min={1}
             max={maxAgentReadBytes / mebibyte}
             value={draft.budgets.maxReadBytes / mebibyte}
-            onChange={(e) =>
+            onCommit={(mebibytes) =>
               setDraft({
                 ...draft,
-                budgets: { ...draft.budgets, maxReadBytes: Number(e.target.value) * mebibyte },
+                budgets: { ...draft.budgets, maxReadBytes: mebibytes * mebibyte },
               })
             }
           />
         </label>
         <label className="settings-row">
           <span>Tasks at a time</span>
-          <input
-            type="number"
+          <NumberField
             min={1}
             max={20}
             value={draft.budgets.maxTasks}
-            onChange={(e) =>
+            onCommit={(maxTasks) =>
               setDraft({
                 ...draft,
-                budgets: { ...draft.budgets, maxTasks: Number(e.target.value) },
+                budgets: { ...draft.budgets, maxTasks },
               })
             }
           />
@@ -363,6 +371,7 @@ export function AgentClientSettings({
           {error}
         </p>
       )}
+      {confirmation.dialog}
     </>
   );
 }

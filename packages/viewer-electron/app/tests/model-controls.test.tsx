@@ -189,10 +189,15 @@ describe.each(['stl', 'obj'])('%s model preview', (extension) => {
     const view = await preview(extension);
     fireEvent.click(screen.getByRole('button', { name: 'Measure' }));
     expect(screen.getByRole('status').textContent).toContain('Click two surface points');
-    // A press that moves past 4 px is a drag, even a short one ending 5 px away.
+    // A press that moves past 4 px is a drag, even a short one ending 5 px away, or one that
+    // goes 10 px and comes back to its start.
     pointer(view.canvas, 'pointerdown', 400, 300);
     pointer(view.canvas, 'pointermove', 405, 300);
     pointer(view.canvas, 'pointerup', 405, 300);
+    pointer(view.canvas, 'pointerdown', 400, 300);
+    pointer(view.canvas, 'pointermove', 410, 300);
+    pointer(view.canvas, 'pointermove', 400, 300);
+    pointer(view.canvas, 'pointerup', 400, 300);
     expect(view.values.get('model.measurement') ?? []).toHaveLength(0);
     // Within 4 px it is still a click.
     pointer(view.canvas, 'pointerdown', 400, 300);

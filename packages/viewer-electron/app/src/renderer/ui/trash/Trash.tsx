@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { FileEntry } from '../../../domain/contracts';
 import type { TrashItem, TrashSnapshot, TrashSortKey } from '../../../domain/files/trash';
@@ -17,6 +17,7 @@ import { FileIcon } from '../../explorer/views';
 import { FileSelection } from '../../explorer/selection';
 import { Dialog, Empty, IconButton, Loading, PathField } from '../primitives';
 import { Icon } from '../Icon';
+import { FileName } from '../FileName';
 import { PathLabel, useHome } from '../PathLabel';
 import { asFile, originUnavailable, trashDate } from './items';
 import { TrashMenu } from './TrashMenu';
@@ -48,6 +49,7 @@ export function Trash({ onClose }: { onClose(): void }) {
   const [preview, setPreview] = useState<{ items: TrashItem[]; index: number }>();
   const [information, setInformation] = useState<TrashItem>();
   const scroll = useRef<HTMLDivElement>(null);
+  const inventory = useRef<HTMLDivElement>(null);
   const live = useRef(true),
     reading = useRef(false),
     queued = useRef(false);
@@ -141,6 +143,15 @@ export function Trash({ onClose }: { onClose(): void }) {
     estimateSize: () => 40,
     overscan: 8,
   });
+  // The list's own scroll bar takes room the headings above it do not have: they keep the same
+  // room, so Size lines up over its column whatever the scroll bar setting.
+  useLayoutEffect(() => {
+    const list = scroll.current;
+    inventory.current?.style.setProperty(
+      '--trash-gutter',
+      `${list ? list.offsetWidth - list.clientWidth : 0}px`,
+    );
+  });
   const unavailable =
     snapshot?.locations.filter((location) => location.state === 'unavailable') ?? [];
   const ancestors = snapshot?.ancestors ?? [];
@@ -203,7 +214,7 @@ export function Trash({ onClose }: { onClose(): void }) {
       const code = (error as { code?: string }).code;
       if (code === 'ENOENT' || code === 'ENOTDIR')
         throw new Error(
-          'The original folder no longer exists. Use Restore To… to choose another folder.',
+          'The original folder no longer exists. Use Put Back To… to choose another folder.',
         );
       throw error;
     }
@@ -262,8 +273,10 @@ export function Trash({ onClose }: { onClose(): void }) {
   return (
     <>
       <Dialog title={title} onClose={onClose} className="trash-dialog">
-        <div className={`trash-toolbar ${folder.current ? 'has-parent' : ''}`}>
-          {folder.current && (
+        {/* DESIGN.md: Back and the path only inside a folder. At the top their two cells stay
+            empty, so Quick Look and Put Back keep their place when a folder opens. */}
+        <div className="trash-toolbar has-parent">
+          {folder.current ? (
             <>
               <IconButton
                 icon="left"
@@ -290,6 +303,11 @@ export function Trash({ onClose }: { onClose(): void }) {
                 ))}
               </nav>
             </>
+          ) : (
+            <>
+              <span aria-hidden="true" />
+              <span aria-hidden="true" />
+            </>
           )}
           <div className="trash-selection-actions">
             <IconButton
@@ -311,8 +329,16 @@ export function Trash({ onClose }: { onClose(): void }) {
                 )
               }
             >
-              {/* with nothing selected it is Restore, not a choice of folder for no items */}
-              {selectedItems.every((item) => item.originalPath) ? 'Restore' : 'Restore To…'}
+              {/* with nothing selected it is Put Back, not a choice of folder for no items; both
+                  labels take the wider one's room, so the button keeps its width */}
+              <span className="swap-label">
+                <span aria-hidden={!selectedItems.every((item) => item.originalPath)}>
+                  Put Back
+                </span>
+                <span aria-hidden={selectedItems.every((item) => item.originalPath)}>
+                  Put Back To…
+                </span>
+              </span>
             </button>
           </div>
           <label className="trash-search">
@@ -329,7 +355,8 @@ export function Trash({ onClose }: { onClose(): void }) {
           </label>
         </div>
         <div className="trash-body">
-          {loading && <Loading label={`Loading ${title}…`} />}
+          {/* a folder opening keeps the rows before it until its own arrive */}
+          {loading && !items.length && <Loading label={`Loading ${title}…`} />}
           {(error || actionError) && (
             <p className="error trash-message" role="alert">
               {homeText(actionError || error, home)}
@@ -371,8 +398,12 @@ export function Trash({ onClose }: { onClose(): void }) {
               }
             />
           )}
-          {!loading && items.length > 0 && (
-            <div className={`trash-inventory ${dateKind ? 'with-date' : ''}`}>
+          {items.length > 0 && (
+            <div
+              ref={inventory}
+              className={`trash-inventory ${dateKind ? 'with-date' : ''}`}
+              aria-busy={loading || undefined}
+            >
               <div className="trash-row trash-heading" role="group" aria-label="Sort Trash">
                 {sortHeading('name', 'Name')}
                 {sortHeading('originalPath', 'Original location')}
@@ -508,9 +539,9 @@ export function Trash({ onClose }: { onClose(): void }) {
                           });
                         }}
                       >
-                        <span className="trash-filename" title={item.name}>
+                        <span className="trash-filename">
                           <FileIcon entry={file} size={18} />
-                          <span>{item.name}</span>
+                          <FileName name={item.name} />
                           {item.directory && <Icon name="right" size={12} />}
                         </span>
                         {item.originalPath ? (
@@ -547,17 +578,28 @@ export function Trash({ onClose }: { onClose(): void }) {
             </p>
           )}
         </div>
-        {selectedItem && (
-          <section className="trash-origin-details" aria-label="Original location details">
-            <div>
-              <span className="muted">Original location</span>
-              {selectedItem.originalPath ? (
-                <PathField className="trash-original-path" path={selectedItem.originalPath} />
-              ) : (
-                <p>{originUnavailable}</p>
-              )}
-            </div>
-            {selectedItem.originalPath ? (
+        {/* always there, one line high, so the list never changes height as the selection does */}
+        <section className="trash-origin-details" aria-label="Original location details">
+          <div>
+            <span className="muted">Original location</span>
+            {!selectedItem ? (
+              <p className="muted">
+                {selected.length
+                  ? `${plural(selected.length, 'item')} selected`
+                  : 'Select an item to see where it came from.'}
+              </p>
+            ) : selectedItem.originalPath ? (
+              <PathField
+                className="trash-original-path"
+                path={selectedItem.originalPath}
+                layout="line"
+              />
+            ) : (
+              <p>{originUnavailable}</p>
+            )}
+          </div>
+          {selectedItem &&
+            (selectedItem.originalPath ? (
               <button disabled={busy} onClick={() => void action(() => openOriginal(selectedItem))}>
                 Show Original Folder
               </button>
@@ -566,11 +608,10 @@ export function Trash({ onClose }: { onClose(): void }) {
                 disabled={busy || !window.viewerNative}
                 onClick={() => void action(() => restore([selectedItem.id], 'choose'))}
               >
-                Restore To…
+                Put Back To…
               </button>
-            )}
-          </section>
-        )}
+            ))}
+        </section>
         <footer className="trash-footer">
           <span className="muted" role="status">
             {snapshot

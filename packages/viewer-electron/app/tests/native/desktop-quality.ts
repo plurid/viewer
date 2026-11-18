@@ -163,7 +163,7 @@ function pinAction(name: string) {
   const row = [...document.querySelectorAll('.capabilities-results li')].find(
     (item) => item.querySelector('strong')!.textContent === name,
   )!;
-  [...row.querySelectorAll('button')].find((button) => button.textContent === 'Pin')!.click();
+  row.querySelector<HTMLButtonElement>('.capability-pin')!.click();
 }
 
 /** Replaces the folder toolbar's tools, keeping the other toolbars. */
@@ -366,7 +366,7 @@ async function session(restart: boolean) {
         });
 
       for (const count of [2, 3]) {
-        await evaluate(click('[aria-label="New folder plane (⇧⌘N)"]'));
+        await evaluate(click('[aria-label^="New files plane"]'));
         await until(
           () => evaluate(countOf('.plane-controls')),
           (value) => value === count,

@@ -4,6 +4,7 @@ import { createElement } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DelimitedTable } from '../src/renderer/previews/DataTable';
 import type { DelimitedPreview } from '../src/renderer/previews/table-data';
+import { PreviewFrameFixture } from './support/preview-frame';
 
 const create = vi.hoisted(() => vi.fn());
 vi.mock('../src/renderer/previews/table-session', () => ({ createTableSession: create }));
@@ -46,6 +47,9 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
+/** A table in a preview's frame, whose footer shows its row and column counts. */
+const framed = (props: { text: string; delimiter: string }) =>
+  createElement(PreviewFrameFixture, null, createElement(DelimitedTable, props));
 const table = (value: string): DelimitedPreview => ({
   headers: ['Name'],
   rows: [[value]],
@@ -54,8 +58,8 @@ const table = (value: string): DelimitedPreview => ({
 });
 
 it('closes old workers and ignores late parsing results after changing files', async () => {
-  const view = render(createElement(DelimitedTable, { text: 'first', delimiter: ',' }));
-  view.rerender(createElement(DelimitedTable, { text: 'second', delimiter: ',' }));
+  const view = render(framed({ text: 'first', delimiter: ',' }));
+  view.rerender(framed({ text: 'second', delimiter: ',' }));
   expect(pending[0]!.close).toHaveBeenCalledOnce();
   await act(async () => pending[0]!.resolve(table('old')));
   expect(view.getByRole('status').textContent).toContain('Reading table');
@@ -66,10 +70,10 @@ it('closes old workers and ignores late parsing results after changing files', a
 });
 
 it('does not reuse a closed table reader when content changes from A to B back to A', async () => {
-  const view = render(createElement(DelimitedTable, { text: 'A', delimiter: ',' }));
+  const view = render(framed({ text: 'A', delimiter: ',' }));
   await act(async () => pending[0]!.resolve(table('A')));
-  view.rerender(createElement(DelimitedTable, { text: 'B', delimiter: ',' }));
-  view.rerender(createElement(DelimitedTable, { text: 'A', delimiter: ',' }));
+  view.rerender(framed({ text: 'B', delimiter: ',' }));
+  view.rerender(framed({ text: 'A', delimiter: ',' }));
   expect(view.getByRole('status').textContent).toContain('Reading table');
   await act(async () => {
     pending[1]!.resolve(table('B'));
@@ -81,7 +85,7 @@ it('does not reuse a closed table reader when content changes from A to B back t
 });
 
 it('retains an explicit recovery action after a worker failure', async () => {
-  const view = render(createElement(DelimitedTable, { text: 'A', delimiter: ',' }));
+  const view = render(framed({ text: 'A', delimiter: ',' }));
   await act(async () => pending[0]!.reject(new Error('Table processing stopped. Try again.')));
   expect(view.container.textContent).toContain("Can't read this table");
   fireEvent.click(view.getByRole('button', { name: 'Try Again' }));

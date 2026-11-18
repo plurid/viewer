@@ -227,6 +227,8 @@
   border-top: 1px solid var(--line);
 }
 .tasks-list > button {
+  /* a list row, not a label: its title and details wrap as text does */
+  white-space: normal;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -253,7 +255,7 @@
   flex-direction: column;
   gap: var(--gap-content);
 }
-.task-create-form label {
+.task-create-form :is(label, .task-checkout-field) {
   display: flex;
   flex-direction: column;
   gap: var(--gap-small);

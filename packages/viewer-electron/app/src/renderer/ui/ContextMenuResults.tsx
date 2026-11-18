@@ -78,6 +78,7 @@ export function ContextMenuResults({
   onSelect,
   onClose,
   searchLabel = 'actions',
+  searchPlaceholder = `Search ${searchLabel}…`,
   searchable = true,
   listLabel = 'Actions',
   empty = 'No matching actions',
@@ -98,6 +99,8 @@ export function ContextMenuResults({
   onClose(): void;
   /** What the search finds, in its label: “Search actions”, or a choice's name. */
   searchLabel?: string;
+  /** What the empty search field shows: “Search actions…”, or a choice list's “Search”. */
+  searchPlaceholder?: string;
   /** Short choice lists use type-ahead and Space in place of a search field. */
   searchable?: boolean;
   /** The list's name: “Actions”, or a choice's name. */
@@ -304,7 +307,7 @@ export function ContextMenuResults({
               ref={input}
               data-autofocus
               aria-label={`Search ${searchLabel}`}
-              placeholder={`Search ${searchLabel}…`}
+              placeholder={searchPlaceholder}
               role={searching ? 'combobox' : undefined}
               aria-autocomplete={searching ? 'list' : undefined}
               aria-expanded={searching ? true : undefined}

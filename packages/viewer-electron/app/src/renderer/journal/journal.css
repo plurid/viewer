@@ -35,6 +35,17 @@
 .journal-control-space {
   flex: 1;
 }
+/* the widest label sets its width: the hidden ones keep their place */
+.journal-follow {
+  display: inline-grid;
+  flex: none;
+}
+.journal-follow > span {
+  grid-area: 1 / 1;
+}
+.journal-follow > span[aria-hidden='true'] {
+  visibility: hidden;
+}
 .journal-follow[aria-pressed='true'] {
   color: var(--accent);
 }

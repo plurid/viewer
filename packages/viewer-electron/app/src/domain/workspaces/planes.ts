@@ -10,7 +10,7 @@ import {
 
 /** The planes a file system item opens in. */
 export type ItemPlaneType = Extract<Pane['type'], 'folder' | 'preview'>;
-/** A folder opens a folder plane. A file, or a document package such as a Pages document, opens a
+/** A folder opens a files plane. A file, or a document package such as a Pages document, opens a
  * preview plane showing what Quick Preview shows. */
 export function itemPlaneType(entry: Pick<FileEntry, 'directory' | 'extension'>): ItemPlaneType {
   return previewsAsFile(entry) ? 'preview' : 'folder';

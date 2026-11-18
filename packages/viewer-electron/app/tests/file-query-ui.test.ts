@@ -95,7 +95,7 @@ describe(':filter and :find', () => {
       palette: vi.fn(),
     };
   };
-  it('filter the folder plane by a query, quotes and all; none clears', async () => {
+  it('filter the files plane by a query, quotes and all; none clears', async () => {
     const pane = activeWorkspace().panes.find((item) => item.id === getState().activePane)!;
     const live = host();
     await act(async () => void (await runLine('filter ext:md tag:"Project X" -draft', live)));

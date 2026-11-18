@@ -183,6 +183,7 @@ describe('authoritative JSONC configuration', () => {
     const current = documentConfiguration(
       JSON.stringify({
         settings: {
+          browsing: { emptyWorkspaceLocation: 'home' },
           fileOpening: { default: 'automatic', types: { docx: 'plane' } },
           updates: { checkAtLaunch: true },
           quit: { warnShortcut: true },
@@ -211,6 +212,9 @@ describe('authoritative JSONC configuration', () => {
       // without filler
       ['instructions, not these', 'instructions rather than these'],
       ['More IDs:', 'Other useful IDs:'],
+      // the plane that browses files by its name, where the line named a folder plane
+      ['New Files Plane button, +, and Cmd+N.', 'New Folder Plane button, +, and Cmd+Shift+N.'],
+      ['New Files Plane button, +, and Cmd+N.', 'New folder plane button, +, and Cmd+Shift+N.'],
     ]) {
       const before = current.replace(now!, earlier!);
       expect(before, earlier).not.toBe(current);

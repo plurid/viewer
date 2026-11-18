@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import type { FileEntry, RendererOperationRequest } from '../../domain/contracts';
 import { sourceVersion } from '../../domain/files/inspection';
 import { turnConversion } from '../../domain/operations/image-conversions';
 import type { QuarterTurn } from './contracts';
+import { previewHasKeyboard } from './keys';
 
 /**
  * A PICTURE'S VIEW, TURNED: by a quarter from the toolbar or ⌘L and ⌘R, or freely while two fingers
@@ -29,6 +30,17 @@ export const nearestTurn = (degrees: number) => normalAngle(Math.round(degrees /
 export const savedTurn = (value: unknown) => nearestTurn(Number(value) || 0);
 /** Whether a turn lays the picture on its side. */
 export const sideways = (degrees: number) => nearestTurn(degrees) % 180 === 90;
+
+/**
+ * A picture as the stylesheet lays it out (previews.css, `.image-stage img`): its own size, made
+ * smaller to fit `room` whole and never larger. Nothing while either is unknown.
+ */
+export function containedSize(natural: Size, room: Size): Size {
+  if (natural.width <= 0 || natural.height <= 0 || room.width <= 0 || room.height <= 0)
+    return { width: 0, height: 0 };
+  const scale = Math.min(1, room.width / natural.width, room.height / natural.height);
+  return { width: natural.width * scale, height: natural.height * scale };
+}
 
 /**
  * How much more than its laid-out size a turned picture is drawn, so it still fits `room` as a
@@ -86,8 +98,8 @@ let settling: ReturnType<typeof setTimeout> | undefined;
 
 /**
  * The picture a rotation is for (DESIGN.md, the Picture Turn Rule): the one under the pointer, else
- * the one whose preview holds the keyboard; none otherwise. With a dialog open, only a picture in
- * the topmost one.
+ * the one that has the keyboard, where ⌘L and ⌘R would turn it (keys.ts); none otherwise. With a
+ * dialog open, only a picture in the topmost one.
  */
 function turnable(): Turnable | undefined {
   const dialog = [...document.querySelectorAll('dialog[open]')].at(-1);
@@ -98,11 +110,7 @@ function turnable(): Turnable | undefined {
       (!dialog || dialog.contains(item.element)),
   );
   if (pointed && candidates.includes(pointed)) return pointed;
-  const focus = document.activeElement;
-  const focused = candidates.find(
-    (item) => focus && item.element.closest('.preview-host')?.contains(focus),
-  );
-  return focused;
+  return candidates.find((item) => previewHasKeyboard(item.element));
 }
 
 /** The desktop reports macOS rotation in degrees since the last report, counterclockwise. */
@@ -120,12 +128,10 @@ function listen(): void {
       target = undefined;
       settled.settle();
     };
-    // 0 is the last report, as the fingers lift; without it, the fingers stopped a moment ago
-    if (!event.rotation) settle();
-    else {
-      target.turn(-event.rotation);
-      settling = setTimeout(settle, gestureSettle);
-    }
+    // A report of 0 turns nothing: the fingers rest, or lift. The picture settles once the
+    // reports have been quiet a moment, so a pause mid-twist never snaps it to a quarter.
+    if (event.rotation) target.turn(-event.rotation);
+    settling = setTimeout(settle, gestureSettle);
   });
 }
 
@@ -137,7 +143,10 @@ export function useRotateGesture(
   settle: () => void,
 ): void {
   const callbacks = useRef({ turn, settle });
-  callbacks.current = { turn, settle };
+  // the newest callbacks, once rendered: a ref is never written while rendering
+  useLayoutEffect(() => {
+    callbacks.current = { turn, settle };
+  });
   useEffect(() => {
     const node = element.current;
     if (!node || !enabled) return;

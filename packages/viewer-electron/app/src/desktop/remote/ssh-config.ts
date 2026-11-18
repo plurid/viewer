@@ -14,12 +14,36 @@ function words(line: string): string[] {
   return tokens.map((token) => token.replace(/^(["'])(.*)\1$/, '$2'));
 }
 
-function globExpression(part: string): RegExp {
-  const escaped = part
-    .replace(/[.+^${}()|\\]/g, '\\$&')
-    .replaceAll('*', '.*')
-    .replaceAll('?', '.');
-  return new RegExp('^' + escaped + '$');
+/**
+ * One path segment of an Include, as glob(3) reads it: `*`, `?` and `[...]` (`!` negates). An
+ * unclosed `[` is an ordinary character; a segment that still makes no expression matches nothing.
+ */
+export function globExpression(part: string): RegExp | undefined {
+  let pattern = '^';
+  for (let index = 0; index < part.length; index++) {
+    const character = part[index]!;
+    if (character === '*') {
+      pattern += '.*';
+    } else if (character === '?') {
+      pattern += '.';
+    } else if (character === '[' && part.indexOf(']', index + 2) > 0) {
+      const close = part.indexOf(']', index + 2);
+      let members = part.slice(index + 1, close);
+      const negated = members.startsWith('!');
+      if (negated) {
+        members = members.slice(1);
+      }
+      pattern += '[' + (negated ? '^' : '') + members.replace(/[\\[\]^]/g, '\\$&') + ']';
+      index = close;
+    } else {
+      pattern += character.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    }
+  }
+  try {
+    return new RegExp(pattern + '$');
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -71,6 +95,9 @@ export async function readSSHConfigHosts(
     for (const part of parts) {
       const next: string[] = [];
       const expression = globExpression(part);
+      if (!expression) {
+        return [];
+      }
       for (const folder of folders) {
         let children;
         try {

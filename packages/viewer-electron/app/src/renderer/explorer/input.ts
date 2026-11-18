@@ -4,6 +4,7 @@ import {
   defaultShortcuts,
   isPreviewShortcut,
   matchesShortcut,
+  resolvedShortcut,
   shortcutCommandID,
 } from '../../domain/preferences/shortcuts';
 import { editable } from '../commands/editing';
@@ -39,7 +40,10 @@ export function keyCommand(event: RoutedKey, settings: ApplicationSettings): str
   // a picture that has the keyboard takes its own keys, as ⌘L and ⌘R (previews/keys.ts)
   if (previewOwnsKey(event)) return;
   const bindings = {
-    ...defaultShortcuts,
+    // as shipped, unless the person gave a shipped key to something else, which keeps it
+    ...Object.fromEntries(
+      Object.keys(defaultShortcuts).map((id) => [id, resolvedShortcut(settings, id)]),
+    ),
     // a picture's keys are no window command
     ...Object.fromEntries(
       Object.entries(settings.shortcuts).filter(([id]) => !isPreviewShortcut(id)),

@@ -25,11 +25,13 @@ import {
 } from '../../domain/previews/documents/table-selection';
 import { createTableSession } from './table-session';
 import { delimitedRows, type DelimitedPreview } from './table-data';
-import { Failure, Loading, tryAgainLabel } from '../ui/primitives';
+import { copyFeedbackDuration, Failure, Loading, tryAgainLabel } from '../ui/primitives';
 import { plural } from '../../domain/plural';
 import { copyText } from '../state/store';
 import type { PreviewContext } from './contracts';
 import { usePreviewScroll } from './scroll';
+import { PreviewToolbar, standaloneToolbar } from './controls';
+import { headerItem } from '../workspace/header-overflow';
 import { usePreviewState } from './state';
 import { errorMessage } from '../../domain/errors';
 type CellAnchor = Extract<EvidenceAnchor, { kind: 'cells' }>;
@@ -257,6 +259,25 @@ export function DataTable({
       : (anchor ?? (rows[0] ? { row: rows[0].row, column: 1 } : undefined));
   const current =
     selection || (addressToInspect && resolveTableCell(addressToInspect, rows, merges));
+  const cell = current?.cell;
+  // the selected cell in words: one text for the detail row and, when cut, its tooltip
+  const detail = cell
+    ? [
+        cell.formula !== undefined
+          ? `${cell.cached ? 'Saved value: ' + cell.value : 'No saved value'} · Formula: ${cell.formula || '(shared formula)'}`
+          : cell.value
+            ? 'Value: ' + cell.value
+            : 'Empty cell',
+        cell.formatted !== undefined &&
+          cell.formatted !== cell.value &&
+          `Formatted: ${cell.formatted || '(empty)'}`,
+        cell.numberFormat && `Format: ${cell.numberFormat}`,
+        cell.formatWarning,
+        current && 'merge' in current && current.merge && `Merged ${current.merge}`,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
   const activeRow = current?.row ?? rows[0]?.row ?? 1;
   const activeColumn = current?.cell?.column ?? remembered?.column ?? 1;
   const range = tableBounds(
@@ -323,7 +344,15 @@ export function DataTable({
         : tableTSV(range, rows, merges, formatted);
       signal.throwIfAborted();
       await copyText(text);
-      if (!abort.signal.aborted) setCopyStatus(`Copied ${rangeLabel(range)}`);
+      if (!abort.signal.aborted) {
+        const said = `Copied ${rangeLabel(range)}`;
+        setCopyStatus(said);
+        // a success says so for a moment, as a copy button does; a failure stays to be read
+        window.setTimeout(
+          () => setCopyStatus((status) => (status === said ? '' : status)),
+          copyFeedbackDuration * 2,
+        );
+      }
     } catch (error) {
       if (!abort.signal.aborted) setCopyStatus(errorMessage(error) || "Couldn't copy. Try again.");
     } finally {
@@ -338,8 +367,10 @@ export function DataTable({
       {renderControls ? (
         renderControls({ query, setQuery, rows: body.length, columns, filtering })
       ) : (
-        <div className="preview-toolbar">
-          <span className="muted">
+        // the one toolbar every preview has, measured where it stands; its count is a fact the
+        // footer shows with the file's others
+        <PreviewToolbar context={standaloneToolbar}>
+          <span {...headerItem('rows', 9, 'detail')}>
             {plural(body.length, numbered ? 'stored row' : 'row')} · {plural(columns, 'column')}
           </span>
           <span className="toolbar-spacer" />
@@ -354,7 +385,7 @@ export function DataTable({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-        </div>
+        </PreviewToolbar>
       )}
       {filtered?.rows === rows && filtered.query === query && filtered.error && (
         <p className="inline-warning">
@@ -396,33 +427,23 @@ export function DataTable({
                   setCopyStatus('Copy canceled');
                 }}
               >
-                Cancel copy
+                Cancel Copy
               </button>
             )}
+            {/* beside Copy, in the row it belongs to: it comes and goes without moving the grid */}
+            <span className="muted workbook-copy-status" role="status">
+              {copyStatus}
+            </span>
           </div>
-          {current?.cell && (
+          {current?.cell && detail && (
             <>
-              <span>
-                {current.cell.formula !== undefined
-                  ? `${current.cell.cached ? 'Saved value: ' + current.cell.value : 'No saved value'} · Formula: ${current.cell.formula || '(shared formula)'}`
-                  : current.cell.value
-                    ? 'Value: ' + current.cell.value
-                    : 'Empty cell'}
-                {current.cell.formatted !== undefined &&
-                  current.cell.formatted !== current.cell.value &&
-                  ` · Formatted: ${current.cell.formatted || '(empty)'}`}
-                {current.cell.numberFormat && ` · Format: ${current.cell.numberFormat}`}
-                {current.cell.formatWarning && ` · ${current.cell.formatWarning}`}
-                {'merge' in current && current.merge && ` · Merged ${current.merge}`}
+              {/* a long value keeps to two lines; the tooltip holds all of it */}
+              <span className="workbook-cell-value" title={detail}>
+                {detail}
               </span>
             </>
           )}
         </div>
-      )}
-      {numbered && copyStatus && (
-        <p className="workbook-copy-status" role="status">
-          {copyStatus}
-        </p>
       )}
       {addressError && (
         <p className="inline-warning" role="alert">

@@ -274,12 +274,12 @@ describe('Show as hex', () => {
   it('shows any file’s bytes in place of its preview, and offers the preview back', async () => {
     const { view, labels, toggle } = host(module());
     await view.findByText('Probe content');
-    await waitFor(() => expect(labels()).toEqual(['Probe command', 'Show as hex']));
+    await waitFor(() => expect(labels()).toEqual(['Probe command', 'Show as Hex']));
     expect(view.queryByRole('button', { name: 'Hex' })).toBeNull();
     await toggle();
     expect(await view.findByRole('grid', { name: 'File bytes' })).toBeTruthy();
     expect(view.queryByText('Probe content')).toBeNull();
-    await waitFor(() => expect(labels()).toEqual(['Go to Offset', 'Show preview']));
+    await waitFor(() => expect(labels()).toEqual(['Go to Offset', 'Show Preview']));
     await toggle();
     expect(await view.findByText('Probe content')).toBeTruthy();
   });
@@ -290,6 +290,6 @@ describe('Show as hex', () => {
     await waitFor(() => expect(labels()).toEqual(['Probe command']));
     fireEvent.click(view.getByText('Probe content'));
     expect(await view.findByRole('grid', { name: 'File bytes' })).toBeTruthy();
-    await waitFor(() => expect(labels()).toEqual(['Go to Offset', 'Show preview']));
+    await waitFor(() => expect(labels()).toEqual(['Go to Offset', 'Show Preview']));
   });
 });

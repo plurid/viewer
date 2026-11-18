@@ -109,6 +109,13 @@ button {
   background: transparent;
   padding: calc(6px * var(--density-scale, 1)) calc(10px * var(--density-scale, 1));
   line-height: 1.3;
+  /* a button's label keeps one line, as a Mac's does; a bar that runs out of room truncates or
+     spills into its own menu */
+  white-space: nowrap;
+}
+/* Rows that are buttons and hold a title over a detail line wrap as the text they hold. */
+:is(.command-result, .application-option, .volume-open, .layout-candidate) {
+  white-space: normal;
 }
 button:hover {
   background: var(--raised);
@@ -116,13 +123,17 @@ button:hover {
 button:active {
   background: var(--raised);
 }
-button:disabled {
+/* A button that waits for something, as Save Rotated Copy for a turn, keeps the keyboard so it
+   can say why (aria-disabled): it looks as a disabled one does. */
+button:disabled,
+button[aria-disabled='true'] {
   cursor: default;
   opacity: 0.45;
 }
 /* Disabled, a button keeps its resting fill under the pointer: a ghost stays clear, a secondary
    button its field. */
-button:disabled:hover {
+button:disabled:hover,
+button[aria-disabled='true']:is(:hover, :active) {
   background: var(--button-fill, transparent);
 }
 button.selected,
@@ -205,6 +216,33 @@ select {
 input::placeholder {
   color: var(--subtle);
 }
+/* A text field shows it has the keyboard by its border, a bare checkbox by a thin accent outline:
+   neither is a halo. */
+:is(
+  input:not([type='checkbox'], [type='radio'], [type='range'], [type='color']),
+  textarea,
+  select
+):focus {
+  border-color: var(--accent);
+}
+#viewer input:is([type='checkbox'], [type='radio']):focus-visible,
+.dialog input:is([type='checkbox'], [type='radio']):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* A live value, such as a zoom level, "3 / 12" or a row range: its figures keep one width, and the
+   box keeps the width of its widest value, so the controls beside it never move. */
+/* ui/NumberField.tsx: a text field for numbers, so it has no spin arrows */
+.number-field {
+  font-variant-numeric: tabular-nums;
+}
+.readout {
+  display: inline-block;
+  min-width: var(--readout-width, 5ch);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
 input[type='checkbox'] {
   accent-color: var(--accent);
 }
@@ -238,7 +276,6 @@ select {
 }
 :root[data-scrollbars='always']
   :is(
-    .file-table-content > .file-scroll,
     .pdf-scroll,
     .settings-navigation,
     .settings-page,
@@ -249,12 +286,17 @@ select {
     .office-document-scroll,
     .office-table-scroll
   ) {
+  overflow-y: auto;
+  scrollbar-width: auto;
+}
+/* List's rows line up with its column headers, so its track stays while nothing scrolls. */
+:root[data-scrollbars='always'] .file-table-content > .file-scroll {
   overflow-y: scroll;
   scrollbar-width: auto;
   scrollbar-gutter: stable;
 }
 :root[data-scrollbars='always'] :is(.breadcrumbs, .plane-module-controls, .columns-view) {
-  overflow-x: scroll;
+  overflow-x: auto;
   scrollbar-width: auto;
 }
 :root[data-scrollbars='always'] :is(.plane-module-controls, .plane-pinned-tools) {
@@ -515,7 +557,8 @@ select {
   font-size: var(--text-compact);
   font-weight: 600;
   text-align: left;
-  cursor: grab;
+  /* a heading reads as a heading, as Finder's; it still drags to reorder */
+  cursor: default;
 }
 .sidebar-section-title svg {
   flex-shrink: 0;
@@ -612,9 +655,21 @@ select {
   color: var(--muted);
 }
 .operations-button {
-  display: flex;
-  align-items: center;
-  gap: 3px;
+  position: relative;
+}
+.operations-button > .count-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 var(--gap-tight);
+  border-radius: var(--radius-menu);
+  background: var(--accent);
+  color: var(--space);
+  line-height: 15px;
+  text-align: center;
+  pointer-events: none;
 }
 .workspace-main {
   /* the tour bar and its stops panel sit over the space, measured from here */
@@ -743,6 +798,48 @@ select {
   [role='option']
 ) {
   user-select: none;
+}
+/* APP CHROME is not text: a drag across a title bar, a header, a toolbar, the sidebar, a status
+   line, a dialog's title or its buttons selects nothing, as in a native app. Content keeps its own
+   selection: messages, values, paths, previews, editors and terminals. Zero specificity, so a path
+   or a value inside the chrome opts back in with its own rule. */
+:where(
+  button,
+  label,
+  kbd,
+  th,
+  [role='columnheader'],
+  [role='toolbar'],
+  .app-titlebar,
+  .location-sidebar,
+  .plane-controls,
+  .plane-header,
+  .plane-module-controls,
+  .preview-toolbar,
+  .breadcrumbs,
+  .folder-status,
+  .file-head,
+  .context-menu,
+  .panel-header,
+  .settings-navigation,
+  .which-key,
+  .tour-bar,
+  .palette-context,
+  .dialog > header,
+  .dialog footer,
+  .readout,
+  .count-badge
+) {
+  user-select: none;
+}
+/* what a person types in stays selectable inside any of them */
+:where(input, textarea, [contenteditable='true']) {
+  user-select: text;
+}
+/* a path in a status line or a palette's footer stays text to select and copy (DESIGN.md Whole
+   Path Rule), unless it names a button or a row a click acts on */
+.path-label:not(:where(button, [role='option'], [role='menuitem']) .path-label) {
+  user-select: text;
 }
 /* PATHS (ui/primitives.tsx PathField): a click selects the whole path; its copy button stays a
    quiet icon, even in a row that gives its buttons a field's fill, centred on the first line. */

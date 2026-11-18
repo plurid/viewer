@@ -151,16 +151,16 @@
   min-width: 0;
   gap: 9px;
 }
-.file-name > span:last-child {
+.file-name > span:last-child:not(.file-name-label) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .file-name .filename {
+  /* the room decides the cut (ui/FileName.tsx), never the text: a name box sized by its own text
+     would shrink as it is cut */
+  flex: 1 1 0;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .linked-plane-marker {
   display: inline-flex;
@@ -178,10 +178,9 @@
   justify-content: center;
   gap: var(--gap-tight);
 }
-.file-linked-label > span {
+.file-linked-label > .file-name-label {
+  flex: 1 1 0;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .gallery-item-container > .linked-plane-marker {
   position: absolute;
@@ -226,10 +225,29 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+button.column-label {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+}
+.column-label > .column-heading-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* the sort chevron's slot is always there, so a label never moves when the sort changes */
+.column-label > .sort-chevron {
+  display: inline-flex;
+  flex: none;
+  width: 11px;
+  color: var(--muted);
+}
 .file-heading[data-column='name'] .column-label {
   padding-inline-start: 23px;
 }
 .file-heading[data-column='size'] .column-label {
+  justify-content: flex-end;
   text-align: right;
 }
 .file-heading .column-resizer {
@@ -322,6 +340,28 @@
   color: var(--muted);
   font-size: var(--text-label);
   flex-shrink: 0;
+}
+/* One line in any width: the count keeps its words and the size gives way first, ending in an
+   ellipsis at the plane's edge. */
+.folder-status > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.folder-status > :first-child {
+  flex: none;
+  max-width: 60%;
+}
+.folder-status > .selection-size {
+  flex: 1 1 0;
+  justify-content: flex-end;
+}
+.folder-status > .selection-size > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .folder-error {
   display: flex;
@@ -418,7 +458,8 @@
   gap: 7px;
 }
 .file-tile {
-  height: 133px;
+  /* a name takes up to two lines, as in Finder's icon view */
+  height: 150px;
   border-radius: var(--radius-control);
   display: flex;
   flex-direction: column;
@@ -444,11 +485,8 @@
   object-fit: contain;
   border-radius: 3px;
 }
-.file-tile > span {
+.file-tile > .file-linked-label {
   width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   text-align: center;
   font-size: var(--text-compact);
 }
@@ -547,11 +585,8 @@
   height: 58px;
   align-items: center;
 }
-.gallery-item > span:last-child {
+.gallery-item > .file-name-label {
   width: 90px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   font-size: var(--text-label);
 }
 .empty-state {
@@ -673,4 +708,55 @@
   background: color-mix(in srgb, var(--selection) 42%, var(--surface));
   color: var(--ink);
   box-shadow: inset 3px 0 var(--muted);
+}
+
+/* SEARCH PLANE (explorer/SearchExplorer.tsx): the passage strip under a document search keeps one
+   height whatever is selected, its quote two lines at most. */
+.search-explorer > .search-evidence {
+  flex: none;
+  box-sizing: border-box;
+  height: 64px;
+  overflow: hidden;
+}
+.search-explorer > .search-evidence > p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* A BUTTON WHOSE LABEL SWAPS, as Put Back and Put Back To…: both labels share one grid cell, the
+   one not shown is invisible, so the button keeps the wider label's width. */
+.swap-label {
+  display: inline-grid;
+}
+.swap-label > span {
+  grid-area: 1 / 1;
+}
+.swap-label > [aria-hidden='true'] {
+  visibility: hidden;
+}
+/* the Basket's references: each path fills its row and keeps its own name (ui/collections) */
+.basket-list .project-control-row > .path-label {
+  flex: 1 1 0;
+}
+.search-explorer .search-row > .search-scope {
+  flex: 0 1 45%;
+  color: var(--muted);
+}
+/* Chrome around the file lists is not text: a drag across it selects nothing (P15). */
+:where(
+  .trash-toolbar,
+  .trash-footer,
+  .trash-heading,
+  .file-picker-navigation,
+  .file-picker-places,
+  .file-picker-columns,
+  .search-row,
+  .overview-files,
+  .worktree-option,
+  .git-review-file
+) {
+  user-select: none;
 }

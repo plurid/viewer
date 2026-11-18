@@ -31,7 +31,8 @@ export function WorksheetNavigation({
         >
           Previous
         </button>
-        <span className="muted tabular" role="status">
+        {/* one width for every range and for loading, so Next stays under the pointer */}
+        <span className="muted readout worksheet-rows" role="status">
           {loading
             ? 'Loading rows…'
             : sheet.rows.length

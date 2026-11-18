@@ -8,6 +8,7 @@ import { IconButton, Loading } from '../../ui/primitives';
 import { PreviewFailure } from '../PreviewFailure';
 import { plural } from '../../../domain/plural';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
+import { NumberField } from '../../ui/NumberField';
 import { cssDPI, type DjVuReply, type DjVuRequest } from '../djvu/protocol';
 
 type Unsent = {
@@ -253,19 +254,15 @@ export default function DjVuPreview(context: PreviewContext) {
           disabled={page <= 1}
           onClick={() => setPage(page - 1)}
         />
-        <input
+        <NumberField
           className="page-number"
-          type="number"
           aria-label="Page number"
           min={1}
           max={pages}
           value={page}
-          onChange={(event) => {
-            const value = Number(event.target.value);
-            if (value >= 1 && value <= pages) setPage(value);
-          }}
+          onCommit={setPage}
         />
-        <span className="muted">/ {pages}</span>
+        <span className="muted readout pdf-page-count">/ {pages}</span>
         <IconButton
           icon="right"
           label="Next page"
@@ -274,6 +271,7 @@ export default function DjVuPreview(context: PreviewContext) {
         />
         <ChoiceButton
           label="DjVu zoom"
+          className="pdf-zoom-choice"
           value={String(zoom)}
           choices={[
             { value: 'page', label: 'Fit Page' },
@@ -296,6 +294,22 @@ export default function DjVuPreview(context: PreviewContext) {
             placeholder="Find"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              // Return goes to the next page with a match, ⇧Return to the one before; Esc closes
+              // the row and nothing else, not the Quick Look around it
+              if (event.key === 'Enter' && matches.length) {
+                event.preventDefault();
+                const ahead = event.shiftKey
+                  ? matches.findLast((index) => index < page)
+                  : matches.find((index) => index > page);
+                setPage(ahead ?? (event.shiftKey ? matches.at(-1)! : matches[0]!));
+              } else if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                setSearchOpen(false);
+                setQuery('');
+              }
+            }}
           />
           <IconButton
             icon="close"

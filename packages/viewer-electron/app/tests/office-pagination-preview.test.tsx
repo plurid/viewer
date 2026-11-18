@@ -29,6 +29,7 @@ vi.mock('../src/renderer/ui/ChoiceMenu', () => ({
       ))}
     </select>
   ),
+  MenuButton: ({ label }: { label: string }) => <button type="button">{label}</button>,
 }));
 vi.mock('../src/renderer/previews/DataTable', () => ({
   DataTable: ({ rows, label }: { rows: WorkbookRow[]; label: string }) => (

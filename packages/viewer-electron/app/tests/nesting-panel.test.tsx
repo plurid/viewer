@@ -8,6 +8,7 @@ import { NestingPanel } from '../src/renderer/layout/nesting/NestingPanel';
 import { flushState, getState, initialize } from '../src/renderer/state/store';
 import { nestingParts } from '../tools/playground/samples/nesting';
 import { jobParts } from '../tools/playground/samples/fabrication';
+import { choiceLabel } from './support/choice-button';
 
 const { openPath } = vi.hoisted(() => ({ openPath: vi.fn(async () => {}) }));
 vi.mock('../src/renderer/workspace/context', () => ({ useWorkspace: () => ({ openPath }) }));
@@ -144,6 +145,7 @@ it('estimates as quantities change and saves a valid nesting plan', async () => 
     ),
   );
   fireEvent.change(bracket, { target: { value: '60' } });
+  fireEvent.blur(bracket);
   // 48 bracket boxes fill a sheet; the estimate answers before any search.
   expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(
     'About 2 sheets · 1250 × 2500 mm',
@@ -232,9 +234,9 @@ it('nests one thickness at a time with the quantities given or named, and sums t
   expect(cover.value).toBe('10');
   expect(screen.getByText('From “10buc”')).toBeTruthy();
   expect(screen.queryByLabelText('Quantity of g6-PL60-B2-2buc')).toBeNull();
-  expect(screen.getByRole('button', { name: 'Material and thickness' }).textContent).toContain(
-    'Mild steel 3 mm · Fiber laser',
-  );
+  expect(
+    screen.getByRole('button', { name: choiceLabel('Material and thickness') }).textContent,
+  ).toContain('Mild steel 3 mm · Fiber laser');
 
   fireEvent.click(thick);
   const plate = (await screen.findByLabelText('Quantity of g6-PL60-B2-2buc')) as HTMLInputElement;
@@ -243,9 +245,9 @@ it('nests one thickness at a time with the quantities given or named, and sums t
     '6',
   );
   expect(screen.getByText('As requested')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Material and thickness' }).textContent).toContain(
-    'Mild steel 6 mm · Fiber laser',
-  );
+  expect(
+    screen.getByRole('button', { name: choiceLabel('Material and thickness') }).textContent,
+  ).toContain('Mild steel 6 mm · Fiber laser');
   const table = within(screen.getByRole('region', { name: 'By thickness' })).getByRole('table');
   await waitFor(() =>
     expect(
@@ -321,7 +323,7 @@ it('draws no sheet and says why when the last sheet format is removed', async ()
   );
   expect(screen.queryByRole('button', { name: 'Search Longer' })).toBeNull();
   // Adding a format back nests again.
-  fireEvent.click(screen.getByRole('button', { name: 'Add format' }));
+  fireEvent.click(screen.getByRole('button', { name: choiceLabel('Add format') }));
   fireEvent.click(await screen.findByText('1500 × 3000 mm'));
   expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(
     'About 1 sheet · 1500 × 3000 mm',
@@ -340,7 +342,7 @@ it('lists only the chosen formats and adds a custom size', async () => {
       .slice(1)
       .map((row) => row.textContent),
   ).toEqual(['1250 × 2500']);
-  fireEvent.click(screen.getByRole('button', { name: 'Add format' }));
+  fireEvent.click(screen.getByRole('button', { name: choiceLabel('Add format') }));
   fireEvent.click(await screen.findByText('Custom size…'));
   fireEvent.change(screen.getByLabelText('Custom sheet width in mm'), {
     target: { value: '3000' },
@@ -359,8 +361,9 @@ it('lists only the chosen formats and adds a custom size', async () => {
   fireEvent.change(screen.getByLabelText('Price of a 1500 × 3000 mm sheet'), {
     target: { value: '160' },
   });
+  fireEvent.blur(screen.getByLabelText('Price of a 1500 × 3000 mm sheet'));
   fireEvent.click(screen.getByRole('button', { name: 'Remove 1500 × 3000 mm' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Add format' }));
+  fireEvent.click(screen.getByRole('button', { name: choiceLabel('Add format') }));
   fireEvent.click(await screen.findByText('1500 × 3000 mm'));
   // a preset removed and added again keeps its price
   expect((screen.getByLabelText('Price of a 1500 × 3000 mm sheet') as HTMLInputElement).value).toBe(
@@ -374,6 +377,7 @@ it('picks a part on a sheet, lights its copies and tells what it is', async () =
     'Quantity of Bracket with holes',
   )) as HTMLInputElement;
   fireEvent.change(bracket, { target: { value: '3' } });
+  fireEvent.blur(bracket);
   await checked();
   const sheet = screen.getByRole('img', { name: /^Sheet 1 · / });
   const copies = () => [...sheet.querySelectorAll('use[data-part="0"]')];
@@ -422,7 +426,8 @@ it('reads lengths in inches, with sheets in feet, and saves the plan in them', a
   expect((screen.getByLabelText('Spacing between parts') as HTMLInputElement).value).toBe('0.197');
   expect(screen.getByLabelText('Speed').parentElement!.textContent).toContain('in/min');
   fireEvent.change(screen.getByLabelText('Spacing between parts'), { target: { value: '0.25' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Add format' }));
+  fireEvent.blur(screen.getByLabelText('Spacing between parts'));
+  fireEvent.click(screen.getByRole('button', { name: choiceLabel('Add format') }));
   expect(await screen.findByText('60 × 120 in')).toBeTruthy();
   fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
   await checked();

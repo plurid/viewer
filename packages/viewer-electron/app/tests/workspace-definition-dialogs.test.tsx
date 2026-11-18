@@ -164,7 +164,7 @@ describe('workspace definition dialogs', () => {
       <WorkspacesDialog onClose={() => {}} onOpen={async () => {}} onAction={() => {}} />,
     );
     fireEvent.click(view.getByRole('tab', { name: 'Defined (0)' }));
-    expect(view.getAllByRole('button', { name: 'Edit workspace definitions' })).toHaveLength(1);
+    expect(view.getAllByRole('button', { name: 'Edit Workspace Definitions' })).toHaveLength(1);
   });
   it('explains hidden and missing Open buttons and hides Remembers for an open definition', () => {
     initialize({
@@ -180,7 +180,7 @@ describe('workspace definition dialogs', () => {
       <WorkspacesDialog onClose={() => {}} onOpen={async () => {}} onAction={() => {}} />,
     );
     fireEvent.click(view.getByRole('tab', { name: 'Defined (60)' }));
-    expect(view.queryByText('Remembers')).toBeNull();
+    expect(view.queryByText(/^Remembers \d+ planes?$/)).toBeNull();
     const hidden = view.getByText('sample/project-1').closest('li')!;
     const missing = view.getByText('sample/project-2').closest('li')!;
     expect(within(hidden).getByRole('button', { name: 'Open' }).getAttribute('title')).toContain(
@@ -270,10 +270,10 @@ describe('workspace definition dialogs', () => {
     fireEvent.click(view.getByRole('tab', { name: 'Defined (60)' }));
     const list = view.getByRole('list', { name: 'Defined workspaces' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(25);
-    expect(view.getByText('Curated')).toBeTruthy();
+    expect(view.getByText('Asks before saving')).toBeTruthy();
     expect(view.getByText('Hidden')).toBeTruthy();
     expect(view.getByText('Folder missing')).toBeTruthy();
-    expect(view.getByText('Remembers')).toBeTruthy();
+    expect(view.getByText(/^Remembers \d+ planes?$/)).toBeTruthy();
     fireEvent.click(view.getByRole('button', { name: /Forget remembered planes for/ }));
     expect(window.viewer.workspaceDefinitions).not.toHaveBeenCalledWith({
       kind: 'forget',
@@ -281,7 +281,7 @@ describe('workspace definition dialogs', () => {
     });
     const confirmation = view.getByRole('dialog', { name: 'Forget remembered planes?' });
     expect(within(confirmation).getByText(/It opens from its definition next time/)).toBeTruthy();
-    fireEvent.click(within(confirmation).getByRole('button', { name: 'Forget remembered planes' }));
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Forget Remembered Planes' }));
     await waitFor(() =>
       expect(window.viewer.workspaceDefinitions).toHaveBeenCalledWith({
         kind: 'forget',

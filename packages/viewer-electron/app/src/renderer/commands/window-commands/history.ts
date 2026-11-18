@@ -5,6 +5,7 @@ import { lastLensRedo, lastLensUndo, redoLens, undoLens } from '../../state/lens
 import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 import { forgetSuggestions, showHiddenInsights } from '../history';
+import { hasHiddenOffers } from '../../workspace/workspace-offer';
 
 /** Undo and Redo pick the most recent action, whether a file operation or a lens edit. */
 function latest(direction: 'undo' | 'redo') {
@@ -36,8 +37,11 @@ export function historyCommands({ windowScope }: WindowScopes): CommandDefinitio
       group: 'Window',
       icon: 'eye',
       aliases: ['insights', 'dismissed insights', 'restore insights'],
+      // it shows dismissed workspace offers again: the person's choice alone
+      humanOnly: true,
       when: (context) =>
-        windowScope(context) && Object.keys(getState().saved.ui.insightsDismissed ?? {}).length > 0,
+        windowScope(context) &&
+        (Object.keys(getState().saved.ui.insightsDismissed ?? {}).length > 0 || hasHiddenOffers()),
       run: () => showHiddenInsights(),
     },
     {

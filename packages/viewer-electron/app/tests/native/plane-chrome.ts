@@ -104,11 +104,11 @@ try {
     await evaluate(
       pageCall(() => document.querySelector<HTMLElement>('.folder-explorer')!.focus()),
     );
-    await actions.key('n', 'KeyN', 4);
+    await actions.key('N', 'KeyN', 12);
     await until(
       () => evaluate(exists('dialog[aria-label="New Folder"]')),
       Boolean,
-      'Command N opens New folder',
+      'Shift Command N opens New Folder',
     );
     assert.equal(
       await evaluate(pageCall(() => document.querySelectorAll('[data-plurid-plane]').length)),
@@ -118,16 +118,16 @@ try {
     await evaluate(
       pageCall(() => document.querySelector<HTMLElement>('.folder-explorer')!.focus()),
     );
-    await actions.key('N', 'KeyN', 12);
+    await actions.key('n', 'KeyN', 4);
     await until(
       () => evaluate(pageCall(() => document.querySelectorAll('[data-plurid-plane]').length)),
       (count) => count === 2,
-      'Shift Command N opens a plane',
+      'Command N opens a plane',
     );
     assert.equal(await evaluate(exists('dialog[open]')), false);
-    assert.equal(await evaluate(exists('[aria-label="New folder plane (⇧⌘N)"]')), true);
+    assert.equal(await evaluate(exists('[aria-label^="New files plane"]')), true);
     await actions.click('[aria-label="Commands (⌘K)"]');
-    await actions.field('Search commands', 'New folder');
+    await actions.field('Search commands', 'New F');
     const shortcuts = await evaluate(
       pageCall(() =>
         Object.fromEntries(
@@ -138,8 +138,8 @@ try {
         ),
       ),
     );
-    assert.equal(shortcuts['New Folder…'], '⌘N');
-    assert.equal(shortcuts['New Folder Plane'], '⇧⌘N');
+    assert.equal(shortcuts['New Folder…'], '⇧⌘N');
+    assert.equal(shortcuts['New Files Plane'], '⌘N');
     await actions.key('Escape', 'Escape');
     await command('Emulation.setDeviceMetricsOverride', {
       width: 900,

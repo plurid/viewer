@@ -138,7 +138,7 @@ describe('workspace agent navigation through existing host records', () => {
         controller,
         switchTo,
       ),
-    ).rejects.toThrow('Focus a folder');
+    ).rejects.toThrow('Focus a files plane');
     expect(open).toHaveBeenCalledOnce();
   });
   it('navigates the current folder with normal history/focus and never opens a permission picker', async () => {

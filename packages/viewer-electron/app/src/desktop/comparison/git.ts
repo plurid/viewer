@@ -166,7 +166,7 @@ export class GitReader {
       const actual = await realpath(root);
       if (directory !== actual && !directory.startsWith(actual + path.sep))
         throw new Error('Git returned a repository outside the requested folder.');
-      // Different folder planes share the same in-flight repository scan.
+      // Different files planes share the same in-flight repository scan.
       if (actual !== file) {
         const existing = this.pending.get(actual);
         if (existing) {

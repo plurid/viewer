@@ -457,13 +457,13 @@ it('keeps every selected item when any original destination collides', async () 
   expect(mock.files.get(home + '/Documents/Notes.txt')?.ino).toBe(50);
   expect(mock.files.get(root + '/Notes.txt')?.ino).toBe(2);
 });
-it('requires Restore to… for an item without a proven original destination', async () => {
+it('requires Put Back To… for an item without a proven original destination', async () => {
   const trash = service(),
     top = await trash.list();
-  await expect(trash.restore(window, [top.items[0].id], 'original')).rejects.toThrow('Restore To');
+  await expect(trash.restore(window, [top.items[0].id], 'original')).rejects.toThrow('Put Back To');
   expect(mock.move).not.toHaveBeenCalled();
 });
-it('cancelling Restore to… neither grants a folder nor moves any item', async () => {
+it('canceling Put Back To… neither grants a folder nor moves any item', async () => {
   const trash = service(),
     top = await trash.list();
   mock.open.mockResolvedValue({ canceled: true, filePaths: [] });

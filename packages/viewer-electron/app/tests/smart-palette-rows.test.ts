@@ -51,14 +51,18 @@ beforeEach(() => {
   initialize({ home: '/fixtures', platform: 'darwin', state: null, locations: [], openPaths: [] });
 });
 afterEach(cleanup);
-const show = (definitions: CommandDefinition[] = [], directory = '/fixtures') => {
+const show = (
+  definitions: CommandDefinition[] = [],
+  directory = '/fixtures',
+  selection: FileEntry[] = [],
+) => {
   const registry = new CommandRegistry();
   const context = {
     scope: 'window',
     workspaceID: activeWorkspace().id,
     paneID: activeWorkspace().panes[0]!.id,
     directory,
-    selection: [],
+    selection,
     jobs: [],
     clipboard: null,
   } as unknown as CommandContext;
@@ -225,14 +229,22 @@ describe('the workspace offer in Suggested', () => {
   });
 
   it('leaves it out once the card is dismissed for its root, or with suggestions off', async () => {
-    savePatch({
-      ui: { ...getState().saved.ui, insightsDismissed: { [root]: ['workspace.open'] } },
+    const state = getState();
+    update({
+      ...state,
+      bootstrap: {
+        ...state.bootstrap,
+        definitions: { ...state.bootstrap.definitions!, dismissedOffers: [root] },
+      },
     });
     const dismissed = show(rows, root + '/src');
     await waitFor(() => expect(dismissed.view.getAllByRole('option').length).toBeGreaterThan(0));
     expect(offered(dismissed.view)).toBeUndefined();
     cleanup();
-    savePatch({ ui: { ...getState().saved.ui, insightsDismissed: {} } });
+    update({
+      ...getState(),
+      bootstrap: { ...getState().bootstrap, definitions: state.bootstrap.definitions },
+    });
     const { settings } = getState();
     update({
       ...getState(),
@@ -247,5 +259,35 @@ describe('the workspace offer in Suggested', () => {
     const off = show(rows, root + '/src');
     await waitFor(() => expect(off.view.getAllByRole('option').length).toBeGreaterThan(0));
     expect(offered(off.view)).toBeUndefined();
+  });
+  it('lists three suggestions in all, the offer included', async () => {
+    // the person's usual choices for PDFs fill Suggested, and the offer takes one of the three
+    const pdf: FileEntry = {
+      ...entry('Scan.pdf', false),
+      extension: 'pdf',
+      kind: 'file',
+      size: 1000,
+      modified: Date.now(),
+      created: Date.now(),
+      mime: 'application/pdf',
+      identity: 'scan',
+    };
+    const usual = ['first', 'second', 'third'].map((id): CommandDefinition => ({
+      id,
+      label: id,
+      group: 'Files',
+      when: () => true,
+      run: vi.fn(),
+    }));
+    savePatch({
+      ui: { ...getState().saved.ui, suggestionHistory: { pdf: ['first', 'second', 'third'] } },
+    });
+    const { view } = show([...rows, ...usual], root + '/src', [pdf]);
+    await waitFor(() => expect(offered(view)).toBeTruthy());
+    const reasons = view
+      .getAllByRole('option')
+      .filter((option) => /Your usual choice|Remembers 5 planes/.test(option.textContent ?? ''));
+    expect(reasons).toHaveLength(3);
+    expect(reasons.at(-1)).toBe(offered(view));
   });
 });

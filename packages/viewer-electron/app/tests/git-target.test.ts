@@ -111,7 +111,7 @@ describe('Git action origin', () => {
     },
   );
 
-  it('requires the actual parent root for independent and linked folder planes', async () => {
+  it('requires the actual parent root for independent and linked files planes', async () => {
     const { target, window } = fixture();
     const space = window.workspaces!.workspaces[0]!;
     space.roots.push('other');

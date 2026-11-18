@@ -21,7 +21,7 @@ import { ContextMenu } from '../ContextMenu';
 import { Icon } from '../Icon';
 import type { CommandRequest } from '../../commands/registry';
 import { measureLocalX, type Point } from '../projectedResize';
-import { baseName } from '../../../domain/workspaces/planes';
+import { baseName, parentPath } from '../../../domain/workspaces/planes';
 import { effectiveWindowUI } from '../../state/effective-ui';
 import { changeSetting } from '../../commands/window-commands/settings';
 import { sendWindowEvent } from '../../app/window-events';
@@ -58,7 +58,7 @@ function readSidebarDrag(data: string): SidebarDrag | null {
   }
 }
 export function Sidebar({ paneID }: { paneID?: string }) {
-  // what this sidebar shows, rather than all saved state: each folder plane has one
+  // what this sidebar shows, rather than all saved state: each files plane has one
   const favorites = useViewer((state) => state.saved.favorites);
   const recents = useViewer((state) => state.saved.recents);
   const recovery = useViewer((state) => state.folderRecovery);
@@ -98,6 +98,8 @@ export function Sidebar({ paneID }: { paneID?: string }) {
     ...order.flatMap((path) => bootstrap.locations.find((item) => item.path === path) ?? []),
     ...bootstrap.locations.filter((item) => item.path === trashLocation),
   ].filter((item) => !sidebar.hidden.includes(item.path));
+  const shownName = (item: { path: string; name: string }) =>
+    sidebar.labels[item.path] || item.name;
   const groups = {
     locations,
     favorites,
@@ -319,11 +321,17 @@ export function Sidebar({ paneID }: { paneID?: string }) {
             </div>
             {!sidebar.collapsed.includes(section) && (
               <div>
-                {groups[section].map((item) => (
+                {groups[section].map((item, _index, all) => (
                   <button
                     key={item.path}
+                    data-location-path={item.path}
                     className={`location ${current === item.path ? 'selected' : ''} ${drop?.section === section && drop.row === item.path ? `sidebar-drop-${drop.edge}` : ''}`}
-                    title={item.path}
+                    // the name says where it goes; two of one name say which folder each is in
+                    title={
+                      all.filter((other) => shownName(other) === shownName(item)).length > 1
+                        ? `In “${baseName(parentPath(item.path)) || parentPath(item.path)}”`
+                        : undefined
+                    }
                     draggable={item.path !== trashLocation}
                     onDragStart={(event) => drag(event, section, item.path)}
                     onDragEnd={() => setDrop(null)}

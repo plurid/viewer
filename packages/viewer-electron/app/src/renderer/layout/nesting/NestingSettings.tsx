@@ -5,6 +5,7 @@ import type {
   NestDirection,
   SheetSize,
 } from '../../../domain/layout/nesting/plan';
+import { NumberField as NumberInput } from '../../ui/NumberField';
 import type { Choice } from '../../ui/ChoiceMenu';
 import { useState } from 'react';
 import { fieldValue, fromUnit, unitSymbol } from '../../../domain/layout/nesting/format';
@@ -199,8 +200,9 @@ export function NestingSettings({
                   <span role="cell">{sheetName(format, units)}</span>
                   <input
                     role="cell"
-                    type="number"
-                    min={0}
+                    // a text field with no spin arrows; empty means any number of sheets
+                    type="text"
+                    inputMode="numeric"
                     placeholder="Any"
                     aria-label={`Sheets of ${name} in stock`}
                     value={format.stock ?? ''}
@@ -213,14 +215,13 @@ export function NestingSettings({
                       })
                     }
                   />
-                  <input
+                  <NumberInput
                     role="cell"
-                    type="number"
+                    kind="decimal"
                     min={0}
-                    step="any"
                     aria-label={`Price of a ${name} sheet`}
                     value={format.price}
-                    onChange={(event) => setFormat(index, { price: amount(event.target.value) })}
+                    onCommit={(price) => setFormat(index, { price })}
                   />
                   <span role="cell">
                     <IconButton
@@ -251,9 +252,9 @@ export function NestingSettings({
           {custom && (
             <>
               <input
-                type="number"
-                min={0}
-                step="any"
+                // a draft the Add button reads: text, with no spin arrows
+                type="text"
+                inputMode="decimal"
                 placeholder="Width"
                 aria-label={`Custom sheet width in ${unit}`}
                 autoFocus
@@ -262,9 +263,8 @@ export function NestingSettings({
               />
               ×
               <input
-                type="number"
-                min={0}
-                step="any"
+                type="text"
+                inputMode="decimal"
                 placeholder="Length"
                 aria-label={`Custom sheet length in ${unit}`}
                 value={custom.height}
@@ -464,16 +464,13 @@ function NumberField({
       label={label}
       control={
         <span className="nesting-unit">
-          <input
-            type="number"
+          <NumberInput
+            kind="decimal"
             min={0}
-            step="any"
+            max={1_000_000}
             aria-label={name}
             value={units ? fieldValue(value, units) : value}
-            onChange={(event) => {
-              const typed = amount(event.target.value, 0, 1_000_000);
-              set(units ? fromUnit(typed, units) : typed);
-            }}
+            onCommit={(typed) => set(units ? fromUnit(typed, units) : typed)}
           />
           {unit ?? (units && unitSymbol(units))}
         </span>

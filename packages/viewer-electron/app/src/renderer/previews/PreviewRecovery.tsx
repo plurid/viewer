@@ -10,10 +10,13 @@ export function PreviewRecovery({
   retry,
   locate,
   detail,
+  inline = false,
 }: {
   path: string;
   entry?: FileEntry;
   detail?: string;
+  /** Inside an empty state, its actions join that state's row: no bar of its own. */
+  inline?: boolean;
   retry(): void;
   locate?(entry: FileEntry): Promise<void> | void;
 }) {
@@ -21,7 +24,7 @@ export function PreviewRecovery({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
   return (
-    <div className="preview-recovery" role="status">
+    <div className={inline ? 'preview-recovery-inline' : 'preview-recovery'} role="status">
       {detail && <span>{detail} This view keeps the last loaded version.</span>}
       <div className="preview-recovery-actions">
         <button onClick={retry}>{tryAgainLabel}</button>

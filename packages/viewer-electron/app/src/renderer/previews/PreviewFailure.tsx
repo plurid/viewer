@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { report } from '../state/core';
 import type { IconName } from '../ui/Icon';
 import { Failure } from '../ui/primitives';
 import type { PreviewContext } from './contracts';
@@ -16,7 +15,7 @@ export function PreviewFailure({
   onRetry,
   children,
 }: {
-  context: Pick<PreviewContext, 'resource' | 'showHex' | 'retry'>;
+  context: Pick<PreviewContext, 'showHex' | 'retry' | 'openInApp'>;
   icon?: IconName;
   title: string;
   detail?: string;
@@ -25,17 +24,14 @@ export function PreviewFailure({
   /** The format's own ways on, before the standard ones, such as First Worksheet. */
   children?: ReactNode;
 }) {
-  const { resource, retry, showHex } = context;
+  const { retry, showHex, openInApp } = context;
   return (
     <Failure icon={icon} title={title} detail={detail} onRetry={onRetry ?? retry}>
       {children}
-      {/* a host offers Try Again only for a file of its own, the one kind an app can open; an
-          archive's entry or a message's attachment has no path outside Viewer */}
-      {retry && (
-        <button
-          type="button"
-          onClick={() => void window.viewer.openExternal(resource.entry.path).catch(report)}
-        >
+      {/* a host offers it only for a file of its own: an archive's entry or a message's
+          attachment has no path outside Viewer */}
+      {openInApp && (
+        <button type="button" onClick={openInApp}>
           Open in Default App
         </button>
       )}

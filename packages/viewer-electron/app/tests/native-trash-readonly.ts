@@ -155,7 +155,7 @@ try {
         },
         evidence: [
           'No public erasure method exists; native Trash view reports actual readable/unavailable locations.',
-          'Applications opens /Applications inside the existing folder plane.',
+          'Applications opens /Applications inside the existing files plane.',
           'No native Trash menu, confirmation, erasure or grant picker was invoked. All fixtures preserved.',
         ],
         scope:

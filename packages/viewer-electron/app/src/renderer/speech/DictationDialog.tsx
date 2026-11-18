@@ -70,7 +70,9 @@ export function DictationDialog({
         {(speech.phase === 'listening' || speech.phase === 'transcribing') && (
           <div className="speech-level-row">
             <meter min="0" max="0.3" value={speech.level} aria-label="Microphone level" />
-            <span>{Math.floor(speech.seconds)} / 60 s</span>
+            <span className="readout" style={{ '--readout-width': '8ch' } as React.CSSProperties}>
+              {Math.floor(speech.seconds)} / 60 s
+            </span>
           </div>
         )}
         {speech.error && (

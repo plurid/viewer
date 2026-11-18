@@ -8,6 +8,8 @@ import {
   pathCopyText,
   pathLabelParts,
   pathText,
+  pathWholeText,
+  sharedFolder,
 } from '../src/domain/files/path-label';
 
 it.each([
@@ -86,7 +88,12 @@ it('names a server location by its server, its starting folder as ~', () => {
   expect(pathText('viewer-sftp://server01/srv/x', home, { remote })).toBe('al@build:/srv/x');
   expect(pathText('viewer-sftp://not a connection', home)).toBe('viewer-sftp://not a connection');
   expect(pathCopyText(location, remote)).toBe('al@build:/home/al/Jobs');
-  expect(pathCopyText(location)).toBe('server:/home/al/Jobs');
+  // before the connection list arrives, a copy is the location itself, never a made-up address
+  expect(pathCopyText(location)).toBe(location);
+  expect(pathCopyText(location, () => undefined)).toBe(location);
+  expect(pathWholeText(location)).toBe('server:/home/al/Jobs');
+  expect(pathWholeText(location, remote)).toBe('al@build:/home/al/Jobs');
+  expect(pathWholeText(home + '/a')).toBe(home + '/a');
   expect(pathCopyText(home + '/a')).toBe(home + '/a');
 });
 
@@ -123,19 +130,21 @@ it('never returns a label wider than its room', () => {
 it('treats only a short tail as an extension, never a dot file or a dot inside words', () => {
   const fits = (room: number) => (text: string) => text.length <= room;
   expect(middleName('.' + 'b'.repeat(40), fits(12))).toBe('.bbbbbb…bbbb');
-  expect(middleName('Photos 2024.11.17 Wedding party at the lake', fits(20))).not.toContain(
-    '.17 Wedding',
-  );
+  // ".17 Wedding" has a space: no extension, so the start of the name stays
+  expect(middleName('Photos 2024.11.17 Wedding', fits(16))).toBe('Photos 20…edding');
   expect(middleName('a'.repeat(30) + '.pdf', fits(12))).toBe('aaaaa…aa.pdf');
+  // nine characters after the dot are a name, not an extension
+  expect(middleName('a'.repeat(30) + '.abcdefghi', fits(12))).toBe('aaaaaaa…fghi');
   // when even … and the extension are too wide, the extension goes too
   expect(middleName('a'.repeat(30) + '.longext', fits(5))).toBe('aaa…t');
 });
 
 it('splits a name between whole characters, never inside an accent or an emoji', () => {
-  const accents = middleName('e\u0301'.repeat(30) + '.pdf', (text) => text.length <= 21);
-  expect(accents[accents.indexOf('…') + 1]).not.toBe('\u0301');
-  const emoji = middleName('😀'.repeat(20) + '.png', (text) => text.length <= 15);
-  expect(emoji).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])/);
+  // 18 code units leave 13 for the stem: split by code point, an accent would follow the …
+  const accents = middleName('e\u0301'.repeat(30) + '.pdf', (text) => text.length <= 18);
+  expect(accents).toBe('e\u0301'.repeat(4) + '…' + 'e\u0301'.repeat(2) + '.pdf');
+  const thumbs = middleName('👍🏽'.repeat(20) + '.png', (text) => text.length <= 25);
+  expect(thumbs).toBe('👍🏽'.repeat(3) + '…' + '👍🏽'.repeat(2) + '.png');
 });
 
 it('isolates a right-to-left name so the folders keep their order', () => {
@@ -151,17 +160,44 @@ it('reads copies from the folder they share, starting at the folder that differs
   expect(commonFolder([base + '/Job 1041/3D/part.dxf', base + '/Job 1042/3D/part.dxf'])).toBe(base);
   expect(commonFolder([base + '/a.dxf', base + '/b.dxf'])).toBe(base);
   expect(commonFolder([])).toBe('');
+  expect(commonFolder([base + '/a.dxf'])).toBe(base);
   expect(pathText(base + '/Job 1041/3D/part.dxf', home, { base })).toBe('Job 1041/3D/part.dxf');
   expect(
     fitPathLabel(pathLabelParts(base + '/Job 1041/3D/part.dxf', home, { base }), 19, measure),
   ).toBe('Job 1041/…/part.dxf');
   expect(pathText(base + '/a.dxf', home, { base })).toBe('a.dxf');
+  expect(sharedFolder([base + '/a.dxf', base + '/b/a.dxf'], home)).toBe(base);
+  expect(pathText(base + '/b/c/a.dxf', home, { base })).toBe('b/c/a.dxf');
 });
 
-it('leaves quoted and assigned shell words whole and names home before punctuation', () => {
-  expect(homeText(`Command failed: cp '${home}/a b' --to=${home}/x`, home)).toBe(
-    `Command failed: cp '${home}/a b' --to=${home}/x`,
+it('reads copies from ~ and the root when all they share is the root or the folder of home', () => {
+  const atHomeAndBackup = [home + '/Downloads/x.jpg', '/Volumes/Backup/x.jpg'];
+  expect(commonFolder(atHomeAndBackup)).toBe('/');
+  expect(sharedFolder(atHomeAndBackup, home)).toBe('');
+  expect(atHomeAndBackup.map((path) => pathText(path, home, { base: '/' }))).toEqual([
+    '~/Downloads/x.jpg',
+    '/Volumes/Backup/x.jpg',
+  ]);
+  const twoPeople = [home + '/Pictures/x.jpg', '/Users/bo/Pictures/x.jpg'];
+  expect(commonFolder(twoPeople)).toBe('/Users');
+  expect(sharedFolder(twoPeople, home)).toBe('');
+  expect(twoPeople.map((path) => pathText(path, home, { base: '/Users' }))).toEqual([
+    '~/Pictures/x.jpg',
+    '/Users/bo/Pictures/x.jpg',
+  ]);
+  // a folder elsewhere that does not hold home still tells copies apart
+  const backup = ['/Volumes/Backup/2023/x.jpg', '/Volumes/Backup/2024/x.jpg'];
+  expect(sharedFolder(backup, home)).toBe('/Volumes/Backup');
+  expect(pathText(backup[0]!, home, { base: '/Volumes/Backup' })).toBe('2023/x.jpg');
+  expect(sharedFolder(backup, '')).toBe('/Volumes/Backup');
+  expect(sharedFolder(['/a.jpg', '/b.jpg'], '')).toBe('');
+});
+
+it('names home as ~ in messages, quoted paths too, and before punctuation', () => {
+  expect(homeText(`EACCES: permission denied, open '${home}/Private/a.txt'`, home)).toBe(
+    "EACCES: permission denied, open '~/Private/a.txt'",
   );
+  expect(homeText(`Moved "${home}/a" to --to=${home}/x`, home)).toBe('Moved "~/a" to --to=~/x');
   expect(homeText(`Saved in ${home}.`, home)).toBe('Saved in ~.');
   expect(homeText(`Saved in ${home}!`, home)).toBe('Saved in ~!');
   expect(homeText(`Saved in ${home}?`, home)).toBe('Saved in ~?');

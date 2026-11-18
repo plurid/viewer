@@ -2,12 +2,14 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { Profiler } from 'react';
 import type { ReactNode } from 'react';
 import type { DesktopEvent, ViewerAPI } from '../src/domain/contracts';
 import type { RemoteConnectionSnapshot } from '../src/domain/remote/contracts';
 import { PathHome, PathLabel } from '../src/renderer/ui/PathLabel';
 import { PathField } from '../src/renderer/ui/primitives';
-import { characterWidth, measurePathLabels } from './support/path-label-room';
+import { DestinationField } from '../src/renderer/ui/DestinationField';
+import { characterWidth, largeFont, measurePathLabels } from './support/path-label-room';
 import type { PathLabelRoom } from './support/path-label-room';
 
 const home = '/Users/fixture';
@@ -216,6 +218,47 @@ it('tells copies in different folders apart from the folder they share', () => {
   expect(texts).toEqual(['Job 1041/…/part.dxf', 'Job 1042/…/part.dxf']);
 });
 
+it('never asks for the server connections in a window that shows only local paths', () => {
+  const remote = vi.fn(async () => ({ connections: [] }));
+  window.viewer = { copyPaths, clipboardWriteText: writeText, remote } as unknown as ViewerAPI;
+  render(atHome(<PathField path={deep} layout="line" />));
+  expect(remote).not.toHaveBeenCalled();
+});
+
+it('measures each font on its own, so a larger font shortens sooner', () => {
+  const style = document.createElement('style');
+  style.textContent = `.large { font-size: ${largeFont}; }`;
+  document.head.append(style);
+  const view = render(
+    atHome(
+      <>
+        <PathLabel path={deep} />
+        <PathLabel path={deep} className="large" />
+      </>,
+    ),
+  );
+  const [normal, large] = [...view.container.querySelectorAll('.path-label-text')].map(
+    (label) => label.textContent ?? '',
+  );
+  expect(normal).toBe('~/…/level-16/level-17/Programs/viewer');
+  expect(large).toBe('~/…/Programs/viewer');
+  style.remove();
+});
+
+it('refits when the interface density changes the font, with no change of room', async () => {
+  const style = document.createElement('style');
+  style.textContent = `[data-density='large'] .path-label { font-size: ${largeFont}; }`;
+  document.head.append(style);
+  const view = render(atHome(<PathLabel path={deep} />));
+  expect(shown(view.container)).toBe('~/…/level-16/level-17/Programs/viewer');
+  await act(async () => {
+    document.body.dataset.density = 'large';
+  });
+  expect(shown(view.container)).toBe('~/…/Programs/viewer');
+  delete document.body.dataset.density;
+  style.remove();
+});
+
 it('names a server location by its server and copies what a person would type', async () => {
   let listener: (event: DesktopEvent) => void = () => {};
   const snapshot = {
@@ -228,6 +271,7 @@ it('names a server location by its server and copies what a person would type', 
   window.viewer = {
     copyPaths,
     clipboardWriteText: writeText,
+    chooseFolder: vi.fn(async () => undefined),
     onEvent: (next: (event: DesktopEvent) => void) => {
       listener = next;
       return () => {};
@@ -235,18 +279,47 @@ it('names a server location by its server and copies what a person would type', 
     remote: vi.fn(async () => ({ connections: [] })),
   } as unknown as ViewerAPI;
   const location = 'viewer-sftp://server01/home/al/Jobs/1042';
-  render(<PathField path={location} layout="line" />);
-  const field = document.querySelector<HTMLElement>('.path-text')!;
+  let localRenders = 0;
+  render(
+    <>
+      <PathField path={location} layout="line" />
+      <DestinationField path={location} onChange={vi.fn()} />
+      <Profiler id="local" onRender={() => localRenders++}>
+        <PathLabel path={deep} />
+      </Profiler>
+    </>,
+  );
+  const field = document.querySelector<HTMLElement>('.path-field .path-text')!;
+  const destination = screen.getByRole('group', { name: /^Save in:/ });
+  // before the connections arrive: readable, and a copy is the location itself
   expect(field.querySelector('.path-label-text')!.textContent).toBe('server:/home/al/Jobs/1042');
-  expect(field.title).not.toMatch(/^viewer-sftp:/);
-  await act(async () => {});
+  expect(field.title).toBe('server:/home/al/Jobs/1042');
+  expect(destination.title).toBe('server:/home/al/Jobs/1042');
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Copy path' }));
+  });
+  expect(copyPaths).toHaveBeenCalledWith([location]);
+  window.getSelection()!.selectAllChildren(field);
+  const before = vi.fn();
+  fireEvent.copy(field, { clipboardData: { setData: before } });
+  expect(before).toHaveBeenCalledWith('text/plain', location);
+  copyPaths.mockClear();
+  const localBefore = localRenders;
   act(() => listener({ type: 'remote', connections: [snapshot] }));
+  // a local path's label does not re-render for a server connection's news
+  expect(localRenders).toBe(localBefore);
   expect(field.querySelector('.path-label-text')!.textContent).toBe('al@build:~/Jobs/1042');
   expect(field.title).toBe('al@build:/home/al/Jobs/1042');
   expect(field.querySelector('.path-label-whole')!.textContent).toBe('al@build:/home/al/Jobs/1042');
+  expect(destination.title).toBe('al@build:/home/al/Jobs/1042');
+  expect(destination.getAttribute('aria-label')).toBe('Save in: al@build:/home/al/Jobs/1042');
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy path' }));
   });
   expect(writeText).toHaveBeenCalledWith('al@build:/home/al/Jobs/1042');
   expect(copyPaths).not.toHaveBeenCalled();
+  window.getSelection()!.selectAllChildren(field);
+  const setData = vi.fn();
+  fireEvent.copy(field, { clipboardData: { setData } });
+  expect(setData).toHaveBeenCalledWith('text/plain', 'al@build:/home/al/Jobs/1042');
 });

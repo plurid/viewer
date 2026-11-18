@@ -229,7 +229,7 @@ export const verbRuns: Record<string, VerbRun> = {
   },
   cd: async ({ args }, host) => {
     const pane = activeWorkspace().panes.find((item) => item.id === host.context().paneID);
-    if (pane?.type !== 'folder') throw new Error(':cd needs a folder plane.');
+    if (pane?.type !== 'folder') throw new Error(':cd needs a files plane.');
     const entry = await statPath(args[0] ? pathOf(args[0], host) : getState().bootstrap.home);
     if (!entry.directory) throw new Error(`${entry.path} is not a folder.`);
     navigate(pane.id, entry.path);
@@ -259,12 +259,12 @@ export const verbRuns: Record<string, VerbRun> = {
       }),
     );
   },
-  // the file query language (domain/search/query.ts), in the folder plane's filter row
+  // the file query language (domain/search/query.ts), in the files plane's filter row
   filter: async ({ step }, host) => {
     const text = step.rest?.text ?? '';
     if (text) readQuery(text);
     const pane = activeWorkspace().panes.find((item) => item.id === host.context().paneID);
-    if (pane?.type !== 'folder') throw new Error(':filter needs a folder plane.');
+    if (pane?.type !== 'folder') throw new Error(':filter needs a files plane.');
     browseSession(pane.id, pane.path);
     updateBrowseSession(pane.id, pane.path, { query: text, searchOpen: !!text, subtree: false });
   },
@@ -394,12 +394,12 @@ export const verbRuns: Record<string, VerbRun> = {
     await window.viewer.terminalWrite(pane.id, args.map((word) => terminalInput(word)).join(''));
   },
 };
-/** The folder plane's items matching a pattern, added to its selection or taken out. */
+/** The files plane's items matching a pattern, added to its selection or taken out. */
 async function choose(host: LineHost, text: string, adding: boolean): Promise<string> {
   const verb = adding ? 'select' : 'deselect';
   if (!text) throw new Error(`:${verb} needs a pattern: *.md, or a query.`);
   const handle = folderHandle(host.context().paneID);
-  if (!handle) throw new Error(`:${verb} works in a folder plane.`);
+  if (!handle) throw new Error(`:${verb} works in a files plane.`);
   let query: FileQuery;
   try {
     query = parsePattern(text);
@@ -502,7 +502,7 @@ async function split(host: LineHost, direction: 'right' | 'down', word?: Word): 
 async function create(host: LineHost, kind: 'mkdir' | 'mkfile', name: string): Promise<void> {
   const destination = host.context().directory;
   if (!destination)
-    throw new Error(`:${kind === 'mkdir' ? 'mkdir' : 'touch'} needs a folder plane.`);
+    throw new Error(`:${kind === 'mkdir' ? 'mkdir' : 'touch'} needs a files plane.`);
   if (name.includes('/')) throw new Error('A name, not a path.');
   await operationOutcome(await window.viewer.operate({ kind, name, sources: [], destination }));
 }

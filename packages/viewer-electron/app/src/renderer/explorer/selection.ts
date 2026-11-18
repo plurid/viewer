@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
-import type { FileEntry } from '../../domain/contracts';
+import type { FileEntry, SortKey } from '../../domain/contracts';
+import { entryOrder } from '../../domain/files/entries';
 import type { BrowseSession } from '../workspace/sessions';
 
 export type FileModifiers = { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean };
@@ -34,6 +35,8 @@ export function useFileKeyboard(id: string, handler: (event: FileKey) => void) {
   }, [id]);
   return handler;
 }
+/** Whether a plane's file view is there to take keys. */
+export const hasFileKeyboard = (id: string) => keyboards.has(id);
 export function routeFileKeyboard(id: string, event: FileKey): void {
   keyboards.get(id)?.(event);
 }
@@ -72,6 +75,25 @@ export function keepPreviewKeys(element: HTMLElement | null): (() => void) | und
 }
 
 /** The moving cursor is independent of the fixed range anchor and the ordered selected paths. */
+/** Every order a view sorts by, the default first. */
+const sortKeys: readonly SortKey[] = ['name', 'modified', 'created', 'size', 'kind', 'extension'];
+const orders = [true, false].flatMap((foldersFirst) =>
+  sortKeys.flatMap((key) =>
+    [false, true].map((descending) => entryOrder(key, descending, foldersFirst)),
+  ),
+);
+/**
+ * Where `entry`, no longer in `scope`, stood in it, as a file a search has just hidden: the index of
+ * the first entry after it, by the order `scope` is sorted in. None when no order a view uses fits.
+ */
+function standing(scope: readonly FileEntry[], entry: FileEntry): number | undefined {
+  for (const order of orders) {
+    if (scope.some((item, index) => index > 0 && order(scope[index - 1]!, item) > 0)) continue;
+    const after = scope.findIndex((item) => order(entry, item) < 0);
+    return after < 0 ? scope.length : after;
+  }
+}
+
 export class FileSelection {
   private prefix = '';
   private typedAt = 0;
@@ -116,16 +138,23 @@ export class FileSelection {
     const current = scope.findIndex((entry) => entry.path === session.cursor);
     const backwards = ['ArrowUp', 'ArrowLeft', 'PageUp'].includes(key);
     const step = ['PageUp', 'PageDown'].includes(key) ? page : stride;
+    // The entry the cursor is on is hidden now, as by a search typed while Quick Preview shows it:
+    // the keys go on from where it stood, not from an end.
+    const hidden = current < 0 && session.cursor ? session.cache.get(session.cursor) : undefined;
+    const after = hidden ? standing(scope, hidden) : undefined;
+    const clamp = (value: number) => Math.max(0, Math.min(scope.length - 1, value));
     const index =
       key === 'Home'
         ? 0
         : key === 'End'
           ? scope.length - 1
-          : current < 0
-            ? backwards
-              ? scope.length - 1
-              : 0
-            : Math.max(0, Math.min(scope.length - 1, current + (backwards ? -step : step)));
+          : after !== undefined
+            ? clamp(backwards ? after - step : after + step - 1)
+            : current < 0
+              ? backwards
+                ? scope.length - 1
+                : 0
+              : clamp(current + (backwards ? -step : step));
     const target = scope[index];
     if (!target) return;
     if (shift && !scope.some((entry) => entry.path === session.anchor))

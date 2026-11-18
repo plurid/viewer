@@ -2,7 +2,10 @@ import { sameCapturedItem } from '../../domain/files/entries';
 import { agentPlaneCopy, agentWorkspaceCopy } from '../../domain/agents/requests';
 import type { CapturedTarget } from '../../domain/automation/actions';
 import { isTourFile } from '../../domain/tours/tour';
-import { withoutWorkspaceDismissals } from '../../domain/suggestions/insights';
+import {
+  namesWorkspaceDismissal,
+  withoutWorkspaceDismissals,
+} from '../../domain/suggestions/insights';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type {
   AgentNavigation,
@@ -510,7 +513,7 @@ export class AgentBroker {
         request.kind === 'select-files' ||
         (request.kind === 'open-path' && request.placement === 'linked')
       )
-        throw new Error('Focus a folder plane first.');
+        throw new Error('Focus a files plane first.');
       if (!(await this.access.state()).enabled) throw new Error('Agent access is disabled.');
     }
     if (request.kind === 'open-path') await this.authorize(request.path);
@@ -732,7 +735,7 @@ export class AgentBroker {
     ) {
       const extension = this.extension,
         catalog = extension?.catalog();
-      if (!extension || !catalog) throw new Error('Focus a granted folder plane in Viewer first.');
+      if (!extension || !catalog) throw new Error('Focus a granted files plane in Viewer first.');
       let request: AgentNavigation;
       let target: CapturedTarget = structuredClone({ ...catalog.target, selection: [] });
       if (call.name === 'propose_open_path') {
@@ -868,8 +871,14 @@ export class AgentBroker {
     } else if (isToolIn(call.name, ['validate_config', 'propose_config'])) {
       if (!this.extension) throw new Error('Configuration API is unavailable.');
       const input = parseToolInput(call.name, args);
-      if (call.name === 'validate_config') value = this.extension.config.preview(input.patches);
-      else {
+      if (call.name === 'validate_config') {
+        const preview = this.extension.config.preview(input.patches);
+        const dismissed = this.extension.config.snapshot().ui.insightsDismissed;
+        value = {
+          ...preview,
+          changes: preview.changes.filter((key) => !namesWorkspaceDismissal(key, dismissed)),
+        };
+      } else {
         value = this.extension.requests.configuration(input.patches);
         this.own((value as { id: string }).id);
       }

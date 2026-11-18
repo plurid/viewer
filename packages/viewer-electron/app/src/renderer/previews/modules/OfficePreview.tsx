@@ -6,7 +6,7 @@ import { usePreviewScroll } from '../scroll';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { headerItem } from '../../workspace/header-overflow';
 import { DataTable, type TableControls } from '../DataTable';
-import { ChoiceButton } from '../../ui/ChoiceMenu';
+import { MenuButton } from '../../ui/ChoiceMenu';
 import { Loading } from '../../ui/primitives';
 import { PreviewFailure } from '../PreviewFailure';
 import { plural } from '../../../domain/plural';
@@ -236,27 +236,21 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
       )}
       <span className="toolbar-spacer" />
       {filter && (
-        <span className="muted office-row-count" {...headerItem('rows', 9, 'detail')}>
+        // a fact, which the footer shows with the file's others
+        <span {...headerItem('rows', 9, 'detail')}>
           {plural(filter.rows, 'row')} · {plural(filter.columns, 'column')}
         </span>
       )}
-      <ChoiceButton
-        label="Preview options"
-        value=""
-        placeholder="More"
-        choices={[
+      {/* actions, as a menu button: each row does something, none is checked */}
+      <MenuButton
+        label="More"
+        className="office-more"
+        items={[
           ...(office.kind === 'workbook'
             ? [
-                {
-                  value: 'formatted',
-                  label: 'Formatted Values',
-                  detail: formatted ? 'Selected' : undefined,
-                },
-                {
-                  value: 'stored',
-                  label: 'Stored Values',
-                  detail: !formatted ? 'Selected' : undefined,
-                },
+                formatted
+                  ? { value: 'stored', label: 'Show Stored Values' }
+                  : { value: 'formatted', label: 'Show Formatted Values' },
               ]
             : []),
           { value: 'details', label: details ? 'Hide Preview Details' : 'Show Preview Details' },

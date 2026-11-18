@@ -11,6 +11,8 @@ interface Metadata {
   orientation?: number;
   hasAlpha?: boolean;
   pages?: number;
+  chromaSubsampling?: string;
+  isProgressive?: boolean;
 }
 export interface ImageInspection {
   width: number;
@@ -33,7 +35,12 @@ interface Pipeline {
   keepIccProfile(): Pipeline;
   withExif(value: Record<string, Record<string, string>>): Pipeline;
   withXmp(value: string): Pipeline;
-  jpeg(options: { quality: number; progressive?: boolean; optimiseCoding?: boolean }): Pipeline;
+  jpeg(options: {
+    quality: number;
+    progressive?: boolean;
+    optimiseCoding?: boolean;
+    chromaSubsampling?: string;
+  }): Pipeline;
   png(options?: {
     compressionLevel: number;
     adaptiveFiltering: boolean;
@@ -74,6 +81,55 @@ export async function previewSvg(root: string, input: Buffer, size: number): Pro
     .toBuffer();
   if (output.length > 32_000_000) throw new Error('SVG preview exceeds the 32 MB output limit.');
   return output;
+}
+/** The IJG library's luminance table at quality 50, which encoders scale by quality (Annex K). */
+const luminance = [
+  16, 11, 10, 16, 24, 40, 51, 61, 12, 12, 14, 19, 26, 58, 60, 55, 14, 13, 16, 24, 40, 57, 69, 56,
+  14, 17, 22, 29, 51, 87, 80, 62, 18, 22, 37, 56, 68, 109, 103, 77, 24, 35, 55, 64, 81, 104, 113,
+  92, 49, 64, 78, 87, 103, 121, 120, 101, 72, 92, 95, 98, 112, 100, 103, 99,
+];
+const luminanceSum = luminance.reduce((total, value) => total + value, 0);
+/**
+ * The quality a JPEG was saved at, read from its first quantization table as the IJG library
+ * scales it, kept between 40 and 100: a camera's own tables read as the quality nearest them.
+ * None for a file with no table before its image data.
+ */
+export function jpegQuality(bytes: Buffer): number | undefined {
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return;
+  let at = 2;
+  while (at + 4 <= bytes.length) {
+    if (bytes[at] !== 0xff) return;
+    const marker = bytes[at + 1]!;
+    // a fill byte, or a marker with no length
+    if (marker === 0xff) {
+      at += 1;
+      continue;
+    }
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      at += 2;
+      continue;
+    }
+    // the image data starts: no table came before it
+    if (marker === 0xda) return;
+    const length = bytes.readUInt16BE(at + 2);
+    if (at + 2 + length > bytes.length) return;
+    // a quantization segment holds one table or more: the luminance one is number 0
+    if (marker === 0xdb) {
+      for (let table = at + 4; table < at + 2 + length;) {
+        const precision = bytes[table]! >> 4;
+        const values = Array.from({ length: 64 }, (_, index) =>
+          precision ? bytes.readUInt16BE(table + 1 + index * 2) : bytes[table + 1 + index]!,
+        );
+        if ((bytes[table]! & 15) === 0) {
+          const scale = (values.reduce((total, value) => total + value, 0) * 100) / luminanceSum;
+          const quality = scale <= 100 ? (200 - scale) / 2 : 5000 / scale;
+          return Math.round(Math.min(100, Math.max(40, quality)));
+        }
+        table += 1 + 64 * (precision ? 2 : 1);
+      }
+    }
+    at += 2 + length;
+  }
 }
 /** The descriptive ASCII tags the default policy keeps: who made the picture and what it shows. */
 const creditTags: Readonly<Record<number, string>> = {
@@ -227,8 +283,17 @@ export async function transformImage(
     const xmp = safeImageXmp(metadata.xmp);
     if (xmp) image = image.withXmp(xmp);
   }
+  // a JPEG saved again keeps its own quality, colour detail and scan order
+  const own = plan.keepQuality && metadata.format === 'jpeg' ? jpegQuality(input) : undefined;
   if (plan.format === 'jpeg')
-    image = image.jpeg({ quality: plan.quality, progressive: plan.optimize, optimiseCoding: true });
+    image = image.jpeg({
+      quality: own ?? plan.quality,
+      progressive: plan.optimize || (own !== undefined && !!metadata.isProgressive),
+      optimiseCoding: true,
+      ...(own !== undefined && metadata.chromaSubsampling === '4:4:4'
+        ? { chromaSubsampling: '4:4:4' }
+        : {}),
+    });
   if (plan.format === 'png')
     image = image.png(
       plan.optimize

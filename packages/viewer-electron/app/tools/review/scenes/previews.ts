@@ -7,6 +7,9 @@ import { across } from '../variants';
 
 const samples = sampleFolders.samples;
 
+/** The Columns preview column, by its role and name. */
+const previewColumn = '[role="region"][aria-label="File preview" i]';
+
 /** The preview bar and identity rules every preview keeps. */
 const previewRules = [
   'The preview toolbar is one line of fixed height; labels never wrap, they turn into icons or go into “…”.',
@@ -32,11 +35,11 @@ const columnsPreview: Scene = {
   setup: { folder: samples, view: 'columns', sidebar: false },
   variants: across('name', ['short', 'long']),
   covers: { previews: ['image'] },
-  focus: ['.column-preview'],
+  focus: [previewColumn],
   async steps(page, variant) {
     const name = variant.data.name === 'long' ? longName('jpg') : sampleFiles.picture;
     await page.layoutShift(() => page.select(page.path(samples, name)));
-    await page.waitFor('.column-preview .preview-body img, .column-preview .preview-body canvas');
+    await page.waitFor(previewColumn + ' img, ' + previewColumn + ' canvas');
     await page.settle(600);
   },
 };
@@ -51,13 +54,14 @@ const quickPreview: Scene = {
   ],
   setup: { folder: samples, view: 'list' },
   variants: across('name', ['short', 'long']),
-  covers: { commands: ['quick-preview'], previews: ['image'] },
+  covers: { commands: ['quick-preview'], previews: ['image'], dialogs: ['QuickPreview.tsx'] },
   focus: ['dialog[open]'],
   async steps(page, variant) {
     const name = variant.data.name === 'long' ? longName('jpg') : sampleFiles.picture;
     await page.select(page.path(samples, name));
     await page.key(' ', 'Space');
-    await page.waitFor('.quick-preview-dialog[open] img, .quick-preview-dialog[open] canvas');
+    const dialog = 'dialog[open][aria-label=' + JSON.stringify(name) + ']';
+    await page.waitFor(dialog + ' img, ' + dialog + ' canvas');
     await page.settle(600);
   },
 };

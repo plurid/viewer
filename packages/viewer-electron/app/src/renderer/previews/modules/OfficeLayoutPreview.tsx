@@ -33,9 +33,6 @@ export default function OfficeLayoutPreview(context: PreviewContext) {
   const progress = context.active ? 'Rendering Office layout…' : 'Layout paused';
   return (
     <div className="office-viewer" data-office-layout>
-      {workbook && !!load.metadata?.sheets.length && (
-        <WorksheetTabs sheets={load.metadata.sheets} value={selected} choose={setSheet} />
-      )}
       {load.metadata?.limited && (
         <p className="inline-warning">The first 256 worksheets are listed.</p>
       )}
@@ -81,6 +78,10 @@ export default function OfficeLayoutPreview(context: PreviewContext) {
             !load.resource && <Loading label={progress} />
           )}
         </div>
+      )}
+      {/* at the bottom, as in Sheet: switching views moves no tab */}
+      {workbook && !!load.metadata?.sheets.length && (
+        <WorksheetTabs sheets={load.metadata.sheets} value={selected} choose={setSheet} />
       )}
     </div>
   );

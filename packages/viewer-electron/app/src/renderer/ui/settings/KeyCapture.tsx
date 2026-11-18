@@ -55,6 +55,8 @@ export function KeyCapture({
       clearTimeout(pause);
       setListening(false);
       setKeys([]);
+      // a key that was taken before a valid one is no longer the news
+      setMessage('');
       change.current(value);
     };
     const keydown = (event: KeyboardEvent) => {
@@ -65,6 +67,7 @@ export function KeyCapture({
         clearTimeout(pause);
         setListening(false);
         setKeys([]);
+        setMessage('');
         return;
       }
       if (event.key === 'Backspace' && plain && !pressed.length) return finish('');

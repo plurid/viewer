@@ -669,7 +669,7 @@ export default function ModelPreview(context: PreviewContext) {
         // repeat what the session already holds, and must not save or clear anything.
         rotation: (value) => {
           if (controls.snapshot().rotation === value) return;
-          controls.rotation(value);
+          controls.rotation(value, turnDuration());
           rememberCamera();
         },
         view: (position, target) => {

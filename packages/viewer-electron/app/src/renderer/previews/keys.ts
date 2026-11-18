@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import { matchesShortcut } from '../../domain/preferences/shortcuts';
 
@@ -14,7 +14,8 @@ import { matchesShortcut } from '../../domain/preferences/shortcuts';
  * next file's picture, which replaces the clicked one, keeps the keys.
  *
  * One window listener answers, and `previewOwnsKey` says exactly when it will, so the window's
- * commands step aside only for a key a preview then takes.
+ * commands step aside only for a key a preview then takes. A trackpad turn goes where the keys
+ * would (`previewHasKeyboard`).
  */
 
 /** Which actions a preview answers, and where. */
@@ -23,16 +24,21 @@ interface Claim {
   scope: HTMLElement;
   /** The preview itself: a next file's preview, loading out of sight, answers nothing. */
   node: HTMLElement;
-  current: { readonly shortcuts: Readonly<Record<string, () => void>> };
+  /** Its chords and what each does, as it last rendered. */
+  actions: { readonly current: Readonly<Record<string, () => void>> };
 }
-type KeyEvent = Pick<KeyboardEvent, 'target' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'key'> &
-  Partial<Pick<KeyboardEvent, 'code' | 'repeat'>>;
+/** The parts of a key press a preview reads: a plane's routed keys, as Quick Preview's, are no events. */
+type KeyEvent = Pick<KeyboardEvent, KeyEventPart> & Partial<Pick<KeyboardEvent, 'code' | 'repeat'>>;
+type KeyEventPart = 'target' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'key';
 
 const claims = new Set<Claim>();
+let watching = false;
 /** What the pointer last pressed, and the places around it, nearest first. */
 let pressed: Element[] = [];
+/** A plane, as the space draws it, or the pinned layer its content floats in. */
+const planes = '[data-plurid-plane], .plurid-plane';
 /** Where a press is remembered up to: past these, it is another plane or dialog. */
-const boundary = 'dialog, [data-plurid-plane], .plurid-plane, .column-preview, .gallery-preview';
+const boundary = `dialog, ${planes}, .column-preview, .gallery-preview`;
 
 const answers = (claim: Claim) =>
   claim.node.isConnected && !claim.node.closest('.held-preview-waiting');
@@ -40,13 +46,16 @@ const answers = (claim: Claim) =>
 const answering = (scope: Element | null | undefined) =>
   scope ? [...claims].filter((claim) => claim.scope === scope && answers(claim)) : [];
 
-/** The place, among those that answer, whose preview has the keyboard for this event. */
-function owner(event: KeyEvent): Element | undefined {
-  const target = event.target instanceof Element ? event.target : null;
+/** The place, among those that answer, whose preview has the keyboard where `at` is. */
+function owner(at: EventTarget | null): Element | undefined {
+  const target = at instanceof Element ? at : null;
   if (!target) return;
   const scopes = new Set([...claims].filter(answers).map((claim) => claim.scope));
   const focused = [...scopes].find((scope) => scope.contains(target));
   if (focused) return focused;
+  // what was pressed is gone, replaced as a picture is by the next file's: the press counts for
+  // the place now standing where it stood
+  const replaced = !!pressed[0] && !pressed[0].isConnected;
   for (const place of pressed) {
     // a plane or dialog closed since the press: the place is gone
     if (!place.isConnected) {
@@ -55,18 +64,18 @@ function owner(event: KeyEvent): Element | undefined {
     }
     // the focus went elsewhere since the press
     if (!target.contains(place)) return;
-    const around = [...scopes].filter((scope) => scope.contains(place) || place.contains(scope));
+    const around = [...scopes].filter(
+      (scope) => scope.contains(place) || (replaced && place.contains(scope)),
+    );
     if (around.length === 1) return around[0];
     if (around.length > 1 || place.matches(boundary)) return;
   }
 }
 /** The action a preview that has the keyboard takes for this key, if one does. */
 function action(event: KeyEvent): (() => void) | undefined {
-  for (const claim of answering(owner(event))) {
-    const chord = Object.keys(claim.current.shortcuts).find((key) =>
-      matchesShortcut(key, event),
-    );
-    if (chord) return claim.current.shortcuts[chord];
+  for (const claim of answering(owner(event.target))) {
+    const chord = Object.keys(claim.actions.current).find((key) => matchesShortcut(key, event));
+    if (chord) return claim.actions.current[chord];
   }
 }
 /** Whether a preview that has the keyboard takes this key itself: the window's commands then
@@ -74,12 +83,18 @@ function action(event: KeyEvent): (() => void) | undefined {
 export function previewOwnsKey(event: KeyEvent): boolean {
   return !!action(event);
 }
+/** Whether the preview at `node` has the keyboard now, as its keys would find it. */
+export function previewHasKeyboard(node: Element): boolean {
+  const place = owner(document.activeElement ?? document.body);
+  return answering(place).some((claim) => claim.node === node);
+}
 
+/** Remembers a press, up to the page itself: the page holds every place, and is none of them. */
 const press = (event: PointerEvent) => {
   pressed = [];
   for (
     let element = event.target instanceof Element ? event.target : null;
-    element;
+    element && element !== document.body && element !== document.documentElement;
     element = element.parentElement
   )
     pressed.push(element);
@@ -95,19 +110,17 @@ const keydown = (event: KeyboardEvent) => {
   if (!event.repeat) run();
 };
 
-/** The smallest element holding both `a` and `b`, short of the whole page. */
-function common(a: Element, b: Element): HTMLElement | undefined {
-  for (let element: Element | null = a; element; element = element.parentElement)
-    if (element.contains(b))
-      return element === document.body || element === document.documentElement
-        ? undefined
-        : (element as HTMLElement);
-}
-/** Where the keyboard makes a preview's keys its own: see the module comment. */
+/**
+ * Where the keyboard makes a preview's keys its own: see the module comment. Its plane, with the
+ * header its toolbar stands in, only while both are that one plane's: a pinned plane's content
+ * floats in the pinned layer, and the header it left behind in the space is no part of it.
+ */
 function scopeOf(node: HTMLElement, header?: HTMLElement): HTMLElement {
+  const plane = node.closest<HTMLElement>(planes);
+  const together = !!header && !!plane && header.closest(planes) === plane;
   return (
     node.closest<HTMLElement>('dialog') ??
-    (header && common(header, node)) ??
+    (together ? plane : undefined) ??
     node.closest<HTMLElement>('.column-preview, .gallery-preview') ??
     node.closest<HTMLElement>('.preview-host') ??
     node
@@ -125,23 +138,24 @@ export function usePreviewKeys(
   header?: HTMLElement,
 ): void {
   const current = useRef(shortcuts);
-  current.current = shortcuts;
-  const chords = Object.keys(shortcuts).filter(Boolean).join(' ');
+  // the newest actions, once rendered: a ref is never written while rendering
+  useLayoutEffect(() => {
+    current.current = shortcuts;
+  });
   useEffect(() => {
     const node = element.current;
-    if (!node || !enabled || !chords) return;
-    const claim: Claim = { scope: scopeOf(node, header), node, current };
-    if (!claims.size) {
-      window.addEventListener('pointerdown', press, true);
-      window.addEventListener('keydown', keydown, true);
-    }
+    // with no chord of its own a preview still has the keyboard, for a trackpad turn
+    if (!node || !enabled) return;
+    const claim: Claim = { scope: scopeOf(node, header), node, actions: current };
+    // Presses are watched from the first preview on, and stay watched: between one file's picture
+    // and the next there is a moment with none, and a press then must still count.
+    if (!watching) window.addEventListener('pointerdown', press, true);
+    watching = true;
+    if (!claims.size) window.addEventListener('keydown', keydown, true);
     claims.add(claim);
     return () => {
       claims.delete(claim);
-      if (claims.size) return;
-      window.removeEventListener('pointerdown', press, true);
-      window.removeEventListener('keydown', keydown, true);
-      pressed = [];
+      if (!claims.size) window.removeEventListener('keydown', keydown, true);
     };
-  }, [element, enabled, chords, header]);
+  }, [element, enabled, header]);
 }

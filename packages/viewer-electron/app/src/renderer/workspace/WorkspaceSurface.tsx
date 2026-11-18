@@ -379,8 +379,15 @@ function CollectionContent() {
 const marked = (Content: React.ComponentType): React.ComponentType =>
   function MarkedPlane() {
     const plane = usePluridPlane();
+    const id = plane.parameters.id ?? '';
+    // the plane the space frames, for review runs' checks (tools/review/checks.ts)
+    const inView = useViewer((state) => !!id && activeWorkspace(state).activePane === id);
     return (
-      <div className="pane-marker" data-viewer-pane={plane.parameters.id ?? ''}>
+      <div
+        className="pane-marker"
+        data-viewer-pane={id}
+        data-plane-in-view={inView ? 'true' : undefined}
+      >
         <Content />
       </div>
     );
@@ -633,7 +640,7 @@ export function WorkspaceSurface({
       <Empty title="No open planes">
         <div className="empty-actions">
           <button className="primary" disabled={!api} onClick={() => workspace.newRootFolder()}>
-            New Folder Plane
+            New Files Plane
           </button>
           <button
             disabled={!api}

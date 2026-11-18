@@ -1,10 +1,11 @@
 import type { SSHFailureState } from '../../src/domain/remote/ssh-errors';
 
-// Standard error of OpenSSH 9.x at LogLevel=ERROR, written from its source messages with fixture
-// names (build-box, 192.0.2.10, /fixtures), never captured by running ssh:
-// sshconnect.c warn_changed_key, check_host_key and ssh_connect_direct; sshconnect2.c userauth
-// and identity_sign; ssh.c resolve_host; kex.c kex_exchange_identification; packet.c.
-// https://github.com/openssh/openssh-portable/tree/V_9_9_P2
+// Standard error of OpenSSH 9.x at LogLevel=ERROR, from its source messages with fixture names
+// (build-box, 192.0.2.10, /fixtures): sshconnect.c warn_changed_key, check_host_key and
+// ssh_connect_direct; sshconnect2.c userauth and identity_sign; ssh.c resolve_host; kex.c
+// kex_exchange_identification; packet.c. https://github.com/openssh/openssh-portable/tree/V_9_9_P2
+// The line endings and the unknown-key wording match a review run against a loopback sshd: ssh
+// ends lines with CRLF, except the one inside the changed-key fingerprint.
 
 export const fixtureFingerprint = 'SHA256:dF7v73VCVA52XCCI0LR7unENWy9rIM/25/r7c9Hgh4g';
 
@@ -13,24 +14,26 @@ const banner = (title: string) =>
     '@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@',
     title,
     '@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@',
-  ].join('\n');
+  ].join('\r\n');
 
 export const changedKeyStderr = [
   banner('@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @'),
   'IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!',
   'Someone could be eavesdropping on you right now (man-in-the-middle attack)!',
   'It is also possible that a host key has just been changed.',
-  'The fingerprint for the ED25519 key sent by the remote host is',
-  fixtureFingerprint + '.',
+  'The fingerprint for the ED25519 key sent by the remote host is\n' + fixtureFingerprint + '.',
   'Please contact your system administrator.',
   'Add correct host key in /fixtures/home/.ssh/known_hosts to get rid of this message.',
   'Offending ED25519 key in /fixtures/home/.ssh/known_hosts:3',
   'Host key for build-box has changed and you have requested strict checking.',
   'Host key verification failed.',
   '',
-].join('\n');
+].join('\r\n');
 
-export const sshErrorSamples: [string, string, SSHFailureState][] = [
+/** CRLF everywhere, except after "remote host is", where ssh writes a bare line feed. */
+const crlf = (text: string) => text.replace(/(?<!\r|remote host is)\n/g, '\r\n');
+
+const samples: [string, string, SSHFailureState][] = [
   ['changed key', changedKeyStderr, 'host-key-changed'],
   [
     'revoked key',
@@ -57,13 +60,13 @@ export const sshErrorSamples: [string, string, SSHFailureState][] = [
     ].join('\n'),
     'host-key-changed',
   ],
+  ['unknown host key without a prompt', 'Host key verification failed.\r\n', 'needs-sign-in'],
   [
-    'unknown host key without a prompt',
-    'No ED25519 host key is known for build-box and you have requested strict checking.\n' +
-      'Host key verification failed.\n',
+    'unknown host key, older wording',
+    'No ED25519 host key is known for build-box and you have requested strict checking.\r\n' +
+      'Host key verification failed.\r\n',
     'needs-sign-in',
   ],
-  ['host key not confirmed', 'Host key verification failed.\n', 'needs-sign-in'],
   [
     'authentication',
     'builder@build-box: Permission denied (publickey,password).\n',
@@ -114,3 +117,7 @@ export const sshErrorSamples: [string, string, SSHFailureState][] = [
     'unreachable',
   ],
 ];
+
+export const sshErrorSamples: [string, string, SSHFailureState][] = samples.map(
+  ([name, text, state]) => [name, crlf(text), state],
+);

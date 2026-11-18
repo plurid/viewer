@@ -62,6 +62,11 @@ describe('settleHeader', () => {
     expect(settleHeader(20, items, away)).toEqual(['discover']);
     expect(settleHeader(-20, items, away)).toEqual([]);
   });
+  it('keeps away only what was away: what would go next, shown now, stays', () => {
+    // Discover is away and Git shown: 31 px over, Git stays though 8 px of doubt would send it
+    expect(settleHeader(31, items, new Set(['discover']))).toEqual(['discover']);
+    expect(settleHeader(31, items, new Set(['back']))).toEqual(['discover']);
+  });
 });
 
 describe('the "…" menu', () => {
@@ -127,8 +132,14 @@ describe('useHeaderOverflow', () => {
     const style = document.createElement('style');
     style.textContent = '[data-spilled], [data-pinned-twin] { display: none; }';
     document.head.append(style);
+    // a labelled action shown as its icon is as wide as its `data-compact-width`
     const width = (element: HTMLElement) =>
-      getComputedStyle(element).display === 'none' ? 0 : Number(element.dataset.width ?? 0);
+      getComputedStyle(element).display === 'none'
+        ? 0
+        : Number(
+            (element.hasAttribute('data-compact') && element.dataset.compactWidth) ||
+              (element.dataset.width ?? 0),
+          );
     vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
       this: HTMLElement,
     ) {
@@ -196,6 +207,123 @@ describe('useHeaderOverflow', () => {
       view.container.querySelector('[data-header-item="zoom"]')!.hasAttribute('data-spilled'),
     ).toBe(false);
   });
+  /** A header of `children`, each `[attributes]`, measured again as a resize would have it. */
+  function Bar({ width, items }: { width: number; items: Record<string, unknown>[] }) {
+    const header = useRef<HTMLDivElement>(null);
+    useHeaderOverflow(header);
+    return createElement(
+      'div',
+      { ref: header, className: 'plane-controls', 'data-width': width },
+      createElement('span', { className: 'plane-heading', 'data-width': 300 }),
+      ...items.map((props, index) => createElement('button', { key: index, ...props })),
+      createElement('button', { ...headerMenu, 'data-width': 30 }),
+    );
+  }
+  /** Frames run when `flush` says, and a resize is reported when `resize` says. */
+  function frames() {
+    const queued: FrameRequestCallback[] = [];
+    const observers: ResizeObserverCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      queued.push(callback),
+    );
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          observers.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const flush = () =>
+      act(() => {
+        while (queued.length) queued.shift()!(0);
+      });
+    return {
+      flush,
+      resize() {
+        for (const observer of observers) observer([], {} as ResizeObserver);
+        flush();
+      },
+    };
+  }
+  const share = {
+    ...headerItem('share', 5, ['share']),
+    'data-header-collapse': '',
+    'data-width': 100,
+    'data-compact-width': 30,
+  };
+  const at = (view: ReturnType<typeof render>, id: string) =>
+    view.container.querySelector<HTMLElement>(`[data-header-item="${id}"]`)!;
+
+  it('shows a labelled action as its icon before it gives way, and so when it comes back', () => {
+    layout();
+    const { resize } = frames();
+    // the title's 96, Share's 100 or its icon's 30, and "…"'s 30
+    const view = render(createElement(Bar, { width: 140, items: [share] }));
+    expect(at(view, 'share').hasAttribute('data-spilled')).toBe(true);
+    // room for its icon, not its label
+    view.rerender(createElement(Bar, { width: 170, items: [share] }));
+    resize();
+    expect(at(view, 'share').hasAttribute('data-spilled')).toBe(false);
+    expect(at(view, 'share').hasAttribute('data-compact')).toBe(true);
+    view.rerender(createElement(Bar, { width: 300, items: [share] }));
+    resize();
+    expect(at(view, 'share').hasAttribute('data-compact')).toBe(false);
+  });
+
+  it('makes no label an icon for an item that gives way anyway', () => {
+    layout();
+    // the title's 96, Share's 100 or 30, a 200 px detail and "…": the detail goes, Share keeps its
+    // label
+    const detail = { ...headerItem('size', 9, 'detail'), 'data-width': 200 };
+    const view = render(createElement(Bar, { width: 260, items: [share, detail] }));
+    expect(at(view, 'size').hasAttribute('data-spilled')).toBe(true);
+    expect(at(view, 'share').hasAttribute('data-compact')).toBe(false);
+    expect(at(view, 'share').hasAttribute('data-spilled')).toBe(false);
+  });
+
+  it('needs only a flexible child’s minimum, not the room it took', () => {
+    layout();
+    const view = render(
+      createElement(Bar, {
+        width: 300,
+        items: [
+          { ...headerItem('discover', 9, ['capabilities']), 'data-width': 30 },
+          // a spacer that grew to fill what was there
+          { style: { flexGrow: '1', minWidth: '0px' }, 'data-width': 400 },
+        ],
+      }),
+    );
+    expect(at(view, 'discover').hasAttribute('data-spilled')).toBe(false);
+  });
+
+  it('gives the keyboard to "…" when the control it was on gives way', () => {
+    layout();
+    const { flush, resize } = frames();
+    const items = [{ ...headerItem('discover', 9, ['capabilities']), 'data-width': 30 }];
+    const view = render(createElement(Bar, { width: 300, items }), {
+      container: document.body.appendChild(document.createElement('div')),
+    });
+    at(view, 'discover').focus();
+    view.rerender(createElement(Bar, { width: 140, items }));
+    resize();
+    flush();
+    expect(at(view, 'discover').hasAttribute('data-spilled')).toBe(true);
+    expect(document.activeElement).toBe(view.container.querySelector('[data-header-menu]'));
+    // one the keyboard was not on gives way without taking it
+    const other = document.body.appendChild(document.createElement('button'));
+    other.focus();
+    view.rerender(createElement(Bar, { width: 300, items }));
+    resize();
+    view.rerender(createElement(Bar, { width: 140, items }));
+    resize();
+    flush();
+    expect(document.activeElement).toBe(other);
+  });
+
   it('shows a format’s control once when the person pinned the same command', async () => {
     layout();
     const view = render(createElement(Header, { width: 900, pinned: true }));

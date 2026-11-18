@@ -8,4 +8,6 @@ export interface SettingsEditor {
   patches(values: SettingsPatch[]): void;
   save(change: SettingsChange): void;
   error(message: string): void;
+  /** The setting whose last write failed, and why: its row shows the reason beside it. */
+  failure?: { path: string; message: string };
 }

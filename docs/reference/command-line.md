@@ -71,7 +71,7 @@ Square brackets in a name mark letters you may leave out, as in vim: `q[uit]` an
 | `wq`                                                    |                                   | Saves, then closes the plane                                                             |
 | `x[it]`, `exi[t]`                                       |                                   | Saves if changed, then closes the plane                                                  |
 | `e[dit]`                                                | `{path}`                          | Opens a path as a plane; a text file opens for editing                                   |
-| `cd`, `chd[ir]`                                         | `[path]`                          | Shows a folder in this folder plane; Home without one                                    |
+| `cd`, `chd[ir]`                                         | `[path]`                          | Shows a folder in this files plane; Home without one                                     |
 | `pw[d]`                                                 |                                   | Shows this plane's folder                                                                |
 | `sp[lit]`                                               | `[path]`                          | Splits down: a tile below, showing the path                                              |
 | `vs[plit]`                                              | `[path]`                          | Splits right: a tile beside, showing the path                                            |
@@ -80,7 +80,7 @@ Square brackets in a name mark letters you may leave out, as in vim: `q[uit]` an
 | `touch`                                                 | `{name}`                          | Creates a file in this folder                                                            |
 | `mv`                                                    | `{name}`                          | Renames the one selected item; a name, not a path                                        |
 | `trash`                                                 |                                   | Moves the selection to the Trash, with the confirmation set in Settings                  |
-| `filter`                                                | `[query]`                         | Filters this folder plane; no query clears it                                            |
+| `filter`                                                | `[query]`                         | Filters this files plane; no query clears it                                             |
 | `find`                                                  | `{query}`                         | Searches this folder and its subfolders; results open as a plane                         |
 | `select`, `sel`                                         | `{glob\|query}`                   | Adds matching items to the selection                                                     |
 | `deselect`, `unselect`                                  | `{glob\|query}`                   | Takes matching items out of the selection                                                |

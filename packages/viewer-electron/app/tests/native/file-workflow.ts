@@ -129,7 +129,7 @@ for (let launch = 0; launch < 2; launch++) {
       await actions.palette('Files');
       await choose(name);
       await actions.key(' ', 'Space');
-      await actions.button('Open linked plane', '.quick-preview-dialog');
+      await actions.button('Open Linked Plane', '.quick-preview-dialog');
     };
     const readyPDF = () =>
       until(
@@ -224,7 +224,7 @@ for (let launch = 0; launch < 2; launch++) {
       );
       assert.deepEqual(result, { width: 96, height: 64 });
       if (await evaluate(exists('.quick-preview-dialog')))
-        await actions.button('Open linked plane', '.quick-preview-dialog');
+        await actions.button('Open Linked Plane', '.quick-preview-dialog');
       await until(
         async () =>
           (await saved()).workspaces[0]?.panes.some(

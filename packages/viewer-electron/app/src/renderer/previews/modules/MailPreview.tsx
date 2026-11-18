@@ -15,6 +15,7 @@ import { Empty, Loading } from '../../ui/primitives';
 import { PreviewFailure } from '../PreviewFailure';
 import { report } from '../../state/store';
 import './mail.css';
+import { FileName } from '../../ui/FileName';
 
 type MailView = 'html' | 'text';
 
@@ -103,9 +104,9 @@ function Attachments({
     <section className="mail-attachments" aria-label="Attachments">
       <ul>
         {attachments.map((attachment, part) => (
-          <li key={part} title={attachment.name}>
-            <span className="mail-attachment-name">{attachment.name}</span>
-            <span className="muted">
+          <li key={part}>
+            <FileName name={attachment.name} className="mail-attachment-name" />
+            <span className="muted mail-attachment-kind">
               {attachmentKind(attachment)} · {formatBytes(attachment.size)}
             </span>
             {save && (

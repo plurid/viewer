@@ -1,3 +1,4 @@
+import { PathLabel } from '../PathLabel';
 import { useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
@@ -44,7 +45,7 @@ function BasketList({ paths, busy }: { paths: string[]; busy: boolean }) {
                 transform: `translateY(${virtual.start}px)`,
               }}
             >
-              <span title={path}>{path}</span>
+              <PathLabel path={path} />
               <button disabled={busy} onClick={() => removeFromBasket([path])}>
                 Remove
               </button>

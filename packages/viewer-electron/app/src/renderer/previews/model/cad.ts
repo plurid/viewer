@@ -53,6 +53,8 @@ export class WarmCadWorker {
   private previews = 0;
   /** Stop when idle instead of waiting: past the heap limit or under memory pressure. */
   private cool = false;
+  /** Memory pressure asked for the worker and the compiled module to go once idle. */
+  private pressure = false;
   private module?: Promise<WebAssembly.Module | undefined>;
   private idleTimer?: ReturnType<typeof setTimeout>;
   private conversionTimer?: ReturnType<typeof setTimeout>;
@@ -130,9 +132,20 @@ export class WarmCadWorker {
     }
     clearTimeout(this.idleTimer);
     this.current = job;
+    let compiling = true;
+    // The conversion's time includes the window's compile. A compile that never ends is given
+    // up, and later workers compile their own.
+    this.conversionTimer = setTimeout(() => {
+      if (compiling) this.module = Promise.resolve(undefined);
+      this.stop();
+      job.finish(
+        new Error('CAD conversion took too long. Try a simpler model or reopen the file.'),
+      );
+    }, this.conversionMilliseconds);
     // Compiling waits once, for the first file; every later worker gets the module at once.
     this.module ??= this.compile().catch(() => undefined);
     void this.module.then((module) => {
+      compiling = false;
       if (this.current === job) this.post(job, module);
     });
   }
@@ -141,7 +154,7 @@ export class WarmCadWorker {
     try {
       if (!this.worker) {
         this.worker = this.create();
-        this.cool = false;
+        this.cool = this.pressure;
       }
       const worker = this.worker;
       worker.onmessage = (event: MessageEvent<CadResponse>) => {
@@ -158,12 +171,6 @@ export class WarmCadWorker {
       };
       worker.onerror = failed;
       worker.onmessageerror = failed;
-      this.conversionTimer = setTimeout(() => {
-        this.stop();
-        job.finish(
-          new Error('CAD conversion took too long. Try a simpler model or reopen the file.'),
-        );
-      }, this.conversionMilliseconds);
       worker.postMessage({ ...job.request, module } satisfies CadRequest, [job.request.buffer]);
     } catch (error) {
       this.stop();
@@ -174,23 +181,34 @@ export class WarmCadWorker {
   private idle(): void {
     clearTimeout(this.idleTimer);
     if (!this.worker || this.current || this.queue.length) return;
-    if (this.cool) this.stop();
-    else if (!this.previews) this.idleTimer = setTimeout(() => this.stop(), this.idleMilliseconds);
+    if (this.cool) this.stop(this.pressure);
+    else if (!this.previews)
+      this.idleTimer = setTimeout(() => this.stop(true), this.idleMilliseconds);
   }
 
-  private stop(): void {
+  /**
+   * Stops the worker. A cancelled or failed conversion keeps the compiled module for the next
+   * worker; the idle period and memory pressure `forget` it too.
+   */
+  private stop(forget = false): void {
     clearTimeout(this.idleTimer);
     clearTimeout(this.conversionTimer);
     this.worker?.terminate();
     this.worker = undefined;
     this.cool = false;
+    if (forget) {
+      this.module = undefined;
+      this.pressure = false;
+    }
   }
 
-  /** Memory pressure: an idle worker stops now, a busy one when its conversions end. */
+  /** Memory pressure: an idle converter lets go now, a busy one when its conversions end. */
   release(): void {
-    if (!this.worker) return;
-    this.cool = true;
-    this.idle();
+    this.pressure = true;
+    if (this.worker || this.current) {
+      this.cool = true;
+      this.idle();
+    } else this.stop(true);
   }
 
   dispose(): void {

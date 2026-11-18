@@ -276,11 +276,11 @@ for (let launch = 0; launch < 2; launch += 1) {
         });
       await until(() => evaluate(exists('.quick-preview-dialog')), Boolean, 'Quick Preview');
       await until(
-        () => evaluate(buttonState('Open linked plane', '.quick-preview-dialog')),
+        () => evaluate(buttonState('Open Linked Plane', '.quick-preview-dialog')),
         (state) => state === 'enabled',
         'Linked plane action',
       );
-      await evaluate(pressButton('Open linked plane', '.quick-preview-dialog'));
+      await evaluate(pressButton('Open Linked Plane', '.quick-preview-dialog'));
       const state = await until(
         saved,
         (state) =>

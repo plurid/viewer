@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { baseName } from '../../../domain/workspaces/planes';
+import { useConfirmation } from '../settings/ConfirmAction';
 import { latestReplies } from '../../state/requests';
 import { errorMessage } from '../../../domain/errors';
 import type { ExecutionGrant } from '../../../domain/agents/requests';
@@ -23,6 +25,7 @@ export function AgentGrants({
   const [root, setRoot] = useState(roots[0] || '');
   const [error, setError] = useState('');
   const home = useHome();
+  const confirmation = useConfirmation();
   useEffect(() => {
     if (!roots.includes(root)) setRoot(roots[0] || '');
   }, [roots, root]);
@@ -56,21 +59,26 @@ export function AgentGrants({
         Viewer asks you before every agent command, and removed files go to the Trash. Agents can’t
         run scripts, programs or apps, or type into a terminal.
       </p>
-      <label className="settings-row settings-wide-field">
+      <div className="settings-row settings-wide-field">
         <span>Grant for folder</span>
         <ChoiceButton
           label="Grant for folder"
           value={root}
-          choices={roots.map((root) => ({ value: root, label: pathText(root, home) }))}
+          // the folder's own name, as Finder names a place; its path shows once, under the row
+          choices={roots.map((root) => ({
+            value: root,
+            label: baseName(root) || root,
+            detail: pathText(root, home),
+          }))}
           placeholder="Choose an authorized folder"
           disabled={!roots.length}
           onChoose={setRoot}
         />
-      </label>
+      </div>
       {!roots.length && <p className="settings-field-detail">Add a folder above first.</p>}
       {root && (
         <p className="settings-field-detail">
-          <PathLabel path={root} layout="wrap" />
+          <PathLabel path={root} />
         </p>
       )}
       {root && (
@@ -110,13 +118,20 @@ export function AgentGrants({
                   {grant.capability !== 'terminal-read' && ' · Not used: Viewer asks each time'}
                 </span>
                 <button
-                  onClick={() => {
-                    void window.viewer
-                      .agentGrant(grant.actionID, grant.root, grant.capability, false, clientID)
-                      .then(() => window.viewer.agentGrants())
-                      .then(setGrants)
-                      .catch((error: Error) => setError(error.message));
-                  }}
+                  className="danger"
+                  onClick={() =>
+                    confirmation.ask({
+                      title: 'Revoke this grant?',
+                      detail: `${capabilityLabel(grant.capability)} in ${pathText(grant.root, home)}: the agent asks again next time.`,
+                      action: 'Revoke',
+                      run: () =>
+                        void window.viewer
+                          .agentGrant(grant.actionID, grant.root, grant.capability, false, clientID)
+                          .then(() => window.viewer.agentGrants())
+                          .then(setGrants)
+                          .catch((error: Error) => setError(error.message)),
+                    })
+                  }
                 >
                   Revoke
                 </button>
@@ -124,6 +139,7 @@ export function AgentGrants({
             ))}
         </Disclosure>
       )}
+      {confirmation.dialog}
     </>
   );
 }

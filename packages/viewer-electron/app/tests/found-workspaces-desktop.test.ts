@@ -65,3 +65,26 @@ it('the desktop Clear port preserves remembered entries older than ninety days',
   const stored = JSON.parse(await readFile(found.store.file, 'utf8'));
   expect(stored.entries).toMatchObject([{ key: 'code/sample', root }]);
 });
+
+it('carries dismissed workspace offers through Viewer moves and clears found ones with history', async () => {
+  const desktop = Object.create(Desktop.prototype) as Desktop;
+  const definitions = {
+    remapOffers: vi.fn(async () => {}),
+    clearFoundOffers: vi.fn(async () => {}),
+  };
+  Object.assign(desktop, {
+    workspaceSessions: { remapFolderHistory: vi.fn(), folderHistoryRevision: 1 },
+    foundWorkspaces: { remap: vi.fn(async () => {}), clearHistory: vi.fn(async () => {}) },
+    declaredCommands: { clearHistory: vi.fn(async () => {}) },
+    definitions,
+    folderChecks: { remap: vi.fn() },
+    windows: new Map(),
+    options: {},
+  });
+  const changes = [{ source: '/Users/sample/code/acme', destination: '/Users/sample/code/site' }];
+  desktop.emit({ type: 'file-changes', changes } as never);
+  expect(definitions.remapOffers).toHaveBeenCalledWith(changes);
+  const clear = Reflect.get(desktop, 'clearHistoryRecords') as () => Promise<void>;
+  await clear.call(desktop);
+  expect(definitions.clearFoundOffers).toHaveBeenCalledOnce();
+});

@@ -6,7 +6,9 @@ import { matchesDialogFilter } from '../../domain/dialogs';
 import type { FileEntry, FolderListing } from '../../domain/contracts';
 import { formatBytes, isPackage } from '../../domain/files/entries';
 import { errorMessage } from '../../domain/errors';
-import { Dialog, IconButton } from '../ui/primitives';
+import { Dialog, IconButton, Loading } from '../ui/primitives';
+import { FileName } from '../ui/FileName';
+import { typeAheadIndex } from '../ui/useListKeys';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { Icon } from '../ui/Icon';
 
@@ -185,7 +187,41 @@ export default function FilePicker({ prompt }: { prompt: FileDialogPrompt }) {
     else if (prompt.mode === 'open' && allowed(entry)) choose([entry.path]);
     else if (prompt.mode === 'save') nameInput.current?.focus();
   };
+  const typed = useRef({ text: '', at: 0 });
   const keydown = (event: KeyboardEvent<HTMLElement>) => {
+    // ⌘↑ goes to the enclosing folder and ⌘↓ opens the selection, as in Finder's chooser
+    if (event.metaKey && event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (listing && listing.parent !== folder) navigate(listing.parent);
+      return;
+    }
+    if (event.metaKey && event.key === 'ArrowDown') {
+      event.preventDefault();
+      const entry = entries[cursor];
+      if (entry && allowed(entry)) open(entry);
+      return;
+    }
+    // letters jump to the next name that starts with them, as a Mac's lists do
+    if (
+      event.currentTarget === scroll.current &&
+      event.key.length === 1 &&
+      event.key !== ' ' &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      const now = event.timeStamp || Date.now();
+      const text = now - typed.current.at < 1000 ? typed.current.text + event.key : event.key;
+      typed.current = { text, at: now };
+      const names = entries.map((entry) => entry.name);
+      const index = typeAheadIndex(names, text, text.length === 1 ? cursor + 1 : cursor);
+      if (index >= 0 && allowed(entries[index]!)) {
+        event.preventDefault();
+        select(index);
+        virtual.scrollToIndex(index, { align: 'auto' });
+      }
+      return;
+    }
     if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
       event.preventDefault();
       const direction = event.key === 'ArrowUp' ? -1 : 1;
@@ -359,10 +395,10 @@ export default function FilePicker({ prompt }: { prompt: FileDialogPrompt }) {
               }
             }}
           >
-            {loading ? (
-              <div className="file-picker-empty" role="status">
-                Loading folder…
-              </div>
+            {/* the folder before keeps its rows until the next arrives; a slow folder shows
+                its progress after a moment, never as a flash */}
+            {loading && !entries.length ? (
+              <Loading label="Loading folder…" />
             ) : !entries.length ? (
               <div className="file-picker-empty" role="status">
                 {query ? 'No matching files' : 'This folder is empty'}
@@ -382,13 +418,13 @@ export default function FilePicker({ prompt }: { prompt: FileDialogPrompt }) {
                       style={{ height: row.size, transform: `translateY(${row.start}px)` }}
                       onClick={(event) => click(event, row.index)}
                       onDoubleClick={() => allowed(entry) && open(entry)}
-                      title={entry.error || entry.name}
+                      title={entry.error || undefined}
                     >
                       <Icon
                         name={isPackage(entry) ? 'grid' : entry.directory ? 'folder' : 'file'}
                         size={16}
                       />
-                      <span>{entry.name}</span>
+                      <FileName name={entry.name} />
                       <small>{entry.directory ? '' : formatBytes(entry.size)}</small>
                     </div>
                   );

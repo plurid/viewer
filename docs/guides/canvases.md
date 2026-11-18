@@ -42,8 +42,8 @@ revision** to restore the preceding design.
 To try a complete saved tool without configuring a model, follow
 [Try the demo project](demo-project.md).
 
-1. Choose **Open Canvas…** in Chat to import an exported plugin folder, or find an existing tool in
-   **Tool Library**.
+1. Choose **More → Open Canvas…** in Chat to import an exported plugin folder, or find an existing
+   tool in **Tool Library**.
 2. Choose **Duplicate** when you want a separate version for a new task.
 3. Open **Conversation** and describe what to change. Keep the working calculations and controls
    that already fit the task.
@@ -127,9 +127,9 @@ does not automatically pay for another generation.
 
 Choose **Export Canvas…** and a destination folder. Viewer creates a new folder containing
 `index.html`, assets, bundled runtime libraries and `canvas.viewer.json`. To continue with the saved
-values, choose **Open Canvas…** from a Chat plane and select that exported folder. Reopening does
-not call a model. Exports include captured sources and inputs but grant no access to original source
-paths. Imported snapshots remain readable; refresh requires attaching the source again in a
+values, choose **More → Open Canvas…** from a Chat plane and select that exported folder. Reopening
+does not call a model. Exports include captured sources and inputs but grant no access to original
+source paths. Imported snapshots remain readable; refresh requires attaching the source again in a
 conversation.
 
 Personal backups include canvases and their attached assets within the backup size limit. For large

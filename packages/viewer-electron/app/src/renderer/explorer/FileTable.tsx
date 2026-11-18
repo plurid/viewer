@@ -1,3 +1,4 @@
+import { Icon } from '../ui/Icon';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { ListColumn, SortKey, UIPreferences } from '../../domain/contracts';
 import {
@@ -93,6 +94,7 @@ export function FileTable({
       <div className="file-table-content">
         <div
           className="file-head"
+          role="row"
           onContextMenu={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -104,6 +106,8 @@ export function FileTable({
             return (
               <div
                 className="file-heading"
+                role="columnheader"
+                aria-sort={sort === column ? (descending ? 'descending' : 'ascending') : undefined}
                 data-column={column}
                 key={column}
                 onDragOver={(event) => {
@@ -141,7 +145,11 @@ export function FileTable({
                     }}
                     onClick={() => onSort(column)}
                   >
-                    {definition.label} {sort === column && (descending ? '↓' : '↑')}
+                    <span className="column-heading-text">{definition.label}</span>
+                    {/* a slot of its own at the end, so no label moves as the sort changes */}
+                    <span className="sort-chevron" aria-hidden="true">
+                      {sort === column && <Icon name={descending ? 'down' : 'up'} size={11} />}
+                    </span>
                   </button>
                 ) : (
                   <span className="column-label">{definition.label}</span>

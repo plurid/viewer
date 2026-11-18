@@ -21,13 +21,13 @@ for its tools
 5. Under **Metadata**, choose **Keep color and credit · remove GPS**, **Remove metadata** or **Keep
    all · includes location**.
 6. Check the **File name** and **Save in** folder, then choose **Export Image**, or **Export 3
-   Images** for a selection. If the folder already holds that name, the export adds "copy" to the
+   Images** for a selection. If the folder already holds that name, the export adds “copy” to the
    new file's name.
 
 ![Image tools converting a photograph to WebP](../media/create.png)
 
 For a quick web copy, choose **Images for web…** instead: WebP, quality 80, at most 2048 pixels, GPS
-removed. **Batch convert images…** applies one setting to a whole selection, and **Convert copy to
+removed. **Batch convert images…** applies one setting to a whole selection, and **Convert Copy to
 JPEG** makes a JPEG copy of a HEIC photo.
 
 ## Make files smaller

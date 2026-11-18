@@ -14,6 +14,7 @@ import { ChoiceButton } from '../ChoiceMenu';
 import type { RowElement } from '../primitives';
 import { Button, PathField, Row } from '../primitives';
 import { ColorField } from '../ColorField';
+import { NumberField } from '../NumberField';
 import { looks } from '../../workspace/look';
 import { errorMessage } from '../../../domain/errors';
 import { DarkPagesDetail } from './DarkPagesSettings';
@@ -116,8 +117,10 @@ export function CatalogSettings({
               { value: otherFolder, label: 'Other…' },
             ]
           : listed;
-        // a row of buttons is no label: a click on its text would press the first
-        const element: RowElement = definition.kind === 'color' ? 'div' : 'label';
+        // Only a checkbox's or a number's row is a label: a click on the text of a row of buttons
+        // or of a choice would press the button or open the menu
+        const element: RowElement =
+          definition.kind === 'boolean' || definition.kind === 'number' ? 'label' : 'div';
         return (
           <Fragment key={definition.path}>
             {definition.section && definition.section !== definitions[index - 1]?.section && (
@@ -214,17 +217,21 @@ export function CatalogSettings({
                     onChange={(value) => patchColor(definition.path, value)}
                   />
                 ) : (
-                  <input
+                  <NumberField
                     aria-label={definition.label}
-                    type="number"
                     min={definition.min}
                     max={definition.max}
-                    defaultValue={Number(settingValue(snapshot, definition.path))}
-                    onBlur={(event) => patch(definition.path, Number(event.target.value))}
+                    value={Number(settingValue(snapshot, definition.path))}
+                    onCommit={(value) => patch(definition.path, value)}
                   />
                 )
               }
             />
+            {editor.failure?.path === definition.path && (
+              <p className="settings-error settings-row-error" role="alert">
+                {editor.failure.message}
+              </p>
+            )}
             {definition.path === 'settings.previews.darkPages' && (
               <DarkPagesDetail editor={editor} />
             )}

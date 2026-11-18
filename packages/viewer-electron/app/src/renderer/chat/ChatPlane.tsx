@@ -7,7 +7,7 @@ import { useEffect, useId, useRef } from 'react';
 import type { ChatPane as Pane } from '../../domain/contracts';
 import { acceptsDrop, droppedPaths } from '../explorer/sections';
 import { report } from '../state/store';
-import { ChoiceButton } from '../ui/ChoiceMenu';
+import { ChoiceButton, MenuButton } from '../ui/ChoiceMenu';
 import { Icon } from '../ui/Icon';
 import { Empty, Loading } from '../ui/primitives';
 import { Composer } from './Composer';
@@ -106,32 +106,35 @@ export default function ChatPlane({ pane }: { pane: Pane }) {
         >
           Canvas
         </button>
-        <button
-          type="button"
-          disabled={busy || running}
-          onClick={() => void actions.importCanvas()}
-        >
-          Open Canvas…
-        </button>
-        <button onClick={() => workspace.openToolLibrary(pane.id)}>Tool Library</button>
-        <button type="button" disabled={busy} onClick={() => void actions.loadRecent()}>
-          Conversations
-        </button>
-        <button type="button" disabled={busy} onClick={() => void actions.exportTranscript()}>
-          Export…
-        </button>
-        {!!recent.length && (
-          <ChoiceButton
-            label="Open conversation"
-            value={pane.conversationID}
-            choices={recent.map((item) => ({
+        {/* one menu of the other conversations, filled as the plane opens: no second control
+            appears beside the toolbar */}
+        <MenuButton
+          label="Conversations"
+          disabled={busy}
+          items={recent
+            .filter((item) => item.id !== pane.conversationID)
+            .map((item) => ({
               value: item.id,
               label: item.title,
               detail: item.problem ?? item.path,
             }))}
-            onChoose={(id) => void actions.open(id)}
-          />
-        )}
+          onChoose={(id) => void actions.open(id)}
+        />
+        <MenuButton
+          label="More"
+          disabled={busy}
+          items={[
+            { value: 'open-canvas', label: 'Open Canvas…' },
+            { value: 'tool-library', label: 'Tool Library' },
+            { value: 'export', label: 'Export…' },
+          ]}
+          onChoose={(value) => {
+            if (value === 'open-canvas') {
+              if (!running) void actions.importCanvas();
+            } else if (value === 'tool-library') workspace.openToolLibrary(pane.id);
+            else void actions.exportTranscript();
+          }}
+        />
       </header>
       <div className="chat-context" role="group" aria-label="Attached context">
         <span className="chat-context-label">Context</span>

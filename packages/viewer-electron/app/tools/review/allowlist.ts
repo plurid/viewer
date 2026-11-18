@@ -18,7 +18,14 @@ export interface Allowance {
   reason: string;
 }
 
-export const allowances: readonly Allowance[] = [];
+export const allowances: readonly Allowance[] = [
+  {
+    check: 'dialog-scroll',
+    selector: /optimize-results/,
+    variant: /^narrow/,
+    reason: 'DESIGN.md, Optimize: narrow result tables scroll sideways so action names stay whole.',
+  },
+];
 
 /** Marks the findings an allowance covers with its reason. */
 export function applyAllowances(

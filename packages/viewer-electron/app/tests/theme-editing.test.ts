@@ -12,6 +12,7 @@ import { SettingsService } from '../src/desktop/preferences/settings';
 import type { SettingsSnapshot } from '../src/domain/services';
 import { builtInTheme } from '../src/domain/preferences/themes';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { choiceLabel } from './support/choice-button';
 
 let directory: string;
 let service: SettingsService;
@@ -105,7 +106,7 @@ describe('theme editing through the serialized Settings queue', () => {
     fireEvent.blur(font);
     await waitFor(() => expect(editor.revisions).toHaveLength(1));
     fireEvent.click(
-      within(editor.details).getByRole('button', { name: 'Theme interface density' }),
+      within(editor.details).getByRole('button', { name: choiceLabel('Theme interface density') }),
     );
     fireEvent.click(document.querySelector('[data-menu-id="choice:compact"]')!);
     fireEvent.change(within(editor.details).getByLabelText('Theme corner radius'), {
@@ -144,9 +145,9 @@ describe('theme editing through the serialized Settings queue', () => {
     fireEvent.change(font, { target: { value: 'Georgia' } });
     fireEvent.blur(font);
     await waitFor(() => expect(editor.revisions).toHaveLength(1));
-    fireEvent.click(editor.view.getByRole('button', { name: 'Dark theme' }));
+    fireEvent.click(editor.view.getByRole('button', { name: choiceLabel('Dark theme') }));
     fireEvent.click(document.querySelector(`[data-menu-id="choice:${builtInTheme('dark').id}"]`)!);
-    fireEvent.click(editor.view.getByRole('button', { name: 'Light theme' }));
+    fireEvent.click(editor.view.getByRole('button', { name: choiceLabel('Light theme') }));
     fireEvent.click(document.querySelector('[data-menu-id="choice:bright"]')!);
     fireEvent.click(within(editor.details).getByRole('button', { name: 'Duplicate' }));
     await act(async () => {

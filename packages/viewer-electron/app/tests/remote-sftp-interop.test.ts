@@ -323,6 +323,74 @@ describe.runIf(enabled)('OpenSSH sftp-server over confined stdio', () => {
     expect(client.connected).toBe(true);
   });
 
+  it('fails server-side copies that OpenSSH answers OK without copying everything', async () => {
+    const { client, file, requests } = await fixture();
+    await writeFile(file('source'), randomBytes(1000), { flag: 'wx' });
+    await writeFile(file('target'), b(''), { flag: 'wx' });
+    await mkdir(file('folder'));
+    const source = await client.open(file('source'), 'read');
+    // A handle opened for reading: OpenSSH's write fails in the last 64 KiB and answers OK.
+    const readOnly = await client.open(file('target'), 'read');
+    await expect(client.copyData(source, 0n, 1000n, readOnly, 0n)).rejects.toMatchObject({
+      code: 'VIEWER_REMOTE_FAILURE',
+    });
+    expect((await stat(file('target'))).size).toBe(0);
+    await client.close(readOnly);
+    // A folder opened as a file: its read fails in the last 64 KiB and answers OK.
+    const folder = await client.open(file('folder'), 'read');
+    const output = await client.open(file('from-folder'), 'create');
+    await expect(client.copyData(folder, 0n, 10n, output, 0n)).rejects.toMatchObject({
+      code: 'VIEWER_REMOTE_FAILURE',
+    });
+    expect((await stat(file('from-folder'))).size).toBe(0);
+    // A destination that already holds bytes at the offset cannot be verified by its size.
+    const before = requests.length;
+    await expect(client.copyData(source, 0n, 10n, output, 0n)).resolves.toBeUndefined();
+    await expect(client.copyData(source, 0n, 10n, output, 5n)).rejects.toMatchObject({
+      code: 'ENOTSUP',
+    });
+    expect(requests.slice(before).filter((request) => request.kind === 'copyData')).toHaveLength(1);
+    await client.close(output);
+    await client.close(folder);
+    await client.close(source);
+    expect(client.connected).toBe(true);
+  });
+
+  it.each([
+    ['before the last 64 KiB', remoteLimits.readBytesPerStream + 1000],
+    ['inside the last 64 KiB', 2 * remoteLimits.readBytesPerStream - 1000],
+  ])(
+    'fails a copy whose source is cut %s of a block and restored before the next',
+    async (_where, cut) => {
+      const session = await fixture();
+      const { client, file } = session;
+      const length = 2 * remoteLimits.readBytesPerStream + 3;
+      const content = randomBytes(length);
+      await writeFile(file('source'), content, { flag: 'wx' });
+      const source = await client.open(file('source'), 'read');
+      const copy = await client.open(file('copy'), 'create');
+      let blocks = 0;
+      session.beforeRequest = async (request) => {
+        if (request.kind !== 'copyData') return;
+        blocks++;
+        if (blocks === 2) await truncate(file('source'), cut);
+        if (blocks === 3) await writeFile(file('source'), content);
+      };
+      const progress: bigint[] = [];
+      await expect(
+        client.copyData(source, 0n, BigInt(length), copy, 0n, {
+          onProgress: (bytes) => progress.push(bytes),
+        }),
+      ).rejects.toMatchObject({ code: 'VIEWER_REMOTE_SHORT_SOURCE' });
+      session.beforeRequest = undefined;
+      expect(blocks).toBe(2);
+      expect(progress).toEqual([BigInt(remoteLimits.readBytesPerStream)]);
+      expect((await stat(file('copy'))).size).toBe(cut);
+      await client.close(copy);
+      await client.close(source);
+    },
+  );
+
   it("answers with OpenSSH's fixed status text, as the fake server does", async () => {
     const { client, file } = await fixture();
     await writeFile(file('existing'), b('x'), { flag: 'wx' });

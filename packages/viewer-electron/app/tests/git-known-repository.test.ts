@@ -71,7 +71,7 @@ beforeEach(() => {
 });
 afterEach(() => cleanup());
 
-/** Shows two folders' rows with Git badges, and lists a third, as folder planes do. */
+/** Shows two folders' rows with Git badges, and lists a third, as files planes do. */
 function Folders() {
   useFolder('/work/viewer');
   return createElement(

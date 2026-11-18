@@ -1076,7 +1076,7 @@ try {
     return { messages: listed.messages, attachments: shown.attachments };
   });
 
-  await flow('Open linked plane on a Pages package', async () => {
+  await flow('Open Linked Plane on a Pages package', async () => {
     await select(cases.package, [packageSource]);
     await actions.key(' ', 'Space');
     await until(
@@ -1085,7 +1085,7 @@ try {
       'Saved preview in Quick Preview',
       30_000,
     );
-    await actions.button('Open linked plane', '.quick-preview-dialog');
+    await actions.button('Open Linked Plane', '.quick-preview-dialog');
     const footers: string[] = [];
     const final = await until(
       async () => {

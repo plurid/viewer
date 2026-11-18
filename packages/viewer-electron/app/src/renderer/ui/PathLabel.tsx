@@ -7,11 +7,12 @@ import {
   pathLabelParts,
   pathLabelText,
   pathText,
+  pathWholeText,
 } from '../../domain/files/path-label';
-import type { TextMeasure } from '../../domain/files/path-label';
 import { hasRemoteLocationScheme } from '../../domain/remote/location';
 import { useViewer } from '../state/core';
 import { useRemoteLabels } from './remote-labels';
+import { measurer, watchFit } from './text-fit';
 import './path-label.css';
 
 /** One line shortened from the start to fit its room, or the whole path wrapping. */
@@ -49,60 +50,19 @@ export function useHomeText(text: string): string {
   return homeText(text, useHome());
 }
 
-/** What copying `path` copies: a local path through the pasteboard, a server location as text. */
+/** The whole path as a tooltip or a screen reader gives it: a server location by its server. */
+export function usePathWhole(path: string): string {
+  return pathWholeText(path, useRemoteLabels(hasRemoteLocationScheme(path)));
+}
+
+/**
+ * What copying `path` copies: a path through the pasteboard, or a known server location as the
+ * text a person types (`al@build:/home/al/Jobs`).
+ */
 export function usePathCopy(path: string): PathCopy {
   const remote = useRemoteLabels(hasRemoteLocationScheme(path));
-  return remote ? { text: pathCopyText(path, remote) } : { paths: [path] };
-}
-
-/** One canvas measures every label, in each label's computed font. */
-let canvas: CanvasRenderingContext2D | null | undefined;
-let canvasFont = '';
-const widths = new Map<string, number>();
-
-function measurer(element: HTMLElement): TextMeasure | undefined {
-  if (canvas === undefined) canvas = document.createElement('canvas').getContext('2d');
-  const context = canvas;
-  if (!context) return undefined;
-  const style = getComputedStyle(element);
-  const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-  return (text) => {
-    const key = font + '\n' + text;
-    let width = widths.get(key);
-    if (width === undefined) {
-      if (canvasFont !== font) {
-        context.font = font;
-        canvasFont = font;
-      }
-      width = context.measureText(text).width;
-      // Candidates repeat as windows resize; a long session starts the memory over.
-      if (widths.size >= 5000) widths.clear();
-      widths.set(key, width);
-    }
-    return width;
-  };
-}
-
-const fitters = new WeakMap<Element, () => void>();
-let observer: ResizeObserver | undefined;
-let observerType: typeof ResizeObserver | undefined;
-
-/** One observer refits every label in the window when its room changes. */
-function watch(element: Element, fit: () => void): () => void {
-  if (typeof ResizeObserver !== 'function') return () => {};
-  if (!observer || observerType !== ResizeObserver) {
-    observerType = ResizeObserver;
-    observer = new ResizeObserver((entries) => {
-      for (const entry of entries) fitters.get(entry.target)?.();
-    });
-  }
-  const current = observer;
-  fitters.set(element, fit);
-  current.observe(element);
-  return () => {
-    fitters.delete(element);
-    current.unobserve?.(element);
-  };
+  const text = pathCopyText(path, remote);
+  return text === path ? { paths: [path] } : { text };
 }
 
 /**
@@ -133,7 +93,7 @@ export function PathLabel({
   const home = useHome();
   const remote = useRemoteLabels(hasRemoteLocationScheme(path));
   const whole = pathLabelText(pathLabelParts(path, home, { remote, base }));
-  const full = pathCopyText(path, remote);
+  const full = pathWholeText(path, remote);
   const root = useRef<HTMLSpanElement>(null);
   const [fitted, setFitted] = useState<FittedLabel>({ whole, text: whole });
   useLayoutEffect(() => {
@@ -151,7 +111,7 @@ export function PathLabel({
       );
     };
     fit();
-    return watch(element, fit);
+    return watchFit(element, fit);
   }, [path, home, layout, whole, remote, base]);
   const shown = layout === 'line' && fitted.whole === whole ? fitted.text : whole;
   const copy = (event: ClipboardEvent<HTMLSpanElement>) => {
@@ -160,7 +120,7 @@ export function PathLabel({
     if (!selection || !label.contains(selection.anchorNode) || !label.contains(selection.focusNode))
       return;
     // The shown text drops names and spells home as `~`: a copy is the whole path.
-    event.clipboardData.setData('text/plain', full);
+    event.clipboardData.setData('text/plain', pathCopyText(path, remote));
     event.preventDefault();
   };
   return (

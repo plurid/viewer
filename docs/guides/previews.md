@@ -4,17 +4,17 @@ Use this guide to look inside a file without leaving its folder: each kind of fi
 saving email attachments, reading any file's bytes, and picking up where you left off.
 
 **Find it:** select a file and press **Space**, or choose **File → Quick Preview** · **Open linked
-plane** keeps it open · **⌘K** → **Show as hex** for its bytes
+plane** keeps it open · **⌘K** → **Show as Hex** for its bytes
 
 ## Look, then keep it open
 
 1. Select a file and press **Space**. [Quick Preview](../reference/terms.md#looking-at-files) opens
    over the folder.
-2. Press **↑** or **↓** to select the next or previous item in the folder; Quick Preview shows it,
-   and names a folder. In Grid and Gallery, **←** and **→** move the selection too. With several
-   files selected, **←** and **→** step through them. A text, drawing or model you clicked keeps its
-   arrow keys. **Space** or **Escape** closes the preview.
-3. To keep the file open beside its folder, choose **Open linked plane**. It becomes a
+2. Press an arrow key to move the folder's selection as its view does, **↑** and **↓** to the next
+   or previous item; Quick Preview shows it, and names a folder. With several files selected, **←**
+   and **→** step through them. A text, drawing or model you clicked keeps its arrow keys. **Space**
+   or **Escape** closes the preview.
+3. To keep the file open beside its folder, choose **Open Linked Plane**. It becomes a
    [linked plane](../reference/terms.md#planes-and-the-space) you can read while you go on browsing.
 
 The footer also opens the file in its own app, offers **Edit** (**⌘E**) for a text file, and shows
@@ -30,7 +30,9 @@ A file's plane shows its main controls in the header. The rest are in the plane'
   **Show PDF Outline** and **Print PDF…** are in **…**. **Optimize…** is under **Suggested** for a
   large PDF, otherwise under **More file actions**.
 - An image shows **Image Tools…**, **Fit image**, zoom, **Rotate left** and **Rotate right**. Its
-  dimensions are in the footer. **Optimize…** is in **…**.
+  zoom says how large it shows against its own pixels; **Actual Size** in **⌘K** shows one pixel a
+  point. Its dimensions are in the footer. **Save Rotated Copy**, once it is turned, and
+  **Optimize…** are in **…**.
 
 To show every control in the header, open **Settings → Space → Plane toolbar** and turn on **Every
 format tool**, or choose **Buttons → Full**. Quick Preview always shows every control.
@@ -70,7 +72,7 @@ shows the text inside it.
 A Pages, Numbers or Keynote document, a Krita, OpenRaster or Sketch file and an XPS document show
 the picture they saved of themselves, not a live rendering. A Pages, Numbers or Keynote package is a
 folder on disk, but Viewer treats it as the document it is: select it and press **Space**, or choose
-**Open linked plane** to show it in a plane. Its footer shows the package's total size. Double-click
+**Open Linked Plane** to show it in a plane. Its footer shows the package's total size. Double-click
 opens the document in its own app, and **Show Package Contents** goes inside.
 
 A Collada, 3DS, USDZ, X3D, VRML or OFF model shows only what its file holds. Textures and other
@@ -85,12 +87,14 @@ import, follow or download it.
 ## Turn a picture
 
 1. Click the picture, then press **⌘R** to turn it right or **⌘L** to turn it left, or choose
-   **Rotate right** or **Rotate left** in its toolbar.
+   **Rotate right** or **Rotate left** in its toolbar. Change the keys in **Settings → Shortcuts**:
+   **Rotate Picture Left** and **Rotate Picture Right**.
 2. On a trackpad, turn two fingers over the picture. It settles on the nearest quarter turn when you
    lift them.
 3. The turn is for viewing only: the file stays as it is, and Viewer remembers the turn for it. To
-   keep a turned file, choose **Save rotated copy**. The copy is saved beside the picture as
-   `<name> rotated`.
+   keep a turned file, choose **Save Rotated Copy**. The copy is saved beside the picture as
+   `<name> rotated`, as the **Rotated Copy** quick actions save one; see
+   [rotated copies](../reference/media.md#quick-actions) for formats.
 
 ## Read PostScript, EPS and Illustrator files
 
@@ -109,7 +113,7 @@ import, follow or download it.
    views. Without Ghostscript, the preview says to install it with `brew install ghostscript`.
 
 With the default **Automatic** opening policy, double-click opens these files in their own app, such
-as Illustrator. **Space** and **Open linked plane** look inside them in Viewer. A `.ps` file
+as Illustrator. **Space** and **Open Linked Plane** look inside them in Viewer. A `.ps` file
 beginning with `%!`, a comment, Ctrl-D or a UTF-8 byte order mark is described as PostScript.
 Opening its preview never runs Ghostscript. Without it, you can still read the comments, source and
 embedded picture. An Illustrator file with a PDF inside opens directly in the PDF preview. In the
@@ -156,8 +160,8 @@ A Safari web archive shows only what Safari saved: nothing loads from the networ
 ## Read a file's bytes
 
 A file no preview reads shows its bytes, under what its first bytes say it is. To see any other
-file's bytes, choose **Show as hex** in Quick Preview, in the plane's **…** menu or in **⌘K**.
-Choose **Show preview** to go back.
+file's bytes, choose **Show as Hex** in Quick Preview, in the plane's **…** menu or in **⌘K**.
+Choose **Show Preview** to go back.
 
 - Click a byte, or use the arrow keys, **Page Up** and **Page Down**, **Home** and **End**, to move.
   **⌘↑** and **⌘↓** go to the first and last byte.
@@ -184,8 +188,8 @@ An XLSX opens on its **Sheet** grid. In the grid:
 - Type an address such as `D42` in **Cell address** and choose **Go** to jump to it.
 - Drag, **⇧**-click or **⇧**-arrow to select a range, then press **⌘C**, or choose **Copy**, to copy
   it as tab-separated text.
-- **More → Stored Values** shows and copies the raw values instead of formatted ones; **Formatted
-  Values** switches back.
+- **More → Show Stored Values** shows and copies the raw values instead of formatted ones; **More →
+  Show Formatted Values** switches back.
 - **⌃Page Up** and **⌃Page Down** switch sheets.
 
 [Worksheet controls](../reference/office.md#reading-and-saved-cells) lists the rest. Office layout

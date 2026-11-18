@@ -77,6 +77,8 @@
   gap: var(--gap-inline);
 }
 .notes-library-row > button:first-child {
+  /* a list row, not a label: its title and date wrap as text does */
+  white-space: normal;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -90,4 +92,17 @@
 }
 .notes-list small {
   color: var(--muted);
+}
+/* Not saved, Saving… and Saved share one cell: the widest sets its width, so a keystroke never
+   changes the header's width or spills its items into "…" and back. */
+.note-save-state {
+  display: inline-grid;
+  flex: none;
+  white-space: nowrap;
+}
+.note-save-state > span {
+  grid-area: 1 / 1;
+}
+.note-save-state > span[aria-hidden='true'] {
+  visibility: hidden;
 }

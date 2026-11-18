@@ -1,11 +1,14 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import {
   macWheelNotch,
   notchScale,
+  wheelEvidence,
   wheelReader,
+  wheelReading,
   wheelSource,
 } from '../src/renderer/previews/model/wheel';
-import type { WheelReading } from '../src/renderer/previews/model/wheel';
+import type { WheelMemory, WheelReading } from '../src/renderer/previews/model/wheel';
 import type { ModelScrollDevice } from '../src/domain/previews/models/scroll-device';
 
 /**
@@ -30,8 +33,9 @@ const trackpad = (deltaY: number, deltaX = 0) => mac(deltaY, -3 * deltaY, deltaX
 function plain(deltaY: number, deltaMode = 0, deltaX = 0): WheelReading {
   return { deltaX, deltaY, deltaMode, ctrlKey: false, shiftKey: false };
 }
-function reader(device: ModelScrollDevice = 'automatic') {
-  return wheelReader({ device: () => device, pageHeight: () => 600 });
+/** A reader with its own memory of the window's last clear device. */
+function reader(device: ModelScrollDevice = 'automatic', memory: WheelMemory = {}) {
+  return wheelReader({ device: () => device, pageHeight: () => 600, memory });
 }
 
 describe('telling a mouse from a trackpad', () => {
@@ -93,7 +97,9 @@ describe('reading wheel events into gestures', () => {
 
   it('scrolls a trackpad as a page, in pixels', () => {
     expect(reader().read(trackpad(6, -2), 0)).toEqual({ kind: 'scroll', x: -2, y: 6 });
-    expect(reader().read(plain(2, 1, 1), 0)).toMatchObject({ kind: 'zoom' });
+    expect(reader().read(plain(2, 1), 0)).toMatchObject({ kind: 'zoom' });
+    // Both axes at once is a trackpad, whatever its units.
+    expect(reader().read(plain(2, 1, 1), 0)).toEqual({ kind: 'scroll', x: 16, y: 32 });
     expect(reader('trackpad').read(plain(2, 1, 1), 0)).toEqual({ kind: 'scroll', x: 16, y: 32 });
     expect(reader('trackpad').read(plain(1, 2), 0)).toEqual({ kind: 'scroll', x: 0, y: 600 });
   });
@@ -178,5 +184,104 @@ describe('reading wheel events into gestures', () => {
       kind: 'zoom',
       smooth: false,
     });
+  });
+});
+
+describe('an event that cannot tell its device', () => {
+  const kinds = (read: ReturnType<typeof reader>, events: WheelReading[], start = 0) =>
+    events.map((event, index) => read.read(event, start + index * 16).kind);
+
+  it('is a trackpad-shaped exact multiple of 120; both axes, fractions and 41 px can tell', () => {
+    expect(wheelEvidence(trackpad(40))).toEqual({ source: 'mouse', certain: false });
+    expect(wheelEvidence(trackpad(0, 80))).toEqual({ source: 'mouse', certain: false });
+    expect(wheelEvidence(trackpad(40, 40))).toEqual({ source: 'trackpad', certain: true });
+    expect(wheelEvidence(trackpad(41))).toEqual({ source: 'trackpad', certain: true });
+    expect(wheelEvidence(mouse(40.00244140625))).toEqual({ source: 'mouse', certain: true });
+    expect(wheelEvidence(mouse(macWheelNotch))).toEqual({ source: 'mouse', certain: true });
+  });
+
+  it('starts a burst as a mouse in a new window, and the next clear event settles it', () => {
+    const read = reader();
+    expect(
+      kinds(
+        read,
+        [40, 37, 30, 22, 8].map((delta) => trackpad(delta)),
+      ),
+    ).toEqual(['zoom', 'scroll', 'scroll', 'scroll', 'scroll']);
+  });
+
+  it('starts a burst as the device the window last read clearly', () => {
+    const memory: WheelMemory = {};
+    reader('automatic', memory).read(trackpad(3), 0);
+    const flick = reader('automatic', memory);
+    expect(
+      kinds(
+        flick,
+        [40, 37, 30].map((delta) => trackpad(delta)),
+      ),
+    ).toEqual(['scroll', 'scroll', 'scroll']);
+    expect(kinds(flick, [trackpad(0, 40), trackpad(12)], 2000)).toEqual(['scroll', 'scroll']);
+    reader('automatic', memory).read(mouse(macWheelNotch), 0);
+    // A linear-scrolling mouse sends exactly 40 px with one notch, again and again.
+    expect(kinds(reader('automatic', memory), [mouse(40), mouse(40), mouse(40)])).toEqual([
+      'zoom',
+      'zoom',
+      'zoom',
+    ]);
+  });
+
+  it('follows a clear burst, and a fractional notch is a mouse even after a trackpad', () => {
+    const memory: WheelMemory = { clear: 'trackpad' };
+    const read = reader('automatic', memory);
+    expect(kinds(read, [trackpad(3), trackpad(40), trackpad(80)])).toEqual([
+      'scroll',
+      'scroll',
+      'scroll',
+    ]);
+    expect(read.read(mouse(40.00244140625), 5000).kind).toBe('zoom');
+    expect(memory.clear).toBe('mouse');
+  });
+
+  it('keeps a clear burst’s device when a stray event points elsewhere', () => {
+    const memory: WheelMemory = {};
+    const read = reader('automatic', memory);
+    expect(kinds(read, [mouse(macWheelNotch), trackpad(3), trackpad(5), mouse(8)])).toEqual([
+      'zoom',
+      'zoom',
+      'zoom',
+      'zoom',
+    ]);
+  });
+
+  it('pans momentum after a pause, also from a 40 px coasting event', () => {
+    const read = reader();
+    read.read(mouse(macWheelNotch), 0);
+    expect(read.read({ ...trackpad(40), momentum: true }, 100).kind).toBe('scroll');
+  });
+});
+
+describe('reading Chromium’s own fields', () => {
+  it('reads momentum and the legacy deltas from a real WheelEvent', () => {
+    const event = new WheelEvent('wheel', { deltaY: 40, deltaMode: 0 });
+    Object.defineProperties(event, {
+      momentum: { value: true },
+      wheelDeltaY: { value: -120 },
+      wheelDeltaX: { value: 0 },
+    });
+    expect(wheelReading(event)).toMatchObject({
+      momentum: true,
+      wheelDeltaY: -120,
+      wheelDeltaX: 0,
+    });
+    expect(reader().read(wheelReading(event), 0).kind).toBe('scroll');
+    const plainEvent = new WheelEvent('wheel', { deltaY: 40 });
+    expect(wheelReading(plainEvent)).toMatchObject({ momentum: false, wheelDeltaY: undefined });
+  });
+
+  it('zooms one whole notch for a Mac notch without the legacy fields', () => {
+    const zoom = reader().read(plain(macWheelNotch), 0) as { scale: number };
+    expect(zoom.scale).toBeCloseTo(1 / notchScale, 12);
+    const brisk = reader().read(plain(300), 0) as { scale: number };
+    expect(brisk.scale).toBeCloseTo(notchScale ** -3, 12);
   });
 });

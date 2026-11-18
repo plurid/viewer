@@ -97,7 +97,7 @@ controls.
 | `settings.browsing.showHidden`             | `false`       | Boolean                                                                                                                                    | **Show hidden files in new planes**                          |
 | `settings.browsing.restoreSession`         | `true`        | Boolean                                                                                                                                    | **Restore the previous workspace**                           |
 | `settings.browsing.confirmTrash`           | `true`        | Boolean; `false` moves to the Trash without asking; nothing is deleted                                                                     | **Confirm before moving to Trash**                           |
-| `settings.browsing.newPlaneLocation`       | `current`     | `current`, `home`, `desktop`, `documents`, `downloads`, `pictures`, `movies`, `music`, `custom`                                            | **New folder planes start in**                               |
+| `settings.browsing.newPlaneLocation`       | `current`     | `current`, `home`, `desktop`, `documents`, `downloads`, `pictures`, `movies`, `music`, `custom`                                            | **New files planes open at**                                 |
 | `settings.browsing.newPlanePath`           | `""`          | An absolute folder; required for `custom`                                                                                                  | **Choose folder…**                                           |
 | `settings.browsing.emptyWorkspaceLocation` | `home`        | The same values without `current`                                                                                                          | **First plane in an empty workspace starts in**              |
 | `settings.browsing.emptyWorkspacePath`     | `""`          | An absolute folder; required for `custom`                                                                                                  | **Choose folder…**                                           |
@@ -110,7 +110,7 @@ controls.
 | `settings.quit.warnShortcut`               | `true`        | Boolean; `false` makes the first **⌘Q** quit                                                                                               | **Warn before quitting with ⌘Q**                             |
 | `settings.updates.checkAtLaunch`           | `true`        | Boolean; at most once a day; not in the App Store edition                                                                                  | **Settings → Privacy → Check for updates when Viewer opens** |
 
-`newPlaneLocation` applies to the workspace **+** button and **⇧⌘N** when planes are open; `current`
+`newPlaneLocation` applies to the workspace **+** button and **⌘N** when planes are open; `current`
 uses the active folder, terminal folder or preview's folder, then Home. `emptyWorkspaceLocation`
 applies when the workspace has no planes. With `warnShortcut` on, the first **⌘Q** shows "Press ⌘Q
 again to quit" and a second press within 2.5 seconds quits. **Quit Viewer** in the menu, the Dock
@@ -120,8 +120,9 @@ and logging out quit at once. `quit` and `updates` change only in Settings or th
 
 `settings.folders` maps an absolute folder path to a sparse override; omitted fields use
 `settings.browsing`. An override applies to that path in every plane, root and workspace. Selection,
-history, search and scroll stay with each plane. **Settings → Browsing → Folder views** lists the
-overrides, changes their view and resets them.
+history, search, scroll and the Columns preview's width stay with each plane, which keeps them in
+every folder it shows. **Settings → Browsing → Folder views** lists the overrides, changes their
+view and resets them.
 
 | Field          | Values                                                                    |
 | -------------- | ------------------------------------------------------------------------- |
@@ -134,7 +135,6 @@ overrides, changes their view and resets them.
 | `foldersFirst` | Boolean                                                                   |
 | `showHidden`   | Boolean                                                                   |
 | `columnWidth`  | 160 to 1600                                                               |
-| `previewWidth` | 320 to 1600: the Columns preview's width, which fills any room beyond it  |
 | `list`         | `visible`, `widths`, `order` and `wrapNames`, as in `ui.list`             |
 
 ## File opening
@@ -290,20 +290,19 @@ path override keeps its written choice. Deciding fills the starter’s source sl
 `~/Library/Application Support/Code/User/globalStorage/alefragnani.project-manager/projects.json`.
 Viewer never changes that source. After consent, it expands `~` and `$home`, skips remote URIs,
 counts disabled entries and reads each project independently. Each enabled local project supplies a
-folder plane at `rootPath`, plus one per extra `paths` entry. Project `tags` become aliases. Both
+files plane at `rootPath`, plus one per extra `paths` entry. Project `tags` become aliases. Both
 files reload within about one second after an editor saves them.
 
 In the Store edition, **Use VS Code Projects** or turning the switch on asks for a folder grant only
 after saving the choice. If access is declined, **Allow access…** in **Settings → Configuration →
 Workspace definitions** asks again so replacement source files remain readable. Ungranted roots have
-an unknown state, not a missing state; opening their folder planes uses the existing access
-recovery.
+an unknown state, not a missing state; opening their files planes uses the existing access recovery.
 
 | Entry field       | Meaning and limit                                                                                                                                                                      |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`            | Display name, 1 to 100 characters. Defaults to the project's name leaf or a standalone key's leaf; a generic leaf such as `site`, `server` or `cli` gains its parent.                  |
 | `root`            | Required for a standalone entry; optional on a project override. Must resolve to an absolute local folder. Viewer creates no folders.                                                  |
-| `planes`          | Zero to 30 layout-template plane kinds. Absent or empty uses the plain folder planes.                                                                                                  |
+| `planes`          | Zero to 30 layout-template plane kinds. Absent or empty uses the plain files planes.                                                                                                   |
 | `tiling`          | `layout` from the tiling layouts, `main` from 0.2 to 0.8, optional `split` with numeric `{ "plane": index }` leaves. Branches have `axis` (`x` or `y`), `ratio`, `first` and `second`. |
 | `focus`           | Zero-based plane index to focus.                                                                                                                                                       |
 | `terminalProfile` | Default terminal profile ID. A plane's `profileID` takes precedence. Unknown profiles fall back to the general profile with a diagnostic.                                              |
@@ -342,7 +341,7 @@ have up to eight segments and 200 characters, with no `.` or `..` segments.
 definition and inherits its name and root. An invalid override falls back to that plain definition.
 Other entries must name a root. Entries validate separately; one invalid entry does not hide its
 neighbors. A plane whose path cannot resolve is skipped with a notice. If all planes are skipped, a
-folder plane opens at the root. Definitions marked hidden and definitions whose root folder is
+files plane opens at the root. Definitions marked hidden and definitions whose root folder is
 missing stay out of search. Root checks run in the background; unknown roots remain searchable.
 Results are cached for up to 60 seconds. Opening workspace search and changes to mounted volumes
 recheck missing and unknown roots among the search candidates through the same bounded checker.
@@ -398,15 +397,35 @@ after the desktop accepts the operation.
 
 ## Found workspaces
 
-`settings.browsing.findWorkspaces` defaults to `true`. Its control is **Settings → Browsing → Find
-workspaces from folders I use**. It uses the person’s own history, not another app’s data. Turning
-it off stops passes and clears entries and probes while keeping hidden roots.
+`settings.browsing.findWorkspaces` defaults to `true`. Its control is **Settings → Browsing →
+Suggest workspaces from folders you open**. It uses the person’s own history, not another app’s
+data. Turning it off stops passes and clears entries and probes while keeping hidden roots.
 
 **Not a Workspace** in **Manage Workspaces… → Defined** adds a found root to the hidden list: 500
-roots at most, the oldest dropped first. A hidden root leaves the catalog, and passes look past it,
-so roots inside it can be found. Undo restores its entry and key. Below the switch, Settings shows
-`12 found · 2 hidden` and **Show Hidden Again**, which empties the list. Clear recent folders and
-turning finding off keep the list. Only the person's requests change it; agent requests are refused.
+roots at most, the oldest dropped first. A hidden root leaves the catalog. Its folders belong to no
+found workspace at or around it, so roots inside it alone can be found; it still counts toward an
+outer repository giving way to inner ones. A pass follows, five minutes after the last. Undo
+restores its entry and key, even across a pass running meanwhile or a Viewer move; Clear recent
+folders and finding turned off drop the entry Undo would restore. Below the switch, Settings shows
+`12 found · 2 hidden` and **Show 2 Hidden Workspaces**, which empties the list, with Undo for eight
+seconds; that Undo hides them again even beside a Not a Workspace made since. Clear recent folders
+and turning finding off keep the list. If the file would pass 1 MB, the oldest hidden roots show
+again first, and a note says so. Only the person's requests change it; agent requests are refused.
+
+The workspace offer's dismissals live in the private `workspace-offers-v1.json`: version `1`, mode
+0600, at most 500 roots of up to 4,096 characters, the latest last. It is written first when an
+offer is dismissed, and a dismissal counts only once it is saved; a failed save leaves the card and
+says why. An unreadable file is moved aside on the next dismissal. Show Hidden Insights empties it.
+Clear recent folders removes the dismissals of found workspaces and keeps those of definitions you
+wrote; its Undo puts them back. Viewer's own moves carry its roots. `ui.insightsDismissed` never
+holds them: a `workspace.open` there is dropped when configuration is read.
+
+| Data                         | Where                       | Bounds                | Clear recent folders                  | Backups, exports, agents |
+| ---------------------------- | --------------------------- | --------------------- | ------------------------------------- | ------------------------ |
+| Found entries, probes        | `found-workspaces-v1.json`  | 1,800 and 1,000; 1 MB | Cleared, except linked or remembering | Never                    |
+| Hidden roots                 | `found-workspaces-v1.json`  | 500                   | Kept; Settings shows them again       | Never                    |
+| Dismissed workspace offers   | `workspace-offers-v1.json`  | 500                   | Found ones cleared; Undo restores     | Never                    |
+| Declared-command run records | `declared-commands-v1.json` | 200                   | Cleared                               | Never                    |
 
 The private `found-workspaces-v1.json` has version `1`, mode 0600 and a 1 MB limit. Search keeps 200
 ordinary findings, plus retained roots. Entries linked open or opened or remembered within 90 days
@@ -444,7 +463,7 @@ Viewer moves preserve keys; the file is written once moves pause for a second, o
 outside rename, fresh probes verify the identity claim and recheck the old path before carrying its
 key.
 
-Found definitions have one folder plane and never supply ROOT token references. Explicit sources win
+Found definitions have one files plane and never supply ROOT token references. Explicit sources win
 for the same root, including known realpath aliases. **Clear Recent Folders** clears entries and
 probes, retaining entries linked open or remembering planes, whatever the memory’s age. Undo
 restores visits so the finder can recognize those folders again. Unchanged paths and explicit
@@ -692,7 +711,7 @@ Space** and **Settings → Browsing → List columns** unless marked.
 | Setting                     | Default                                                                                 | Values                                                                                                                                                                                           | Settings label                                                            |
 | --------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
 | `ui.sidebar.visible`        | `false`                                                                                 | Boolean                                                                                                                                                                                          | **Show window navigation**                                                |
-| `ui.sidebar.inNewPlanes`    | `true`                                                                                  | Boolean                                                                                                                                                                                          | **Show navigation in new folder planes**                                  |
+| `ui.sidebar.inNewPlanes`    | `true`                                                                                  | Boolean                                                                                                                                                                                          | **Show navigation in new files planes**                                   |
 | `ui.sidebar.width`          | `210`                                                                                   | 160 to 360 px                                                                                                                                                                                    | None                                                                      |
 | `ui.sidebar.order`          | `["locations", "favorites", "recents"]`                                                 | Each section once                                                                                                                                                                                | **Sidebar sections**                                                      |
 | `ui.sidebar.collapsed`      | `[]`                                                                                    | Section IDs to fold                                                                                                                                                                              | None                                                                      |
@@ -701,7 +720,7 @@ Space** and **Settings → Browsing → List columns** unless marked.
 | `ui.sidebar.labels`         | `{}`                                                                                    | Path to a display label of up to 200 characters                                                                                                                                                  | None                                                                      |
 | `ui.titlebar.visible`       | `true`                                                                                  | Boolean; hidden, it returns while the pointer is at the top edge                                                                                                                                 | **Show title bar**                                                        |
 | `ui.titlebar.navigation`    | `true`                                                                                  | Boolean                                                                                                                                                                                          | **Title bar icons → Window navigation**                                   |
-| `ui.titlebar.newPlane`      | `true`                                                                                  | Boolean                                                                                                                                                                                          | **Title bar icons → New Folder Plane**                                    |
+| `ui.titlebar.newPlane`      | `true`                                                                                  | Boolean                                                                                                                                                                                          | **Title bar icons → New files plane**                                     |
 | `ui.titlebar.operations`    | `true`                                                                                  | Boolean; shown when there are file operations                                                                                                                                                    | **Title bar icons → File Operations**                                     |
 | `ui.titlebar.voice`         | `false`                                                                                 | Boolean                                                                                                                                                                                          | **Title bar icons → Microphone**                                          |
 | `ui.titlebar.commands`      | `true`                                                                                  | Boolean; **⌘K** works when hidden                                                                                                                                                                | **Title bar icons → Commands**                                            |
@@ -727,7 +746,7 @@ Space** and **Settings → Browsing → List columns** unless marked.
 | `ui.layout.units`           | `mm`                                                                                    | `mm` or `in`: what the Layout plane's nesting measures in; values stay in millimeters                                                                                                            | **Units** in the nesting panel                                            |
 | `ui.recentCommands`         | `[]`                                                                                    | App-managed, up to 30 command IDs                                                                                                                                                                | None                                                                      |
 | `ui.suggestionHistory`      | Absent                                                                                  | App-managed: up to 40 kinds of file, 8 command IDs each                                                                                                                                          | **Forget Learned Suggestions** command                                    |
-| `ui.insightsDismissed`      | Absent                                                                                  | App-managed: up to 200 folders or workspace roots, 20 insight IDs each                                                                                                                           | **Show Hidden Insights** command                                          |
+| `ui.insightsDismissed`      | Absent                                                                                  | App-managed: up to 200 folders, 20 insight IDs each                                                                                                                                              | **Show Hidden Insights** command                                          |
 | `ui.firstRunHint`           | Absent; `{ "used": [] }` in a new profile                                               | App-managed: `used` lists `palette` and `quick-preview`; `retired` once both are used or the tips are closed                                                                                     | None                                                                      |
 
 Overview opens while the space is shown even when `ui.space.minimap` is `false` or `minimapAuto`
@@ -748,7 +767,7 @@ search controls; the rest are its commands in **…**. Quick Preview shows every
 | --------------------- | -------------------------- | ------------------------------------------------------------ |
 | `archive.extract`     | **Extract Here**           | Every selected file is a `.zip`, `.tar`, `.tar.gz` or `.tgz` |
 | `pdf.large.optimize`  | **Optimize…**              | Every selected file is a PDF over 10 MB                      |
-| `heic.jpeg`           | **Convert copy to JPEG**   | Every selected file is HEIC or HEIF                          |
+| `heic.jpeg`           | **Convert Copy to JPEG**   | Every selected file is HEIC or HEIF                          |
 | `photo.large.web`     | **Images for web…**        | Every selected file is a JPEG or PNG over 3 MB               |
 | `downloads.installer` | **Move to Trash**          | DMG or PKG files in Home's Downloads, more than 7 days old   |
 | `names.copy`          | **Find Duplicates…**       | A name ends in ` copy`, ` copy 2` or ` (1)`                  |
@@ -790,12 +809,12 @@ folder's listing alone. Hidden files take no part.
 | `workspace.open`       | Its workspace remembers planes, opens more than a folder or is open elsewhere | **Open Workspace**, **Switch** |
 
 `workspace.open` is the workspace offer. It reads the catalog, not the listing, and leads the cards
-in the first folder plane inside the innermost definition root holding the folder. It never shows in
-the workspace linked to that definition or mostly inside its root.
+in the first files plane whose innermost searchable definition root is the offered one. It never
+shows in the workspace linked to that definition or mostly inside its root. Its dismissals live in
+`workspace-offers-v1.json`, never here; see [Found workspaces](#found-workspaces).
 
-`ui.insightsDismissed` records the insights hidden in each folder, and `workspace.open` under the
-root it was hidden for. **⌘K** → **Show Hidden Insights** clears it. Agents' configuration reads
-leave out the `workspace.open` entries.
+`ui.insightsDismissed` records the insights hidden in each folder. **⌘K** → **Show Hidden Insights**
+clears it and empties the workspace offer's dismissals too.
 
 `ui.firstRunHint` holds the tips a new profile shows above its first folder: **Space**, **⌘K** and
 dragging a plane by its title. Only a new configuration starts it; a profile made before it has none

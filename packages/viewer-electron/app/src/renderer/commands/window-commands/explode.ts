@@ -4,7 +4,7 @@ import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 
 /**
- * Explode folder: the active folder plane's subfolders, and theirs to the depth asked,
+ * Explode folder: the active files plane's subfolders, and theirs to the depth asked,
  * as linked planes around it, in one undo step; Collapse closes them again.
  */
 export function explodeCommands({ actions, windowScope }: WindowScopes): CommandDefinition[] {

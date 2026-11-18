@@ -15,6 +15,7 @@ import { getState, replaceState } from '../src/renderer/state/core';
 import { WorkspaceContext, type WorkspaceController } from '../src/renderer/workspace/context';
 import { trackCanvasWrite } from '../src/renderer/canvases/writes';
 import { deferred } from './support/deferred';
+import { choiceLabel } from './support/choice-button';
 
 const providers: ModelProvider[] = ['Alpha', 'Beta'].map((name) => ({
   id: name.toLowerCase(),
@@ -154,7 +155,7 @@ describe('conversation identity', () => {
   it('keeps the generating model attribution when the next model is selected', async () => {
     const view = mount();
     await screen.findByText('Answer produced by Alpha');
-    fireEvent.click(screen.getByRole('button', { name: 'Chat model' }));
+    fireEvent.click(screen.getByRole('button', { name: choiceLabel('Chat model') }));
     fireEvent.click(screen.getByText('Beta'));
     await waitFor(() =>
       expect(view.container.querySelector('.chat-message > strong')?.textContent).toBe('Alpha'),

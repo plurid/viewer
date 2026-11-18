@@ -19,7 +19,8 @@ export function FormField({
 }: {
   label: ReactNode;
   htmlFor?: string;
-  children: ReactNode;
+  /** Optional in the type, so `createElement(FormField, props, control)` checks. */
+  children?: ReactNode;
   className?: string;
   as?: FormFieldElement;
 }) {

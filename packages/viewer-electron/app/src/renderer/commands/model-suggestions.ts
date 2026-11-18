@@ -111,7 +111,7 @@ export function askModelAboutFolder(
   );
 }
 
-/** What a sample file's applicable commands are, in a folder plane. */
+/** What a sample file's applicable commands are, in a files plane. */
 export function sampleCommands(
   registry: Pick<CommandRegistry, 'list'>,
   paneID: string,

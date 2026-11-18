@@ -159,7 +159,6 @@
   min-height: 160px;
   overflow: auto;
   border-top: 1px solid var(--line);
-  scrollbar-gutter: stable;
 }
 .torrent-file {
   display: flex;
@@ -169,12 +168,23 @@
   border-bottom: 1px solid color-mix(in srgb, var(--line) 25%, transparent);
   font-size: var(--text-compact);
 }
-.torrent-file > span:first-child {
+.torrent-file > .torrent-file-name {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-inline);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.torrent-file-name > .file-name-label {
+  flex: 0 1 auto;
+}
+.torrent-file-name > small {
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .torrent-file > span:last-child {
   flex: none;

@@ -19,15 +19,11 @@ const edit = (file: string, before: string | RegExp, after: string): MutationEdi
   before,
   after,
 });
-const readWindow = edit(
-  streams,
-  'if (reserved + length > remoteLimits.readBytesPerStream) break;',
-  '',
-);
+const readWindow = edit(streams, 'if (!budget.fits(length)) break;', '');
 const writeWindow = edit(
   streams,
-  'reserved + data.length > remoteLimits.readBytesPerStream',
-  'false',
+  'while (blocks.length >= concurrency || !budget.fits(length)) await retire();',
+  'while (blocks.length >= concurrency) await retire();',
 );
 const concurrency = edit(
   streams,
@@ -229,42 +225,94 @@ export const sftpMutations: Record<string, readonly MutationEdit[]> = {
     ),
   ],
   noHandleLimit: [edit(client, 'this.handles.size + this.openingHandles < handleLimit;', 'true;')],
-  noQueueCap: [edit(client, 'this.metadataQueued() >= sftpBounds.queueRequests', 'false')],
+  noQueueCap: [
+    edit(
+      client,
+      '} else if (!cleanup && flow.queue.length >= sftpBounds.queueRequests) {',
+      '} else if (false) {',
+    ),
+  ],
   queueCapsStreams: [
     edit(
       client,
-      /flow === this\.metadataFlow &&\s*this\.metadataQueued\(\) >= sftpBounds\.queueRequests/,
-      'this.queue.length >= sftpBounds.queueRequests',
+      '} else if (!cleanup && flow.queue.length >= sftpBounds.queueRequests) {',
+      '} if (!cleanup && this.queued >= sftpBounds.queueRequests) {',
     ),
   ],
-  queueCountsStreams: [edit(client, 'if (entry.flow === this.metadataFlow) count++;', 'count++;')],
+  queueCountsStreams: [
+    edit(
+      client,
+      'flow.queue.length >= sftpBounds.queueRequests',
+      'this.queued >= sftpBounds.queueRequests',
+    ),
+  ],
   flowTurnsOff: [
-    edit(client, 'const turn = this.turns.get(candidate.flow) ?? 0;', 'const turn = 0;'),
+    edit(
+      client,
+      /flow\.turn < chosen\.flow\.turn \|\|\s*\(flow\.turn === chosen\.flow\.turn && head\.sequence < chosen\.sequence\)/,
+      'head.sequence < chosen.sequence',
+    ),
   ],
+  newFlowsFirst: [
+    edit(
+      client,
+      '{ queue: [], turn: this.turn, requests: 0 }',
+      '{ queue: [], turn: 0, requests: 0 }',
+    ),
+  ],
+  turnNotRecorded: [edit(client, 'if (!entry.cleanup) entry.flow.turn = ++this.turn;', '')],
   orphanCloseQueueCapped: [
-    edit(client, /!cleanup &&\s*flow === this\.metadataFlow/, 'flow === this.metadataFlow'),
+    edit(client, '} else if (!cleanup && flow.queue.length', '} else if (flow.queue.length'),
   ],
-  orphanCloseNotFirst: [edit(client, 'if (candidate.cleanup) return index;', '')],
+  orphanCloseNotFirst: [edit(client, 'if (this.cleanups.length) return this.cleanups[0];', '')],
+  streamWindowUncapped: [
+    edit(client, 'if (flow.requests >= remoteLimits.requestsPerChannel)', 'if (false)'),
+  ],
+  forgeableStreams: [
+    edit(
+      streams,
+      'return (options as Partial<SFTPStreamRequestOptions>)[streamActivity];',
+      'return (options as Partial<SFTPStreamRequestOptions>)[streamActivity] ?? (options as { activity?: SFTPStreamActivity }).activity;',
+    ),
+  ],
+  wireDeadlineFixed: [edit(client, 'if (ahead < entry.ahead) {', 'if (false) {')],
+  hungQueueKeepsChannel: [
+    edit(
+      client,
+      /if \(\s*timeout >= this\.metadataTimeoutMs &&[\s\S]*?\)\s*this\.fail\(error\);/,
+      '',
+    ),
+  ],
+  hungQueueAnyTimeout: [edit(client, 'timeout >= this.metadataTimeoutMs &&', '')],
   renameAnyLstatError: [
     edit(client, "if (!(error instanceof SFTPError) || error.code !== 'ENOENT') throw error;", ''),
   ],
   resolvedLength: [edit(client, 'result.length > remoteLimits.serverPathBytes ||', '')],
-  copyNoPreCheck: [
-    edit(client, /await coversRange\(\);\s*while \(copied < length\)/, 'while (copied < length)'),
-  ],
+  copyNoPreCheck: [edit(client, 'if (sourceSize < end) throw shortSource();', '')],
   copyNoPostCheck: [
     edit(
       client,
-      /\/\/ A source that shrank during the copy left the destination short\.\s*await coversRange\(\);/,
-      '',
+      'if (size === undefined || size < destinationOffset + copied + block) {',
+      'if (false) {',
     ),
   ],
   copySizeUnknownAllowed: [
+    edit(client, 'if (sourceSize === undefined || destinationSize === undefined)', 'if (false)'),
+  ],
+  copyOverwrites: [edit(client, 'if (destinationSize > destinationOffset)', 'if (false)')],
+  copyEndOfFileAsFailure: [
+    edit(client, 'if (error instanceof SFTPError && error.status === 1) throw shortSource();', ''),
+  ],
+  copyShortAlwaysFailure: [
+    edit(client, 'if (now !== undefined && now < end) throw shortSource();', ''),
+  ],
+  copyProgressFirst: [
     edit(
       client,
-      /if \(size === undefined\)\s*throw new SFTPError\('ENOTSUP', 'The server did not report the copy source size\.'\);/,
-      'if (size === undefined) return;',
+      'const size = await sizeOf(destination);',
+      'lifetime.progress(Number(block));\nconst size = await sizeOf(destination);',
     ),
+    edit(client, /copied \+= block;\s*lifetime\.progress\(Number\(block\)\);/, 'copied += block;'),
   ],
   noPacketLimit: [edit(client, 'bytes.length <= this.packetLimit,', 'true,')],
   noLinkGate: [
@@ -281,7 +329,7 @@ export const sftpMutations: Record<string, readonly MutationEdit[]> = {
       'return version !== undefined;',
     ),
   ],
-  noDrainWait: [edit(client, 'this.writable &&\n        this.queue.length', 'this.queue.length')],
+  noDrainWait: [edit(client, 'this.writable &&\n        this.queued > 0', 'this.queued > 0')],
   oneNameAny: [edit(client, 'if (names.length !== 1) {', 'if (names.length === 0) {')],
   abortedNoDrainTimer: [
     edit(client, '} else if (entry.timer === undefined) {', '} else if (false) {'),
@@ -342,8 +390,30 @@ export const sftpMutations: Record<string, readonly MutationEdit[]> = {
   noBufferCopy: [
     edit(
       streams,
-      'const data = Buffer.from(item.value.subarray(index, index + chunk));',
-      'const data = item.value.subarray(index, index + chunk);',
+      'const data = Buffer.from(item.value.subarray(index, index + length));',
+      'const data = item.value.subarray(index, index + length);',
+    ),
+  ],
+  channelBudgetOff: [
+    edit(
+      streams,
+      /this\.held \+ bytes <= share &&\s*this\.channel\.reserved \+ bytes <= sftpBounds\.streamBytesPerChannel/,
+      'this.held + bytes <= share',
+    ),
+  ],
+  noEvenShare: [
+    edit(
+      streams,
+      'Math.floor(sftpBounds.streamBytesPerChannel / this.channel.streams)',
+      'sftpBounds.streamBytesPerChannel',
+    ),
+  ],
+  noFirstBlockAllowance: [edit(streams, 'if (this.held === 0) return true;', '')],
+  sentRearmsEveryTime: [
+    edit(
+      streams,
+      'if (this.waiting > 0 && this.timer === undefined) this.arm();',
+      'if (this.waiting > 0) this.arm();',
     ),
   ],
   bothWindowsOpen: [readWindow, writeWindow, concurrency],
@@ -408,6 +478,16 @@ export const sftpMutations: Record<string, readonly MutationEdit[]> = {
       fixture,
       /if \(this\.statusOverride && decoded\.request\.kind === 'close'\)\s*this\.handles\.delete\(decoded\.request\.handle\.toString\('hex'\)\);/,
       '',
+    ),
+  ],
+  fakeCopyOKOnlyWhenWhole: [
+    edit(fixture, 'return remaining === 0n ? 0 : status;', 'return status === 8 ? 0 : status;'),
+  ],
+  sanitizeSliceFirst: [
+    edit(
+      errors,
+      /const display = \[\s*\.\.\.message\s*\.toString\('utf8'\)\s*\.replace\(([^\n]+)\),\s*\]\s*\.slice\(0, remoteLimits\.serverPromptCharacters\)\s*\.join\(''\);/,
+      "const display = [...message.toString('utf8')].slice(0, remoteLimits.serverPromptCharacters).join('').replace($1);",
     ),
   ],
   fakeDirectoryEOFText: [

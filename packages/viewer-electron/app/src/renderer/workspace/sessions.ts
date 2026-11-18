@@ -126,6 +126,11 @@ export function selectedFiles(id: string): FileEntry[] {
 export function selectionCursor(id: string): string | undefined {
   return sessions.get(id)?.cursor || undefined;
 }
+/** Moves a plane's keyboard cursor to `path`, as Quick Preview does to the file it shows. */
+export function setSelectionCursor(id: string, path: string): void {
+  const session = sessions.get(id);
+  if (session) session.cursor = path;
+}
 export function focusFiles(id: string): void {
   const until = performance.now() + 1500;
   const focus = () => {

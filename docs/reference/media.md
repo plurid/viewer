@@ -11,12 +11,25 @@ Undo, reported in **File operations**; the source is never changed.
 These appear in **⌘K** when every selected file is a JPEG, PNG, TIFF, HEIC, HEIF, GIF, BMP or WebP
 image.
 
-| Command                                         | Output beside each image                                       |
-| ----------------------------------------------- | -------------------------------------------------------------- |
-| **Convert copy to JPEG**                        | `Name.jpg`                                                     |
-| **Convert copy to PNG**                         | `Name.png`                                                     |
-| **Rotated copy, left**, **Rotated copy, right** | `Name rotated.ext`; formats other than PNG and JPEG become PNG |
-| **Create PDF from Images**                      | One PDF in the folder: `Name.pdf`, or `Name and others.pdf`    |
+| Command                                         | Output beside each image                                                                  |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Convert Copy to JPEG**                        | `Name.jpg`                                                                                |
+| **Convert Copy to PNG**                         | `Name.png`                                                                                |
+| **Rotated Copy, Left**, **Rotated Copy, Right** | `Name rotated.ext`: PNG and JPEG keep their format, HEIC and HEIF become JPEG, others PNG |
+| **Create PDF from Images**                      | One PDF in the folder: `Name.pdf`, or `Name and others.pdf`                               |
+
+**Save Rotated Copy** in a picture's preview makes the same copy, turned as the picture is shown: a
+quarter left or right, or a half turn. Rotated copies:
+
+- are made of JPEG, PNG, HEIC, HEIF, BMP, WebP, GIF and TIFF pictures. An animated GIF or a TIFF of
+  several pages is refused, saying why, since a copy would keep one frame or page of it;
+- turn the picture as it is shown, its EXIF orientation applied first;
+- save a JPEG at the quality it was saved at, read from its own tables, and with its own color
+  detail, so the copy is about its size and looks as it did;
+- save a HEIC or HEIF photo as a JPEG, about its size, with the date it was taken;
+- keep the color profile, the description, artist, copyright and the date the photo was taken, and
+  nothing else of its metadata;
+- leave the picture itself as it was.
 
 A convert command is not offered when every selected image is already in that format. In a mixed
 selection, such an image gets a copy beside it, such as `Shot copy.png`; the image itself is never
@@ -25,7 +38,7 @@ replaced.
 ## Image tools
 
 **Image Tools…** in **⌘K** or an image preview exports up to 1,000 JPEG, PNG, TIFF, GIF, WebP or
-AVIF images. HEIC previews on macOS but is not an image-tool input; use **Convert copy to JPEG**.
+AVIF images. HEIC previews on macOS but is not an image-tool input; use **Convert Copy to JPEG**.
 
 | Choice     | Values                                                                                                  |
 | ---------- | ------------------------------------------------------------------------------------------------------- |

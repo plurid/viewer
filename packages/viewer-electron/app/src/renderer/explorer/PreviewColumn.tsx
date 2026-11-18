@@ -1,8 +1,8 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { Point } from '../ui/projectedResize';
 import { measureLocalX } from '../ui/projectedResize';
-import { updateFolderPresentation, useFolderPresentation } from '../state/store';
+import { activeWorkspace, updatePane, useViewer } from '../state/store';
 import { keepPreviewKeys } from './selection';
 
 export const previewMinimum = 320;
@@ -13,21 +13,40 @@ const previewWidth = (width: number) =>
 
 /**
  * THE COLUMNS PREVIEW, as Finder's: it takes the room the list columns leave, at least the width
- * the person gave it, remembered per folder as the columns' own widths are. Its divider resizes it
- * by pointer or keys; the strip scrolls when it is wider than the plane.
+ * the person gave it. The width is its plane's own, saved with the workspace, never a folder's or
+ * a project's: a plane keeps it in every folder it goes to, as a Finder window does, and two
+ * planes on one folder each keep theirs. Its divider resizes it by pointer or keys; the strip
+ * scrolls when it is wider than the plane.
  */
 export function PreviewColumn({
-  folder,
+  paneID,
   path,
   children,
 }: {
-  folder: string;
+  /** The files plane it stands in; a Columns view outside one keeps its width while it shows. */
+  paneID?: string;
   path: string;
   children: ReactNode;
 }) {
-  const preferences = useFolderPresentation(folder);
-  const width = preferences.previewWidth ?? previewDefault;
+  const saved = useViewer((state) => {
+    const pane = paneID && activeWorkspace(state).panes.find((item) => item.id === paneID);
+    return pane && pane.type === 'folder' ? pane.previewWidth : undefined;
+  });
+  const [own, setOwn] = useState<number>();
+  const width = saved ?? own ?? previewDefault;
   const column = useRef<HTMLDivElement>(null);
+  // what a reader hears: the width shown, which can be more than the width it was given
+  const [shown, setShown] = useState(width);
+  useLayoutEffect(() => {
+    const element = column.current;
+    if (!element) return;
+    const measure = () => setShown(element.offsetWidth || width);
+    measure();
+    const observer =
+      typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
+    observer?.observe(element);
+    return () => observer?.disconnect();
+  }, [width]);
   const attach = useCallback((element: HTMLDivElement | null) => {
     column.current = element;
     return keepPreviewKeys(element);
@@ -38,8 +57,13 @@ export function PreviewColumn({
     latest: number;
     localX(point: Point): number | undefined;
   }>(null);
-  const save = (value: number) =>
-    updateFolderPresentation(folder, { previewWidth: previewWidth(value) });
+  // the plane's width, written only when it changes
+  const save = (value: number) => {
+    const next = previewWidth(value);
+    if (next === width) return;
+    if (paneID) updatePane(paneID, { previewWidth: next });
+    else setOwn(next);
+  };
   return (
     <div
       className="column-preview"
@@ -57,7 +81,7 @@ export function PreviewColumn({
         aria-orientation="vertical"
         aria-valuemin={previewMinimum}
         aria-valuemax={previewMaximum}
-        aria-valuenow={width}
+        aria-valuenow={shown}
         title="Drag to resize preview; double-click to reset"
         onClick={(event) => event.stopPropagation()}
         onDoubleClick={() => save(previewDefault)}
@@ -99,7 +123,8 @@ export function PreviewColumn({
         onPointerUp={() => {
           const current = drag.current;
           drag.current = null;
-          if (current) save(current.latest);
+          // a press without a drag leaves the width as it was
+          if (current && current.latest !== current.width) save(current.latest);
         }}
         onPointerCancel={() => {
           drag.current = null;

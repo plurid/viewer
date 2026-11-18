@@ -50,6 +50,10 @@ export const remoteLimits = Object.freeze({
   controlPathBytes: 104,
   /** OpenSSH binds a master at `<ControlPath>.<16 random characters>` before renaming it. */
   controlTemporarySuffixBytes: 17,
+  /** `ssh -O check` only talks to the local socket; a slower answer is "unknown", not gone. */
+  masterCheckTimeoutMs: 5 * second,
+  /** OpenSSH's standard error kept for classification, in UTF-16 code units. */
+  sshStderrCharacters: 64 * 1024,
   quitTimeoutMs: 2 * second,
   connectionIDMinCharacters: 6,
   connectionIDMaxCharacters: 16,

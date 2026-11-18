@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { NumberField } from '../ui/NumberField';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import type { Choice } from '../ui/ChoiceMenu';
 import { Row } from '../ui/primitives';
@@ -96,16 +97,13 @@ function LengthField({
   const shown = pixels ? Math.round(value) : Math.round(toMillimetres(value) * 100) / 100;
   return (
     <Field label={`${label} (${pixels ? 'px' : 'mm'})`}>
-      <input
-        type="number"
+      <NumberField
+        kind={pixels ? 'integer' : 'decimal'}
         min={0}
         max={max}
-        step={pixels ? 1 : step}
+        step={pixels ? 1 : (step ?? 1)}
         value={shown}
-        onChange={(event) => {
-          const number = Math.min(max, Math.max(0, Number(event.target.value) || 0));
-          onChange(pixels ? number : millimetres(number));
-        }}
+        onCommit={(number) => onChange(pixels ? number : millimetres(number))}
       />
     </Field>
   );
@@ -370,18 +368,11 @@ function ModeOptions({
           />
           {!options.fill && (
             <Field label="Copies of each">
-              <input
-                type="number"
+              <NumberField
                 min={1}
                 max={1000}
                 value={copies}
-                onChange={(event) => {
-                  const value = Math.min(
-                    1000,
-                    Math.max(1, Math.round(Number(event.target.value) || 1)),
-                  );
-                  set({ copies: pieces.map(() => value) });
-                }}
+                onCommit={(value) => set({ copies: pieces.map(() => value) })}
               />
             </Field>
           )}
@@ -453,15 +444,12 @@ function ModeOptions({
           </Field>
           {options.target === 'scale' && (
             <Field label="Scale (%)">
-              <input
-                type="number"
+              <NumberField
                 min={10}
                 max={2000}
                 step={10}
                 value={options.scale}
-                onChange={(event) =>
-                  set({ scale: Math.min(2000, Math.max(10, Number(event.target.value) || 100)) })
-                }
+                onCommit={(scale) => set({ scale })}
               />
             </Field>
           )}

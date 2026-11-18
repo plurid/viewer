@@ -125,6 +125,10 @@
   width: 100%;
   min-width: 0;
 }
+.speech-provider-editor .settings-row > :is(input, .choice-button) {
+  width: var(--row-control);
+  max-width: 100%;
+}
 @media (max-width: 820px) {
   .speech-preferences .settings-row {
     grid-template-columns: minmax(0, 1fr);

@@ -5,6 +5,7 @@ import { resolveOutline, type OutlineEntry } from './outline';
 import { drawPage, type PageDrawing } from './darken';
 import { Loading } from '../../ui/primitives';
 import type { PageColors } from '../../../domain/previews/documents/dark-pages';
+import { useListKeys } from '../../ui/useListKeys';
 
 /** A page thumbnail, rendered only while its row is in view, dark as its page is. */
 function Thumbnail({
@@ -69,12 +70,20 @@ export function PDFThumbnails({
   useEffect(() => {
     virtual.scrollToIndex(page - 1, { align: 'auto' });
   }, [page, virtual]);
+  const keyDown = useListKeys({
+    labels: Array.from({ length: pdf.numPages }, (_, index) => String(index + 1)),
+    active: page - 1,
+    select: (index) => onSelect(index + 1),
+  });
   return (
     <div
       className="pdf-thumbnails"
       ref={scroll}
       role="listbox"
       aria-label="Pages"
+      // one stop for the keyboard: ↑ ↓ Home End move through the pages, not Tab
+      tabIndex={0}
+      onKeyDown={keyDown}
       data-pages={dark ? 'dark' : undefined}
       // the page's colour only: the selected page's outline stays in the window's accent
       style={dark ? ({ '--page': dark.page } as CSSProperties) : undefined}
@@ -88,6 +97,7 @@ export function PDFThumbnails({
               role="option"
               aria-selected={number === page}
               aria-label={`Page ${number}`}
+              tabIndex={-1}
               className={number === page ? 'selected' : ''}
               style={{ position: 'absolute', top: item.start, height: item.size, width: '100%' }}
               onClick={() => onSelect(number)}

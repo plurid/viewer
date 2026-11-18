@@ -308,6 +308,9 @@ describe('dismissals', () => {
         '/empty': [],
         '/broken': 'screenshots',
         '/many': Array.from({ length: 30 }, (_, index) => 'id' + index),
+        // the workspace offer's dismissals live in a private file, never here
+        '/offer': ['workspace.open', 'screenshots'],
+        '/only-offer': ['workspace.open'],
       },
     }).insightsDismissed!;
     expect(Object.keys(normal)).toHaveLength(200);
@@ -317,6 +320,8 @@ describe('dismissals', () => {
     expect(normal).not.toHaveProperty('/folder0');
     expect(normal['/ids']).toEqual(['pdfs.large']);
     expect(normal['/many']).toHaveLength(20);
+    expect(normal['/offer']).toEqual(['screenshots']);
+    expect(normal).not.toHaveProperty('/only-offer');
     expect(preferencesSchema.shape.insightsDismissed.safeParse(normal).success).toBe(true);
     expect(normalizePreferences().insightsDismissed).toEqual({});
     expect(normalizePreferences({ insightsDismissed: ['/a'] }).insightsDismissed).toEqual({});

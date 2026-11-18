@@ -144,7 +144,7 @@ function installTrashFixture(noteOriginal: string, longOriginal: string, preview
     fixture.__trashLastRestore = { ids, destination };
     if (fixture.__trashMode === 'collision')
       throw new Error(
-        '“Build notes.txt” already exists. Use Restore to… to choose another folder.',
+        '“Build notes.txt” already exists. Use Put Back To… to choose another folder.',
       );
     fixture.__trashFixtureItems = fixture.__trashFixtureItems.filter(
       (item) => !ids.includes(item.id),
@@ -570,11 +570,11 @@ try {
   await until(
     () => evaluate(pageCall(planeLabels)),
     (values) => values.includes(`Folder ${originalFolder}`),
-    'actual original folder plane',
+    'actual original files plane',
   );
   await capture('compact-light-original-folder-plane', 900, 640);
   evidence.push(
-    'Open original folder reports a missing parent without closing Trash; a known generated original parent opens in an actual root folder plane and closes Trash. No files were restored, trashed or erased.',
+    'Open original folder reports a missing parent without closing Trash; a known generated original parent opens in an actual root files plane and closes Trash. No files were restored, trashed or erased.',
   );
   assert.equal(await readFile(note, 'utf8'), contents);
   await writeFile(

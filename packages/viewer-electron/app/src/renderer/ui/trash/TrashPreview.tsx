@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { Resource } from '../../../domain/contracts';
 import type { TrashItem } from '../../../domain/files/trash';
 import { formatBytes } from '../../../domain/files/entries';
 import { PreviewHost } from '../../previews/PreviewHost';
 import { PreviewFacts } from '../../previews/PreviewFileInfo';
 import { Dialog, Empty, IconButton, Loading } from '../primitives';
+import { originalTrashFolder } from '../../../domain/files/trash';
+import { homeText } from '../../../domain/files/path-label';
+import { useHome } from '../PathLabel';
 import { errorMessage } from '../../../domain/errors';
 
 /** Quick Look for files in the Trash, read through the desktop's scoped Trash resource. */
@@ -50,7 +54,12 @@ export function TrashPreview({
       if (owned) void window.viewer.release(owned.id);
     };
   }, [item.id]);
+  const home = useHome();
   const step = (delta: number) => setIndex((index + delta + items.length) % items.length);
+  // where it came from, which Put Back returns it to; else which Trash holds it
+  const origin = item.originalPath
+    ? homeText(originalTrashFolder(item.originalPath), home)
+    : item.location;
   const footer = (size: number, label?: string, details: readonly string[] = []) => (
     <>
       {restoreError && (
@@ -60,16 +69,12 @@ export function TrashPreview({
       )}
       <footer className="quick-preview-footer">
         {/* the dialog's title names the item; where it was comes last and gives way first */}
-        <PreviewFacts
-          kind={label ?? ''}
-          size={formatBytes(size)}
-          details={[...details, item.location]}
-        />
+        <PreviewFacts kind={label ?? ''} size={formatBytes(size)} details={[...details, origin]} />
         <div className="quick-preview-actions">
           {items.length > 1 && (
             <div className="quick-preview-navigation">
               <IconButton icon="left" label="Previous file" onClick={() => step(-1)} />
-              <span>
+              <span className="readout" style={{ '--readout-width': '7ch' } as CSSProperties}>
                 {index + 1} / {items.length}
               </span>
               <IconButton icon="right" label="Next file" onClick={() => step(1)} />
@@ -88,7 +93,7 @@ export function TrashPreview({
                 .finally(() => setBusy(false));
             }}
           >
-            {item.originalPath ? 'Restore' : 'Restore To…'}
+            {item.originalPath ? 'Put Back' : 'Put Back To…'}
           </button>
         </div>
       </footer>
@@ -100,10 +105,8 @@ export function TrashPreview({
       className="quick-preview-dialog trash-preview-dialog"
       onClose={onClose}
       onKeyDown={(event) => {
-        if (
-          event.target instanceof Element &&
-          event.target.closest('input, textarea, select, button')
-        )
+        // the buttons here take no arrows, so ← and → still step after a click on Next
+        if (event.target instanceof Element && event.target.closest('input, textarea, select'))
           return;
         if (items.length > 1 && ['ArrowLeft', 'ArrowRight'].includes(event.key)) {
           event.preventDefault();

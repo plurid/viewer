@@ -12,12 +12,15 @@ export type CheckID =
   | 'scroll-overflow'
   | 'dialog-scroll'
   | 'menu-covers-trigger'
+  | 'menu-search'
   | 'home-path'
   | 'em-dash'
   | 'broken-value'
   | 'plural'
   | 'name-extension'
-  | 'layout-shift';
+  | 'layout-shift'
+  | 'measure'
+  | 'wording';
 
 export interface Box {
   x: number;
@@ -70,6 +73,8 @@ export interface SceneSetup {
   titlebar?: boolean;
   /** A second workspace for the switcher and Manage, with this name. */
   otherWorkspace?: string;
+  /** This many more workspaces, for long switcher lists. */
+  extraWorkspaces?: number;
   /** A project for the workspace: its folder and its outside folders by binding name, relative
    * to the sample home. */
   project?: { root: string; bindings: Readonly<Record<string, string>> };
@@ -103,7 +108,18 @@ export interface Scene {
   focus?: readonly string[];
   /** Why the scene cannot be captured yet: it is listed, not run. */
   blocked?: string;
+  /** What the scene needs from the app, checked before its steps: a build without it reports
+   * "needs a newer build" instead of a failure. */
+  requires?: readonly Requirement[];
 }
+
+/** A feature a scene needs: a palette command by its label, an element, or the QA runtime's
+ * hooks (Trash and places in the sample home, the command list, the markers). */
+export type Requirement =
+  | { command: string }
+  | { selector: string; what: string }
+  | { text: string; what: string }
+  | { qaHooks: true };
 
 /** A module of scenes for one part of the app. */
 export interface ReviewArea {
@@ -122,6 +138,8 @@ export interface Capture {
   findings: Finding[];
   /** Why the steps failed, when they did. */
   error?: string;
+  /** What the build lacks, when the scene needs a newer one. */
+  newerBuild?: string;
   /** Milliseconds from launch to the closed app. */
   milliseconds: number;
   /** Command palette labels the steps ran. */
@@ -152,6 +170,8 @@ export interface SceneResult {
   covers: SceneCoverage;
   /** Why the scene was not captured. */
   blocked?: string;
+  /** What the build lacks, when no variant could be captured. */
+  newerBuild?: string;
 }
 
 /** One entry of a coverage list. */
@@ -172,7 +192,12 @@ export interface Coverage {
 export interface RunResults {
   version: 1;
   run: string;
+  /** The packaged app, relative to the repository, or from ~. */
   binary: string;
+  /** How many app instances ran at once. */
+  parallel: number;
+  /** Where the command list came from: the app's own list, or a scan of the source. */
+  commandSource: 'runtime' | 'source';
   started: string;
   milliseconds: number;
   /** The run's generated samples and profiles, kept for the owner to move to the Trash. */

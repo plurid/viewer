@@ -11,7 +11,7 @@ import {
 } from '../src/desktop/remote/sftp/codec';
 import { assertSafeSFTPAfterEach } from './support/fake-sftp-server';
 import { sftpFixture, sftpTurn } from './support/sftp-fixture';
-import { pread, pwrite } from '../src/desktop/remote/sftp/streams';
+import { pread, pwrite, SFTPStreamLifetime } from '../src/desktop/remote/sftp/streams';
 import { SFTPProtocolError, sftpStatusError } from '../src/desktop/remote/sftp/errors';
 import { remoteLimits } from '../src/domain/remote/limits';
 import { encodeReply } from '../src/desktop/remote/sftp/codec';
@@ -105,9 +105,26 @@ describe('bounded server-side copying', () => {
     await client.connect();
     const source = await client.open(b('/home/source'), 'read');
     const destination = await client.open(b('/home/destination'), 'create');
+    const before = server.packets.length;
     await client.copyData(source, 0n, 0n, destination, 0n);
+    // Not even a size read, and handles are not checked: there is nothing to copy.
+    await client.copyData(b('unknown'), 1n << 62n, 0n, b('none'), 1n << 62n);
+    expect(server.packets).toHaveLength(before);
     expect(server.bytes('/home/destination')).toEqual(b(''));
-    expect(server.packets.some((packet) => packet.request?.kind === 'copyData')).toBe(false);
+  });
+
+  it('checks the extension and the channel before accepting a zero-length copy', async () => {
+    const plain = sftpFixture({ extensions: false });
+    await plain.client.connect();
+    await expect(plain.client.copyData(b('a'), 0n, 0n, b('b'), 0n)).rejects.toMatchObject({
+      code: 'ENOTSUP',
+    });
+    const closed = sftpFixture();
+    await closed.client.connect();
+    closed.client.disconnect();
+    await expect(closed.client.copyData(b('a'), 0n, 0n, b('b'), 0n)).rejects.toMatchObject({
+      code: 'VIEWER_REMOTE_DISCONNECTED',
+    });
   });
 
   it('refuses a copy range past the source end before copying anything', async () => {
@@ -217,6 +234,247 @@ describe('bounded server-side copying', () => {
     expect(server.packets.filter((packet) => packet.request?.kind === 'copyData')).toHaveLength(1);
     expect(client.stats.abandoned).toBe(0);
     expect(client.connected).toBe(true);
+  });
+});
+
+describe('copies verified against what OpenSSH reports as success', () => {
+  const W = remoteLimits.readBytesPerStream;
+  const copyOutcome = (work: Promise<void>): Promise<string> =>
+    work.then(
+      () => 'done',
+      (error: { code: string }) => error.code,
+    );
+
+  it('answers raw copy-data with the statuses OpenSSH sends', async () => {
+    const { client, server, wire } = sftpFixture();
+    server.file('/home/source', Buffer.alloc(1000, 7));
+    server.file('/home/large', Buffer.alloc(200_000, 7));
+    server.file('/home/readonly', b(''));
+    server.directory('/home/folder');
+    await client.connect();
+    const source = await client.open(b('/home/source'), 'read');
+    const large = await client.open(b('/home/large'), 'read');
+    const readOnly = await client.open(b('/home/readonly'), 'read');
+    const opened = await client.open(b('/home/folder'), 'read');
+    const statuses: number[] = [];
+    server.replyOverride = (reply) => {
+      if (reply.kind === 'status') statuses.push(reply.status);
+      return reply;
+    };
+    server.holdReplies = true;
+    // The cases and answers recorded from /usr/libexec/sftp-server.
+    const cases: [Buffer, bigint, bigint, string, 'read' | 'create', number, number][] = [
+      [source, 0n, 1000n, 'normal', 'create', 0, 1000],
+      [source, 500n, 1000n, 'partial', 'create', 0, 500],
+      [source, 1000n, 10n, 'at-end', 'create', 0, 0],
+      [source, 5000n, 10n, 'past-end', 'create', 0, 0],
+      [source, 0n, 1000n, 'readonly', 'read', 0, 0],
+      [large, 0n, 65_536n, 'readonly', 'read', 0, 0],
+      [large, 0n, 65_537n, 'readonly', 'read', 2, 0],
+      [large, 199_000n, 2000n, 'eof-1', 'create', 0, 1000],
+      [large, 100_000n, 165_535n, 'eof-2', 'create', 0, 100_000],
+      [large, 100_000n, 99_999n, 'eof-3', 'create', 0, 99_999],
+      [opened, 0n, 10n, 'from-folder', 'create', 0, 0],
+      [opened, 0n, 65_537n, 'from-folder-2', 'create', 4, 0],
+    ];
+    for (const [from, offset, length, name, mode, status, written] of cases) {
+      const destination =
+        mode === 'read'
+          ? readOnly
+          : await (async () => {
+              server.holdReplies = false;
+              const handle = await client.open(b('/home/' + name), 'create');
+              server.holdReplies = true;
+              return handle;
+            })();
+      statuses.length = 0;
+      wire.write(
+        encodeRequest(0xfffffff0, {
+          kind: 'copyData',
+          source: from,
+          sourceOffset: offset,
+          length,
+          destination,
+          destinationOffset: 0n,
+        }),
+      );
+      await sftpTurn();
+      expect([name, statuses]).toEqual([name, [status]]);
+      expect(server.bytes('/home/' + name).length).toBe(written);
+    }
+  });
+
+  it.each(['readonly', 'folder', 'quota'] as const)(
+    'fails a %s copy that OpenSSH answers OK without writing the last 64 KiB',
+    async (kind) => {
+      const { client, server } = sftpFixture({ quotaBytes: kind === 'quota' ? 1500 : undefined });
+      server.file('/home/source', Buffer.alloc(1000, 7));
+      server.file('/home/target', b(''));
+      server.directory('/home/folder').size = 64;
+      await client.connect();
+      const source =
+        kind === 'folder'
+          ? await client.open(b('/home/folder'), 'read')
+          : await client.open(b('/home/source'), 'read');
+      const target =
+        kind === 'readonly'
+          ? await client.open(b('/home/target'), 'read')
+          : await client.open(b('/home/output'), 'create');
+      const progress: bigint[] = [];
+      const outcome = await copyOutcome(
+        client.copyData(source, 0n, kind === 'folder' ? 10n : 1000n, target, 0n, {
+          onProgress: (bytes) => progress.push(bytes),
+        }),
+      );
+      expect(server.packets.filter((packet) => packet.request?.kind === 'copyData')).toHaveLength(
+        1,
+      );
+      expect(outcome).toBe('VIEWER_REMOTE_FAILURE');
+      expect(progress).toEqual([]);
+      expect(server.bytes(kind === 'readonly' ? '/home/target' : '/home/output')).toEqual(b(''));
+      expect(client.connected).toBe(true);
+    },
+  );
+
+  it('reports a source that ends before a block as a short source', async () => {
+    const { client, server } = sftpFixture();
+    const length = 2 * W + 3;
+    const node = server.file('/home/source', Buffer.alloc(length, 42));
+    await client.connect();
+    const source = await client.open(b('/home/source'), 'read');
+    const destination = await client.open(b('/home/destination'), 'create');
+    let blocks = 0;
+    server.replyOverride = (reply, request) => {
+      if (request.kind !== 'copyData') return reply;
+      // Cut to one window after block 1 and restored after block 2, as in OpenSSH's interop probe.
+      blocks++;
+      node.size = blocks === 1 ? W : length;
+      return reply;
+    };
+    const progress: bigint[] = [];
+    expect(
+      await copyOutcome(
+        client.copyData(source, 0n, BigInt(length), destination, 0n, {
+          onProgress: (bytes) => progress.push(bytes),
+        }),
+      ),
+    ).toBe('VIEWER_REMOTE_SHORT_SOURCE');
+    expect(blocks).toBe(2);
+    expect(progress).toEqual([BigInt(W)]);
+    expect(server.bytes('/home/destination').length).toBe(W);
+  });
+
+  it('fails a block whose last 64 KiB read short even when the source is restored', async () => {
+    const { client, server } = sftpFixture();
+    const length = 2 * W;
+    const node = server.file('/home/source', Buffer.alloc(length, 42));
+    await client.connect();
+    const source = await client.open(b('/home/source'), 'read');
+    const destination = await client.open(b('/home/destination'), 'create');
+    let blocks = 0;
+    server.replyOverride = (reply, request) => {
+      if (request.kind !== 'copyData') return reply;
+      blocks++;
+      node.size = blocks === 1 ? length - 1000 : length;
+      return reply;
+    };
+    const progress: bigint[] = [];
+    expect(
+      await copyOutcome(
+        client.copyData(source, 0n, BigInt(length), destination, 0n, {
+          onProgress: (bytes) => progress.push(bytes),
+        }),
+      ),
+    ).toBe('VIEWER_REMOTE_FAILURE');
+    expect(progress).toEqual([BigInt(W)]);
+    expect(server.bytes('/home/destination').length).toBe(length - 1000);
+  });
+
+  it('copies only at or past the end of the destination', async () => {
+    const { client, server } = sftpFixture();
+    server.file('/home/source', b('abc'));
+    server.file('/home/destination', b('0123456789'));
+    await client.connect();
+    const source = await client.open(b('/home/source'), 'read');
+    const destination = await client.open(b('/home/destination'), 'read');
+    // The fake opens existing files only for reading, so make the handle writable directly.
+    server.handles.get(destination.toString('hex'))!.writable = true;
+    expect(await copyOutcome(client.copyData(source, 0n, 3n, destination, 9n))).toBe('ENOTSUP');
+    expect(server.packets.some((packet) => packet.request?.kind === 'copyData')).toBe(false);
+    await client.copyData(source, 0n, 3n, destination, 10n);
+    await client.copyData(source, 0n, 3n, destination, 15n);
+    expect(server.bytes('/home/destination')).toEqual(
+      Buffer.concat([b('0123456789abc'), Buffer.alloc(2), b('abc')]),
+    );
+  });
+
+  it('fails when the destination size goes unreported after a block', async () => {
+    const { client, server } = sftpFixture();
+    server.file('/home/source', b('abc'));
+    await client.connect();
+    const source = await client.open(b('/home/source'), 'read');
+    const destination = await client.open(b('/home/destination'), 'create');
+    let copied = false;
+    server.replyOverride = (reply, request) => {
+      if (request.kind === 'copyData') copied = true;
+      if (!copied || request.kind !== 'fstat' || reply.kind !== 'attrs') return reply;
+      const attrs = { ...reply.attrs };
+      delete attrs.size;
+      return { ...reply, attrs };
+    };
+    const progress: bigint[] = [];
+    expect(
+      await copyOutcome(
+        client.copyData(source, 0n, 3n, destination, 0n, {
+          onProgress: (bytes) => progress.push(bytes),
+        }),
+      ),
+    ).toBe('VIEWER_REMOTE_FAILURE');
+    expect(progress).toEqual([]);
+  });
+
+  it('reports progress for a block only after its destination size is read', async () => {
+    const { client, server } = sftpFixture();
+    server.file('/home/source', b('abc'));
+    await client.connect();
+    const source = await client.open(b('/home/source'), 'read');
+    const destination = await client.open(b('/home/destination'), 'create');
+    server.holdReplies = true;
+    const progress: bigint[] = [];
+    const copying = client.copyData(source, 0n, 3n, destination, 0n, {
+      onProgress: (bytes) => progress.push(bytes),
+    });
+    for (const kind of ['fstat', 'fstat', 'copyData', 'fstat']) {
+      await sftpTurn();
+      expect(server.packets.at(-1)?.request?.kind).toBe(kind);
+      expect(progress).toEqual([]);
+      server.releaseReply(0);
+    }
+    await copying;
+    expect(progress).toEqual([3n]);
+  });
+
+  it('times out a hung destination size check on the copy stall clock', async () => {
+    const { client, server } = sftpFixture();
+    server.file('/home/source', b('abc'));
+    await client.connect();
+    const source = await client.open(b('/home/source'), 'read');
+    const destination = await client.open(b('/home/destination'), 'create');
+    vi.useFakeTimers();
+    server.holdReplies = true;
+    const copying = copyOutcome(
+      client.copyData(source, 0n, 3n, destination, 0n, { stallTimeoutMs: 10 }),
+    );
+    for (let index = 0; index < 3; index++) {
+      await vi.advanceTimersByTimeAsync(5);
+      server.releaseReply(0);
+    }
+    // The size check after the block stays unanswered.
+    await vi.advanceTimersByTimeAsync(9);
+    expect(client.connected).toBe(true);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(client.connected).toBe(false);
+    expect(await copying).toBe('VIEWER_REMOTE_TIMEOUT');
   });
 });
 
@@ -1230,5 +1488,377 @@ describe('OpenSSH rename compatibility', () => {
     expect(server.packets.some((packet) => packet.type === 18)).toBe(false);
     expect(server.nodes.get('/home/source')).toBe(source);
     expect(server.nodes.has('/home/destination')).toBe(false);
+  });
+});
+
+describe('fair credit, the channel byte budget and liveness', () => {
+  it('writes a waiting metadata request before streams that start after it', async () => {
+    const { client, server } = sftpFixture();
+    server.file('/home/f', Buffer.alloc(4096, 1));
+    await client.connect();
+    const handle = await client.open(b('/home/f'), 'read');
+    server.holdReplies = true;
+    const reads: Promise<void>[] = [];
+    const fresh = (): void => {
+      reads.push(
+        (async () => {
+          for await (const chunk of pread(client, handle, { length: 1n, chunkBytes: 1 }))
+            expect(chunk.length).toBe(1);
+        })(),
+      );
+    };
+    for (let index = 0; index < remoteLimits.requestsPerChannel; index++) fresh();
+    await sftpTurn();
+    expect(client.stats.inFlight).toBe(remoteLimits.requestsPerChannel);
+    const before = server.packets.length;
+    const stat = client.stat(b('/home/f'));
+    // New one-request streams keep arriving as each answer frees a credit.
+    for (let index = 0; index < 3; index++) {
+      fresh();
+      fresh();
+      server.releaseReply(0);
+      await sftpTurn();
+    }
+    expect(server.packets[before]?.request?.kind).toBe('stat');
+    server.releaseReplies();
+    expect((await stat).size).toBe(4096n);
+    await Promise.all(reads);
+  });
+
+  it('admits metadata however many stream blocks wait for credit', async () => {
+    const { client, server } = sftpFixture();
+    server.file('/home/source', Buffer.alloc(1024, 5));
+    await client.connect();
+    const handles = await Promise.all(
+      Array.from({ length: 5 }, () => client.open(b('/home/source'), 'read')),
+    );
+    server.holdReplies = true;
+    // One-byte blocks keep every stream far inside the byte budget, so each queues a full window.
+    const streams = handles.map(async (handle) => {
+      let bytes = 0;
+      for await (const chunk of pread(client, handle, { chunkBytes: 1, length: 128n }))
+        bytes += chunk.length;
+      return bytes;
+    });
+    await sftpTurn();
+    expect(client.stats.queued).toBeGreaterThan(sftpBounds.queueRequests);
+    const stats = Array.from({ length: sftpBounds.queueRequests }, () =>
+      client.stat(b('/home/source')),
+    );
+    server.releaseReplies();
+    expect((await Promise.all(stats)).every((attrs) => attrs.size === 1024n)).toBe(true);
+    expect(await Promise.all(streams)).toEqual(Array(5).fill(128));
+  });
+
+  it('keeps a stream moving while the metadata queue stays full', async () => {
+    const { client, server } = sftpFixture({ extensions: false });
+    server.file('/home/source', Buffer.alloc(64 * 1024, 5));
+    await client.connect();
+    const handle = await client.open(b('/home/source'), 'read');
+    server.holdReplies = true;
+    const stats: Promise<unknown>[] = [];
+    for (let index = 0; index < remoteLimits.requestsPerChannel + sftpBounds.queueRequests; index++)
+      stats.push(client.stat(b('/home'), { timeoutMs: null }));
+    const stream = (async () => {
+      for await (const chunk of pread(client, handle, { chunkBytes: 1024 }))
+        expect(chunk.length).toBe(1024);
+    })();
+    await sftpTurn();
+    const before = server.packets.length;
+    for (let step = 0; step < 60; step++) {
+      server.releaseReply(0);
+      await sftpTurn();
+      // Each answer frees at most one metadata slot; take it again at once.
+      stats.push(client.stat(b('/home'), { timeoutMs: null }).catch(() => undefined));
+    }
+    const kinds = server.packets.slice(before).map((packet) => packet.request?.kind);
+    expect(kinds.filter((kind) => kind === 'read').length).toBeGreaterThanOrEqual(25);
+    server.releaseReplies();
+    await stream;
+    await Promise.all(stats);
+  });
+
+  it('holds 50 uploads to a silent server within the channel byte budget, refusing none', async () => {
+    const count = 50;
+    const { client, server } = sftpFixture();
+    await client.connect();
+    const handles = await Promise.all(
+      Array.from({ length: count }, (_, index) => client.open(b('/home/out-' + index), 'create')),
+    );
+    server.holdReplies = true;
+    const held = new Map<number, number>();
+    let peak = 0;
+    const uploads = handles.map((handle, index) =>
+      pwrite(client, handle, [Buffer.alloc(512 * 1024, index), Buffer.alloc(512 * 1024, index)], {
+        onInFlight: (bytes) => {
+          held.set(index, bytes);
+          peak = Math.max(
+            peak,
+            [...held.values()].reduce((sum, value) => sum + value, 0),
+          );
+        },
+      }),
+    );
+    await sftpTurn();
+    await sftpTurn();
+    expect(client.stats.inFlight).toBe(remoteLimits.requestsPerChannel);
+    expect(peak).toBeGreaterThan(0);
+    expect(peak).toBeLessThanOrEqual(sftpBounds.streamBytesPerChannel);
+    server.releaseReplies();
+    expect(await Promise.all(uploads)).toEqual(Array(count).fill(1024n * 1024n));
+    for (let index = 0; index < count; index++)
+      expect(server.bytes('/home/out-' + index)).toEqual(Buffer.alloc(1024 * 1024, index));
+    expect(peak).toBeLessThanOrEqual(sftpBounds.streamBytesPerChannel);
+  });
+
+  it('holds streams that start one after another to the budget plus one block each', async () => {
+    const count = 20;
+    const { client, server } = sftpFixture();
+    const content = Buffer.alloc(remoteLimits.readBytesPerStream + 1, 9);
+    server.file('/home/source', content);
+    await client.connect();
+    const handles = await Promise.all(
+      Array.from({ length: count }, () => client.open(b('/home/source'), 'read')),
+    );
+    server.holdReplies = true;
+    const held = new Map<number, number>();
+    let peak = 0;
+    const streams = handles.map(async (handle, index) => {
+      let bytes = 0;
+      for await (const chunk of pread(client, handle, {
+        onInFlight: (reserved) => {
+          held.set(index, reserved);
+          peak = Math.max(
+            peak,
+            [...held.values()].reduce((sum, value) => sum + value, 0),
+          );
+        },
+      }))
+        bytes += chunk.length;
+      return bytes;
+    });
+    await sftpTurn();
+    const block = sftpBounds.defaultDataBytes;
+    expect(peak).toBeLessThanOrEqual(sftpBounds.streamBytesPerChannel + count * block);
+    server.releaseReplies();
+    expect(await Promise.all(streams)).toEqual(Array(count).fill(content.length));
+    expect(peak).toBeLessThanOrEqual(sftpBounds.streamBytesPerChannel + count * block);
+  });
+
+  it('gives a lone stream its full window again once other streams finish', async () => {
+    const { client, server } = sftpFixture();
+    const content = Buffer.alloc(remoteLimits.readBytesPerStream, 3);
+    server.file('/home/source', content);
+    await client.connect();
+    const handles = await Promise.all(
+      Array.from({ length: 6 }, () => client.open(b('/home/source'), 'read')),
+    );
+    for (const length of await Promise.all(
+      handles.slice(0, 5).map(async (handle) => {
+        let bytes = 0;
+        for await (const chunk of pread(client, handle)) bytes += chunk.length;
+        return bytes;
+      }),
+    ))
+      expect(length).toBe(content.length);
+    server.holdReplies = true;
+    let peak = 0;
+    const last = pread(client, handles[5]!, {
+      onInFlight: (bytes) => {
+        peak = Math.max(peak, bytes);
+      },
+    });
+    const first = last.next();
+    await sftpTurn();
+    expect(peak).toBe(remoteLimits.readBytesPerStream);
+    server.releaseReplies();
+    expect((await first).value?.length).toBeGreaterThan(0);
+    await last.return(undefined);
+  });
+
+  it('keeps the channel when a request waiting for a handle slot expires with nothing on the wire', async () => {
+    const { client } = sftpFixture(
+      {
+        limits: {
+          packetLength: 262144n,
+          readLength: 261120n,
+          writeLength: 261120n,
+          openHandles: 1n,
+        },
+      },
+      { metadataTimeoutMs: 50 },
+    );
+    await client.connect();
+    const held = await client.opendir(b('/home'));
+    vi.useFakeTimers();
+    const waiting = client.opendir(b('/home')).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(client.stats).toMatchObject({ inFlight: 0, queued: 1 });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(await waiting).toMatchObject({ code: 'VIEWER_REMOTE_TIMEOUT' });
+    expect(client.connected).toBe(true);
+    vi.useRealTimers();
+    await client.close(held);
+  });
+
+  it('keeps a metadata request alive while the replies ahead of it keep arriving', async () => {
+    const { client, server } = sftpFixture({}, { metadataTimeoutMs: 1000 });
+    server.file('/home/source', Buffer.alloc(2 * remoteLimits.readBytesPerStream, 7));
+    await client.connect();
+    const handle = await client.open(b('/home/source'), 'read');
+    vi.useFakeTimers();
+    server.holdReplies = true;
+    const stream = (async () => {
+      for await (const chunk of pread(client, handle)) expect(chunk.length).toBeGreaterThan(0);
+    })();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(client.stats.inFlight).toBe(remoteLimits.requestsPerChannel);
+    let answered = false;
+    const stat = client.stat(b('/home/source')).then((attrs) => {
+      answered = true;
+      return attrs;
+    });
+    // A serial server on a slow link: one answer every 100 ms, in order.
+    for (let elapsed = 0; !answered && elapsed < 10_000; elapsed += 100) {
+      server.releaseReply(0);
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    expect(answered).toBe(true);
+    expect(client.connected).toBe(true);
+    expect((await stat).size).toBe(BigInt(2 * remoteLimits.readBytesPerStream));
+    server.releaseReplies();
+    await vi.advanceTimersByTimeAsync(0);
+    await stream;
+  });
+
+  it.each([
+    [0, 1000],
+    [2, 2000],
+  ])(
+    'fails the channel when a metadata request with %i answered ahead of it hangs for its deadline',
+    async (answeredAhead, deadline) => {
+      const { client, server } = sftpFixture({}, { metadataTimeoutMs: 1000 });
+      server.file('/home/source', Buffer.alloc(1024, 7));
+      await client.connect();
+      const handle = await client.open(b('/home/source'), 'read');
+      vi.useFakeTimers();
+      server.holdReplies = true;
+      const stream = pread(client, handle, { chunkBytes: 1, concurrency: 2 })
+        .next()
+        .catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(0);
+      const stat = client.stat(b('/home/source')).catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(500);
+      // The reads written before the stat answer; then the server hangs.
+      server.releaseReplies(false, answeredAhead);
+      await vi.advanceTimersByTimeAsync(deadline - 501);
+      expect(client.connected).toBe(true);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(client.connected).toBe(false);
+      expect(await stat).toMatchObject({ code: 'VIEWER_REMOTE_TIMEOUT' });
+      await stream;
+    },
+  );
+
+  it('fails the channel when credit stays held by paused streams and nothing answers', async () => {
+    const { client, server } = sftpFixture({}, { metadataTimeoutMs: 200 });
+    server.file('/home/a', Buffer.alloc(remoteLimits.readBytesPerStream, 1));
+    await client.connect();
+    const a = await client.open(b('/home/a'), 'read');
+    const c = await client.open(b('/home/a'), 'read');
+    vi.useFakeTimers();
+    server.holdReplies = true;
+    const streamA = pread(client, a, { stallTimeoutMs: 200 });
+    const firstA = streamA.next();
+    await vi.advanceTimersByTimeAsync(0);
+    server.releaseReply(0);
+    // A's consumer holds its first block; 63 reads stay on the wire with A's clock paused.
+    await firstA;
+    const streamC = pread(client, c, { stallTimeoutMs: 200, concurrency: 2, chunkBytes: 1024 });
+    const firstC = streamC.next();
+    await vi.advanceTimersByTimeAsync(0);
+    server.releaseReply(remoteLimits.requestsPerChannel - 1);
+    await firstC;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(client.stats.inFlight).toBe(remoteLimits.requestsPerChannel);
+    const stat = client.stat(b('/home/a')).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(199);
+    expect(client.connected).toBe(true);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await stat).toMatchObject({ code: 'VIEWER_REMOTE_TIMEOUT' });
+    expect(client.connected).toBe(false);
+    await streamA.return(undefined).catch(() => undefined);
+    await streamC.return(undefined).catch(() => undefined);
+  });
+
+  it('keeps stream flows out of reach of callers outside a stream lifetime', async () => {
+    const { client, server } = sftpFixture({ extensions: false });
+    await client.connect();
+    server.holdReplies = true;
+    const first = Array.from(
+      { length: remoteLimits.requestsPerChannel + sftpBounds.queueRequests },
+      () => client.stat(b('/home'), { timeoutMs: null }),
+    );
+    // A hand-made activity hook is just an unknown option: the request stays metadata.
+    const forged = { timeoutMs: null, activity: { sent: () => {}, replied: () => {} } } as never;
+    await expect(client.stat(b('/home'), forged)).rejects.toMatchObject({
+      code: 'VIEWER_REMOTE_FAILURE',
+      message: expect.stringContaining('queue is full'),
+    });
+    // A lifetime's own options name a stream, which one window of requests bounds.
+    const lifetime = new SFTPStreamLifetime(client, {});
+    const window = Array.from({ length: remoteLimits.requestsPerChannel }, () =>
+      client.stat(b('/home'), lifetime.request).catch((error: unknown) => error),
+    );
+    await expect(client.stat(b('/home'), lifetime.request)).rejects.toMatchObject({
+      code: 'VIEWER_REMOTE_PROTOCOL',
+    });
+    lifetime.finish();
+    expect(await Promise.all(window)).toEqual(
+      Array(remoteLimits.requestsPerChannel).fill(expect.objectContaining({ code: 'ABORT_ERR' })),
+    );
+    await sftpTurn();
+    server.releaseReplies();
+    await Promise.all(first);
+    expect(client.connected).toBe(true);
+  });
+
+  it('does not treat sending a block as progress', async () => {
+    const { client, server } = sftpFixture();
+    server.file('/home/source', b('abc'));
+    await client.connect();
+    const handle = await client.open(b('/home/source'), 'read');
+    vi.useFakeTimers();
+    server.holdReplies = true;
+    // The stall closes the channel, which fails the unanswered blockers too.
+    const blockers = Array.from({ length: remoteLimits.requestsPerChannel - 1 }, () =>
+      client.stat(b('/home'), { timeoutMs: null }).catch((error: unknown) => error),
+    );
+    const result = pread(client, handle, {
+      chunkBytes: 1,
+      concurrency: 3,
+      length: 3n,
+      stallTimeoutMs: 10,
+    })
+      .next()
+      .catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(client.stats.queued).toBe(2);
+    // Answers to other requests let the stream's later blocks out, but its first stays unanswered.
+    for (let index = 0; index < 2; index++) {
+      await vi.advanceTimersByTimeAsync(4);
+      server.releaseReply(0);
+    }
+    await vi.advanceTimersByTimeAsync(1);
+    expect(client.stats.queued).toBe(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(client.connected).toBe(false);
+    expect(await result).toMatchObject({ code: 'VIEWER_REMOTE_TIMEOUT' });
+    await Promise.all(blockers);
+  });
+
+  it('bounds error text after stripping, so hidden characters do not shorten it', () => {
+    const error = sftpStatusError(4, b('​'.repeat(100) + 'x'.repeat(2500)));
+    expect(error.message).toBe('x'.repeat(2000));
   });
 });

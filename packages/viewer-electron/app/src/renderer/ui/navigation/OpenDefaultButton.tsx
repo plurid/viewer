@@ -41,8 +41,10 @@ export function OpenDefaultButton({
       live = false;
     };
   }, [path]);
-  const name = application?.path === path ? application.name : undefined;
-  const label = name ? `Open in ${name}` : 'Open';
+  // Shown once the app is known, so the button never changes its label and width under the
+  // pointer, from Open to Open in Preview.
+  if (application?.path !== path) return null;
+  const label = application.name ? `Open in ${application.name}` : 'Open';
   return (
     <button
       className="open-default-button"

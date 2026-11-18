@@ -23,6 +23,7 @@ import { LayoutSheet } from '../src/renderer/layout/LayoutSheet';
 import { LayoutPictures } from '../src/renderer/layout/pictures';
 import type { LayoutPage } from '../src/domain/layout/plan';
 import { fitHelvetica } from '../src/domain/layout/helvetica';
+import { choiceLabel } from './support/choice-button';
 
 // the nesting helper's panel is tested on its own; here it only has to be the one mounted
 vi.mock('../src/renderer/layout/nesting/NestingPanel', () => ({
@@ -276,7 +277,7 @@ describe('the Layout plane', () => {
     fireEvent.click(other);
     await waitFor(() => expect(other.getAttribute('aria-pressed')).toBe('true'));
     expect(candidates[0]!.getAttribute('aria-pressed')).toBe('false');
-    const style = screen.getByRole('button', { name: 'Collage style' });
+    const style = screen.getByRole('button', { name: choiceLabel('Collage style') });
     expect(other.textContent).toContain(style.textContent!);
   });
 
@@ -303,7 +304,7 @@ describe('the Layout plane', () => {
   it('changes the page and shows the change at once', async () => {
     open(Object.keys(photos));
     await ready();
-    fireEvent.click(screen.getByRole('button', { name: 'Page size' }));
+    fireEvent.click(screen.getByRole('button', { name: choiceLabel('Page size') }));
     const search = await waitFor(() => screen.getByLabelText('Search Page size'));
     fireEvent.change(search, { target: { value: 'A4' } });
     fireEvent.keyDown(search, { key: 'Enter' });

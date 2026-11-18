@@ -164,7 +164,7 @@ export interface WorkspaceController {
     options?: { duration?: number; onSettle?: () => void; onInterrupt?: () => void },
   ): boolean;
   removeBookmark(name: string): void;
-  /** Opens a folder plane's subfolders, `depth` levels deep, as linked planes: one undo step. */
+  /** Opens a files plane's subfolders, `depth` levels deep, as linked planes: one undo step. */
   explode(hostID: string, depth: number): Promise<number>;
   /** Closes the planes Explode folder opened from a plane. */
   collapse(hostID: string): void;

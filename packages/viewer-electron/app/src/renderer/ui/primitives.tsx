@@ -7,12 +7,14 @@ import {
   useState,
   type ButtonHTMLAttributes,
   type MouseEvent,
+  type PointerEvent,
   type ReactNode,
   type KeyboardEventHandler,
 } from 'react';
 import type { HTMLAttributes } from 'react';
 import { Icon, type IconName } from './Icon';
 import { PathLabel, usePathCopy } from './PathLabel';
+import { FileName } from './FileName';
 import type { PathLabelLayout } from './PathLabel';
 import { errorMessage } from '../../domain/errors';
 import { diagnosticFailure } from '../../domain/diagnostics/failure';
@@ -161,6 +163,36 @@ export function Loading({ label = 'Loading…' }: { label?: string }) {
     </div>
   );
 }
+/**
+ * A dialog's title, its quoted file name losing its middle as a file name does, so the title
+ * keeps one line and the close button stays inside the dialog.
+ */
+function DialogTitle({ title }: { title: string }) {
+  const quoted = /^(.*?)“([^”]+)”(.*)$/s.exec(title);
+  if (!quoted) return <strong title={title}>{title}</strong>;
+  const [, before, name, after] = quoted;
+  return (
+    <strong className="dialog-title-quoted" title={title}>
+      {before && <span className="dialog-title-text">{before}</span>}
+      <span className="dialog-title-text">“</span>
+      <FileName name={name!} className="dialog-title-name" />
+      <span className="dialog-title-text">”{after}</span>
+    </strong>
+  );
+}
+/** The control a dialog opens on when none asks for it: its default action, else the one that
+ * keeps things as they are, never the close button in its title. */
+function initialFocus(dialog: HTMLDialogElement): HTMLElement | null {
+  const asked = dialog.querySelector<HTMLElement>('[data-autofocus]');
+  if (asked) return asked;
+  const actions = [...dialog.querySelectorAll<HTMLButtonElement>('footer button:not(:disabled)')];
+  return (
+    actions.find((button) => button.classList.contains('primary')) ??
+    actions.find((button) => !button.classList.contains('danger')) ??
+    actions[0] ??
+    null
+  );
+}
 export function Dialog({
   title,
   children,
@@ -168,6 +200,7 @@ export function Dialog({
   wide = false,
   className = '',
   onKeyDown,
+  closeOnBackdrop = false,
 }: {
   title: string;
   children: ReactNode;
@@ -175,13 +208,19 @@ export function Dialog({
   wide?: boolean;
   className?: string;
   onKeyDown?: KeyboardEventHandler<HTMLDialogElement>;
+  /** A press on the dimmed space around closes it: for read-only information, never a form a
+   * stray click would lose, as macOS sheets never close that way. */
+  closeOnBackdrop?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // where the press began: a drag that selects text and ends outside the dialog is not a press
+  // outside it
+  const pressedOutside = useRef(false);
   useEffect(() => {
     const dialog = ref.current;
     const opener = document.activeElement;
     dialog?.showModal();
-    dialog?.querySelector<HTMLElement>('[data-autofocus]')?.focus({ preventScroll: true });
+    if (dialog) (initialFocus(dialog) ?? dialog).focus({ preventScroll: true });
     return () => {
       dialog?.close();
       queueMicrotask(() => {
@@ -197,37 +236,46 @@ export function Dialog({
       });
     };
   }, []);
+  const outside = (event: MouseEvent<HTMLDialogElement> | PointerEvent<HTMLDialogElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return (
+      event.target === event.currentTarget &&
+      (event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom)
+    );
+  };
   return (
     <dialog
       ref={ref}
+      tabIndex={-1}
       className={`dialog ${wide ? 'wide-dialog' : ''} ${className}`}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
       }}
+      onPointerDown={(event) => {
+        pressedOutside.current = outside(event);
+      }}
       onClick={(event) => {
-        const rect = event.currentTarget.getBoundingClientRect();
-        if (
-          event.target === event.currentTarget &&
-          (event.clientX < rect.left ||
-            event.clientX > rect.right ||
-            event.clientY < rect.top ||
-            event.clientY > rect.bottom)
-        )
-          onClose();
+        if (closeOnBackdrop && pressedOutside.current && outside(event)) onClose();
+        pressedOutside.current = false;
       }}
       aria-label={title}
       data-plurid-overlay="dialog"
       onKeyDown={onKeyDown}
     >
       <header>
-        <strong>{title}</strong>
+        <DialogTitle title={title} />
         <IconButton icon="close" label="Close" onClick={onClose} />
       </header>
       {children}
     </dialog>
   );
 }
+/** What a name field selects as it opens. */
+export type NameSelection = 'all' | 'stem' | 'end';
 export function NameDialog({
   title,
   initial = '',
@@ -237,6 +285,7 @@ export function NameDialog({
   label = 'Name',
   maxLength = 255,
   secondaryAction,
+  selection = 'all',
 }: {
   title: string;
   initial?: string;
@@ -246,6 +295,9 @@ export function NameDialog({
   label?: string;
   maxLength?: number;
   secondaryAction?: (busy: boolean) => ReactNode;
+  /** What the field selects as it opens: all of it, a file name's stem as Finder's Rename does,
+   * or nothing with the caret at the end, as after a typed prefix such as `smb://`. */
+  selection?: NameSelection;
 }) {
   const [name, setName] = useState(initial);
   const [error, setError] = useState('');
@@ -278,8 +330,10 @@ export function NameDialog({
             value={name}
             onChange={(event) => setName(event.target.value)}
             onFocus={(event) => {
-              const end = label === 'Name' ? initial.lastIndexOf('.') : -1;
-              event.target.setSelectionRange(0, end > 0 ? end : initial.length);
+              const stem = selection === 'stem' ? initial.lastIndexOf('.') : -1;
+              if (selection === 'end')
+                event.target.setSelectionRange(initial.length, initial.length);
+              else event.target.setSelectionRange(0, stem > 0 ? stem : initial.length);
             }}
             required
             maxLength={maxLength}

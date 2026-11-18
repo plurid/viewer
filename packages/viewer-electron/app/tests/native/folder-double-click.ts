@@ -129,7 +129,7 @@ try {
     deviceScaleFactor: 1,
     mobile: false,
   });
-  await until(() => main.evaluate(exists('[data-viewer-plane="folder"]')), Boolean, 'Folder plane');
+  await until(() => main.evaluate(exists('[data-viewer-plane="folder"]')), Boolean, 'Files plane');
   await actions.click(header + ' [aria-label="Frame plane"]');
   const settle = () => {
     let last = '';

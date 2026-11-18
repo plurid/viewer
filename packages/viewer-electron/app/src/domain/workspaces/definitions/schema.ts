@@ -206,6 +206,13 @@ export interface ProjectManagerState {
 }
 export interface DefinitionCatalog {
   found?: { state: FoundWorkspaceState; count: number; hidden: number };
+  /** Roots whose workspace offer the person dismissed, from a private file: never config. */
+  dismissedOffers?: string[];
+  /**
+   * In the reply to Show Hidden Again, its Undo or Not a Workspace's Undo: how many roots it
+   * showed or hid again. Zero says nothing changed.
+   */
+  changed?: number;
   revision: number;
   file: { path: string; state: DefinitionFileState };
   projectManager: ProjectManagerState;
@@ -251,4 +258,12 @@ export type WorkspaceDefinitionFileRequest =
   /** Not a Workspace: hides a found definition's root. */
   | { kind: 'not-a-workspace'; key: string }
   /** Shows a hidden found root again, or every one without a root. */
-  | { kind: 'show-found'; root?: string };
+  | { kind: 'show-found'; root?: string }
+  /** Undo of Show Hidden Again: hides again the roots it showed. */
+  | { kind: 'hide-found-again' }
+  /** Dismisses the workspace offer for these roots. */
+  | { kind: 'dismiss-offers'; roots: string[] }
+  /** Show Hidden Insights: every workspace offer shows again. */
+  | { kind: 'show-offers' }
+  /** Undo of Clear recent folders: the offer dismissals it cleared return. */
+  | { kind: 'restore-offers' };

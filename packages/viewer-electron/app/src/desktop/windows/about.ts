@@ -38,7 +38,7 @@ export function installAboutPanel(release: InstalledRelease, line?: string): voi
   });
 }
 
-/** The bundled licenses: a folder plane in the direct build, Finder in the sandboxed Store build. */
+/** The bundled licenses: a files plane in the direct build, Finder in the sandboxed Store build. */
 export async function openAcknowledgements(
   open?: (folder: string) => Promise<void>,
 ): Promise<void> {

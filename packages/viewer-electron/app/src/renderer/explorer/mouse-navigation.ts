@@ -6,7 +6,7 @@ export function mouseHistoryDirection(button: number): -1 | 1 | 0 {
   return button === 3 ? -1 : button === 4 ? 1 : 0;
 }
 /**
- * Where a side button takes a folder plane: back and forward through its history, as in
+ * Where a side button takes a files plane: back and forward through its history, as in
  * Finder. Back with no earlier folder in the history goes up to the parent folder.
  */
 export function mouseHistoryTarget(

@@ -12,6 +12,7 @@ import { plural } from '../../../domain/plural';
 import { useOfficeDocument } from '../useOfficeDocument';
 import { EPUBBookmarks } from '../EPUBBookmarks';
 import { readEPUBBookmarks } from '../../../domain/previews/documents/epub-bookmarks';
+import type { CSSProperties } from 'react';
 export { chapterNodes } from '../epub-content';
 const emptyChapters: EPUBChapter[] = [];
 /** The only pictures a book may carry inline: base64 PNG, JPEG, GIF or WebP, as the desktop
@@ -215,7 +216,13 @@ export default function EPUBPreview(context: PreviewContext) {
           disabled={!position}
           onClick={() => setChapter(position - 1)}
         />
-        <span>
+        {/* "9 / 24" and "10 / 24" hold one width, so Next stays under the pointer */}
+        <span
+          className="readout"
+          style={
+            { '--readout-width': `${String(chapters.length).length * 2 + 3}ch` } as CSSProperties
+          }
+        >
           {position + 1} / {chapters.length}
         </span>
         <IconButton

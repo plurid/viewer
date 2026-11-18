@@ -1,4 +1,5 @@
 import { receiveSessionKeys } from '../../keys/session';
+import { useConfirmation } from './ConfirmAction';
 import { ModelSettings } from '../models/ModelSettings';
 import { FilePermissions } from '../permissions/FilePermissions';
 import { PrivacyInformation } from './PrivacyInformation';
@@ -70,6 +71,10 @@ export function SettingsWindow() {
     setFocused({ path, at: Date.now() });
   };
   const [error, setError] = useState('');
+  // the one setting a write was for, so a refused value's reason shows beside its row
+  const [errorPath, setErrorPath] = useState<string>();
+  const writingPath = useRef<string | undefined>(undefined);
+  const confirmation = useConfirmation();
   const latest = useRef<SettingsSnapshot | undefined>(undefined);
   const writes = useRef<SettingsEditQueue | null>(null);
   const accept = (value: SettingsSnapshot) => {
@@ -83,7 +88,10 @@ export function SettingsWindow() {
       write: (patches, revision) => window.viewer.settingsPatch(patches, revision),
       refresh: () => window.viewer.settingsGet(),
       accept,
-      error: setError,
+      error: (message) => {
+        setError(message);
+        setErrorPath(writingPath.current);
+      },
     });
   useEffect(() => {
     let live = true;
@@ -190,11 +198,13 @@ export function SettingsWindow() {
   useEffect(() => {
     document.documentElement.dataset.scrollbars = scrollbars;
   }, [scrollbars]);
-  const enqueue = (build: SettingsChange) => {
+  const enqueue = (build: SettingsChange, path?: string) => {
     setError('');
+    setErrorPath(undefined);
+    writingPath.current = path;
     writes.current!.enqueue(build);
   };
-  const patch = (path: string, value: unknown) => enqueue(() => [{ path, value }]);
+  const patch = (path: string, value: unknown) => enqueue(() => [{ path, value }], path);
   const patches = (values: SettingsPatch[]) => enqueue(() => values);
   const selected = (value: string) => {
     setCategory(value);
@@ -208,7 +218,15 @@ export function SettingsWindow() {
       </div>
     );
   const settings = snapshot.settings;
-  const editor: SettingsEditor = { snapshot, patch, patches, save: enqueue, error: setError };
+  const failure = error && errorPath ? { path: errorPath, message: error } : undefined;
+  const editor: SettingsEditor = {
+    snapshot,
+    patch,
+    patches,
+    save: (change) => enqueue(change),
+    error: setError,
+    failure,
+  };
   const shownCategory = category === 'License' && !license ? 'Browsing' : category;
   const definitions = settingCatalog.filter((item) =>
     query
@@ -218,6 +236,8 @@ export function SettingsWindow() {
       : item.category === shownCategory,
   );
   const discover = settingsDiscovery(settings, query);
+  // a failure that a catalog row on this page shows beside itself needs no banner
+  const rowShowsError = !!failure && definitions.some((item) => item.path === failure.path);
   const page = !query && shownCategory;
   return (
     <PathHome.Provider value={snapshot.home ?? ''}>
@@ -249,7 +269,7 @@ export function SettingsWindow() {
           <header>
             <h1>{query ? 'Search results' : shownCategory}</h1>
           </header>
-          {error && (
+          {error && !rowShowsError && (
             <p className="settings-error" role="alert">
               {error}
             </p>
@@ -304,26 +324,43 @@ export function SettingsWindow() {
           {!query &&
             ['Browsing', 'Previews', 'Editor', 'Terminals', 'Space'].includes(category) && (
               <button
-                className="settings-reset"
-                onClick={() => {
-                  const defaults = defaultSettings(settings.search.roots[0] || '/');
-                  if (category === 'Space') patch('ui.space', normalizePreferences().space);
-                  else if (category === 'Previews') patch('settings.previews', defaults.previews);
-                  else if (category === 'Editor') patch('settings.editor', defaults.editor);
-                  // the font only: profiles and programs are the person's own
-                  else if (category === 'Terminals')
-                    patch('settings.terminalFont', defaults.terminalFont);
-                  else
-                    patches([
-                      { path: 'settings.browsing', value: defaults.browsing },
-                      { path: 'settings.appearance', value: defaults.appearance },
-                      { path: 'ui.list', value: normalizePreferences().list },
-                    ]);
-                }}
+                className="settings-reset danger"
+                onClick={() =>
+                  confirmation.ask({
+                    title:
+                      category === 'Terminals'
+                        ? 'Reset the terminal font?'
+                        : `Reset the ${category} settings?`,
+                    detail:
+                      category === 'Browsing'
+                        ? 'Every Browsing setting, the appearance and the list columns go back to their defaults.'
+                        : category === 'Terminals'
+                          ? 'The terminal font and its size go back to their defaults. Profiles and programs stay.'
+                          : `Every ${category} setting goes back to its default.`,
+                    action: 'Reset',
+                    run: () => {
+                      const defaults = defaultSettings(settings.search.roots[0] || '/');
+                      if (category === 'Space') patch('ui.space', normalizePreferences().space);
+                      else if (category === 'Previews')
+                        patch('settings.previews', defaults.previews);
+                      else if (category === 'Editor') patch('settings.editor', defaults.editor);
+                      // the font only: profiles and programs are the person's own
+                      else if (category === 'Terminals')
+                        patch('settings.terminalFont', defaults.terminalFont);
+                      else
+                        patches([
+                          { path: 'settings.browsing', value: defaults.browsing },
+                          { path: 'settings.appearance', value: defaults.appearance },
+                          { path: 'ui.list', value: normalizePreferences().list },
+                        ]);
+                    },
+                  })
+                }
               >
                 {category === 'Terminals' ? 'Reset Terminal Font' : `Reset ${category} Defaults`}
               </button>
             )}
+          {confirmation.dialog}
         </main>
       </div>
     </PathHome.Provider>

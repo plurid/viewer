@@ -114,6 +114,10 @@ export function undoClearRecentFolders(): void {
     recents: [...new Set([...getState().saved.recents, ...recovery.recents])].slice(0, 50),
     visits: boundFolderVisits(restored, Date.now(), Object.keys(current)),
   });
+  // the workspace offers Clear stopped hiding hide again; every window hears the catalog's change
+  void Promise.resolve()
+    .then(() => window.viewer.workspaceDefinitionFile({ kind: 'restore-offers' }))
+    .catch(report);
   dismissFolderRecovery();
 }
 

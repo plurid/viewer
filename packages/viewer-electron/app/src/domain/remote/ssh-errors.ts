@@ -1,3 +1,5 @@
+import { remoteLimits } from './limits';
+
 export type SSHFailureState = 'needs-sign-in' | 'host-key-changed' | 'unreachable';
 
 /** The key a server offered when its identity changed, as OpenSSH printed it. */
@@ -11,7 +13,10 @@ export interface SSHFailure {
   hostKey?: SSHHostKey;
 }
 
-const stderrBytes = 64 * 1024;
+export interface SSHFailureContext {
+  /** The record names jump hosts: ControlPersist sends the jump's own messages to /dev/null. */
+  viaJump?: boolean;
+}
 
 // OpenSSH's own wording (sshconnect.c warn_changed_key and check_host_key): a revoked key, a
 // changed key, and a changed key reached under another name or address.
@@ -31,12 +36,21 @@ const fingerprint =
 const serverText = /Received disconnect from|open failed:/;
 
 /** Only a classification and a validated fingerprint cross the boundary, never stderr itself. */
-export function classifySSHFailure(code: number | null, stderr: string): SSHFailure | undefined {
+export function classifySSHFailure(
+  code: number | null,
+  stderr: string,
+  context: SSHFailureContext = {},
+): SSHFailure | undefined {
   if (code === 0) {
     return undefined;
   }
-  if (code !== 255 || stderr.length > stderrBytes) {
+  if (code !== 255 || stderr.length > remoteLimits.sshStderrCharacters) {
     return { state: 'unreachable' };
+  }
+  // A jump host that refused, failed to sign in or is unknown leaves nothing to read. Retrying
+  // without the person cannot fix a refusal, so it waits for a click.
+  if (context.viaJump && !stderr.trim()) {
+    return { state: 'needs-sign-in' };
   }
   if (changedKey.test(stderr)) {
     const offered = serverText.test(stderr) ? null : fingerprint.exec(stderr);
@@ -50,8 +64,12 @@ export function classifySSHFailure(code: number | null, stderr: string): SSHFail
   return { state: 'unreachable' };
 }
 
-export function classifySSHExit(code: number | null, stderr: string): SSHFailureState | undefined {
-  return classifySSHFailure(code, stderr)?.state;
+export function classifySSHExit(
+  code: number | null,
+  stderr: string,
+  context: SSHFailureContext = {},
+): SSHFailureState | undefined {
+  return classifySSHFailure(code, stderr, context)?.state;
 }
 
 const failureMessages: Record<SSHFailureState, string> = {

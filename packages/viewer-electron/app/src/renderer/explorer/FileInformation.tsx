@@ -323,6 +323,7 @@ export function FileInformation({ entries, onClose }: { entries: FileEntry[]; on
           : `Info for ${plural(entries.length, 'Item')}`
       }
       onClose={onClose}
+      closeOnBackdrop
     >
       <div className="file-information">
         {entries.map((entry) => (
@@ -354,7 +355,12 @@ export function FileInformation({ entries, onClose }: { entries: FileEntry[]; on
                   </dd>
                 </>
               )}
-              {entry.error && <dd className="error">{entry.error}</dd>}
+              {entry.error && (
+                // the whole row: a message never squeezes into the label column
+                <dd className="error" style={{ gridColumn: '1 / -1' }}>
+                  {entry.error}
+                </dd>
+              )}
             </dl>
             {entry.directory && <NetworkSharingSection path={entry.path} />}
             {getState().bootstrap.platform === 'darwin' &&

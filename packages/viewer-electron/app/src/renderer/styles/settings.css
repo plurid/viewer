@@ -47,13 +47,10 @@
   max-width: 100%;
   font-size: var(--text-compact);
 }
+/* the Undo bar after deleting a workspace sits in the window's flow, as notices do: recovery never
+   covers the list or the status line */
 .workspace-recovery {
-  position: fixed;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  max-width: calc(100vw - 40px);
+  min-width: 0;
 }
 .workspace-recovery span {
   white-space: nowrap;
@@ -258,6 +255,27 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+/* a page's own error stays in view while the page scrolls, under its title */
+.settings-page > .settings-error {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: var(--gap-small) 0;
+  background: var(--surface);
+}
+/* a refused value's reason, under the row of the setting it is for */
+.settings-row-error {
+  margin: calc(-1 * var(--gap-tight)) 0 var(--gap-small);
+  font-size: var(--text-compact);
+}
+/* Headings inside a page's sections: smaller than the section's own h2, as macOS groups are */
+.settings-page h3 {
+  margin: var(--gap-panel) 0 var(--gap-small);
+  font-size: var(--text-compact);
+  font-weight: 600;
+  color: var(--muted);
+}
 .settings-location {
   display: flex;
   gap: 14px;
@@ -326,8 +344,15 @@
   font-size: var(--text-compact);
   color: var(--muted);
 }
+/* one line that keeps its height whatever the state says; the whole state is its tooltip */
 .model-status {
   max-width: 240px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.model-load-status {
+  min-height: 1.5em;
 }
 .model-status[data-connected='true'],
 .model-default {
@@ -380,18 +405,26 @@
 .model-data-permission[open] > :not(summary) {
   margin-top: 12px;
 }
+/* A provider's short values (name, key, effort) are rows with the field at the shared 180 px edge;
+   its long ones (model ID, SAM model, the address) take the whole row under their labels. */
 .settings-provider .model-editor-body > label {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
-  gap: 18px;
-  align-items: center;
-  margin: 14px 0;
+  gap: var(--gap-small);
+  margin: var(--gap-content) 0;
   color: var(--muted);
 }
+.settings-provider .model-editor-body > label.model-field-row {
+  grid-template-columns: minmax(0, 1fr) var(--row-control, 180px);
+  gap: var(--gap-dialog);
+  align-items: center;
+}
+.settings-provider .model-editor-body > label.model-field-wide {
+  grid-template-columns: minmax(0, 1fr);
+}
 @container (max-width: 540px) {
-  .settings-provider .model-editor-body > label {
+  .settings-provider .model-editor-body > label.model-field-row {
     grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
+    gap: var(--gap-small);
   }
 }
 .model-data-permission p,
@@ -632,14 +665,16 @@
   gap: 8px;
 }
 /* press to set a key */
+/* The button keeps the width of "Press keys…", so it never widens as it listens, and a taken
+   key's message shows under it without growing its row. */
 .key-capture {
+  position: relative;
   display: inline-flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 3px;
 }
 .key-capture button {
-  min-width: 96px;
+  min-width: 120px;
   height: 28px;
   font:
     600 var(--text-body)/1 ui-monospace,
@@ -647,7 +682,15 @@
     monospace;
 }
 .key-capture small {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  z-index: 1;
+  padding: 1px var(--gap-small);
+  border-radius: var(--radius-control);
+  background: var(--surface);
   color: var(--danger);
+  white-space: nowrap;
 }
 .shortcut-control {
   display: inline-flex;

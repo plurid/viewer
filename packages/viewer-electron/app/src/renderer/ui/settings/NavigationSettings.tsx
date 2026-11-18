@@ -50,7 +50,7 @@ export function NavigationSettings({ editor }: { editor: SettingsEditor }) {
   return (
     <>
       {/* Quick access › Global shortcut is the catalog's row just above */}
-      <label className="settings-row">
+      <div className="settings-row">
         <span>Show or hide Viewer</span>
         <KeyCapture
           label="Global Viewer shortcut"
@@ -60,7 +60,7 @@ export function NavigationSettings({ editor }: { editor: SettingsEditor }) {
             if (value) patch('settings.hotkey.shortcut', value);
           }}
         />
-      </label>
+      </div>
       {hotkey?.problem && <p className="error">{hotkey.problem}</p>}
       <h2>Shell command</h2>
       <p className="settings-note">

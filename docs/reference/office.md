@@ -52,14 +52,14 @@ directory; the engine does not receive the source folder path. Requests are limi
 loopback origin. The same pinned assets are packaged for macOS, Windows and Linux; executable
 Windows/Linux qualification is still pending.
 
-| Limit           | Value                                                          |
-| --------------- | -------------------------------------------------------------- |
-| Layouts at once | 1                                                              |
-| Input           | 64 MB                                                          |
-| Output PDF      | 32 MB                                                          |
-| Engine time     | 45 seconds per layout                                          |
-| Layout cache    | 128 MiB, shared; open views pin their entries                  |
-| Spare engine    | 1, started for the next document; closes after 1 minute unused |
+| Limit           | Value                                                                      |
+| --------------- | -------------------------------------------------------------------------- |
+| Layouts at once | 1                                                                          |
+| Input           | 64 MB                                                                      |
+| Output PDF      | 32 MB                                                                      |
+| Engine time     | 45 seconds per layout                                                      |
+| Layout cache    | 128 MiB, shared; open views pin their entries                              |
+| Spare engine    | 1, started for the next document; closes after 1 minute unused, or at Quit |
 
 Closing or canceling a view releases its request, and reopening can reuse cached output. Protected
 files and unsupported content may need another application.
@@ -71,10 +71,10 @@ images. It omits full pagination, floating placement, headers, footnotes and som
 features. Unsupported images have placeholders.
 
 XLSX Sheet shows original row/column addresses and saved values. Select a cell to inspect its value,
-format and saved formula. **More → Stored Values** switches from supported number/date formats to
-raw values; **Formatted Values** switches back. Missing cached values are identified. The reader
-does not evaluate formulas or follow external data. Calc may recalculate supported formulas in Print
-Layout, so the two views can show different values.
+format and saved formula. **More → Show Stored Values** switches from supported number/date formats
+to raw values; **More → Show Formatted Values** switches back. Missing cached values are identified.
+The reader does not evaluate formulas or follow external data. Calc may recalculate supported
+formulas in Print Layout, so the two views can show different values.
 
 Focus the grid and use arrow keys to inspect cells; Tab leaves the grid instead of visiting every
 cell. Page Up/Down moves by the visible page and loads another bounded page when needed. Home/End
@@ -96,12 +96,11 @@ marks the selected range; the focused grid outlines its active cell. The detail 
 range beside **Copy** and the active cell's saved value. Escape collapses a multi-cell range to its
 active cell. With a single cell selected, Escape continues the normal preview-close behavior.
 
-Choose **Copy** or press Control/Command + C while the grid has focus. The clipboard receives
-tab-separated values using the current **Formatted Values** or **Stored Values** setting. Fields
-containing tabs, line breaks or quotes are quoted, with embedded quotes doubled. Blank cells and
-source row/column gaps remain empty fields. Merged values appear only in the upper-left cell of
-their range. Formulas are never evaluated or copied in place of values; formulas without cached
-values copy as empty cells.
+Choose **Copy** or press **⌘C** while the grid has focus. The clipboard receives tab-separated
+values as the sheet shows them, formatted or stored. Fields containing tabs, line breaks or quotes
+are quoted, with embedded quotes doubled. Blank cells and source row/column gaps remain empty
+fields. Merged values appear only in the upper-left cell of their range. Formulas are never
+evaluated or copied in place of values; formulas without cached values copy as empty cells.
 
 Selections use source coordinates. A display filter does not remove intervening source rows from the
 copied rectangle. Known merged cells expand the selection to their full range. A selection can span

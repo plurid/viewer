@@ -37,6 +37,22 @@ export function DialogHost() {
   );
 }
 
+/**
+ * The buttons in a Mac's order, whatever order they were asked in: the default at the far right,
+ * Cancel beside it, and any other choice, such as Don't Save, at the left.
+ */
+export function buttonOrder(
+  prompt: Pick<MessageDialogPrompt, 'buttons' | 'defaultId' | 'cancelId'>,
+): number[] {
+  const indexes = prompt.buttons.map((_, index) => index);
+  const others = indexes.filter((index) => index !== prompt.defaultId && index !== prompt.cancelId);
+  const cancel =
+    prompt.cancelId !== prompt.defaultId && indexes.includes(prompt.cancelId)
+      ? [prompt.cancelId]
+      : [];
+  const fallback = indexes.includes(prompt.defaultId) ? [prompt.defaultId] : [];
+  return [...others, ...cancel, ...fallback];
+}
 function MessagePrompt({ prompt }: { prompt: MessageDialogPrompt }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -66,21 +82,29 @@ function MessagePrompt({ prompt }: { prompt: MessageDialogPrompt }) {
         )}
       </div>
       <footer>
-        {prompt.buttons.map((label, index) => (
+        {buttonOrder(prompt).map((index, place, order) => (
           <button
             key={index}
             disabled={busy}
             data-autofocus={index === prompt.defaultId || undefined}
             className={
-              index === prompt.destructiveId
-                ? 'danger'
-                : index === prompt.defaultId && index !== prompt.cancelId
-                  ? 'primary'
-                  : undefined
+              [
+                index === prompt.destructiveId
+                  ? 'danger'
+                  : index === prompt.defaultId && index !== prompt.cancelId
+                    ? 'primary'
+                    : '',
+                // a third choice such as Don't Save stands apart at the far left
+                place === 0 && order.length > 2 && index !== prompt.cancelId
+                  ? 'dialog-leading-action'
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' ') || undefined
             }
             onClick={() => void answer(index)}
           >
-            {label}
+            {prompt.buttons[index]}
           </button>
         ))}
       </footer>

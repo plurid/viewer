@@ -6,7 +6,9 @@ import { activeWorkspace, useViewer } from '../state/store';
 import type { WorkspaceController } from '../workspace/context';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { Dialog } from '../ui/primitives';
-import { PathLabel } from '../ui/PathLabel';
+import { PathLabel, useHome } from '../ui/PathLabel';
+import { pathText } from '../../domain/files/path-label';
+import { baseName } from '../../domain/workspaces/planes';
 import { plural } from '../../domain/plural';
 import { receiptOutcome } from './ReceiptPlane';
 import './tasks.css';
@@ -21,6 +23,7 @@ export function TasksDialog({
 }) {
   const space = useViewer(activeWorkspace),
     folders = space.panes.filter((pane) => pane.type === 'folder');
+  const home = useHome();
   const [creating, setCreating] = useState(!!target),
     [name, setName] = useState(''),
     [folderID, setFolderID] = useState(target?.paneID ?? folders[0]?.id ?? ''),
@@ -54,7 +57,7 @@ export function TasksDialog({
     setError('');
     try {
       const pane = folders.find((pane) => pane.id === folderID);
-      if (!pane) throw new Error('Choose an open folder plane.');
+      if (!pane) throw new Error('Choose an open files plane.');
       const rootID = workspace.rootID(pane.id);
       if (!rootID) throw new Error('The folder is still opening. Try again.');
       await workspace.newTaskArea(
@@ -167,15 +170,21 @@ export function TasksDialog({
                 required
               />
             </label>
-            <label>
-              Checkout folder
+            {/* a div: a click on its words would open the menu. Each folder by its own name, its
+                path under it with home as ~ */}
+            <div className="task-checkout-field">
+              <span>Checkout folder</span>
               <ChoiceButton
                 label="Task checkout folder"
                 value={folderID}
-                choices={folders.map((pane) => ({ value: pane.id, label: pane.path }))}
+                choices={folders.map((pane) => ({
+                  value: pane.id,
+                  label: baseName(pane.path) || pane.path,
+                  detail: pathText(pane.path, home),
+                }))}
                 onChoose={setFolderID}
               />
-            </label>
+            </div>
             <div className="task-create-actions">
               <button type="button" disabled={busy} onClick={() => setCreating(false)}>
                 Cancel
@@ -192,11 +201,11 @@ export function TasksDialog({
               ? 'No matching task areas.'
               : folders.length
                 ? 'Create a task from an open folder, then link its notes, conversations, terminals and review tools.'
-                : 'Open a folder plane, then create a task from it.'}
+                : 'Open a files plane, then create a task from it.'}
           </p>
         )}
         {!history && !folders.length && areas.length > 0 && (
-          <p className="muted">Open a folder plane to create a task.</p>
+          <p className="muted">Open a files plane to create a task.</p>
         )}
         {history && !receipts && !error && (
           <p className="muted" role="status">

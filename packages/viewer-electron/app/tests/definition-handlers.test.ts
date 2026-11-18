@@ -62,7 +62,10 @@ function fixture() {
     setProjectManager: vi.fn<WorkspaceDefinitions['setProjectManager']>(async () => {}),
     edit: vi.fn(async () => catalog.file.path),
     hideFound: vi.fn(async (_key: string) => {}),
-    showFound: vi.fn(async (_root?: string) => {}),
+    showFound: vi.fn(async (_root?: string, _again?: boolean) => 1),
+    dismissOffers: vi.fn(async (_roots: readonly string[]) => {}),
+    clearOffers: vi.fn(async () => {}),
+    restoreOffers: vi.fn(async () => {}),
   };
   const windows = new Map(
     [1, 2].map((owner) => [owner, { isDestroyed: () => false, show: vi.fn(), focus: vi.fn() }]),
@@ -475,6 +478,49 @@ describe('Not a Workspace', () => {
     expect(valid({ kind: 'show-found', root: 'code/site' })).toBe(false);
     expect(valid({ kind: 'not-a-workspace' })).toBe(false);
     expect(valid({ kind: 'not-a-workspace', key: 'code/site', root: '/x' })).toBe(false);
+    expect(valid({ kind: 'hide-found-again' })).toBe(true);
+    expect(valid({ kind: 'show-offers' })).toBe(true);
+    expect(valid({ kind: 'dismiss-offers', roots: ['/home/sample/code/site'] })).toBe(true);
+    expect(valid({ kind: 'dismiss-offers', roots: [] })).toBe(false);
+    expect(valid({ kind: 'dismiss-offers', roots: ['code/site'] })).toBe(false);
+    // the private file keeps roots of 4,096 characters at most
+    expect(valid({ kind: 'dismiss-offers', roots: ['/' + 'a'.repeat(4095)] })).toBe(true);
+    expect(valid({ kind: 'dismiss-offers', roots: ['/' + 'a'.repeat(4096)] })).toBe(false);
+    expect(valid({ kind: 'restore-offers' })).toBe(true);
+    expect(
+      valid({ kind: 'dismiss-offers', roots: Array.from({ length: 201 }, (_, i) => '/r/' + i) }),
+    ).toBe(false);
+  });
+  it('takes the person’s offer clicks even while an agent command runs in the window', async () => {
+    const f = fixture();
+    // a card's ×, Show Hidden Insights and Clear's Undo: the person's own clicks
+    f.isAgent.mockReturnValue(true);
+    await f.handlers.workspaceDefinitionFile(
+      [{ kind: 'dismiss-offers', roots: ['/home/sample/code/site'] }],
+      1,
+    );
+    expect(f.definitions.dismissOffers).toHaveBeenCalledWith(['/home/sample/code/site']);
+    await f.handlers.workspaceDefinitionFile([{ kind: 'show-offers' }], 1);
+    expect(f.definitions.clearOffers).toHaveBeenCalledOnce();
+    await f.handlers.workspaceDefinitionFile([{ kind: 'restore-offers' }], 1);
+    expect(f.definitions.restoreOffers).toHaveBeenCalledOnce();
+    // hiding found workspaces stays the person's alone
+    await expect(
+      f.handlers.workspaceDefinitionFile([{ kind: 'hide-found-again' }], 1),
+    ).rejects.toThrow('only to the person');
+    expect(f.definitions.showFound).not.toHaveBeenCalled();
+  });
+  it('says how many roots Show Hidden Again, its Undo and Not a Workspace’s Undo changed', async () => {
+    const f = fixture();
+    f.definitions.showFound.mockResolvedValueOnce(3).mockResolvedValueOnce(0);
+    expect((await f.handlers.workspaceDefinitionFile([{ kind: 'show-found' }], 1)).changed).toBe(3);
+    expect(
+      (await f.handlers.workspaceDefinitionFile([{ kind: 'hide-found-again' }], 1)).changed,
+    ).toBe(0);
+    expect(f.definitions.showFound).toHaveBeenLastCalledWith(undefined, true);
+    expect((await f.handlers.workspaceDefinitionFile([{ kind: 'catalog' }], 1)).changed).toBe(
+      undefined,
+    );
   });
   it('hides and shows found roots for the person only', async () => {
     const f = fixture();

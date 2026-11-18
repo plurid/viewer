@@ -11,10 +11,12 @@
  * - `scroll-overflow`: a container that scrolls sideways although it is not meant to.
  * - `dialog-scroll`: a horizontal scroll bar inside a dialog.
  * - `menu-covers-trigger`: an open menu or popover over the control that opened it.
+ * - `menu-search`: an open menu of 8 or fewer choices with a search field; it moves by type-ahead.
  * - `home-path`, `em-dash`, `broken-value`, `plural`: visible text with a full home path, an em
  *   dash, `undefined`, `NaN` or `[object Object]`, or a count of one with a plural noun.
  * - `name-extension`: a file name cut at its end, so its extension is lost, and a file name field
  *   that opens a long name at its start.
+ * - `wording`: a retry button that is not Try Again, or a raw error code or state in visible text.
  * - `layout-shift` (markLayout and layoutMoves): toolbars, footers and list columns that move when
  *   the selection changes.
  *
@@ -60,7 +62,15 @@ export interface LayoutParts {
 
 /** Shared selectors for the checks. */
 export const checkSelectors = {
-  nameCells: ['.filename', '.preview-filename'],
+  // Newer builds mark every file name; older ones are read by class: List and Columns rows, the
+  // preview footer, Grid tiles and the Gallery strip.
+  nameCells: [
+    '[data-file-name]',
+    '.filename',
+    '.preview-filename',
+    '.file-tile .file-linked-label > span',
+    '.gallery-item > span',
+  ],
   nameFields: [
     'input[aria-label*="filename" i]',
     'input[aria-label*="file name" i]',
@@ -75,6 +85,8 @@ export const checkSelectors = {
     'webview',
     'canvas',
     '.text-preview',
+    '.text-viewer',
+    '.code-scroll',
     '.markdown-preview',
   ],
   // the Columns strip and the gallery strip scroll sideways by design
@@ -125,7 +137,9 @@ function pageChecks(options: PageCheckOptions): PageFinding[] {
     .find((text) => text.includes('plurid://'));
   const viewedRoute = /plurid:\/\/[^/\s]+(\/\S+)/.exec(status ?? '')?.[1];
   const planes = [...(space?.querySelectorAll('[role="group"][aria-label^="/"]') ?? [])];
-  const viewed = planes.find((plane) => plane.getAttribute('aria-label') === viewedRoute);
+  // newer builds mark the plane in view; older ones only name it in the status text
+  const marked = document.querySelector('[data-plane-in-view="true"]')?.closest('[role="group"]');
+  const viewed = marked ?? planes.find((plane) => plane.getAttribute('aria-label') === viewedRoute);
   const inBackgroundPlane = (element: Element) => {
     const plane = element.closest('[role="group"][aria-label^="/"]');
     return !!viewed && !!plane && plane !== viewed && planes.includes(plane);
@@ -459,6 +473,29 @@ function pageChecks(options: PageCheckOptions): PageFinding[] {
       report('window-overflow', layer, 'It does not fit inside the window.');
   }
 
+  // A choice list of 8 or fewer moves by type-ahead, as a native menu does: no search field.
+  for (const layer of layers) {
+    const dialogs = 'dialog[open], [role="dialog"], [role="alertdialog"]';
+    if (layer.matches(dialogs)) continue;
+    // a menu's list inside its own menu layer is the same menu; a dialog around it is not
+    if (layers.some((other) => other !== layer && !other.matches(dialogs) && other.contains(layer)))
+      continue;
+    const search = layer.querySelector('input:not([type="hidden"])');
+    if (!search || !shown(search)) continue;
+    const choices = [
+      ...layer.querySelectorAll(
+        '[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"]',
+      ),
+      // scrolled out of view still counts: the list is that long
+    ].filter((item) => item.checkVisibility()).length;
+    if (choices > 0 && choices <= 8 && first('menu-search', layer))
+      report(
+        'menu-search',
+        layer,
+        'A list of ' + choices + ' choices has a search field; 8 or fewer move by type-ahead.',
+      );
+  }
+
   // An open menu or popover never covers the control that opened it.
   for (const trigger of document.querySelectorAll('[aria-expanded="true"]')) {
     if (!shown(trigger)) continue;
@@ -518,6 +555,10 @@ function pageChecks(options: PageCheckOptions): PageFinding[] {
     if (text.includes(emDash)) once('em-dash', element, 'It contains an em dash.', text);
     const broken = /\bundefined\b|\bNaN\b|\[object Object\]/.exec(text);
     if (broken) once('broken-value', element, 'It shows “' + broken[0] + '”.', text);
+    const raw = /\b(mkdir|rmdir|ENOENT|EACCES|EPERM|EEXIST|ENOTDIR)\b/.exec(text);
+    if (raw) once('wording', element, 'It shows the raw code “' + raw[0] + '”.', text);
+    if (element.closest('button') && text.trim() === 'Retry')
+      once('wording', element, 'A retry button reads Try Again.', text);
     const count = plural.exec(text.replace(/\s+/g, ' '));
     if (count && !singularEndings.test(count[1]!) && !singularWords.has(count[1]!.toLowerCase()))
       once('plural', element, 'It says “' + count[0] + '”.', text);
@@ -531,6 +572,7 @@ function pageChecks(options: PageCheckOptions): PageFinding[] {
   for (const cell of document.querySelectorAll(options.nameCells.join(','))) {
     if (!shown(cell)) continue;
     const full =
+      cell.getAttribute('data-file-name') ||
       cell.getAttribute('title') ||
       cell.closest('[title]')?.getAttribute('title') ||
       cell.textContent ||
@@ -547,7 +589,8 @@ function pageChecks(options: PageCheckOptions): PageFinding[] {
         'name-extension',
         cell,
         'The name is cut at its end, so ' + extension + ' does not show.',
-        full.slice(0, 160),
+        // a tooltip may hold the whole path; the finding names the file
+        (full.split('/').at(-1) ?? full).slice(0, 160),
       );
   }
   for (const field of document.querySelectorAll<HTMLInputElement>(options.nameFields.join(','))) {

@@ -272,7 +272,7 @@ const serverViewID = () =>
   document.querySelector('.server-plane')?.closest<HTMLElement>('[data-viewer-pane]')?.dataset
     .viewerPane || '';
 
-/** Whether the engine tree nests `viewID` under the folder plane, found through React's fiber. */
+/** Whether the engine tree nests `viewID` under the files plane, found through React's fiber. */
 function linkedToFolder(viewID: string): boolean {
   const element = document.querySelector('[data-viewer-plane="server-folder"]')!;
   const key = Object.keys(element).find((key) => key.startsWith('__reactFiber'))!;

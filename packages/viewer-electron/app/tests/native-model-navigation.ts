@@ -159,7 +159,7 @@ const cameraPose = () => JSON.stringify((window as unknown as ModelWindow).__mod
 
 const dockedPlane = () => (window as unknown as ModelWindow).__modelQA.camera.docked();
 
-/** The linked folder plane: the first child of the root plane. */
+/** The linked files plane: the first child of the root plane. */
 const linkedFolderPlane = () =>
   (window as unknown as ModelWindow).__modelQA.tree.get()[0].children[0].planeID;
 
@@ -420,7 +420,7 @@ try {
     await select(step);
     await palette('Quick Preview');
     await models();
-    await click('Open linked plane');
+    await click('Open Linked Plane');
     await models();
     await engine();
     await settle();

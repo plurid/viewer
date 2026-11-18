@@ -142,3 +142,41 @@ it('bounds ancestry to sixteen levels and stops at Store scope roots', () => {
   ]);
   expect(rootAncestors(home + '/' + Array(30).fill('child').join('/'), context)).toHaveLength(16);
 });
+
+it('keeps a hidden inner repository in the count that makes the outer one give way', () => {
+  const platform = home + '/work/platform';
+  const git: FolderProbe = { git: 'directory', markers: ['.git'], capped: false } as FolderProbe;
+  const facts = new Map([
+    [platform, git],
+    [platform + '/svc-a', git],
+    [platform + '/svc-b', git],
+  ]);
+  const inB = platform + '/svc-b/src';
+  const inA = platform + '/svc-a/src';
+  expect(rootFor(inB, facts, context)).toBe(platform + '/svc-b');
+  // Not a Workspace on svc-a: svc-b stays its own workspace, not the outer repository
+  const hidden = { ...context, hidden: [platform + '/svc-a'] };
+  expect(rootFor(inB, facts, hidden)).toBe(platform + '/svc-b');
+  // and folders of the hidden one belong to no workspace
+  expect(rootFor(inA, facts, hidden)).toBeUndefined();
+});
+
+it('gives the folders of a hidden root to no workspace at or around it', () => {
+  const platform = home + '/work/platform';
+  const git: FolderProbe = { git: 'directory', markers: ['.git'], capped: false } as FolderProbe;
+  // the outer folder is a monorepo with its own manifest
+  const outer = { ...git, markers: ['.git', 'package.json'] } as FolderProbe;
+  const facts = new Map([
+    [platform, outer],
+    [platform + '/svc-a', git],
+    [platform + '/svc-b', git],
+  ]);
+  const hidden = { ...context, hidden: [platform + '/svc-a'] };
+  expect(rootFor(platform + '/svc-a/src', facts, context)).toBe(platform + '/svc-a');
+  // Not a Workspace on svc-a: its folders do not make the monorepo a workspace either
+  expect(rootFor(platform + '/svc-a/src', facts, hidden)).toBeUndefined();
+  expect(rootFor(platform + '/svc-a', facts, hidden)).toBeUndefined();
+  // a project inside a hidden root is still its own
+  const nested = new Map([...facts, [platform + '/svc-a/tools', git]]);
+  expect(rootFor(platform + '/svc-a/tools/src', nested, hidden)).toBe(platform + '/svc-a/tools');
+});

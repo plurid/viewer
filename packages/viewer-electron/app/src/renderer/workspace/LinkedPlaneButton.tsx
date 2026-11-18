@@ -18,6 +18,8 @@ export function LinkedPlaneButton({ paneID, entry }: { paneID?: string; entry: F
     <button
       type="button"
       className="linked-plane-marker"
+      // inside a row the list owns the keys: the marker is not a Tab stop of its own
+      tabIndex={-1}
       aria-label={`View linked plane for ${entry.name}`}
       title="View linked plane"
       onPointerDown={(event) => event.stopPropagation()}

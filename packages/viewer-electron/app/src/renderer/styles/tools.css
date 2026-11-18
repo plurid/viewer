@@ -52,18 +52,20 @@
   background: var(--raised);
 }
 .terminal-error {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 8px;
-  z-index: 2;
-  margin: 0;
-  padding: 6px 10px;
+  flex: none;
+  margin: var(--gap-small) 0 0;
+  padding: var(--gap-small) var(--gap-content);
   border-radius: var(--radius-control);
   color: var(--danger);
   background: var(--raised);
 }
 
+/* A command's Stop, Open Receipt and Copy Output: one row, apart, wrapping as whole buttons. */
+.execution-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-inline);
+}
 /* Command progress: a panel (ui/Panel.tsx) the window holds at its bottom right. */
 .execution-panel {
   position: absolute;
@@ -111,11 +113,20 @@
 }
 .settings-row > div {
   min-width: 0;
-  flex: 0 1 65%;
-  width: 65%;
 }
 .settings-row > div textarea {
   width: 100%;
+}
+.settings-json-field {
+  display: grid;
+  gap: var(--gap-small);
+  padding: var(--gap-inline) 0;
+}
+.settings-json-field textarea {
+  width: 100%;
+}
+.settings-json-field small {
+  color: var(--danger);
 }
 
 .agent-review-dialog[open] {
@@ -134,9 +145,8 @@
 }
 .agent-review-body {
   min-height: 0;
-  padding: 18px;
+  padding: var(--gap-dialog);
   overflow: auto;
-  scrollbar-gutter: stable;
 }
 .agent-review-dialog form > footer {
   flex-shrink: 0;
@@ -145,7 +155,6 @@
 .agent-proposal-detail {
   max-height: 45vh;
   overflow: auto;
-  scrollbar-gutter: stable;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font:
@@ -304,6 +313,8 @@
   overflow-wrap: anywhere;
 }
 .inspection-passage {
+  /* a quoted passage wraps as the text it quotes */
+  white-space: normal;
   display: grid;
   gap: 4px;
   text-align: left;
@@ -319,7 +330,7 @@
 }
 
 .dialog-body {
-  padding: 18px;
+  padding: var(--gap-dialog);
   max-height: min(580px, calc(100vh - 180px));
   overflow: auto;
 }
@@ -591,9 +602,9 @@
   align-items: end;
   flex-wrap: wrap;
 }
-.workflow-body .settings-actions label {
+.workflow-body .settings-actions :is(label, .workflow-template) {
   display: grid;
-  gap: 8px;
+  gap: var(--gap-inline);
 }
 .workflow-body .project-control-row small {
   display: block;
@@ -615,6 +626,7 @@
   color: var(--muted);
 }
 .workflow-run-choice {
+  white-space: normal;
   text-align: left;
   display: flex;
   gap: 16px;
@@ -804,12 +816,6 @@
   margin-top: 4px;
   color: var(--muted);
 }
-.watch-rule-notice {
-  top: auto;
-  bottom: 80px;
-  left: auto;
-  right: 24px;
-}
 .watch-rule-row {
   padding: 14px 0;
   border-bottom: 1px solid var(--line);
@@ -855,4 +861,21 @@
   caret-color: var(--accent);
   resize: vertical;
   font: inherit;
+}
+
+/* Chrome of the working panels selects nothing on a drag, as the app's own chrome (base.css):
+   toolbars, filter bars and status footers. Paths and values inside keep their own rule. */
+:where(
+  .chat-toolbar,
+  .journal-filterbar,
+  .journal-scopebar,
+  .browser-status,
+  .server-log-controls,
+  .execution-actions,
+  .settings-row > span,
+  .settings-page > header,
+  .settings-page h2,
+  .settings-page h3
+) {
+  user-select: none;
 }

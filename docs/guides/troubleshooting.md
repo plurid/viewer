@@ -26,7 +26,7 @@ original file.
 - Choose **Try again** in the preview.
 - For an Office file, try the **Reading** view, or **Sheet** for a workbook.
 - Very large, encrypted, damaged or unsupported files can be beyond a preview's limits. Choose
-  **Open With…** to use another app, or **Show as hex** to see its bytes.
+  **Open With…** to use another app, or **Show as Hex** to see its bytes.
 
 A thumbnail does not mean the full preview is supported;
 [Supported formats](../reference/formats.md) lists what is.

@@ -43,6 +43,9 @@ export function DarkPagesDetail({ editor }: { editor: SettingsEditor }) {
     <label>
       {label}
       <input
+        // a reset or a config.jsonc edit shows its new time: a field that keeps what was typed
+        // would show the old one
+        key={value}
         type="time"
         aria-label={`Dark pages ${label.toLowerCase()}`}
         defaultValue={value}

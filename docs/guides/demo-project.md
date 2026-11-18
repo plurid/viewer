@@ -9,7 +9,8 @@ the controls. This walkthrough runs locally without a model account or API key.
 1. [Install Viewer](install.md), then download
    [**Viewer-Demo.zip**](https://github.com/plurid/viewer/releases/latest/download/Viewer-Demo.zip).
 2. Extract the archive. In Viewer, press **⌘⇧O** and open its **Viewer Demo** folder.
-3. Press **⌘K**, choose **Chat About Files**, then choose **Open Canvas…** in the Chat toolbar.
+3. Press **⌘K**, choose **Chat About Files**, then choose **More → Open Canvas…** in the Chat
+   toolbar.
 4. Select **Front** inside **Viewer Demo**. Viewer opens **Six-slot station · Front** with its saved
    inputs and results. Import the folder, not its `index.html` file.
 5. Click a tray-slot row in the results table to see the corresponding robot pose. Drag in the
@@ -31,7 +32,7 @@ configured in **Settings → Models**.
 
 ## Compare the alternative
 
-1. Open another Chat plane with **⌘K → Chat About Files**. Choose **Open Canvas…** and select
+1. Open another Chat plane with **⌘K → Chat About Files**. Choose **More → Open Canvas…** and select
    **Rear** inside **Viewer Demo**.
 2. Press **⌘0** to see the connected planes. Frame either tool with its title-bar **Frame plane**
    button.
@@ -51,7 +52,7 @@ them opens independent saved tools; the archive does not recreate that conversat
 2. Choose **Export Canvas…** in the Viewer toolbar and a destination folder to save your version.
 3. Quit and reopen Viewer. Choose **Tool Library** from **⌘K**, select the tool and choose **Open
    tool**. Its saved inputs stay with it.
-4. To reopen an exported version, use Chat's **Open Canvas…** and select the exported folder.
+4. To reopen an exported version, use Chat's **More → Open Canvas…** and select the exported folder.
 
 ## What was made by Meta
 

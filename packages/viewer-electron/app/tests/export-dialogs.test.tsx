@@ -229,6 +229,7 @@ it('shows the destination leaf and a home-relative tail, with concrete image out
   expect(screen.getByText('~/…/oferta-de-pret-snecuri-automata-4-7/3D')).toBeTruthy();
   expect(screen.getByTitle(folder).getAttribute('aria-label')).toContain(folder);
   fireEvent.change(screen.getByLabelText('Output width'), { target: { value: '1200' } });
+  fireEvent.blur(screen.getByLabelText('Output width'));
   expect(screen.getByText('Exports 1200 × 450 px WebP')).toBeTruthy();
   expect(screen.queryByText(/Orientation is normalized|Smaller images keep/)).toBeNull();
 });
@@ -374,7 +375,6 @@ it('checks the first numbered name and counts its number in the 255 limit', asyn
 it.each([
   ['.', 'Enter a name other than “.” or “..”.'],
   ['..', 'Enter a name other than “.” or “..”.'],
-  ['.secret', 'A name that starts with “.” makes a hidden file. Remove the dot.'],
   ['line\nbreak', 'Remove the invisible control character from the name.'],
   ['tab\there', 'Remove the invisible control character from the name.'],
   ['nul\0here', 'Remove the invisible control character from the name.'],
@@ -391,19 +391,42 @@ it('refuses the Windows-only characters on Windows only', () => {
     'On Windows, a file name can\'t contain < > : " \\ | ? *.',
   );
   expect(fileNameError('.secret', 'png')).toBe('');
+  render(<FileNameField value=".secret" extension="png" folder={folder} onChange={vi.fn()} />);
+  expect(screen.queryByText(/Starts with a dot/)).toBeNull();
+});
+
+it('warns that a name starting with a dot makes a hidden file, without refusing it', async () => {
+  vi.mocked(window.viewer.stat).mockResolvedValue(file);
+  render(<FileNameField value=".secret" extension="png" folder={folder} onChange={vi.fn()} />);
+  expect(fileNameError('.secret', 'png')).toBe('');
+  const warning = screen.getByText('Starts with a dot, so the file will be hidden.');
+  expect(screen.queryByRole('alert')).toBeNull();
+  const conflict = await screen.findByText(/is already here/);
+  const input = screen.getByRole('textbox');
+  expect(input.getAttribute('aria-invalid')).toBe('false');
+  expect(input.getAttribute('aria-describedby')).toBe(warning.id + ' ' + conflict.id);
 });
 
 it.each([
   ['photo.jpeg', 'jpg', 'photo'],
   ['photo.JPG', 'jpg', 'photo'],
   ['scan.tiff', 'tif', 'scan'],
-  ['  photo  ', 'png', 'photo'],
+  ['photo  ', 'png', 'photo'],
+  ['photo.jpeg.jpg', 'jpg', 'photo'],
+  ['photo.png .png', 'png', 'photo'],
   ['report.pdf.png', 'png', 'report.pdf'],
 ])('cleans %j for the .%s suffix once the field loses focus', (value, extension, stem) => {
   const onChange = vi.fn();
   render(<FileNameField value={value} extension={extension} folder={folder} onChange={onChange} />);
   fireEvent.blur(screen.getByRole('textbox'));
   expect(onChange).toHaveBeenCalledWith(stem);
+});
+
+it('keeps a leading space, which sorts a name first', () => {
+  const onChange = vi.fn();
+  render(<FileNameField value=" Final" extension="pdf" folder={folder} onChange={onChange} />);
+  fireEvent.blur(screen.getByRole('textbox'));
+  expect(onChange).not.toHaveBeenCalled();
 });
 
 it('keeps a stem that is only the suffix rather than emptying it', () => {
@@ -420,7 +443,8 @@ it('opens a long name at its end once its dialog opens', async () => {
   render(<FileNameField value={stem} extension="png" folder={folder} onChange={vi.fn()} />, {
     container: dialog,
   });
-  const input = screen.getByRole('textbox') as HTMLInputElement;
+  // a closed dialog hides its content from the accessibility tree
+  const input = dialog.querySelector('input')!;
   input.scrollLeft = 0;
   input.setSelectionRange(0, 0);
   dialog.setAttribute('open', '');
@@ -516,9 +540,11 @@ it('explains a skipped enlargement only when the target would enlarge the image'
   await screen.findByText('2400 × 900 px, transparent');
   expect(screen.queryByText(/Already smaller/)).toBeNull();
   fireEvent.change(screen.getByLabelText('Output width'), { target: { value: '4800' } });
+  fireEvent.blur(screen.getByLabelText('Output width'));
   expect(screen.getByText('Already smaller than the target; keeps 2400 × 900.')).toBeTruthy();
   expect(screen.getByText('Exports 2400 × 900 px WebP')).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Output width'), { target: { value: '1200' } });
+  fireEvent.blur(screen.getByLabelText('Output width'));
   expect(screen.queryByText(/Already smaller/)).toBeNull();
   expect(screen.getByText('Exports 1200 × 450 px WebP')).toBeTruthy();
 });
@@ -530,10 +556,14 @@ it('shows dimensions for rotation, crop, fill and stretch', async () => {
   expect(screen.getByText('Exports 900 × 2400 px WebP')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: /^Crop$/ }));
   fireEvent.change(screen.getByLabelText('Crop width'), { target: { value: '800' } });
+  fireEvent.blur(screen.getByLabelText('Crop width'));
   fireEvent.change(screen.getByLabelText('Crop height'), { target: { value: '600' } });
+  fireEvent.blur(screen.getByLabelText('Crop height'));
   expect(screen.getByText('Exports 800 × 600 px WebP')).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Output width'), { target: { value: '400' } });
+  fireEvent.blur(screen.getByLabelText('Output width'));
   fireEvent.change(screen.getByLabelText('Output height'), { target: { value: '400' } });
+  fireEvent.blur(screen.getByLabelText('Output height'));
   expect(screen.getByText('Exports 400 × 300 px WebP')).toBeTruthy();
   await choose('Image resize fit', 'Fill and crop');
   expect(screen.getByText('Exports 400 × 400 px WebP')).toBeTruthy();
@@ -714,4 +744,25 @@ it('says what a fast cut does only once it is chosen', async () => {
   expect(screen.queryByText(/Fast cuts/)).toBeNull();
   await choose('Cut accuracy', 'Fast');
   expect(await screen.findByText('Fast cuts can start a few seconds early.')).toBeTruthy();
+});
+
+it('takes Space, I, O and the arrows as a video editor does, and leaves fields their keys', async () => {
+  render(
+    <MediaPlane
+      pane={{ id: 'media', type: 'media', path: folder + '/source.mp4', draftID: draft.id }}
+      active={false}
+    />,
+  );
+  const input = await screen.findByRole('textbox', { name: /^File name:/ });
+  const editor = screen.getByRole('region', { name: 'Media editor' });
+  const seek = screen.getByRole('slider', { name: 'Seek playback' }) as HTMLInputElement;
+  const before = Number(seek.value);
+  fireEvent.keyDown(editor, { key: 'ArrowRight', shiftKey: true });
+  expect(Number(seek.value)).toBeGreaterThan(before);
+  fireEvent.keyDown(editor, { key: 'ArrowLeft', shiftKey: true });
+  expect(Number(seek.value)).toBe(before);
+  // a field keeps its letters: typing an "o" in the file name marks nothing
+  const typed = fireEvent.keyDown(input, { key: 'o' });
+  expect(typed).toBe(true);
+  expect(fireEvent.keyDown(editor, { key: 'i' })).toBe(false);
 });

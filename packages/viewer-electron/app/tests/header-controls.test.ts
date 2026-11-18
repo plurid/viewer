@@ -25,10 +25,12 @@ import { WorkspaceContext } from '../src/renderer/workspace/context';
 import { CommandsContext } from '../src/renderer/commands/context';
 import { CommandRegistry } from '../src/renderer/commands/registry';
 import { PlaneHeader } from '../src/renderer/workspace/PlaneHeader';
+import { usePreviewControlsSlot } from '../src/renderer/previews/controls';
 import { RelatedPlanes } from '../src/renderer/workspace/RelatedPlanes';
 import { changeWorkspace } from '../src/renderer/state/core';
 import { initialize } from '../src/renderer/state/store';
 import { setWorkspaceOverride } from '../src/renderer/state/workspaces';
+import { choiceLabel } from './support/choice-button';
 
 const everyOn = Object.fromEntries(headerControlKeys.map((key) => [key, true]));
 
@@ -222,6 +224,80 @@ describe('the header as this window shows it', () => {
     act(() => setWorkspaceOverride('ui.space.dragging', false));
     expect(heading.hasAttribute('data-plurid-drag-handle')).toBe(false);
   });
+  it('shows "…" for what gave way though the person hid it, its room counted only then', async () => {
+    act(() => changeWorkspace((space) => ({ ...space, profileID: 'full' })));
+    act(() => setWorkspaceOverride('ui.space.headerControls.actions', false));
+    // jsdom lays nothing out: a narrow header of 30 px controls
+    const wide = (element: HTMLElement) => (element.hasAttribute('data-spilled') ? 0 : 30);
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return wide(this);
+    });
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return wide(this);
+    });
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.matches('.plane-controls') ? 200 : wide(this);
+    });
+    try {
+      const view = header();
+      await act(async () => {});
+      expect(view.container.querySelector('[data-spilled]')).toBeTruthy();
+      expect(button(view, 'Preview actions')?.getAttribute('data-header-menu')).toBe('spill');
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+  it('gives a format no header slot while its plane is pinned, so its tools stand in its content', () => {
+    const header = (pinned: boolean) =>
+      render(
+        createElement(
+          WorkspaceContext.Provider,
+          {
+            value: {
+              selectForDrag: vi.fn(),
+              subscribeLinks: () => () => {},
+              subtree: () => [],
+              parentPaneID: () => undefined,
+            } as unknown as WorkspaceController,
+          },
+          createElement(
+            CommandsContext.Provider,
+            { value: new CommandRegistry() },
+            createElement(() => {
+              const slot = usePreviewControlsSlot('plane');
+              return createElement(
+                'div',
+                { 'data-slot': slot ? 'header' : 'content' },
+                createElement(PlaneHeader, {
+                  context: {
+                    treePlane: {
+                      routeDivisions: {
+                        plane: { parameters: { id: 'plane' } },
+                        path: { parameters: {} },
+                      },
+                      ...(pinned ? { pinned: { left: 0, top: 0, width: 400, height: 300 } } : {}),
+                    },
+                  } as unknown as PluridPlaneChromeContext,
+                }),
+              );
+            }),
+          ),
+        ),
+      );
+    expect(header(false).container.querySelector('[data-slot]')!.getAttribute('data-slot')).toBe(
+      'header',
+    );
+    cleanup();
+    expect(header(true).container.querySelector('[data-slot]')!.getAttribute('data-slot')).toBe(
+      'content',
+    );
+  });
   it('shows every control under the Full profile', () => {
     const view = header();
     act(() => changeWorkspace((space) => ({ ...space, profileID: 'full' })));
@@ -255,12 +331,12 @@ describe('the header as this window shows it', () => {
         createElement(RelatedPlanes, { id, parentShown }),
       );
     const view = render(related('root', false));
-    expect(view.getByRole('button', { name: 'Related planes' }).textContent).toBe('1');
+    expect(view.getByRole('button', { name: choiceLabel('Related planes') }).textContent).toBe('1');
     view.rerender(related('branch', true));
-    expect(view.getByRole('button', { name: 'Related planes' }).textContent).toBe('2');
+    expect(view.getByRole('button', { name: choiceLabel('Related planes') }).textContent).toBe('2');
     view.rerender(related('leaf', true));
-    expect(view.queryByRole('button', { name: 'Related planes' })).toBeNull();
+    expect(view.queryByRole('button', { name: choiceLabel('Related planes') })).toBeNull();
     view.rerender(related('leaf', false));
-    expect(view.getByRole('button', { name: 'Related planes' }).textContent).toBe('1');
+    expect(view.getByRole('button', { name: choiceLabel('Related planes') }).textContent).toBe('1');
   });
 });

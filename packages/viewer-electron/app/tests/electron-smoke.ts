@@ -636,7 +636,7 @@ async function verifyDailyFileWork(): Promise<void> {
     false,
     'Command + Shift alone must not create a folder',
   );
-  await key('n', 'KeyN', 4);
+  await key('N', 'KeyN', 12);
   await until(
     () =>
       evaluate(
@@ -859,7 +859,7 @@ async function verifyDailyFileWork(): Promise<void> {
   );
   await snapshot('desktop-native-large-quick-preview.png');
   await key('Escape', 'Escape');
-  await key('N', 'KeyN', 12);
+  await key('n', 'KeyN', 4);
   await until(
     () => evaluate(pageCall(planeCount)),
     (count) => count === 2,
@@ -1212,7 +1212,7 @@ async function verifyFoundations(): Promise<void> {
   assert.ok(child.child, 'Terminal belongs to the originating root');
   assert.ok(Math.abs(child.angle - 90.1) < 0.001, 'Terminal opens at 90.1 degrees to its parent');
   await snapshot('desktop-native-terminal.png');
-  await paletteCommand('New Folder Plane');
+  await paletteCommand('New Files Plane');
   await until(
     () => evaluate(pageCall(planeCount)),
     (count) => count === 2,
@@ -1419,20 +1419,20 @@ async function verifyConfiguredChrome(): Promise<void> {
   for (const control of controls) await setting(control);
   await until(preset, (value) => value === 'Essential', 'the Essential toolbar is back');
   await tab('Browsing');
-  for (const column of ['Date modified', 'Kind', 'Size']) await setting(column);
+  for (const column of ['Date Modified', 'Kind', 'Size']) await setting(column);
   await until(
     () => evaluate(countOf('.file-head [data-column]')),
     (count) => count === 1,
     'metadata columns can all be hidden while Name remains visible',
   );
-  for (const column of ['Date modified', 'Kind', 'Size', 'Date created', 'Extension'])
+  for (const column of ['Date Modified', 'Kind', 'Size', 'Date Created', 'Extension'])
     await setting(column);
   await until(
     () => evaluate(countOf('.file-head [data-column]')),
     (count) => count === 6,
     'optional created and extension columns appear',
   );
-  for (const column of ['Date created', 'Extension']) await setting(column);
+  for (const column of ['Date Created', 'Extension']) await setting(column);
   await click('dialog [aria-label="Close"]');
   await evaluate(pageCall(watchFileTable));
   const widths = () =>
@@ -3056,7 +3056,7 @@ async function verifyRefinements(): Promise<void> {
   await settingsEvaluate(
     pageCall(() =>
       document
-        .querySelector('[aria-label="New folder planes open at"]')!
+        .querySelector('[aria-label="New files planes open at"]')!
         .closest('.settings-row')!
         .scrollIntoView({ block: 'start' }),
     ),
@@ -3082,7 +3082,7 @@ async function verifyRefinements(): Promise<void> {
     (state) => state.workspaces[0].panes[0]?.path === path.join(fixture.files, 'Data'),
     'Empty button uses its own configured folder',
   );
-  await click('[aria-label="New folder plane (⇧⌘N)"]');
+  await click('[aria-label^="New files plane"]');
   await restoredEngine(2);
   await until(
     () => readFile(stateFile, 'utf8').then((raw) => JSON.parse(raw) as SavedState),
@@ -4103,7 +4103,7 @@ async function verifyTextEditing(): Promise<void> {
   );
 }
 /** Additional release checks against the actual signed Electron bundle. Files remain untouched. */
-/** The workspace surface's bounds and each folder plane's, with its pane id. */
+/** The workspace surface's bounds and each files plane's, with its pane id. */
 function folderPlaneBounds() {
   const bounds = (element: Element) => {
     const rect = element.getBoundingClientRect();
@@ -4130,7 +4130,7 @@ async function verifyPublishedPlaneInput(): Promise<void> {
   const near = (actual: number, expected: number, label: string) =>
     assert.ok(Math.abs(actual - expected) < 2, `${label}: ${actual} vs ${expected}`);
   const roots = (count: number) =>
-    until(folders, (value) => value.planes.length === count, `${count} folder planes`);
+    until(folders, (value) => value.planes.length === count, `${count} files planes`);
   await paletteCommand('View Side by Side');
   await roots(2);
   await settleCamera();
@@ -4142,7 +4142,7 @@ async function verifyPublishedPlaneInput(): Promise<void> {
   near(ordered[1].x - ordered[0].x - ordered[0].width, 12, 'side-by-side gap');
   const peerID = ordered.find((item) => item.id !== sourceID)!.id;
   await click(
-    `${plane(peerID)} .location[title=${JSON.stringify(path.join(fixture.files, 'Documents'))}]`,
+    `${plane(peerID)} .location[data-location-path=${JSON.stringify(path.join(fixture.files, 'Documents'))}]`,
   );
   await until(
     () => evaluate(pageCall(titleOf, plane(peerID) + ' .plane-heading')),
@@ -5308,7 +5308,7 @@ async function verifyIndependentPreviewRevocation(): Promise<void> {
     await settingsEvaluate(pageCall(revokeAccess, documents));
     await until(
       () => evaluate(textOf('.quick-preview')),
-      (value) => value.includes('File unavailable') && !value.includes('A wider view'),
+      (value) => value.includes('Can’t show this file') && !value.includes('A wider view'),
       'revoked preview disposes its decoded text and shows the access error',
     );
     await click('dialog [aria-label="Close"]');
@@ -5752,7 +5752,7 @@ async function verifyRootPlanes(): Promise<void> {
 
   const first = original.workspaces[0].roots[0];
   const firstEngineID = await enginePlaneIDs();
-  await click('[aria-label="New folder plane (⇧⌘N)"]');
+  await click('[aria-label^="New files plane"]');
   let state = await roots(2);
   const second = state.workspaces[0].roots[1];
   assert.equal(state.workspaces[0].panes.find((pane) => pane.id === second)?.path, fixture.files);
@@ -5767,7 +5767,7 @@ async function verifyRootPlanes(): Promise<void> {
     '220',
   );
   await click(
-    `${folder(second)} .location[title=${JSON.stringify(path.join(fixture.files, 'Models'))}]`,
+    `${folder(second)} .location[data-location-path=${JSON.stringify(path.join(fixture.files, 'Models'))}]`,
   );
   state = await until(
     saved,
@@ -5778,7 +5778,7 @@ async function verifyRootPlanes(): Promise<void> {
   );
   assert.equal(state.workspaces[0].panes.find((pane) => pane.id === first)?.path, fixture.files);
   const documents = path.join(fixture.files, 'Documents');
-  await contextMenu(`${folder(second)} .location[title=${JSON.stringify(documents)}]`);
+  await contextMenu(`${folder(second)} .location[data-location-path=${JSON.stringify(documents)}]`);
   await command('Input.insertText', { text: 'Open in New Root Plane' });
   await key('Enter', 'Enter');
   state = await roots(3);
@@ -5786,20 +5786,18 @@ async function verifyRootPlanes(): Promise<void> {
     state.workspaces[0].panes.find((pane) => pane.id === state.workspaces[0].roots[2])?.path,
     documents,
   );
-  await key('N', 'KeyN', 12);
+  await key('n', 'KeyN', 4);
   await roots(4);
-  await paletteCommand('New Folder Plane');
+  await paletteCommand('New Files Plane');
   state = await roots(5);
   await click(`${controls(state.workspaces[0].roots[4])} [aria-label="Folder actions"]`);
-  await command('Input.insertText', { text: 'New Folder Plane' });
+  await command('Input.insertText', { text: 'New Files Plane' });
   await key('Enter', 'Enter');
   await roots(6);
   // Two additions in one React batch must retain both roots and all earlier engine IDs.
   await evaluate(
     pageCall(() => {
-      const button = document.querySelector<HTMLButtonElement>(
-        '[aria-label="New folder plane (⇧⌘N)"]',
-      )!;
+      const button = document.querySelector<HTMLButtonElement>('[aria-label^="New files plane"]')!;
       button.click();
       button.click();
     }),
@@ -5829,7 +5827,7 @@ async function verifyRootPlanes(): Promise<void> {
 
   const last = state.workspaces[0].roots[7];
   await contextMenu(
-    `${folder(last)} .location[title=${JSON.stringify(path.join(fixture.files, 'Models'))}]`,
+    `${folder(last)} .location[data-location-path=${JSON.stringify(path.join(fixture.files, 'Models'))}]`,
   );
   await command('Input.insertText', { text: 'Open in New Root Plane' });
   await key('Enter', 'Enter');
@@ -6007,7 +6005,7 @@ async function verifyRootPlanes(): Promise<void> {
   await restoredEngine(1);
   await settleCamera();
   console.log(
-    'Root planes: +, Cmd+Shift+N, Commands, plane actions, shortcut roots, independent history, rapid additions, reload, minimap facing, projected resizing and narrow docked navigation.',
+    'Root planes: +, Cmd+N, Commands, plane actions, shortcut roots, independent history, rapid additions, reload, minimap facing, projected resizing and narrow docked navigation.',
   );
 }
 async function job(request: RendererOperationRequest): Promise<OperationJob> {
@@ -6074,12 +6072,12 @@ async function verifyEntryAndPalette(): Promise<void> {
   );
   await settingsEvaluate(pageCall(categoryButton, 'Browsing', true));
   await until(
-    () => settingsEvaluate(exists('[aria-label="New folder planes open at"]')),
+    () => settingsEvaluate(exists('[aria-label="New files planes open at"]')),
     Boolean,
     'new-plane folder preference',
   );
   // a choice is a searchable menu: open it, then choose the row
-  await settingsEvaluate(clickElement('[aria-label="New folder planes open at"]'));
+  await settingsEvaluate(clickElement('[aria-label="New files planes open at"]'));
   await until(
     () => settingsEvaluate(pageCall(resultButton, 'Downloads', false)),
     Boolean,
@@ -6135,7 +6133,7 @@ async function verifyEntryAndPalette(): Promise<void> {
   );
   await snapshot('desktop-native-empty-workspace.png');
   assert.equal(
-    await evaluate(exists('[aria-label="New folder planes open at"]')),
+    await evaluate(exists('[aria-label="New files planes open at"]')),
     false,
     'The starting-folder preference belongs only in Settings',
   );
@@ -6149,9 +6147,9 @@ async function verifyEntryAndPalette(): Promise<void> {
       value.workspaces[0].panes[0].path === path.join(fixture.files, 'Data'),
     'empty-state root uses its separate configured folder',
   );
-  await click('[aria-label="New folder plane (⇧⌘N)"]');
+  await click('[aria-label^="New files plane"]');
   await restoredEngine(2);
-  await key('N', 'KeyN', 12);
+  await key('n', 'KeyN', 4);
   await restoredEngine(3);
   await until(
     async () => JSON.parse(await readFile(stateFile, 'utf8')) as SavedState,
@@ -6867,7 +6865,7 @@ async function verify(): Promise<void> {
     '210',
   );
   await click(
-    `.folder-plane .location[title=${JSON.stringify(path.join(fixture.files, 'Models'))}]`,
+    `.folder-plane .location[data-location-path=${JSON.stringify(path.join(fixture.files, 'Models'))}]`,
   );
   await until(text, (value) => value.includes('Triangle.glb'), 'in-plane shortcut navigation');
   await paletteCommand('Parent Folder');
@@ -6912,8 +6910,8 @@ async function verify(): Promise<void> {
         from.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: transfer }));
         to.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: transfer }));
       },
-      `.location[title=${JSON.stringify(path.join(fixture.files, 'Documents'))}]`,
-      `.location[title=${JSON.stringify(path.join(fixture.files, 'Models'))}]`,
+      `.location[data-location-path=${JSON.stringify(path.join(fixture.files, 'Documents'))}]`,
+      `.location[data-location-path=${JSON.stringify(path.join(fixture.files, 'Models'))}]`,
     ),
   );
   assert.deepEqual(
@@ -6944,12 +6942,16 @@ async function verify(): Promise<void> {
   );
   await until(
     () =>
-      evaluate(exists(`.location[title=${JSON.stringify(path.join(fixture.files, 'Images'))}]`)),
+      evaluate(
+        exists(
+          `.location[data-location-path=${JSON.stringify(path.join(fixture.files, 'Images'))}]`,
+        ),
+      ),
     (value) => value,
     'folder shortcut drop',
   );
   await contextMenu(
-    '.location[title=' + JSON.stringify(path.join(fixture.files, 'Documents')) + ']',
+    '.location[data-location-path=' + JSON.stringify(path.join(fixture.files, 'Documents')) + ']',
   );
   await command('Input.insertText', { text: 'Rename Shortcut' });
   await key('Enter', 'Enter');
@@ -7271,7 +7273,7 @@ async function verify(): Promise<void> {
   await evaluate(
     pageCall(() =>
       Array.from(document.querySelectorAll<HTMLButtonElement>('dialog button'))
-        .find((button) => button.textContent === 'Open linked plane')!
+        .find((button) => button.textContent === 'Open Linked Plane')!
         .click(),
     ),
   );

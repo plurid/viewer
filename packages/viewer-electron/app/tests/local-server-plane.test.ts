@@ -7,6 +7,7 @@ import type { LocalServer, LocalServerLog } from '../src/domain/previews/web';
 import ServerPlane from '../src/renderer/local-servers/ServerPlane';
 import { addServerPane, removePanes } from '../src/renderer/state/panes';
 import { initialize, flushState } from '../src/renderer/state/store';
+import { choiceLabel } from './support/choice-button';
 vi.mock('../src/renderer/workspace/context', () => ({
   useWorkspace: () => ({ openBrowser: vi.fn() }),
 }));
@@ -106,7 +107,7 @@ describe('local server plane', () => {
     );
     expect(screen.getByText('/index.html')).toBeTruthy();
     expect(screen.getByText('/missing.css')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Request status' }));
+    fireEvent.click(screen.getByRole('button', { name: choiceLabel('Request status') }));
     const statusMenu = screen.getByRole('dialog', { name: 'Request status' });
     fireEvent.click(statusMenu.querySelector<HTMLElement>('[data-menu-id="choice:client-error"]')!);
     expect(screen.queryByText('/index.html')).toBeNull();

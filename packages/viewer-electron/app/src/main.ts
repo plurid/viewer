@@ -75,6 +75,7 @@ import {
 } from './desktop/diagnostics/failures';
 import { reportWorkers } from './desktop/workers/utility-client';
 import { answerStoppedWindows, rendererWatches } from './desktop/windows/window-health';
+import { stopOfficeEngines } from './desktop/previews/office-renderer';
 import { assetPath, setAssetRoot } from './desktop/native/assets';
 import { installAboutPanel, installedRelease, openAcknowledgements } from './desktop/windows/about';
 import { applicationUpdates } from './desktop/updates/native';
@@ -269,6 +270,9 @@ const quit = new QuitSequence({
   quit: () => {
     // a hung renderer is ended first, so its window closes at once
     rendererWatches.releaseAll();
+    // Electron waits for every window, and closes only those open now: no hidden Office engine
+    // may stay or start
+    void stopOfficeEngines();
     app.quit();
   },
   report: (context, error) => console.error(context, error),
@@ -534,7 +538,10 @@ async function createViewerWindow(workspaceID?: string): Promise<BrowserWindow |
     menu();
   });
   const remember = () => rememberWindow(createdWindow);
-  createdWindow.on('move', remember);
+  createdWindow.on('move', () => {
+    remember();
+    sendEvent(createdWindow.webContents, { type: 'window-moved' });
+  });
   createdWindow.on('resize', remember);
   createdWindow.on('maximize', remember);
   createdWindow.on('unmaximize', remember);
@@ -713,7 +720,10 @@ async function openSettingsWindow(focus?: string): Promise<void> {
     );
   };
   created.on('resize', placed);
-  created.on('move', placed);
+  created.on('move', () => {
+    placed();
+    if (!created.isDestroyed()) sendEvent(created.webContents, { type: 'window-moved' });
+  });
   created.on('closed', () => {
     settingsWindow = null;
     // Quit saved the placement already: a write now could race the services stopping
@@ -853,6 +863,7 @@ app
     desktop = new Desktop(app.getPath('userData'), trusted, {
       license,
       shellCommandHome,
+      qaRuntime: backgroundTest,
       openSettings: openSettingsWindow,
       newWindow: async (workspaceID) => {
         await createWindow(workspaceID);

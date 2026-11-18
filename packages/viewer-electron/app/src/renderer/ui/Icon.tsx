@@ -61,11 +61,13 @@ const paths = {
   pencil: 'M16 3l5 5L8 21H3v-5L16 3Zm-3 3 5 5',
   stop: 'M6 6h12v12H6V6Z',
   tasks: 'm3 7 2 2 4-4m-6 12 2 2 4-4M13 6h8m-8 6h8m-8 6h8',
+  // file operations under way: things moving between places, apart from Copy's two sheets
+  operations: 'M4 8h13m-4-4 4 4-4 4M20 16H7m4-4-4 4 4 4',
   pin: 'M9 3h6m-5 0v6l-4 5h12l-4-5V3m-2 11v7',
   // What can I do here?, apart from a file's Get info
   help: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.4m0 3h.01',
   chat: 'M4 4h16v12H9l-5 4V4Z',
-  // a plane of its own, apart from New folder plane's plus
+  // a plane of its own, apart from New Files Plane's plus
   planes: 'M8 8h13v12H8V8ZM3 4h13v4M3 4v12h5',
   // a document's page thumbnails, apart from the plane's navigation
   pages: 'M8 3h12v14H8V3ZM4 7v14h12',

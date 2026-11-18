@@ -13,7 +13,7 @@ import type { CommandContext, CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 
 /**
- * A COMMANDER'S PAIR: two folder planes as Norton's and Midnight's two panels. View side
+ * A COMMANDER'S PAIR: two files planes as Norton's and Midnight's two panels. View side
  * by side (or stacked) pairs the planes it shows, Pair with… any two; ⌃⌘C and ⌃⌘X copy and move
  * the selection to the other, swap trades their folders, and the two may follow each other into
  * subfolders. Not ⌘F5/F6: ⌃⌘ with the letter one already knows for copy and cut.
@@ -104,7 +104,7 @@ export function pairCommands({ actions, paneScope }: WindowScopes): CommandDefin
         startPlaneHints((chosen) => {
           const other = activeWorkspace().panes.find((pane) => pane.id === chosen);
           if (other?.type !== 'folder' || other.id === id)
-            announce('Choose another folder plane to pair with.');
+            announce('Choose another files plane to pair with.');
           else pairPanes(id, other.id);
         });
       },

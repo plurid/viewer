@@ -43,3 +43,21 @@ export function across(key: string, values: readonly string[]): Variant[] {
 export function sizesIn(look: Look, data: Record<string, string> = {}): Variant[] {
   return [variant('wide', look, data), variant('narrow', look, data)];
 }
+
+/** A window of any size, for checklists that name one. */
+export function sized(width: number, height: number, look: Look): Variant {
+  return {
+    id: width + 'x' + height + '-' + look,
+    label: width + ' × ' + height + ', ' + look,
+    width,
+    height,
+    look,
+    data: {},
+  };
+}
+
+/** Two captures for coverage scenes: wide in dark and narrow in light. */
+export const coverageVariants: readonly Variant[] = [
+  variant('wide', 'dark'),
+  variant('narrow', 'light'),
+];

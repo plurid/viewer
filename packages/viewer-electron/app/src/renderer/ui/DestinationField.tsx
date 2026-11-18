@@ -4,7 +4,7 @@ import { baseName } from '../../domain/workspaces/planes';
 import { Button, CopyButton } from './primitives';
 import { Icon } from './Icon';
 import { FormField } from './FormField';
-import { PathLabel, useHomeText, usePathCopy, usePathText } from './PathLabel';
+import { PathLabel, useHomeText, usePathCopy, usePathText, usePathWhole } from './PathLabel';
 
 /**
  * A FOLDER CHOICE (DESIGN.md, the Output Form Rule): the folder's own name, its path as a path
@@ -29,7 +29,7 @@ export function DestinationField({
   const [error, setError] = useState('');
   const shownError = useHomeText(error);
   const copy = usePathCopy(path);
-  const whole = 'text' in copy ? copy.text : path;
+  const whole = usePathWhole(path);
   const name = path ? baseName(path) : empty;
   // A root is its own name: its path line would repeat it.
   const pathLine = usePathText(path) !== name;

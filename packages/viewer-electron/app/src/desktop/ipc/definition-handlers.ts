@@ -27,7 +27,17 @@ interface DefinitionPorts {
     | 'setProjectManager'
     | 'refreshSourceOffer'
   > &
-    Partial<Pick<WorkspaceDefinitions, 'prepareKeys' | 'hideFound' | 'showFound'>>;
+    Partial<
+      Pick<
+        WorkspaceDefinitions,
+        | 'prepareKeys'
+        | 'hideFound'
+        | 'showFound'
+        | 'dismissOffers'
+        | 'clearOffers'
+        | 'restoreOffers'
+      >
+    >;
   memory: Pick<DefinedWorkspaces, 'get' | 'remember' | 'forget' | 'problem'>;
   sessions: Pick<
     WorkspaceSessions,
@@ -196,9 +206,26 @@ export function createDefinitionHandlers(
       };
     },
     workspaceDefinitionFile: async ([request], owner) => {
+      // The workspace offer's dismissals change only by the person's own clicks: a card's ×, Show
+      // Hidden Insights and Clear recent folders' Undo. No agent reaches them, as Show Hidden
+      // Insights is the person's command alone, so a click counts even while an agent's command
+      // runs in the same window.
+      if (
+        request.kind === 'dismiss-offers' ||
+        request.kind === 'show-offers' ||
+        request.kind === 'restore-offers'
+      ) {
+        await ports.definitions.load();
+        if (request.kind === 'dismiss-offers')
+          await ports.definitions.dismissOffers?.(request.roots);
+        else if (request.kind === 'show-offers') await ports.definitions.clearOffers?.();
+        else await ports.definitions.restoreOffers?.();
+        return ports.definitions.snapshot();
+      }
       human(owner);
       await ports.definitions.load();
       human(owner);
+      let changed: number | undefined;
       if (request.kind === 'project-manager')
         await ports.definitions.setProjectManager(request.enabled, () => human(owner));
       if (request.kind === 'not-a-workspace') {
@@ -206,7 +233,10 @@ export function createDefinitionHandlers(
         const open = ports.sessions.findByDefinition(request.key);
         if (open) throw new Error(`Close “${open.name}” first.`);
         await ports.definitions.hideFound?.(request.key);
-      } else if (request.kind === 'show-found') await ports.definitions.showFound?.(request.root);
+      } else if (request.kind === 'show-found')
+        changed = await ports.definitions.showFound?.(request.root);
+      else if (request.kind === 'hide-found-again')
+        changed = await ports.definitions.showFound?.(undefined, true);
       if (request.kind === 'edit') {
         const file = await ports.definitions.edit();
         const error = await shell.openPath(file);
@@ -243,7 +273,8 @@ export function createDefinitionHandlers(
         await ports.definitions.reload();
       }
       human(owner);
-      return ports.definitions.snapshot();
+      const snapshot = ports.definitions.snapshot();
+      return changed === undefined ? snapshot : { ...snapshot, changed };
     },
   };
 }

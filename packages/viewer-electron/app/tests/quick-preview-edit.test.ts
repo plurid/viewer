@@ -42,7 +42,7 @@ vi.mock('../src/renderer/previews/PreviewHost', async () => {
 });
 import { QuickPreview, quickPreviewEdit } from '../src/renderer/previews/QuickPreview';
 import { WorkspaceContext, type WorkspaceController } from '../src/renderer/workspace/context';
-import { getState, initialize, quickPreview } from '../src/renderer/state/store';
+import { getState, initialize, quickPreview, receiveSettings } from '../src/renderer/state/store';
 
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
   this.setAttribute('open', '');
@@ -94,6 +94,25 @@ it.each(['notes.md', 'index.html'])(
     await waitFor(() => expect(getState().quickPreview).toBeNull());
   },
 );
+it('names Edit’s key as the keymap has it, the person’s own included', async () => {
+  const view = show('/fixtures/notes.md');
+  expect(view.getByRole('button', { name: 'Edit' }).getAttribute('title')).toBe('Edit Text (⌘E)');
+  cleanup();
+  act(() => {
+    const settings = getState().settings;
+    receiveSettings({
+      ...settings,
+      revision: settings.revision + 1,
+      settings: {
+        ...settings.settings,
+        shortcuts: { ...settings.settings.shortcuts, 'edit-file': 'Cmd+Shift+E' },
+      },
+    });
+  });
+  expect(
+    show('/fixtures/notes.md').getByRole('button', { name: 'Edit' }).getAttribute('title'),
+  ).toBe('Edit Text (⇧⌘E)');
+});
 it('offers no Edit for a file that is not text, or too large to edit', () => {
   expect(show('/fixtures/photo.png').queryByRole('button', { name: 'Edit' })).toBeNull();
   cleanup();

@@ -218,25 +218,46 @@ export function useHeaderOverflow(
         .filter((item) => item.hasAttribute('data-header-collapse'))
         .sort((a, b) => Number(b.dataset.headerRank) - Number(a.dataset.headerRank));
       for (const item of collapsible) item.removeAttribute('data-spilled');
-      for (const item of items) item.removeAttribute('data-compact');
-      for (const item of collapsible) {
-        if (measure(element, items, widths.current).excess <= 0) break;
-        item.setAttribute('data-compact', '');
-      }
-      const { excess, candidates } = measure(element, items, widths.current);
       // a "…" the person hid comes back for what gives way: its room counts only then
       const menu = element.querySelector('[data-header-menu=""]')
         ? 0
         : menuWidth(element) + gapOf(element);
+      // What gives way even with every label an icon goes anyway: no label becomes an icon for
+      // its sake, so the controls that stay keep the labels they had without it.
+      for (const item of collapsible) item.setAttribute('data-compact', '');
+      const tight = measure(element, items, widths.current);
+      const anyway = new Set(settleHeader(tight.excess, tight.candidates, away, menu));
+      for (const item of collapsible) item.removeAttribute('data-compact');
+      const over = () => {
+        const { excess, candidates } = measure(element, items, widths.current);
+        const going = candidates
+          .filter((candidate) => anyway.has(candidate.id))
+          .reduce((total, candidate) => total + candidate.cost, 0);
+        return excess - going + (anyway.size ? menu : 0);
+      };
+      for (const item of collapsible) {
+        if (over() <= 0) break;
+        item.setAttribute('data-compact', '');
+      }
+      const { excess, candidates } = measure(element, items, widths.current);
       const spilled = new Set(settleHeader(excess, candidates, away, menu));
       const next: string[][] = [];
+      const focus = document.activeElement;
+      let hid = false;
       for (const item of items) {
         const gone = spilled.has(idOf(item));
+        if (gone && !item.hasAttribute('data-spilled') && focus && item.contains(focus)) hid = true;
         item.toggleAttribute('data-spilled', gone);
         if (gone && commandsOf(item).length) next.push(commandsOf(item));
       }
       markScrolling(slot());
       setLead((previous) => (sameLead(previous, next) ? previous : next));
+      // A control the keyboard was on gave way: the keyboard goes to "…", which holds it now,
+      // once "…" is there to take it.
+      if (hid)
+        requestAnimationFrame(() =>
+          element.querySelector<HTMLElement>('[data-header-menu]')?.focus({ preventScroll: true }),
+        );
     };
     const schedule = () => {
       frame ||= requestAnimationFrame(update);

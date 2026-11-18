@@ -44,7 +44,7 @@ export function trashMenuActions(
           ? [
               {
                 id: 'restore',
-                label: 'Restore',
+                label: 'Put Back',
                 icon: 'restore' as const,
                 run: () => handlers.act(() => handlers.restore(ids, 'original')),
               },
@@ -54,7 +54,7 @@ export function trashMenuActions(
           ? [
               {
                 id: 'restore-to',
-                label: 'Restore To…',
+                label: 'Put Back To…',
                 icon: 'folder' as const,
                 run: () => handlers.act(() => handlers.restore(ids, 'choose')),
               },

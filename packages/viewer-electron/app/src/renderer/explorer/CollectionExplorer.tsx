@@ -251,7 +251,11 @@ export function CollectionExplorer({ id }: { id: string }) {
           disabled={!entries.length || busy}
           onClick={() => basketEntries(selected.length ? selected : entries)}
         >
-          {selected.length ? 'Add Selection to Basket' : 'Add Collection to Basket'}
+          {/* both labels take the wider one's room, so the toolbar never moves as you select */}
+          <span className="swap-label">
+            <span aria-hidden={!selected.length}>Add Selection to Basket</span>
+            <span aria-hidden={!!selected.length}>Add Collection to Basket</span>
+          </span>
         </button>
       </div>
       <FileTable paneID={id}>

@@ -4,16 +4,23 @@ This page lists every default key on macOS: command shortcuts, menu keys, keys i
 Quick Preview, and the prefix keys.
 
 **Settings → Shortcuts** shows and changes the keys with an ID in the tables below; **Reset**
-returns one to its default and **Reset All Shortcuts** returns them all. Changes are saved in
-`settings.shortcuts` by ID; an empty value turns a key off. Every command is also in **⌘K**, with
-its key beside it. A key belongs to one command only.
+returns one to its default and **Reset All Shortcuts** returns them all. Only your own changes are
+saved, in `settings.shortcuts` by ID; an empty value turns a key off. A default comes from Viewer
+itself, so a key Viewer later ships differently reaches you unless you changed it. Every command is
+also in **⌘K**, with its key beside it.
+
+A key belongs to one command only. Give a default key to something else, as a recipe or a custom
+action, and the command it came with leaves it to yours: its row in **Settings → Shortcuts** says
+so, and you can choose another key for it. The one key shared on purpose is **⌘L**: see
+[Pictures](#pictures).
 
 ## Folders and files
 
 | Action                                            | Key                                   | ID                                          |
 | ------------------------------------------------- | ------------------------------------- | ------------------------------------------- |
 | **Open Folder…**                                  | **⇧⌘O**                               | `choose-folder`                             |
-| **New Folder Plane**                              | **⇧⌘N**                               | `new-root-folder`                           |
+| **New Files Plane**                               | **⌘N**                                | `new-root-folder`                           |
+| **New Window**                                    | **⌥⌘N**                               | `new-native-window`                         |
 | **Go to Folder…**                                 | **⌘L**, also **⇧⌘G**                  | `go-to`                                     |
 | Choose a suggested folder in **Go to Folder…**    | **↑** / **↓**, then **Return**        |                                             |
 | **Open** the selection                            | **⌘O**, also **⌘↓** or **⌃↓**         | `open-selection`                            |
@@ -27,7 +34,7 @@ its key beside it. A key belongs to one command only.
 | **Select by Pattern…** / **Deselect by Pattern…** | **⌃⌘=** / **⌃⌘-**                     | `select-by-pattern` / `deselect-by-pattern` |
 | **Duplicate**                                     | **⌘D**                                | `duplicate`                                 |
 | **Move to Trash…**                                | **⌘⌫**                                | `trash`                                     |
-| **New Folder…**                                   | **⌘N**                                | `new-folder`                                |
+| **New Folder…**                                   | **⇧⌘N**                               | `new-folder`                                |
 | **New Folder with Selection…**                    | **⌃⌘N**                               | `new-folder-with-selection`                 |
 | **Show Hidden Files** / **Hide Hidden Files**     | **⇧⌘.**                               | `toggle-hidden`                             |
 | **Undo File Operation** / **Redo File Operation** | **⌘Z** / **⇧⌘Z**                      | `undo-file` / `redo-file`                   |
@@ -108,12 +115,27 @@ These keys are fixed. They work when the folder has the focus, not in a text fie
 
 ## Quick Preview
 
-| Key                     | Action                        |
-| ----------------------- | ----------------------------- |
-| **Space** or **Escape** | Close Quick Preview           |
-| **←** / **→**           | Previous / next selected file |
+| Key                     | Action                                                                       |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| **Space** or **Escape** | Close Quick Preview                                                          |
+| **←** / **→**           | With several files selected, the previous / next of them                     |
+| **↑ ↓ ← →**             | Otherwise, move the folder's selection as its view does; the preview follows |
 
-A control that has the focus, such as a drawing or a video, answers its own keys first.
+The arrows move on from the file Quick Preview shows. A control that has the focus, such as a
+drawing, a 3D model or a long text, answers its own keys first. If the folder's plane closed, the
+arrows step through the files Quick Preview shows.
+
+## Pictures
+
+These keys turn the picture that has the keyboard: click the picture or its header's tools, or use
+Quick Preview. Anywhere else, **⌘L** is **Go to Folder…**: the two share it on purpose, and both
+rows in **Settings → Shortcuts** say so. A trackpad turn goes to the picture under the pointer, else
+to the one these keys would turn.
+
+| Action                   | Key    | ID                   |
+| ------------------------ | ------ | -------------------- |
+| **Rotate Picture Left**  | **⌘L** | `image-rotate-left`  |
+| **Rotate Picture Right** | **⌘R** | `image-rotate-right` |
 
 ## While a tour plays
 

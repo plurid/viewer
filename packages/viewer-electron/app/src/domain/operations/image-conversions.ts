@@ -34,11 +34,11 @@ export function turnConversion(turn: 90 | 180 | 270): ImageConversion {
   return turn === 90 ? 'rotate-right' : turn === 180 ? 'rotate-180' : 'rotate-left';
 }
 /**
- * Pictures a rotated copy is made from: what the system decoder reads, but not GIF or TIFF, which
- * can hold several frames or pages that a rotated copy would drop.
+ * Pictures a rotated copy is made from: what the system decoder reads. An animated GIF or a TIFF of
+ * several pages is refused as the copy is made, saying why, as Image Tools refuses one: the copy
+ * would keep one frame or page of it.
  */
-export const rotatableImage = (entry: { directory: boolean; extension: string }) =>
-  convertibleImage(entry) && !['gif', 'tif', 'tiff'].includes(entry.extension.toLowerCase());
+export const rotatableImage = convertibleImage;
 /** Explicit raster inputs accepted by the bundled image tools. */
 export const transformableImage = (entry: { directory: boolean; extension: string }) =>
   !entry.directory &&

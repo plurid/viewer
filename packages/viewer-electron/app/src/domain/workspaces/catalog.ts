@@ -1,6 +1,7 @@
 import type { SavedState, Workspace } from '../contracts';
 import type { DefinitionCatalog, WorkspaceDefinition } from './definitions/schema';
 import type { FoundKeyChange } from './found/catalog';
+import { plural } from '../plural';
 
 export function rekeyFoundLinks(
   workspaces: Workspace[],
@@ -33,7 +34,7 @@ export function linkedDefinition(space: Workspace, catalog?: DefinitionCatalog) 
 }
 
 /**
- * A definition that opens more than one folder plane at its root: several planes, a plane of
+ * A definition that opens more than one files plane at its root: several planes, a plane of
  * another kind, tiling or its own look. Manage marks it Rich; the workspace offer names it.
  */
 export function richDefinition(definition: WorkspaceDefinition): boolean {
@@ -43,6 +44,25 @@ export function richDefinition(definition: WorkspaceDefinition): boolean {
     !!definition.tiling ||
     !!definition.look
   );
+}
+
+const planeNouns: Readonly<Record<string, string>> = {
+  file: 'a file',
+  terminal: 'a terminal',
+  scratch: 'a scratch plane',
+  search: 'a search',
+};
+/**
+ * What a rich definition gives, as words after its name: "opens 3 planes", "opens a terminal",
+ * "opens 2 tiled planes", "has its own look".
+ */
+export function richSummary(definition: WorkspaceDefinition): string {
+  const { planes, tiling, look } = definition;
+  const only = planes.length === 1 ? planes[0]!.plane.kind : undefined;
+  if (only && only !== 'folder') return 'opens ' + (planeNouns[only] ?? plural(1, 'plane'));
+  if (only && look && !tiling) return 'has its own look';
+  if (only && tiling) return 'opens a tiled plane';
+  return 'opens ' + plural(planes.length, tiling ? 'tiled plane' : 'plane');
 }
 
 export function definitionSourceNotice(

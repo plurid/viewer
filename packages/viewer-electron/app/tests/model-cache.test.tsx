@@ -622,6 +622,84 @@ describe('the warm CAD worker', () => {
     await expect(next).resolves.toHaveLength(1);
   });
 
+  it('gives up on a compile that never ends within the conversion time, then compiles in the worker', async () => {
+    const hung = vi.fn(() => new Promise<WebAssembly.Module | undefined>(() => {}));
+    const cad = converter({ compile: hung });
+    const stuck = cad.request(new ArrayBuffer(8), 'step', signal());
+    await posted();
+    expect(workers).toHaveLength(0);
+    vi.advanceTimersByTime(45_000);
+    await expect(stuck).rejects.toThrow('CAD conversion took too long');
+    const next = cad.request(new ArrayBuffer(8), 'step', signal());
+    await posted();
+    expect(workers[0]!.posted[0]!.module).toBeUndefined();
+    workers[0]!.reply();
+    await expect(next).resolves.toHaveLength(1);
+    expect(hung).toHaveBeenCalledOnce();
+  });
+
+  it('cancels a conversion waiting for the compile and posts only the next one', async () => {
+    let finish!: (module: WebAssembly.Module) => void;
+    const cad = converter({
+      compile: () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    });
+    const abort = new AbortController();
+    const waiting = cad.request(new ArrayBuffer(8), 'step', abort.signal);
+    const next = cad.request(new ArrayBuffer(8), 'iges', signal());
+    abort.abort();
+    await expect(waiting).rejects.toThrow('Aborted');
+    finish(compiled);
+    await posted();
+    expect(workers).toHaveLength(1);
+    expect(workers[0]!.posted.map((request) => request.extension)).toEqual(['iges']);
+    workers[0]!.reply();
+    await next;
+  });
+
+  it('lets go of the compiled module after its idle time and under memory pressure', async () => {
+    const cad = converter();
+    const close = cad.retain();
+    const first = cad.request(new ArrayBuffer(8), 'step', signal());
+    await posted();
+    workers[0]!.reply();
+    await first;
+    close();
+    vi.advanceTimersByTime(120_000);
+    const second = cad.request(new ArrayBuffer(8), 'step', signal());
+    await posted();
+    workers[1]!.reply();
+    await second;
+    expect(compile).toHaveBeenCalledTimes(2);
+    releaseModelMemory();
+    expect(workers[1]!.terminated).toBe(true);
+    const third = cad.request(new ArrayBuffer(8), 'step', signal());
+    await posted();
+    workers[2]!.reply();
+    await third;
+    expect(compile).toHaveBeenCalledTimes(3);
+  });
+
+  it('lets go after a conversion that memory pressure met while it waited for the compile', async () => {
+    let finish!: (module: WebAssembly.Module) => void;
+    const cad = converter({
+      compile: () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    });
+    cad.retain();
+    const waiting = cad.request(new ArrayBuffer(8), 'step', signal());
+    releaseModelMemory();
+    finish(compiled);
+    await posted();
+    workers[0]!.reply();
+    await waiting;
+    expect(workers[0]!.terminated).toBe(true);
+  });
+
   it('stops listening for memory pressure once disposed', async () => {
     const cad = converter();
     cad.retain();
@@ -749,6 +827,28 @@ describe('remembered models and the preview around them', () => {
     expect(modelGeometryCache.snapshot()).toMatchObject({ entries: 0, parsing: 0 });
   });
 
+  it('converts once when a second preview finishes reading after the first conversion', async () => {
+    let release!: () => void;
+    const slow = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let reads = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        reads += 1;
+        if (reads === 2) await slow;
+        return { ok: true, arrayBuffer: async () => new ArrayBuffer(8), text: async () => '' };
+      }),
+    );
+    render(<ModelPreview {...context(entry('step'))} />);
+    render(<ModelPreview {...context(entry('step'))} />);
+    await waitFor(() => expect(modelGeometryCache.snapshot().entries).toBe(1));
+    await act(async () => release());
+    await waitFor(() => expect(screen.getAllByText(/1 mesh · 12 triangles/)).toHaveLength(2));
+    expect(importCad).toHaveBeenCalledOnce();
+  });
+
   it('keeps one version of a file: a newer one replaces the older', async () => {
     (await open(entry('step', { modified: 1 }))).unmount();
     (await open(entry('step', { modified: 2 }))).unmount();
@@ -770,6 +870,25 @@ describe('remembered models and the preview around them', () => {
 });
 
 describe('the geometry cache keeps its accounts', () => {
+  it('gives a late joiner the model already kept, without parsing again', async () => {
+    const cache = new ModelGeometryCache();
+    const model: ParsedModel = { kind: 'cad', meshes: cadBox() };
+    cache.set('k', '/f/k', model, cache.begin());
+    const parse = vi.fn(async () => model);
+    await expect(cache.share('k', '/f/k', parse, new AbortController().signal)).resolves.toBe(
+      model,
+    );
+    expect(parse).not.toHaveBeenCalled();
+  });
+
+  it('starts its byte count again from nothing once everything is forgotten', () => {
+    const cache = new ModelGeometryCache();
+    cache.set('k', '/f/k', { kind: 'cad', meshes: cadBox() }, cache.begin());
+    (cache as unknown as { bytes: number }).bytes += 12345;
+    cache.invalidate('/f');
+    expect(cache.snapshot()).toMatchObject({ entries: 0, bytes: 0 });
+  });
+
   it('starts a new parse after an access change, instead of joining the one running', async () => {
     const cache = new ModelGeometryCache();
     const parse = vi.fn(() => new Promise<ParsedModel>(() => {}));

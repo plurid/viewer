@@ -2,6 +2,7 @@ import type { FileEntry } from '../contracts';
 import type { WorkspaceOffer } from '../workspaces/offer';
 import { fileFamily, formatBytes } from '../files/entries';
 import { plural } from '../plural';
+import { richSummary } from '../workspaces/catalog';
 import { archive, copyName, oldInstaller } from './rules';
 import { extractedFolderName } from '../operations/extract';
 
@@ -216,21 +217,10 @@ export interface WorkspaceInsight extends FolderInsight {
   root: string;
   /** Why the palette's Suggested section lists it: "Remembers 5 planes". */
   reason: string;
+  /** The action's accessible name, with the workspace it opens: "Open Workspace “acme-site”". */
+  actionName: string;
 }
-const planeNouns: Readonly<Record<string, string>> = {
-  file: 'a file',
-  terminal: 'a terminal',
-  scratch: 'a scratch plane',
-  search: 'a search',
-};
-/** What opening a rich definition shows: "3 planes", "a terminal", "2 tiled planes". */
-function opens(offer: WorkspaceOffer): string {
-  const { planes, tiling, look } = offer.definition;
-  const only = planes.length === 1 ? planes[0]!.plane.kind : undefined;
-  if (only && only !== 'folder') return planeNouns[only] ?? plural(1, 'plane');
-  if (only && look && !tiling) return 'in its own look';
-  return plural(planes.length, tiling ? 'tiled plane' : 'plane');
-}
+const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /**
  * The card for a workspace offer (domain/workspaces/offer.ts): the workspace's name and what opening
@@ -252,22 +242,19 @@ export function workspaceInsight(offer: WorkspaceOffer): WorkspaceInsight {
       title: holder === name ? `“${name}” is already open` : `“${name}” is open in “${holder}”`,
       reason: holder === name ? 'Already open' : `Has “${name}” open`,
       action: 'Switch',
+      actionName: `Switch to “${holder}”`,
     };
   }
-  if (offer.reason === 'remembered') {
-    const planes = plural(offer.definition.remembered!.planes, 'plane');
-    return {
-      ...card,
-      title: `“${name}” remembers ${planes}`,
-      reason: `Remembers ${planes}`,
-      action: 'Open Workspace',
-    };
-  }
+  const adds =
+    offer.reason === 'remembered'
+      ? 'remembers ' + plural(offer.definition.remembered!.planes, 'plane')
+      : richSummary(offer.definition);
   return {
     ...card,
-    title: `“${name}” opens ${opens(offer)}`,
-    reason: `Opens ${opens(offer)}`,
+    title: `“${name}” ${adds}`,
+    reason: sentence(adds),
     action: 'Open Workspace',
+    actionName: `Open Workspace “${name}”`,
   };
 }
 
@@ -298,5 +285,24 @@ export function withoutWorkspaceDismissals(
       const kept = ids.filter((id) => id !== 'workspace.open');
       return kept.length ? [[folder, kept]] : [];
     }),
+  );
+}
+
+/**
+ * Whether a configuration change, by its key path, names a root that holds a workspace offer
+ * dismissal. Viewer keeps those in a private file and drops them from configuration it reads; one
+ * typed into config.jsonc by hand is there until then, and an agent's change preview must not
+ * name it.
+ */
+export function namesWorkspaceDismissal(
+  key: string,
+  dismissed: Readonly<Record<string, readonly string[]>> | undefined,
+): boolean {
+  const prefix = 'ui.insightsDismissed.';
+  if (!key.startsWith(prefix)) return false;
+  const rest = key.slice(prefix.length);
+  return Object.entries(dismissed ?? {}).some(
+    ([root, ids]) =>
+      ids.includes('workspace.open') && (rest === root || rest.startsWith(root + '.')),
   );
 }

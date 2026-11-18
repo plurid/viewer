@@ -11,12 +11,23 @@ import { useComparisonSession } from './useComparisonSession';
 import { imageComparisonMode, imageComparisonModes, textComparisonModes } from './modes';
 import { useViewer } from '../state/store';
 import { ChoiceButton } from '../ui/ChoiceMenu';
+import { FileName } from '../ui/FileName';
+import { PathLabel } from '../ui/PathLabel';
 
-const sourceName = (source: DiffSource) => {
-  if (source.kind === 'empty') return source.name;
+/** A side's source: a file as its path label, keeping its own name; a Git version by its name,
+ * cut in its middle, and the commit; an empty side by what it stands for. */
+function SourceName({ source }: { source: DiffSource }) {
+  if (source.kind === 'empty') return <span>{source.name}</span>;
+  if (source.kind === 'file') return <PathLabel path={source.path} />;
   const name = source.path.split('/').at(-1) || source.path;
-  return source.kind === 'git' ? `${name} · HEAD ${source.commit.slice(0, 8)}` : source.path;
-};
+  return (
+    // the name gives way before the commit, which keeps its place at the end
+    <span className="diff-source-version" style={{ display: 'flex', gap: 4, minWidth: 0 }}>
+      <FileName name={name} />
+      <span style={{ flex: 'none' }}>· HEAD {source.commit.slice(0, 8)}</span>
+    </span>
+  );
+}
 
 export default function DiffPlane({ pane }: { pane: DiffRecord }) {
   const navigation = useRef<DiffNavigation | null>(null);
@@ -83,8 +94,8 @@ export default function DiffPlane({ pane }: { pane: DiffRecord }) {
         )}
       </div>
       <div className="diff-sources">
-        <span title={sourceName(pane.left)}>{sourceName(pane.left)}</span>
-        <span title={sourceName(pane.right)}>{sourceName(pane.right)}</span>
+        <SourceName source={pane.left} />
+        <SourceName source={pane.right} />
       </div>
       {loaded.image ? (
         <ImageDiff left={loaded.left} right={loaded.right} mode={imageComparisonMode(pane.mode)} />

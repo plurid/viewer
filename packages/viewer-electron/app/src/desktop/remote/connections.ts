@@ -1,5 +1,6 @@
 import path from 'node:path';
-import { rename } from 'node:fs/promises';
+import { access, rename } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { remoteConnection } from '../../domain/remote/connections';
@@ -18,8 +19,9 @@ import type { RemoteConnectionState } from '../../domain/remote/status';
 import { SSHConnectionError } from '../../domain/remote/ssh-errors';
 import type { SSHHostKey } from '../../domain/remote/ssh-errors';
 import { DocumentStore } from '../persistence/document-store';
+import { stat } from '../files/stats';
 import type { WorkerBackend } from '../workers/utility-client';
-import { AskpassRelay } from './askpass';
+import { AskpassRelay, UnexpectedQuestionError } from './askpass';
 import type { AskpassAttempt, PromptAnswer } from './askpass';
 import { RemoteControl } from './control';
 import type { SSHRunner } from './control';
@@ -88,12 +90,40 @@ export interface RemoteConnectionsOptions {
   sessions?: RemoteSessionPort;
   temporaryDirectory?: string;
   sshDirectory?: string;
+  /** Ends a master that refused `-O exit`; tests replace it. */
+  terminate?(pid: number): void;
 }
 
 const disconnectedError = () =>
   Object.assign(new Error('Connect to this server first.'), {
     code: 'VIEWER_REMOTE_DISCONNECTED',
   });
+
+/** A sign-in that needs the person: a key file Viewer can't open, or a question it never expects. */
+export class RemoteSignInError extends Error {
+  readonly code = 'VIEWER_REMOTE_SIGN_IN';
+}
+
+const keyName = (file: string): string => path.basename(file);
+
+/**
+ * The chosen key must be a file Viewer can open before ssh starts: otherwise OpenSSH only warns
+ * and the sign-in fails for a reason no one sees. Its contents are never read.
+ */
+async function requireKey(file: string): Promise<void> {
+  try {
+    if (!(await stat(file)).isFile()) {
+      throw new Error('Not a file.');
+    }
+    await access(file, constants.R_OK);
+  } catch {
+    throw new RemoteSignInError(
+      'Viewer can’t open the key file “' +
+        keyName(file) +
+        '”. Choose it again in Settings → Servers, then connect.',
+    );
+  }
+}
 
 /** Fields ssh connects with. A new name, starting folder or preference keeps the connection. */
 function sameEndpoint(left: RemoteConnection, right: RemoteConnection): boolean {
@@ -133,6 +163,7 @@ export class RemoteConnections {
       sshExecutable: options.sshExecutable,
       temporaryDirectory: options.temporaryDirectory,
       idle: (id) => this.idle(id),
+      terminate: options.terminate,
     });
     this.sessions =
       options.sessions ??
@@ -374,8 +405,16 @@ export class RemoteConnections {
     this.state(record.id, owner === undefined ? 'reconnecting' : 'connecting');
     let attempt: AskpassAttempt | undefined;
     try {
+      if (record.identityFile !== undefined) {
+        await requireKey(record.identityFile);
+      }
       if (owner !== undefined) {
-        attempt = await this.relay.begin(record.id, record.name, owner);
+        attempt = await this.relay.begin(
+          record.id,
+          record.name,
+          owner,
+          record.identityFile === undefined ? undefined : keyName(record.identityFile),
+        );
         attempt.signal.addEventListener('abort', () => controller.abort(), { once: true });
         if (attempt.signal.aborted) {
           controller.abort();
@@ -412,7 +451,21 @@ export class RemoteConnections {
     } catch (error) {
       await this.sessions.disconnect(record.id).catch(() => {});
       await this.control.disconnect(record.id);
-      if (controller.signal.aborted || this.closed) {
+      const reason = attempt?.signal.reason;
+      const signIn =
+        error instanceof RemoteSignInError
+          ? error
+          : reason instanceof UnexpectedQuestionError
+            ? new RemoteSignInError(reason.message)
+            : undefined;
+      if (signIn && !this.closed) {
+        live.hostKey = undefined;
+        this.state(record.id, 'needs-sign-in');
+        // A click hears why; an automatic attempt leaves the state for the plane to show.
+        if (owner !== undefined) {
+          throw signIn;
+        }
+      } else if (controller.signal.aborted || this.closed) {
         if (live.controller === controller && !this.closed) {
           this.state(record.id, 'disconnected');
         }
@@ -443,14 +496,15 @@ export class RemoteConnections {
           this.offline(id);
         }
       };
-      void this.control.check(id).then((alive) => {
+      void this.control.check(id).then((state) => {
         if (!usable.includes(live.state) || this.closed) {
           return;
         }
-        if (alive) {
-          this.health(id, live);
-        } else {
+        // No answer in time is not proof the master is gone: ask again at the next interval.
+        if (state === 'gone') {
           lost();
+        } else {
+          this.health(id, live);
         }
       }, lost);
     }, remoteLimits.sshServerAliveIntervalSeconds * 1000).unref();
@@ -482,8 +536,8 @@ export class RemoteConnections {
   /** An idle connection's channels reopen through its master, never by a new sign-in. */
   private async wake(id: string, live: LiveConnection): Promise<void> {
     live.waking ??= (async () => {
-      const alive = await this.control.check(id).catch(() => false);
-      if (!alive) {
+      // A channel can no longer sign in by itself, so only a master known to be gone stops here.
+      if ((await this.control.check(id)) === 'gone') {
         await this.expire(id, live);
         throw disconnectedError();
       }
@@ -505,8 +559,8 @@ export class RemoteConnections {
       return;
     }
     live.checking = (async () => {
-      const alive = await this.control.check(id).catch(() => false);
-      if (!alive && usable.includes(live.state) && !this.closed) {
+      const state = await this.control.check(id);
+      if (state === 'gone' && usable.includes(live.state) && !this.closed) {
         this.offline(id);
       }
     })().finally(() => {

@@ -74,29 +74,29 @@
 .workspace-catalog-panel > footer {
   flex-wrap: wrap;
 }
+/* The footer's count, or Not a Workspace's notice in its place: a long name gives way from its
+   end, with its whole text on hover, and the notice's buttons stay whole */
 .workspace-catalog-count {
   flex: 1;
   min-width: 0;
-  text-align: right;
-}
-/* Not a Workspace's Undo, in the count's place: a long name gives way, Undo stays whole */
-.workspace-catalog-undo {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: var(--gap-inline);
-  min-width: 0;
 }
-.workspace-catalog-undo > span {
+.workspace-catalog-count > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.workspace-catalog-undo > button,
+.workspace-catalog-count > button,
 .workspace-catalog-list li > button:not(.workspace-catalog-open) {
   flex: none;
   white-space: nowrap;
+}
+.workspace-catalog-count > button {
+  color: var(--ink);
 }
 .workspace-catalog-panel > footer nav {
   display: flex;

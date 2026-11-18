@@ -12,6 +12,8 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -42,7 +44,14 @@ import { IconButton, Empty, Failure, Loading, tryAgainLabel } from '../ui/primit
 import { plural } from '../../domain/plural';
 import { Icon } from '../ui/Icon';
 import { FolderAccessButton, needsFolderAccess } from '../ui/permissions/FolderAccessButton';
-import { ColumnsView, GalleryView, GridView, ListView, type FileViewProps } from './views';
+import {
+  ColumnsView,
+  GalleryView,
+  GridView,
+  ListView,
+  fileRowID,
+  type FileViewProps,
+} from './views';
 import { refreshFolder, useFolder } from './useFolder';
 import { folderCommandPath } from '../commands/folder-target';
 import { recordScroll, useScrollRestore } from './scroll-restore';
@@ -96,6 +105,10 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
   const [subtree, setSubtree] = useBrowseField(id, path, 'subtree');
   const input = useRef<HTMLInputElement>(null);
   const surface = useRef<HTMLDivElement>(null);
+  // the rows' DOM ids, so the focused plane names its cursor row to VoiceOver
+  const rowPrefix = useId();
+  // a deep path shows its end, where the folder in view is, as the path bar scrolls
+  const crumbBar = useRef<HTMLElement>(null);
   const selectionCache = session.cache;
   const fileDialogs = useFileDialogs();
   const [searchOpen, setSearchOpen] = useBrowseField(id, path, 'searchOpen');
@@ -483,9 +496,14 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
       },
     });
   });
-  if (!pane) return <Empty title="This folder plane is no longer open" />;
+  useLayoutEffect(() => {
+    const bar = crumbBar.current;
+    if (bar) bar.scrollLeft = bar.scrollWidth;
+  }, [path, pathOpen]);
+  if (!pane) return <Empty title="This files plane is no longer open" />;
   const viewProps: FileViewProps = {
     paneID: id,
+    idPrefix: rowPrefix,
     entries,
     presentation,
     depths: tree.depths,
@@ -554,7 +572,9 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
         if (pane) recordScroll(session, pane.mode, event.target as HTMLElement);
       }}
       tabIndex={0}
+      role="group"
       aria-label={`Folder ${path}`}
+      aria-activedescendant={session.cursor ? fileRowID(rowPrefix, session.cursor) : undefined}
       onFocus={() => setActivePane(id)}
       onPointerDown={() => setActivePane(id)}
       // Opening a folder can detach the clicked row before the space handles the event.
@@ -629,7 +649,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
     >
       {pathOpen && (
         <div className="breadcrumb-row">
-          <nav className="breadcrumbs" aria-label="Folder path">
+          <nav className="breadcrumbs" aria-label="Folder path" ref={crumbBar}>
             <button title="Go to root" onClick={() => navigate(id, separator)}>
               {separator}
             </button>
@@ -638,6 +658,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
                 <Icon name="right" size={12} />
                 <button
                   title={separator + crumbs.slice(0, index + 1).join(separator)}
+                  aria-current={index === crumbs.length - 1 ? 'location' : undefined}
                   onClick={() =>
                     navigate(id, separator + crumbs.slice(0, index + 1).join(separator))
                   }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** Previews embedded in a folder plane, and a preview plane's own frame. */
+/** Previews embedded in a files plane, and a preview plane's own frame. */
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { createElement } from 'react';

@@ -108,10 +108,14 @@ describe('background definition roots', () => {
     );
     await f.service.load();
     expect(checkRoot).not.toHaveBeenCalled();
+    // fake time: a busy machine cannot run out a check's 150 ms and free its slot
+    vi.useFakeTimers();
     f.service.searchRoots('', 1, 20);
-    await vi.waitFor(() => expect(checkRoot).toHaveBeenCalledTimes(2));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(checkRoot).toHaveBeenCalledTimes(2);
     releases.shift()!();
-    await vi.waitFor(() => expect(checkRoot).toHaveBeenCalledTimes(3));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(checkRoot).toHaveBeenCalledTimes(3);
     await f.service.close();
     for (const release of releases) release();
   });

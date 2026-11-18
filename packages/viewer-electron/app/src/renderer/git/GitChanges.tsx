@@ -7,6 +7,8 @@ import type { ReviewMode } from '../../domain/comparison/review';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { plural } from '../../domain/plural';
+import { FileName } from '../ui/FileName';
+import { baseName, parentPath } from '../../domain/workspaces/planes';
 
 export default function GitChanges({
   path,
@@ -138,10 +140,15 @@ function ActiveGitChanges({ path, paneID }: { path: string; paneID: string }) {
                     className="git-review-file"
                     aria-pressed={change.id === review.selected?.id}
                     disabled={review.busy}
+                    // the name leads and keeps its extension; its folder follows and gives way
+                    title={change.path}
                     onClick={() => review.change({ selectedPath: change.path })}
                   >
                     <span className="git-badge">{change.status}</span>
-                    <span>{change.path}</span>
+                    <FileName className="git-review-name" name={baseName(change.path)} />
+                    {change.path.includes('/') && (
+                      <span className="git-review-folder">{parentPath(change.path)}</span>
+                    )}
                   </button>
                 </div>
               );
@@ -164,7 +171,11 @@ function ActiveGitChanges({ path, paneID }: { path: string; paneID: string }) {
             >
               Next
             </button>
-            <span className="git-review-path">{review.selected?.path ?? 'Changed files'}</span>
+            {review.selected ? (
+              <FileName className="git-review-path" name={review.selected.path} />
+            ) : (
+              <span className="git-review-path">Changed files</span>
+            )}
             {review.selected && (
               <button
                 onClick={() =>

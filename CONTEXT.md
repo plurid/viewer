@@ -33,13 +33,14 @@ local server listener. `desktop/remote/connections.ts` owns private saved record
 authority, idle release and connection-scoped quiescing; `control.ts` owns explicit system OpenSSH
 masters and their holders. `askpass.ts`, `native-prompts.ts` and the Swift relay attach native
 secure input to the clicking window. `session.ts` owns one lazy `UtilityClient` for
-`remote-worker.ts`, its SFTP channels and scheduler. `ssh-config.ts` reads host suggestions only
-after the person's yes. `domain/remote/ssh-arguments.ts` builds every argv and
-`domain/remote/ssh-errors.ts` classifies exits. Remote resources, server Trash and operation
-executors join this owner in later packages. Existing Operations, Resources, Terminals and Trash
-retain their shared state and authority. SSH planes are proposed for the direct build behind
-`VIEWER_REMOTE=1` until qualification; construction never connects or writes a connection record.
-Connections and secrets stay outside editable JSONC and agent authority.
+`remote-worker.ts`, its SFTP channels and `lane-scheduler.ts`. `ssh-config.ts` reads host
+suggestions only after the person's yes. `domain/remote/ssh-arguments.ts` builds every argv,
+`domain/remote/ssh-errors.ts` classifies exits and `domain/remote/prompts.ts` words OpenSSH's
+questions. Remote resources, server Trash and operation executors join this owner in later packages.
+Existing Operations, Resources, Terminals and Trash retain their shared state and authority. SSH
+planes are proposed for the direct build behind `VIEWER_REMOTE=1` until qualification; construction
+never connects or writes a connection record. Connections and secrets stay outside editable JSONC
+and agent authority.
 
 `desktop/remote/sftp` owns the bounded SFTP v3 codec, duplex client, stream windows and listing-name
 boundary.
@@ -71,7 +72,9 @@ Workspace links record their definition source.
 The **workspace offer** is `domain/workspaces/offer.ts`: the owning root for a folder and whether
 opening it adds something. `domain/suggestions/insights.ts` words it as the `workspace.open` card,
 `renderer/workspace/workspace-offer.ts` reads it for the folder in view, and the folder card and the
-palette's Suggested section show it. Its dismissals stay out of agents' configuration reads.
+palette's Suggested section show it. `desktop/workspaces/offer-dismissals.ts`, owned by the
+definition catalog, keeps its dismissals in a private file the catalog reports, never in
+configuration.
 
 - `domain/terminals/command-text.ts` validates command text.
 - `domain/terminals/declared-commands.ts` parses bounded file declarations without execution.

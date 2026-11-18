@@ -162,6 +162,8 @@ export function humanDefinitionCommand(id: string): boolean {
       'reset-workspace',
       'save-workspace-definition',
       'save-workspace-as-definition',
+      // it also shows the workspace offers the person dismissed, a private list
+      'show-hidden-insights',
     ].includes(id)
   );
 }

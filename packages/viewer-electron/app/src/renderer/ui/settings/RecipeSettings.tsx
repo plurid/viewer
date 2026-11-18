@@ -161,6 +161,7 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
               </button>
               {!builtInRecipes.some((item) => item.id === recipe.id) && (
                 <ReferencedRemove
+                  name={`the recipe “${recipe.name}”`}
                   users={referencesTo(settings, 'recipe', recipe.id)}
                   onRemove={() =>
                     patch(

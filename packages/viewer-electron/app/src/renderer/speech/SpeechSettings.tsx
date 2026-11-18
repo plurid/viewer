@@ -225,7 +225,7 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
       )}
       <h2>Recording</h2>
       <div className="speech-preferences">
-        <label className="settings-row">
+        <div className="settings-row">
           <span>Language</span>
           <ChoiceButton
             label="Speech language"
@@ -234,8 +234,8 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
             choices={speechLanguages.map(([value, label]) => ({ value, label }))}
             onChoose={(value) => preference({ language: value as SpeechPreferences['language'] })}
           />
-        </label>
-        <label className="settings-row">
+        </div>
+        <div className="settings-row">
           <span>Microphone</span>
           <ChoiceButton
             label="Speech microphone"
@@ -261,7 +261,7 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
             ]}
             onChoose={(microphone) => preference({ microphone })}
           />
-        </label>
+        </div>
       </div>
       <p className="settings-note">{microphoneAccess[status.microphone]}</p>
       <p className="settings-note">

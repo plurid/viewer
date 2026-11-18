@@ -416,7 +416,7 @@ export class AgentRequests {
       navigation: structuredClone(request),
       detail:
         request.kind === 'open-path'
-          ? `${request.path}\n\n${{ current: 'Use the current folder plane; files open in a linked preview.', root: 'Open an independent root plane.', linked: 'Open a linked plane.' }[request.placement]}`
+          ? `${request.path}\n\n${{ current: 'Use the current files plane; files open in a linked preview.', root: 'Open an independent root plane.', linked: 'Open a linked plane.' }[request.placement]}`
           : request.kind === 'select-files'
             ? request.files.length
               ? request.files.map((file) => file.path).join('\n')

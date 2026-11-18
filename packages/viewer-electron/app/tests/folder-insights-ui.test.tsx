@@ -1,18 +1,19 @@
 // @vitest-environment jsdom
 /**
- * The insight strip in a folder plane: its cards come from the listing, an action selects the
+ * The insight strip in a files plane: its cards come from the listing, an action selects the
  * files it covers and runs the command a person would pick from the menu on them, and a dismissed
  * card stays hidden in its folder until Show hidden insights.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { FileEntry, FolderPane } from '../src/domain/contracts';
+import type { FileEntry, FolderPane, Pane } from '../src/domain/contracts';
 import type { SettingsPatch, SettingsSnapshot } from '../src/domain/services';
 import type {
   DefinitionCatalog,
   WorkspaceDefinition,
 } from '../src/domain/workspaces/definitions/schema';
 import { sampleDefinition } from './workspace-definition-fixtures';
+import { offerFor } from '../src/renderer/workspace/workspace-offer';
 import { FolderExplorer } from '../src/renderer/explorer/FolderExplorer';
 import { CommandsContext } from '../src/renderer/commands/context';
 import { CommandRegistry, type CommandContext } from '../src/renderer/commands/registry';
@@ -358,10 +359,11 @@ describe('the insight strip', () => {
 
 describe('the workspace offer card', () => {
   const root = downloads;
-  const definition = (): WorkspaceDefinition => {
-    const base = sampleDefinition('sample/inbox', { root, name: 'inbox' });
+  const remembered = (key: string, path: string, name: string): WorkspaceDefinition => {
+    const base = sampleDefinition(key, { root: path, name });
     return { ...base, remembered: { at: now, basis: base.basis, planes: 5 } };
   };
+  const definition = () => remembered('sample/inbox', root, 'inbox');
   const folderPane = (id: string, path: string): FolderPane => ({
     id,
     type: 'folder',
@@ -373,40 +375,59 @@ describe('the workspace offer card', () => {
     history: [path],
     historyIndex: 0,
   });
-  /** The catalog holds the definition, and the workspace also browses outside its root. */
-  function offering(extra: FolderPane[] = [folderPane('desktop', home + '/Desktop')]) {
-    const catalog: DefinitionCatalog = {
-      revision: 1,
-      file: { path: '/data/workspaces.jsonc', state: 'absent' },
-      projectManager: {
-        path: '/source/projects.json',
-        state: 'off',
-        enabled: false,
-        projects: 0,
-        missing: 0,
-        disabled: 0,
-        remote: 0,
-        duplicateKeys: 0,
-      },
-      definitions: [definition()],
-      diagnostics: [],
-    };
+  const catalogOf = (
+    definitions: WorkspaceDefinition[],
+    revision = 1,
+    dismissedOffers?: string[],
+  ): DefinitionCatalog => ({
+    revision,
+    file: { path: '/data/workspaces.jsonc', state: 'absent' },
+    projectManager: {
+      path: '/source/projects.json',
+      state: 'off',
+      enabled: false,
+      projects: 0,
+      missing: 0,
+      disabled: 0,
+      remote: 0,
+      duplicateKeys: 0,
+    },
+    definitions,
+    diagnostics: [],
+    ...(dismissedOffers ? { dismissedOffers } : {}),
+  });
+  /**
+   * The catalog holds the definitions; the workspace's planes are `before`, the plane the tests
+   * mount, then `after`, which by default browses outside every root.
+   */
+  function offering(
+    after: Pane[] = [folderPane('desktop', home + '/Desktop')],
+    definitions = [definition()],
+    before: Pane[] = [],
+  ) {
     const state = getState();
     update({
       ...state,
-      bootstrap: { ...state.bootstrap, definitions: catalog },
+      bootstrap: { ...state.bootstrap, definitions: catalogOf(definitions) },
       saved: {
         ...state.saved,
         workspaces: state.saved.workspaces.map((space) =>
           space.id === state.saved.activeWorkspace
-            ? { ...space, panes: [...space.panes, ...extra] }
+            ? { ...space, panes: [...before, ...space.panes, ...after] }
             : space,
         ),
       },
     });
   }
+  const mainPane = () =>
+    activeWorkspace().panes.find((pane) => pane.type === 'folder' && pane.path === downloads)!.id;
   const offerCard = () =>
     strip().querySelector<HTMLElement>('[data-insight="workspace.open"]') ?? undefined;
+  const elsewhere = [
+    folderPane('desktop', home + '/Desktop'),
+    folderPane('documents', home + '/Documents'),
+    folderPane('music', home + '/Music'),
+  ];
 
   it('leads the cards after the tips, within three, naming the root', async () => {
     savePatch({ ui: { ...getState().saved.ui, firstRunHint: { used: [] } } });
@@ -427,27 +448,38 @@ describe('the workspace offer card', () => {
     expect(label.querySelector('.path-label-text')!.textContent).toBe('~/Downloads');
   });
 
-  it('opens the definition without touching the selection', async () => {
-    offering();
+  it('opens the definition by its name without touching the selection', async () => {
+    // a name ending in an ellipsis does not make the action read as one that asks first
+    offering(undefined, [remembered('sample/inbox', root, 'inbox…')]);
     const workspaceDefinitions = vi.fn(async () => ({ kind: 'elsewhere' as const }));
     Object.assign(window.viewer, { workspaceDefinitions });
     const { paneID } = mount();
     await waitFor(() => expect(offerCard()).toBeTruthy());
     updateBrowseSession(paneID, downloads, { selection: [downloads + '/Scan.pdf'] });
-    fireEvent.click(within(offerCard()!).getByRole('button', { name: 'Open Workspace' }));
+    const action = within(offerCard()!).getByRole('button', { name: 'Open Workspace “inbox…”' });
+    expect(action.textContent).toBe('Open Workspace');
+    fireEvent.click(action);
     await waitFor(() =>
       expect(workspaceDefinitions).toHaveBeenCalledWith({ kind: 'open', key: 'sample/inbox' }),
     );
     expect(selection(paneID)).toEqual([downloads + '/Scan.pdf']);
   });
 
-  it('is dismissed for its root until Show hidden insights', async () => {
-    offering();
+  it('is dismissed for its whole root in the private list until Show Hidden Insights', async () => {
+    // the root holds the folder in view: the dismissal names the root, never the folder
+    const outer = remembered('sample/home', home, 'home');
+    offering([folderPane('apps', '/Applications'), folderPane('library', '/Library')], [outer]);
+    const workspaceDefinitionFile = vi.fn(async (request: { kind: string }) =>
+      request.kind === 'dismiss-offers' ? catalogOf([outer], 2, [home]) : catalogOf([outer], 3),
+    );
+    Object.assign(window.viewer, { workspaceDefinitionFile });
     const { registry } = mount();
     await waitFor(() => expect(offerCard()).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss “inbox” remembers 5 planes' }));
-    expect(offerCard()).toBeUndefined();
-    expect(getState().saved.ui.insightsDismissed).toEqual({ [root]: ['workspace.open'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss “home” remembers 5 planes' }));
+    await waitFor(() => expect(offerCard()).toBeUndefined());
+    expect(workspaceDefinitionFile).toHaveBeenCalledWith({ kind: 'dismiss-offers', roots: [home] });
+    // config.jsonc never holds it
+    expect(getState().saved.ui.insightsDismissed ?? {}).toEqual({});
     // the folder's own cards fill the place
     expect(titles()).toEqual([
       '2 installers older than a week',
@@ -455,25 +487,69 @@ describe('the workspace offer card', () => {
       '1 PDF over 10 MB',
     ]);
     const [show] = registry.list({ ids: ['show-hidden-insights'], scope: 'window' });
+    expect(show).toBeTruthy();
     await act(async () => {
       await registry.run(show!);
     });
+    expect(workspaceDefinitionFile).toHaveBeenCalledWith({ kind: 'show-offers' });
     expect(offerCard()).toBeTruthy();
   });
 
-  it('shows in the first folder plane inside the root only', async () => {
-    // two planes of four inside the root: the workspace is not mostly in it
-    offering([
-      folderPane('desktop', home + '/Desktop'),
-      folderPane('photos', downloads + '/Photos'),
-      folderPane('documents', home + '/Documents'),
-    ]);
+  it('shows in the first files plane the root holds, past other kinds of plane', async () => {
+    // two planes of five inside the root, the first a terminal: the card goes to the files plane
+    const terminal = { id: 'terminal', type: 'terminal', path: root } as Pane;
+    offering(elsewhere, undefined, [terminal]);
+    mount(mainPane());
+    await waitFor(() => expect(offerCard()).toBeTruthy());
+    cleanup();
+    // a later files plane of the same root shows none
+    offering([folderPane('photos', downloads + '/Photos'), ...elsewhere]);
     mount('photos');
     await waitFor(() => expect(strip()).toBeTruthy());
     expect(offerCard()).toBeUndefined();
+  });
+
+  it('with nested roots, shows the outer offer in a plane of the outer root’s own', async () => {
+    // the plain inner root holds the first plane, which has nothing to offer
+    const inner = sampleDefinition('sample/photos', {
+      root: downloads + '/Photos',
+      name: 'photos',
+    });
+    offering(elsewhere, [definition(), inner], [folderPane('photos', downloads + '/Photos')]);
+    mount(mainPane());
+    await waitFor(() => expect(offerCard()).toBeTruthy());
+    expect(offerCard()!.textContent).toContain('“inbox” remembers 5 planes');
     cleanup();
+    mount('photos');
+    await waitFor(() => expect(strip()).toBeTruthy());
+    expect(offerCard()).toBeUndefined();
+  });
+
+  it('counts a plane in a hidden inner definition’s folder as the outer root’s own', async () => {
+    // search leaves out the hidden inner definition: its folder belongs to the outer workspace
+    const inner = {
+      ...sampleDefinition('sample/photos', { root: downloads + '/Photos', name: 'photos' }),
+      hidden: true,
+    };
+    offering(elsewhere, [definition(), inner], [folderPane('photos', downloads + '/Photos')]);
+    mount('photos');
+    await waitFor(() => expect(offerCard()).toBeTruthy());
+    expect(offerCard()!.textContent).toContain('“inbox” remembers 5 planes');
+  });
+
+  it('keeps the card when its dismissal could not be saved', async () => {
+    offering();
+    const workspaceDefinitionFile = vi.fn(async () => {
+      throw new Error('Dismissed workspace offers could not be saved.');
+    });
+    Object.assign(window.viewer, { workspaceDefinitionFile });
     mount();
     await waitFor(() => expect(offerCard()).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss “inbox” remembers 5 planes' }));
+    await waitFor(() =>
+      expect(getState().notice).toBe('Dismissed workspace offers could not be saved.'),
+    );
+    expect(offerCard()).toBeTruthy();
   });
 
   it('stays away while insights are off and when the workspace is mostly in the root', async () => {
@@ -501,6 +577,19 @@ describe('the workspace offer card', () => {
       ),
     );
     expect(screen.queryByRole('region', { name: 'Insights' })).toBeNull();
+  });
+
+  it('offers nothing for a server location', () => {
+    const current = { ...activeWorkspace(), panes: elsewhere };
+    const dismissed: string[] = [];
+    expect(offerFor(downloads, current, [current], [definition()], dismissed)).toBeTruthy();
+    for (const folder of ['viewer-sftp://c1' + downloads, 'Users/a/Downloads'])
+      expect(offerFor(folder, current, [current], [definition()], dismissed)).toBeUndefined();
+    // a definition at the disk's root holds every local folder, never a server's
+    const top = remembered('sample/top', '/', 'Macintosh HD');
+    const empty = { ...activeWorkspace(), panes: [] };
+    expect(offerFor('/Users/a/x', empty, [empty], [top], dismissed)?.root).toBe('/');
+    expect(offerFor('viewer-sftp://c1/x', empty, [empty], [top], dismissed)).toBeUndefined();
   });
 });
 

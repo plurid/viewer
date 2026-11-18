@@ -17,6 +17,7 @@ import { decodeListingName } from './sftp/codec';
 import type { SFTPListingName } from './sftp/codec';
 import { SFTPError } from './sftp/errors';
 import { pread, pwrite } from './sftp/streams';
+import { LaneScheduler } from './lane-scheduler';
 import { remoteLanes } from './lanes';
 import type { RemoteLane } from './lanes';
 import type {
@@ -43,12 +44,6 @@ interface Session {
   stopped: boolean;
 }
 
-interface Job {
-  signal: AbortSignal;
-  thumbnail: boolean;
-  run(): Promise<void>;
-}
-
 /** A request the worker refuses before touching the server. */
 class RemoteRequestError extends Error {
   constructor(
@@ -59,63 +54,8 @@ class RemoteRequestError extends Error {
   }
 }
 
-const stderrCharacters = 64 * 1024;
-const laneConcurrency = 16;
 const regularFile = (permissions: number | undefined) =>
   permissions !== undefined && (permissions & 0xf000) === 0x8000;
-
-/** Foreground work goes first; thumbnails take what is left, at most two at a time. */
-class LaneScheduler {
-  private queued: Job[] = [];
-  private active = 0;
-  private thumbnails = 0;
-
-  run<T>(signal: AbortSignal, thumbnail: boolean, work: () => Promise<T>): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-      this.queued.push({
-        signal,
-        thumbnail,
-        run: async () => {
-          try {
-            signal.throwIfAborted();
-            resolve(await work());
-          } catch (error) {
-            reject(error);
-          }
-        },
-      });
-      this.queued.sort((left, right) => Number(left.thumbnail) - Number(right.thumbnail));
-      this.pump();
-    });
-  }
-
-  private next(): Job | undefined {
-    const index = this.queued.findIndex(
-      (job) => !job.thumbnail || this.thumbnails < remoteLimits.thumbnailsPerConnection,
-    );
-    return index < 0 ? undefined : this.queued.splice(index, 1)[0];
-  }
-
-  private pump(): void {
-    while (this.active < laneConcurrency) {
-      const job = this.next();
-      if (!job) {
-        return;
-      }
-      this.active++;
-      if (job.thumbnail) {
-        this.thumbnails++;
-      }
-      void job.run().finally(() => {
-        this.active--;
-        if (job.thumbnail) {
-          this.thumbnails--;
-        }
-        this.pump();
-      });
-    }
-  }
-}
 
 const sessions = new Map<string, Session>();
 const requests = new Map<string, { connectionID: string; controller: AbortController }>();
@@ -165,7 +105,8 @@ function childTransport(child: ChildProcessWithoutNullStreams): Duplex {
   return transport;
 }
 
-async function openChannel(session: Session): Promise<Channel> {
+/** `closed` runs when the ssh child has ended, whether or not SFTP was ever ready. */
+async function openChannel(session: Session, closed: () => void): Promise<Channel> {
   const configuration = session.configuration;
   const command = sshArguments(configuration.connection, {
     kind: 'sftp',
@@ -180,13 +121,16 @@ async function openChannel(session: Session): Promise<Channel> {
   const channel: Channel = { child, client, closing: false };
   let stderr = '';
   child.stderr.on('data', (bytes: Buffer) => {
-    if (stderr.length < stderrCharacters) {
-      stderr += bytes.toString('utf8').slice(0, stderrCharacters - stderr.length);
+    const room = remoteLimits.sshStderrCharacters - stderr.length;
+    if (room > 0) {
+      stderr += bytes.toString('utf8').slice(0, room);
     }
   });
   child.on('error', () => transport.destroy(new Error('The SSH channel could not start.')));
-  child.once('exit', (code) => {
+  // `close`, not `exit`: only then has all of standard error arrived to be classified.
+  child.once('close', (code) => {
     session.opened.delete(channel);
+    closed();
     const failure = classifySSHFailure(code, stderr);
     transport.destroy(failure ? new SSHConnectionError(failure) : undefined);
     if (!session.stopped && !channel.closing) {
@@ -212,21 +156,14 @@ function channel(session: Session, lane: RemoteLane): Promise<Channel> {
   if (existing) {
     return existing;
   }
-  const pending = openChannel(session);
+  const forget = () => {
+    if (session.channels.get(lane) === pending) {
+      session.channels.delete(lane);
+    }
+  };
+  const pending: Promise<Channel> = openChannel(session, forget);
   session.channels.set(lane, pending);
-  pending.then(
-    (opened) =>
-      opened.child.once('exit', () => {
-        if (session.channels.get(lane) === pending) {
-          session.channels.delete(lane);
-        }
-      }),
-    () => {
-      if (session.channels.get(lane) === pending) {
-        session.channels.delete(lane);
-      }
-    },
-  );
+  pending.catch(forget);
   return pending;
 }
 
@@ -442,7 +379,7 @@ function failure(error: unknown): { error: string; code: string } {
     };
   }
   if (error instanceof Error && error.name === 'AbortError') {
-    return { error: 'The server request was cancelled.', code: 'ABORT_ERR' };
+    return { error: 'The server request was canceled.', code: 'ABORT_ERR' };
   }
   return {
     error: 'The server request failed. Reconnect and try again.',

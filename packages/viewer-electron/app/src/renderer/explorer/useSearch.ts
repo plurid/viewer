@@ -10,7 +10,7 @@ const emptyEntries: FileEntry[] = [];
 /** How often streamed results reach the view while a search runs. */
 const resultInterval = 100;
 
-/** Search lifetime belongs to a folder plane, independently of its view mode. */
+/** Search lifetime belongs to a files plane, independently of its view mode. */
 export function useSearch(path: string, query: string, enabled: boolean, showHidden: boolean) {
   const indexed = useIndexedSearch(query, path, enabled && !!query.trim(), showHidden);
   // a query too long for the index is too long for the walk: the filter says what to shorten

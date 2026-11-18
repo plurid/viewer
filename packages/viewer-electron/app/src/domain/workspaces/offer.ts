@@ -2,7 +2,7 @@ import type { Workspace } from '../contracts';
 import type { WorkspaceDefinition } from './definitions/schema';
 import { searchableDefinition } from './definitions/query';
 import { definitionLinkMatches, richDefinition } from './catalog';
-import { mostlyIn, owningDefinition } from './ownership';
+import { mostlyInside, owningDefinition } from './ownership';
 
 /** What opening the definition adds to browsing its folder. */
 export type WorkspaceOfferReason = 'open-elsewhere' | 'remembered' | 'rich';
@@ -41,17 +41,28 @@ export interface WorkspaceOfferInput {
 }
 
 /**
- * The deepest definition root holding the folder, when opening it adds something to what the
- * person already has: the workspace open for it elsewhere, its remembered planes or a rich
- * definition. A plain definition opens one folder plane at its root, which browsing already gives,
- * so it is not offered. Nothing is offered when the current workspace is linked to that definition
- * or mostly in its root, as it already is that workspace.
+ * The definition an offer for the folder names: the deepest root holding it whose definition
+ * search lists. A hidden or missing inner definition leaves the folder to the root around it.
+ */
+export function offeredDefinition(
+  folder: string,
+  definitions: readonly WorkspaceDefinition[],
+): WorkspaceDefinition | undefined {
+  return owningDefinition(folder, definitions, searchableDefinition);
+}
+
+/**
+ * The offered definition, when opening it adds something to what the person already has: the
+ * workspace open for it elsewhere, its remembered planes or a rich definition. A plain definition
+ * opens one files plane at its root, which browsing already gives, so it is not offered. Nothing
+ * is offered when the current workspace is linked to that definition or mostly inside its root,
+ * inner roots included, as it already is that workspace.
  */
 export function workspaceOffer(input: WorkspaceOfferInput): WorkspaceOffer | undefined {
-  const definition = owningDefinition(input.folder, input.definitions);
-  if (!definition || !searchableDefinition(definition)) return;
+  const definition = offeredDefinition(input.folder, input.definitions);
+  if (!definition) return;
   if (linkedTo(input.current, definition)) return;
-  if (mostlyIn(input.current, input.definitions)?.key === definition.key) return;
+  if (mostlyInside(input.current, definition.root)) return;
   const open = input.workspaces.find(
     (space) => space.id !== input.current.id && linkedTo(space, definition),
   );

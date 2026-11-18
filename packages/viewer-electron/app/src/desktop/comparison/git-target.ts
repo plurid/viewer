@@ -49,7 +49,7 @@ export async function validateGitTarget(
     canonical(target.directory),
   ]);
   if (!containsPath(source, directory))
-    throw new Error('Choose a folder inside the folder plane this started from.');
+    throw new Error('Choose a folder inside the files plane this started from.');
   for (const file of target.selection) {
     const parent = await canonical(path.dirname(path.resolve(file.path)));
     if (!containsPath(directory, parent))

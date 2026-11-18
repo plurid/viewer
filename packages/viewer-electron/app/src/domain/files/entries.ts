@@ -103,7 +103,15 @@ export function sortEntries(
   descending: boolean,
   foldersFirst = true,
 ): FileEntry[] {
-  return [...entries].sort((a, b) => {
+  return [...entries].sort(entryOrder(key, descending, foldersFirst));
+}
+/** The order `sortEntries` puts entries in, as a comparison. */
+export function entryOrder(
+  key: SortKey,
+  descending: boolean,
+  foldersFirst = true,
+): (a: FileEntry, b: FileEntry) => number {
+  return (a, b) => {
     if (foldersFirst && browsable(a) !== browsable(b)) return browsable(a) ? -1 : 1;
     const value =
       key === 'name'
@@ -112,7 +120,7 @@ export function sortEntries(
           ? collator.compare(a.extension, b.extension)
           : a[key] - b[key];
     return (value || collator.compare(a.name, b.name)) * (descending ? -1 : 1);
-  });
+  };
 }
 /** How many digits a size keeps: one decimal, or every byte for a threshold a rounded figure could
  * misstate. */
@@ -168,12 +176,117 @@ export const isPackage = (entry: Pick<FileEntry, 'directory' | 'extension'>) =>
  *: it opens in its app, and Show Package Contents goes inside. */
 export const browsable = (entry: Pick<FileEntry, 'directory' | 'extension'>) =>
   entry.directory && !isPackage(entry);
-/** The Kind column: Folder, Application, Alias, or a file's or bundle's extension. */
+// The Kind column's words for common files, as Finder names them; any other file is its
+// extension's "document".
+const kindNames: Readonly<Record<string, string>> = {
+  pdf: 'PDF document',
+  txt: 'Plain text',
+  text: 'Plain text',
+  md: 'Markdown document',
+  markdown: 'Markdown document',
+  rtf: 'Rich text document',
+  html: 'HTML document',
+  htm: 'HTML document',
+  css: 'CSS style sheet',
+  json: 'JSON document',
+  csv: 'CSV document',
+  tsv: 'TSV document',
+  xml: 'XML document',
+  yaml: 'YAML document',
+  yml: 'YAML document',
+  ts: 'TypeScript source',
+  tsx: 'TypeScript source',
+  js: 'JavaScript source',
+  jsx: 'JavaScript source',
+  py: 'Python script',
+  sh: 'Shell script',
+  rs: 'Rust source',
+  go: 'Go source',
+  c: 'C source',
+  cpp: 'C++ source',
+  java: 'Java source',
+  swift: 'Swift source',
+  png: 'PNG image',
+  jpg: 'JPEG image',
+  jpeg: 'JPEG image',
+  gif: 'GIF image',
+  heic: 'HEIC image',
+  webp: 'WebP image',
+  tif: 'TIFF image',
+  tiff: 'TIFF image',
+  bmp: 'BMP image',
+  svg: 'SVG image',
+  psd: 'Photoshop image',
+  mp3: 'MP3 audio',
+  m4a: 'MPEG-4 audio',
+  wav: 'WAV audio',
+  aiff: 'AIFF audio',
+  flac: 'FLAC audio',
+  mp4: 'MPEG-4 movie',
+  m4v: 'MPEG-4 movie',
+  mov: 'QuickTime movie',
+  mkv: 'Matroska movie',
+  webm: 'WebM movie',
+  zip: 'ZIP archive',
+  tar: 'Tar archive',
+  gz: 'Gzip archive',
+  tgz: 'Gzip archive',
+  '7z': '7-Zip archive',
+  dmg: 'Disk image',
+  docx: 'Word document',
+  doc: 'Word document',
+  xlsx: 'Excel workbook',
+  xls: 'Excel workbook',
+  pptx: 'PowerPoint presentation',
+  ppt: 'PowerPoint presentation',
+  pages: 'Pages document',
+  numbers: 'Numbers spreadsheet',
+  key: 'Keynote presentation',
+  epub: 'EPUB book',
+  dxf: 'DXF drawing',
+  stl: 'STL model',
+  obj: 'OBJ model',
+  glb: 'glTF model',
+  gltf: 'glTF model',
+  step: 'STEP model',
+  stp: 'STEP model',
+  ttf: 'TrueType font',
+  otf: 'OpenType font',
+  eml: 'Email message',
+  mbox: 'Mailbox',
+  ics: 'Calendar',
+  vcf: 'Contact card',
+  torrent: 'Torrent file',
+  sqlite: 'SQLite database',
+  db: 'Database',
+};
+/** The Kind column, as Finder words it: Folder, Application, Alias, "PDF document", "PNG
+ * image", "Plain text", or the extension's document. */
 export function kindLabel(entry: Pick<FileEntry, 'directory' | 'extension' | 'kind'>): string {
   if (entry.kind === 'symlink') return 'Alias';
   if (browsable(entry)) return 'Folder';
-  if (isPackage(entry) && entry.extension.toLowerCase() === 'app') return 'Application';
-  return entry.extension.toUpperCase() || 'File';
+  const extension = entry.extension.toLowerCase();
+  if (isPackage(entry) && extension === 'app') return 'Application';
+  return kindNames[extension] ?? (extension ? `${extension.toUpperCase()} document` : 'Document');
+}
+
+const clock = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
+const calendarDay = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
+const midnight = (time: Date) =>
+  new Date(time.getFullYear(), time.getMonth(), time.getDate()).getTime();
+/** A file's date as Finder's list shows it: "Today at 3:04 PM", "Yesterday at 9:15 AM",
+ * "Nov 17, 2026 at 3:04 PM". */
+export function listDate(time: number | Date, now: number | Date = Date.now()): string {
+  const when = new Date(time);
+  const days = Math.round((midnight(new Date(now)) - midnight(when)) / 86_400_000);
+  const at = clock.format(when);
+  if (days === 0) return `Today at ${at}`;
+  if (days === 1) return `Yesterday at ${at}`;
+  return `${calendarDay.format(when)} at ${at}`;
 }
 
 export function fileFamily(entry: Pick<FileEntry, 'extension' | 'directory' | 'mime'>): string {

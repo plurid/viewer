@@ -17,6 +17,7 @@ import { useSessionKeys } from '../../keys/session';
 import { ChoiceButton } from '../ChoiceMenu';
 import { Field } from './SettingField';
 import { KeyCapture } from './KeyCapture';
+import { NumberField } from '../NumberField';
 import type { SettingsEditor } from './editor';
 
 const keysFrom = (text: string) => text.trim().split(/\s+/).filter(Boolean);
@@ -114,7 +115,8 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
           <option key={id} value={id} />
         ))}
       </datalist>
-      <label className="settings-row">
+      {/* a div: a click on the text would start key capture */}
+      <div className="settings-row">
         <span>Prefix</span>
         <KeyCapture
           label="Prefix"
@@ -123,8 +125,9 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
           owner={(value) => shortcutOwner(snapshot.settings, value, 'keymap-prefix')}
           onChange={(prefix) => save({ prefix })}
         />
-      </label>
-      <label className="settings-row">
+      </div>
+      {/* a div: a click on the text would start key capture */}
+      <div className="settings-row">
         <span>Leader</span>
         <KeyCapture
           label="Leader"
@@ -132,7 +135,7 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
           value={keymap.leader}
           onChange={(leader) => save({ leader })}
         />
-      </label>
+      </div>
       {(
         [
           ['inTerminals', 'Prefix in terminals'],
@@ -151,24 +154,22 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
       ))}
       <label className="settings-row">
         <span>Timeout (ms)</span>
-        <input
+        <NumberField
           aria-label="Timeout"
-          type="number"
           min={300}
           max={10000}
-          defaultValue={keymap.timeout}
-          onBlur={(event) => save({ timeout: Number(event.target.value) })}
+          value={keymap.timeout}
+          onCommit={(timeout) => save({ timeout })}
         />
       </label>
       <label className="settings-row">
         <span>Repeat time (ms)</span>
-        <input
+        <NumberField
           aria-label="Repeat time"
-          type="number"
           min={100}
           max={3000}
-          defaultValue={keymap.repeatTime}
-          onBlur={(event) => save({ repeatTime: Number(event.target.value) })}
+          value={keymap.repeatTime}
+          onCommit={(repeatTime) => save({ repeatTime })}
         />
       </label>
       <SessionBindings />

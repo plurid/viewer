@@ -14,7 +14,6 @@
   flex: none;
   width: clamp(150px, 28%, 260px);
   overflow: auto;
-  scrollbar-gutter: stable;
   border-right: 1px solid var(--line);
 }
 .sqlite-object {

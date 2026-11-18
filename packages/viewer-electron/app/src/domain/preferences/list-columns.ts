@@ -2,8 +2,8 @@ import type { ListColumn, UIPreferences } from '../contracts';
 
 export const listColumns: { id: ListColumn; label: string; width: number; visible: boolean }[] = [
   { id: 'name', label: 'Name', width: 0, visible: true },
-  { id: 'modified', label: 'Date modified', width: 160, visible: true },
-  { id: 'created', label: 'Date created', width: 160, visible: false },
+  { id: 'modified', label: 'Date Modified', width: 190, visible: true },
+  { id: 'created', label: 'Date Created', width: 190, visible: false },
   { id: 'kind', label: 'Kind', width: 96, visible: true },
   { id: 'extension', label: 'Extension', width: 80, visible: false },
   { id: 'size', label: 'Size', width: 95, visible: true },

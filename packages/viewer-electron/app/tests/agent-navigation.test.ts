@@ -716,7 +716,7 @@ describe('reviewed MCP workspace navigation', () => {
     catalog = undefined;
     expect(await call('list_workspaces')).toHaveLength(3);
     await expect(call('propose_open_path', { path: files })).rejects.toThrow(
-      'Focus a granted folder',
+      'Focus a granted files plane',
     );
   });
   it('keeps authentication and strict arguments on discovery and proposals', async () => {
@@ -768,7 +768,7 @@ describe('reviewed MCP workspace navigation', () => {
     });
     await expect(call('propose_selection', { paths: [] })).rejects.toThrow();
     await expect(call('propose_open_path', { path: files, placement: 'linked' })).rejects.toThrow(
-      'Focus a folder',
+      'Focus a files plane',
     );
     snapshot.workspaces.find((space) => space.id === 'empty')!.panes.push(plane('changed', secret));
     await expect(call('propose_open_path', { path: files })).rejects.toThrow(

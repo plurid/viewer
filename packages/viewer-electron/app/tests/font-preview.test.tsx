@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import FontPreview from '../src/renderer/previews/modules/FontPreview';
 import type { PreviewContext } from '../src/renderer/previews/contracts';
 import { Writer, fixtureFont } from './font-fixtures';
+import { choiceLabel } from './support/choice-button';
 
 /** Records what the preview asks of Chromium's font loading. */
 class FakeFontFace {
@@ -99,10 +100,10 @@ it('renders the typed sample at the chosen size', async () => {
   const specimen = screen.getByRole('region', { name: 'Specimen' });
   expect(specimen.textContent).toContain('Sphinx of black quartz');
   expect(specimen.textContent).not.toContain('lazy dog');
-  fireEvent.click(screen.getByRole('button', { name: 'Sample size' }));
+  fireEvent.click(screen.getByRole('button', { name: choiceLabel('Sample size') }));
   // a short list has no search field: its rows are the menu
   expect(screen.queryByLabelText('Search Sample size')).toBeNull();
-  fireEvent.click(await screen.findByRole('menuitem', { name: '72 px' }));
+  fireEvent.click(await screen.findByRole('menuitemradio', { name: '72 px' }));
   await waitFor(() => expect(specimen.style.fontSize).toBe('72px'));
   // clearing the field restores the pangram
   fireEvent.change(field, { target: { value: '' } });

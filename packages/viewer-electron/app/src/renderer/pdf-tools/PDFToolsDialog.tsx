@@ -359,11 +359,7 @@ export function PDFToolsDialog({
           disabled={working}
           numberedSuffix={separate ? ' 001' : ''}
         />
-        <DestinationField
-          path={folder}
-          onChange={setFolder}
-          disabled={working}
-        />
+        <DestinationField path={folder} onChange={setFolder} disabled={working} />
         <label className="pdf-tools-split dialog-field-toggle">
           <input
             type="checkbox"
@@ -431,7 +427,12 @@ export function PDFToolsDialog({
         ) : (
           <button
             className="primary"
-            disabled={loading || !included.length || !folder.trim() || !!fileNameError(name, 'pdf', separate ? ' 001' : '')}
+            disabled={
+              loading ||
+              !included.length ||
+              !folder.trim() ||
+              !!fileNameError(name, 'pdf', separate ? ' 001' : '')
+            }
             onClick={() => void start()}
           >
             {separate ? 'Split Pages' : 'Save PDF'}

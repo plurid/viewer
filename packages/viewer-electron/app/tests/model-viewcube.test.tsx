@@ -613,6 +613,64 @@ describe('the cube’s keyboard, pointer and place', () => {
     expect(patch(nearest).tabIndex).toBe(0);
   });
 
+  it('turns a rolled free camera level over a third of a second when Turntable is chosen', async () => {
+    await preview('stl');
+    const front = patch(cubeViews[0]!);
+    pointer(front, 'pointerdown', 700, 500);
+    pointer(front, 'pointermove', 740, 560);
+    frames();
+    const top = new THREE.Vector3(0, 0, 1);
+    // How far the picture's right edge tilts out of level.
+    const tilt = () =>
+      Math.abs(new THREE.Vector3(1, 0, 0).applyQuaternion(camera().quaternion).dot(top));
+    const rolled = tilt();
+    expect(rolled).toBeGreaterThan(0.05);
+    graphics.reducedMotion = false;
+    fireEvent.click(screen.getByRole('button', { name: /^Rotation\b/ }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Turntable' }));
+    frames();
+    expect(tilt()).toBeCloseTo(rolled, 6);
+    const start = camera().quaternion.clone();
+    graphics.now += 160;
+    frames();
+    // Midway: turned from where it was, not yet level.
+    expect(camera().quaternion.angleTo(start)).toBeGreaterThan(0.01);
+    expect(tilt()).toBeGreaterThan(1e-3);
+    graphics.now += 400;
+    frames(2);
+    expect(camera().up.toArray()).toEqual([0, 0, 1]);
+  });
+
+  it('keeps the caption on the turning view while a drag passes other sides', async () => {
+    const view = await preview('stl');
+    const front = patch(cubeViews[0]!);
+    const caption = view.container.querySelector('.model-viewcube-caption')!;
+    pointer(front, 'pointerdown', 700, 500);
+    pointer(front, 'pointermove', 752, 500);
+    frames();
+    const nearest = nearestCubeView(camera(), 'stl');
+    const other = cubeViews.find((standard) => standard !== nearest && standard.kind === 'corner')!;
+    fireEvent.pointerOver(patch(other));
+    expect(caption.textContent).toBe(nearest.label);
+  });
+
+  it('does not go home when a drag that started on Home ends there, and names it once', async () => {
+    await preview('stl');
+    const home = screen.getByRole('button', { name: 'Home view' });
+    expect(home.hasAttribute('title')).toBe(false);
+    const toolbar = screen.getByRole('toolbar', { name: 'View cube' });
+    pointer(home, 'pointerdown', 700, 500);
+    pointer(home, 'pointermove', 740, 500);
+    pointer(toolbar, 'pointerup', 740, 500);
+    const turned = camera().position.clone();
+    fireEvent.click(home, { detail: 1 });
+    frames();
+    expect(camera().position.distanceTo(turned)).toBeLessThan(1e-9);
+    fireEvent.click(home, { detail: 0 });
+    frames(2);
+    expect(camera().position.distanceTo(turned)).toBeGreaterThan(0.1);
+  });
+
   it('keeps every press, menu and double click from the plane', async () => {
     const view = await preview('stl');
     const cube = view.container.querySelector<HTMLElement>('.model-viewcube')!;

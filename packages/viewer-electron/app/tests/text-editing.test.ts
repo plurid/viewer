@@ -134,17 +134,22 @@ describe('editing a previewed file', () => {
       false,
     );
   });
-  it('offers Save only while something is unsaved, and Save As and Revert in the ⋯ menu', async () => {
+  it('dims Save until something is unsaved, and keeps Save As and Revert in the ⋯ menu', async () => {
     const { id } = addPane('/fixtures/notes.md', 'preview', true);
     const view = render(
       createElement(FileEditor, { resourceID: 'resource', paneID: id, onClose: vi.fn() }),
     );
     const cm = await editor(view.container);
-    expect(view.queryByRole('button', { name: 'Save' })).toBeNull();
+    // present from the start, so the first keystroke moves nothing in the header
+    expect((view.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
     expect(view.getByRole('button', { name: 'Done' })).toBeTruthy();
     expect(view.queryByRole('button', { name: /Save As|Revert/ })).toBeNull();
     await type(cm, 'more ');
-    await waitFor(() => expect(view.getByRole('button', { name: 'Save' })).toBeTruthy());
+    await waitFor(() =>
+      expect((view.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
     // the plane's commands still carry them
     expect(editingPlane(id)?.saveAs).toBeTypeOf('function');
     expect(editingPlane(id)?.revert).toBeTypeOf('function');

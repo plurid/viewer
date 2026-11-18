@@ -27,6 +27,8 @@ export interface PreviewCommand {
   id: string;
   label: string;
   aliases?: readonly string[];
+  /** The key it answers to, as Settings → Shortcuts has it: shown beside it in ⌘K and menus. */
+  shortcut?: string;
   primary?: boolean;
   available?: boolean;
   run(): void | Promise<void>;
@@ -72,6 +74,9 @@ export interface PreviewContext {
   /** A workspace preview plane's own: its text may be edited where it is. Quick
    * Preview and folder galleries pass none. */
   editing?: { paneID: string };
+  /** A format's own keys in effect, for its keys and their hints, as a picture's Rotate Left and
+   * Rotate Right ('' for none); the shipped ones where a host passes none. */
+  shortcuts?: Readonly<Record<string, string>>;
   /** Opens a local file the preview refers to (a relative link) beside its plane. */
   openRelated?(path: string): void;
   retry?(): void;

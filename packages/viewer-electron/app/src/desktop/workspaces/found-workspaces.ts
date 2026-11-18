@@ -32,6 +32,7 @@ import type { FolderFacts } from './folder-facts';
 import type { FoundProbePass } from './found-probes';
 import { probeFoundFolders } from './found-probes';
 import { sameJSON } from '../../domain/json';
+import { plural } from '../../domain/plural';
 import { DocumentStore } from '../persistence/document-store';
 import { lstat } from '../files/stats';
 
@@ -131,6 +132,8 @@ export class FoundWorkspaces {
   private lastPass = 0;
   private followUps = 0;
   private epoch = 0;
+  /** Counts passes, so an entry Undo put back belongs to the pass running then. */
+  private passes = 0;
   private started = false;
   private stopped = false;
   private written = false;
@@ -140,8 +143,18 @@ export class FoundWorkspaces {
   private configured?: boolean;
   private cancellation?: AbortController;
   private remapWrite?: ReturnType<typeof setTimeout>;
-  /** The entry the latest Not a Workspace hid, and its place, for Undo. */
-  private lastHidden?: { entry: FoundEntry; index: number };
+  /**
+   * The latest Not a Workspace, for its Undo: the root as it was hidden, where Viewer's own moves
+   * took it since, and the entry it hid with its place.
+   */
+  private lastHidden?: { as: string; root: string; entry?: FoundEntry; index: number };
+  /** The roots the latest Show Hidden Again showed, for its Undo. */
+  private lastShown?: string[];
+  /**
+   * An entry Undo put back while a pass ran, which that pass keeps. A pass of another epoch, after
+   * Clear recent folders, finding turned off or a move, drops it.
+   */
+  private restoring?: { entry: FoundEntry; index: number; epoch: number; pass: number };
   private state: FoundCatalogState['state'] = 'loading';
   recovery?: string;
   constructor(
@@ -234,12 +247,13 @@ export class FoundWorkspaces {
       ],
       nonLocalRoots: this.ports.nonLocalRoots?.(),
     };
+    const hidden = new Set(this.document.hidden);
     const entries = this.ports.enabled()
       ? this.document.entries.filter(
           (entry) =>
             allowedFoundFolder(entry.root, context) &&
             allowedFoundFolder(entry.realpath, context) &&
-            !this.document.hidden.includes(entry.root) &&
+            !hidden.has(entry.root) &&
             (!this.ports.access || this.ports.access(entry.root)),
         )
       : [];
@@ -319,7 +333,7 @@ export class FoundWorkspaces {
     this.followUps = 0;
     this.document.entries = [];
     this.document.probes = [];
-    this.lastHidden = undefined;
+    this.forgetUndoEntry();
     this.state = 'off';
     await this.persist();
     this.emit();
@@ -333,6 +347,7 @@ export class FoundWorkspaces {
   }
   private async scan(): Promise<void> {
     const epoch = this.epoch;
+    const passNumber = ++this.passes;
     await this.load();
     if (this.stopped || epoch !== this.epoch) return;
     await this.prepareWrite();
@@ -423,6 +438,11 @@ export class FoundWorkspaces {
     const before = JSON.stringify(this.document.entries);
     const previousState = this.state;
     this.document.entries = this.mintEntries(roots, pass, claims.owners, saved, now);
+    // The pass decided without a root Undo showed while it ran: the entry Undo put back stays.
+    const restoring = this.restoring;
+    this.restoring = undefined;
+    if (restoring?.epoch === epoch && restoring.pass === passNumber)
+      this.restore(restoring.entry, restoring.index);
     this.document.probes = [...pass.cache.values()].sort((a, b) => b.at - a.at).slice(0, 1000);
     this.state = 'ready';
     await this.persist();
@@ -611,16 +631,31 @@ export class FoundWorkspaces {
         trim(next.probes);
         while (bytes > 1_000_000) {
           const index = next.entries.findLastIndex((entry) => !this.retained(entry.key));
-          if (index < 0) {
-            this.recovery =
-              'Found workspace metadata cannot fit its retained entries in the 1 MB limit. The previous file remains in effect.';
-            return;
-          }
+          if (index < 0) break;
           const [removed] = next.entries.splice(index, 1);
           bytes -= Buffer.byteLength(JSON.stringify(removed)) + Number(next.entries.length > 0);
         }
+        // The person's hidden roots go last, oldest first, and say so.
+        const hiddenBefore = next.hidden.length;
+        while (bytes > 1_000_000 && next.hidden.length) {
+          const removed = next.hidden.shift();
+          bytes -= Buffer.byteLength(JSON.stringify(removed)) + Number(next.hidden.length > 0);
+        }
+        if (bytes > 1_000_000) {
+          this.recovery =
+            'Found workspaces could not be saved: the workspaces Viewer keeps for open or remembered planes exceed 1 MB. The previous file remains in effect.';
+          return;
+        }
+        const dropped = hiddenBefore - next.hidden.length;
+        if (dropped)
+          this.recovery =
+            'Found workspaces reached their 1 MB limit, so ' +
+            (dropped === 1
+              ? 'the oldest hidden folder shows again.'
+              : `the ${plural(dropped, 'oldest hidden folder')} show again.`);
         this.document.probes = next.probes;
         this.document.entries = next.entries;
+        this.document.hidden = next.hidden;
         const text = JSON.stringify(next);
         if (text === this.writtenText) return;
         await this.store.save(next);
@@ -641,7 +676,7 @@ export class FoundWorkspaces {
     this.document.entries = this.document.entries.filter((entry) => this.keptOnClear(entry.key));
     this.document.probes = [];
     // the entry kept for Undo is evidence from the history just cleared
-    this.lastHidden = undefined;
+    this.forgetUndoEntry();
     this.state = this.ports.enabled() ? 'ready' : 'off';
     await this.persist();
     this.emit();
@@ -653,7 +688,13 @@ export class FoundWorkspaces {
   async hide(root: string): Promise<void> {
     await this.load();
     const index = this.document.entries.findIndex((entry) => entry.root === root);
-    if (index >= 0) this.lastHidden = { entry: this.document.entries[index]!, index };
+    this.lastHidden = {
+      as: root,
+      root,
+      entry: index >= 0 ? this.document.entries[index] : undefined,
+      index: Math.max(0, index),
+    };
+    // Show Hidden Again's Undo still hides what it showed, with this one beside them
     this.document.hidden = [...this.document.hidden.filter((item) => item !== root), root].slice(
       -500,
     );
@@ -662,43 +703,67 @@ export class FoundWorkspaces {
     this.passAfterHiding();
   }
   /**
-   * Shows hidden roots again: these, or every one. Undo puts back the entry it hid, even when a pass
-   * dropped it meanwhile, so its key and place return at once; a later pass finds the others.
+   * Shows hidden roots again: these, or every one, and says how many. Undo of the latest Not a
+   * Workspace names the root as it was hidden; a Viewer move since leads to where it is now. The
+   * entry it hid comes back at once with its key and place; a later pass finds the others.
    */
-  async show(roots?: readonly string[]): Promise<void> {
+  async show(roots?: readonly string[]): Promise<number> {
     await this.load();
-    const shown = new Set(roots ?? this.document.hidden);
+    const last = this.lastHidden;
+    const shown = new Set(
+      roots?.map((root) => (last && root === last.as ? last.root : root)) ?? this.document.hidden,
+    );
     const hidden = this.document.hidden.filter((item) => !shown.has(item));
-    if (hidden.length === this.document.hidden.length) return;
+    const count = this.document.hidden.length - hidden.length;
+    if (!count) return 0;
+    this.lastShown =
+      roots === undefined ? this.document.hidden.filter((item) => shown.has(item)) : undefined;
     this.document.hidden = hidden;
-    const restored = this.lastHidden;
-    const restore = () => {
-      if (
-        !restored ||
-        this.document.hidden.includes(restored.entry.root) ||
-        this.document.entries.some(
-          (entry) => entry.root === restored.entry.root || entry.key === restored.entry.key,
-        )
-      )
-        return false;
-      this.document.entries.splice(restored.index, 0, restored.entry);
-      return true;
-    };
-    if (restored && shown.has(restored.entry.root)) {
+    if (last && shown.has(last.root)) {
       this.lastHidden = undefined;
-      restore();
-      // a pass that started before this decided without the root: what it mints replaces entries
-      const running = this.running;
-      if (running)
-        void running.then(async () => {
-          if (this.stopped || !restore()) return;
-          await this.persist();
-          this.emit();
-        });
+      if (last.entry) this.restore(last.entry, last.index);
+      // a pass running now decided without the root: it keeps the entry
+      if (last.entry && this.running)
+        this.restoring = {
+          entry: last.entry,
+          index: last.index,
+          epoch: this.epoch,
+          pass: this.passes,
+        };
     }
     await this.persist();
     this.emit();
     this.passAfterHiding();
+    return count;
+  }
+  /** Undo of Show Hidden Again: the roots it showed are hidden again, and says how many. */
+  async hideAgain(): Promise<number> {
+    await this.load();
+    const hidden = new Set(this.document.hidden);
+    const roots = (this.lastShown ?? []).filter((root) => !hidden.has(root));
+    this.lastShown = undefined;
+    if (!roots.length) return 0;
+    // they were hidden before any hidden since: they keep their older place
+    this.document.hidden = [...roots, ...this.document.hidden].slice(-500);
+    await this.persist();
+    this.emit();
+    this.passAfterHiding();
+    return roots.length;
+  }
+  /** Puts an entry back at its place unless its root is hidden or another entry holds it. */
+  private restore(entry: FoundEntry, index: number): boolean {
+    if (
+      this.document.hidden.includes(entry.root) ||
+      this.document.entries.some((item) => item.root === entry.root || item.key === entry.key)
+    )
+      return false;
+    this.document.entries.splice(index, 0, entry);
+    return true;
+  }
+  /** Entries kept for Undo are evidence from folder history: they go with it. */
+  private forgetUndoEntry(): void {
+    if (this.lastHidden) this.lastHidden = { ...this.lastHidden, entry: undefined };
+    this.restoring = undefined;
   }
   private passAfterHiding(): void {
     if (this.started && !this.stopped && this.ports.enabled())
@@ -723,6 +788,19 @@ export class FoundWorkspaces {
     this.epoch++;
     this.cancellation?.abort();
     this.document = next;
+    // Undo of the latest Not a Workspace follows the root it hid
+    const last = this.lastHidden;
+    if (last)
+      this.lastHidden = {
+        ...last,
+        root: map(last.root),
+        entry: last.entry && {
+          ...last.entry,
+          root: map(last.entry.root),
+          realpath: map(last.entry.realpath),
+        },
+      };
+    this.lastShown = this.lastShown?.map(map);
     // `running` still holds the pass just cancelled. Remapped visits are not new visits, so nothing
     // else would resume it.
     if (this.running && this.started)

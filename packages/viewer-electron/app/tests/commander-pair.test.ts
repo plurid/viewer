@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * A COMMANDER'S PAIR: two folder planes paired, each naming the other; ⌃⌘C and ⌃⌘X
+ * A COMMANDER'S PAIR: two files planes paired, each naming the other; ⌃⌘C and ⌃⌘X
  * copy and move the selection to the other; swap; the two following each other into subfolders;
  * select and deselect by a glob or a query.
  */
@@ -191,6 +191,6 @@ describe('select by pattern', () => {
     expect(selected.map((item) => item.name)).toEqual(['notes.md', 'Docs']);
     expect((await runLine('select size>', host)).message).toMatch(/size>10mb/);
     remove();
-    expect((await runLine('select *.md', host)).message).toMatch(/folder plane/);
+    expect((await runLine('select *.md', host)).message).toMatch(/files plane/);
   });
 });

@@ -1,15 +1,18 @@
+import type { KeyboardEvent } from 'react';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { MediaPane as Pane } from '../../domain/contracts';
 import type { MediaTransform } from '../../domain/operations/transforms';
 import { mediaTime, transformExtension } from '../../domain/operations/transforms';
 import { baseName, parentPath } from '../../domain/workspaces/planes';
 import { Failure, IconButton, Loading, tryAgainLabel } from '../ui/primitives';
+import { Icon } from '../ui/Icon';
 import { plural } from '../../domain/plural';
 import { statusLabel } from '../ui/status-labels';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 import { DestinationField } from '../ui/DestinationField';
 import { FileNameField, fileNameError } from '../ui/FileNameField';
 import { FormField } from '../ui/FormField';
+import { NumberField } from '../ui/NumberField';
 import { useHome } from '../ui/PathLabel';
 import { report, useViewer, updatePane } from '../state/store';
 import { useWorkspace } from '../workspace/context';
@@ -264,7 +267,8 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
   ];
   const mediaProps = {
     src: granted.resource?.url,
-    controls: true,
+    // Viewer's own transport below plays it: a native one beside it would be a second
+    controls: false,
     preload: 'metadata' as const,
     muted: ['mute', 'replace'].includes(plan.audio.mode),
     onLoadedData: () => {
@@ -316,8 +320,53 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
       }
     },
   };
+  const togglePlayback = () => {
+    const media = player.current;
+    if (!media || !playbackReady || playbackError) return;
+    if (!media.paused) media.pause();
+    else
+      void media
+        .play()
+        .catch((error) => setPlaybackError(String(error.message || "Playback couldn't start.")));
+  };
+  const setIn = () =>
+    changeRange({ ...selectedRange, start: Math.min(position, selectedRange.end - step) });
+  const setOut = () =>
+    changeRange({ ...selectedRange, end: Math.max(position, selectedRange.start + step) });
+  // an editor's keys, as a Mac's video editors have them: Space plays, I and O mark the range,
+  // ← → step a frame, with ⇧ a second; a field, a slider or a button keeps its own keys
+  const editorKeys = (event: KeyboardEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement;
+    if (
+      event.defaultPrevented ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.altKey ||
+      target.closest('input, textarea, select, [contenteditable="true"]')
+    )
+      return;
+    const key = event.key.toLowerCase();
+    if (key === ' ' && !target.closest('button')) togglePlayback();
+    else if (key === 'i') setIn();
+    else if (key === 'o') setOut();
+    else if (key === 'arrowleft' || key === 'arrowright')
+      seek(
+        Math.min(
+          info.duration,
+          Math.max(0, position + (key === 'arrowleft' ? -1 : 1) * (event.shiftKey ? 1 : step)),
+        ),
+      );
+    else return;
+    event.preventDefault();
+  };
   return (
-    <section className="media-editor" aria-label="Media editor">
+    // a click anywhere in it gives it the keys, as a player has them
+    <section
+      className="media-editor"
+      aria-label="Media editor"
+      tabIndex={-1}
+      onKeyDown={editorKeys}
+    >
       <div className="preview-toolbar media-editor-toolbar">
         <ChoiceButton
           label="Source"
@@ -345,14 +394,17 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
           {snapshot.saving || snapshot.dirty ? 'Saving draft…' : 'Draft saved'}
         </span>
       </div>
-      {(snapshot.error || message || exportNotice) && (
-        <p className="media-editor-notice" role="status">
-          {homeText(snapshot.error || message || exportNotice || '', home)}
-          {snapshot.error && (
-            <button onClick={() => void session.flush().catch(report)}>{tryAgainLabel}</button>
-          )}
-        </p>
-      )}
+      {/* its line is always there, so a notice that comes and goes never moves the editor */}
+      <p
+        className="media-editor-notice"
+        role="status"
+        data-empty={!(snapshot.error || message || exportNotice) || undefined}
+      >
+        {homeText(snapshot.error || message || exportNotice || '', home)}
+        {snapshot.error && (
+          <button onClick={() => void session.flush().catch(report)}>{tryAgainLabel}</button>
+        )}
+      </p>
       <div className="media-editor-body">
         <div className="media-editor-main">
           <div className="media-editor-player">
@@ -368,14 +420,23 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
                 key={granted.resource?.id}
                 ref={player as React.RefObject<HTMLVideoElement>}
                 {...mediaProps}
-                controls={false}
               />
             ) : (
-              <audio
-                key={granted.resource?.id}
-                ref={player as React.RefObject<HTMLAudioElement>}
-                {...mediaProps}
-              />
+              <>
+                <Icon name="audio" size={42} />
+                <audio
+                  key={granted.resource?.id}
+                  ref={player as React.RefObject<HTMLAudioElement>}
+                  {...mediaProps}
+                />
+              </>
+            )}
+            {/* over the picture, so the transport and the list below never move as it comes and goes */}
+            {!playbackReady && !granted.error && !playbackError && (
+              <p className="media-player-status" role="status">
+                {playbackSlow ? 'Playback is taking longer than expected.' : 'Loading playback…'}
+                {playbackSlow && <button onClick={retryPlayback}>{tryAgainLabel}</button>}
+              </p>
             )}
             {overlayGrant.resource && (
               <audio
@@ -394,19 +455,16 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
           <div className="media-playback-controls">
             <button
               disabled={!playbackReady || !!playbackError}
-              onClick={() => {
-                const media = player.current;
-                if (!media) return;
-                if (!media.paused) media.pause();
-                else
-                  void media
-                    .play()
-                    .catch((error) =>
-                      setPlaybackError(String(error.message || "Playback couldn't start.")),
-                    );
-              }}
+              onClick={togglePlayback}
+              className="swap-label"
             >
-              {playing ? 'Pause' : 'Play'}
+              {/* both labels hold the button's width, so the slider never moves as it toggles */}
+              <span aria-hidden={!playing} style={playing ? undefined : { visibility: 'hidden' }}>
+                Pause
+              </span>
+              <span aria-hidden={playing} style={playing ? { visibility: 'hidden' } : undefined}>
+                Play
+              </span>
             </button>
             <input
               aria-label="Seek playback"
@@ -418,17 +476,9 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
               disabled={!playbackReady}
               onChange={(event) => seek(Number(event.target.value))}
             />
-            <span>
+            <span className="readout media-time">
               {mediaTime(position)} / {mediaTime(info.duration)}
             </span>
-            {!playbackReady && !playbackError && (
-              <span role="status">
-                {playbackSlow ? 'Playback is taking longer than expected.' : 'Loading playback…'}
-              </span>
-            )}
-            {playbackSlow && !playbackReady && (
-              <button onClick={retryPlayback}>{tryAgainLabel}</button>
-            )}
           </div>
           <SourceStrip draft={draft} source={source} active={active} onSeek={seek} />
           <div className="media-range-controls">
@@ -438,16 +488,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
               max={Math.max(0, selectedRange.end - step)}
               onChange={(start) => changeRange({ ...selectedRange, start })}
             />
-            <button
-              onClick={() =>
-                changeRange({
-                  ...selectedRange,
-                  start: Math.min(position, selectedRange.end - step),
-                })
-              }
-            >
-              Set In
-            </button>
+            <button onClick={setIn}>Set In</button>
             <Timecode
               label="Out"
               value={selectedRange.end}
@@ -455,16 +496,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
               max={info.duration}
               onChange={(end) => changeRange({ ...selectedRange, end })}
             />
-            <button
-              onClick={() =>
-                changeRange({
-                  ...selectedRange,
-                  end: Math.max(position, selectedRange.start + step),
-                })
-              }
-            >
-              Set Out
-            </button>
+            <button onClick={setOut}>Set Out</button>
             <button
               disabled={plan.segments.length >= 32}
               onClick={() => {
@@ -684,18 +716,15 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
             <>
               <span className="muted">{overlayFile && baseName(overlayFile.path)}</span>
               <FormField label="Audio offset (seconds)">
-                <input
+                <NumberField
                   aria-label="Audio offset (seconds)"
-                  type="number"
+                  kind="decimal"
                   min={-86400}
                   max={86400}
-                  step="0.1"
+                  step={0.1}
                   value={plan.audio.offset}
-                  onChange={(event) =>
-                    session.plan((plan) => ({
-                      ...plan,
-                      audio: { ...plan.audio, offset: Number(event.target.value) || 0 },
-                    }))
+                  onCommit={(offset) =>
+                    session.plan((plan) => ({ ...plan, audio: { ...plan.audio, offset } }))
                   }
                 />
               </FormField>
@@ -762,11 +791,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
             disabled={busy || !!runningExport}
             numberedSuffix={separate ? ' 1' : ''}
           />
-          <DestinationField
-            path={folder}
-            onChange={setFolder}
-            disabled={busy || !!runningExport}
-          />
+          <DestinationField path={folder} onChange={setFolder} disabled={busy || !!runningExport} />
           {separate && (
             <p className="muted">
               File names start with {name} 1.{extension}.
@@ -774,7 +799,12 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
           )}
           <button
             className="primary"
-            disabled={busy || snapshot.saving || !!fileNameError(name, extension, separate ? ' 1' : '') || !folder.trim()}
+            disabled={
+              busy ||
+              snapshot.saving ||
+              !!fileNameError(name, extension, separate ? ' 1' : '') ||
+              !folder.trim()
+            }
             onClick={() => void exportMedia()}
           >
             {busy

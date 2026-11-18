@@ -7,6 +7,7 @@ import { ChoiceButton } from '../src/renderer/ui/ChoiceMenu';
 import type { ResolvedCommand } from '../src/renderer/commands/registry';
 import { ContextMenuResults } from '../src/renderer/ui/ContextMenuResults';
 import { Popover } from '../src/renderer/ui/Popover';
+import { choiceLabel } from './support/choice-button';
 
 const choices = [
   { value: 'png', label: 'PNG' },
@@ -41,6 +42,9 @@ beforeEach(() => {
     }
     if (this.matches('.choice-button')) {
       return triggerBox;
+    }
+    if (this.matches('.command-search-field')) {
+      return new DOMRect(0, 0, 300, 41);
     }
     if (this.matches('.context-menu, .context-submenu, .popover')) {
       const maximum = Number.parseFloat(this.style.maxHeight);
@@ -108,7 +112,7 @@ it.each(surfaces)(
         inDialog,
       ),
     );
-    fireEvent.click(view.getByRole('button', { name: /^Format / }));
+    fireEvent.click(view.getByRole('button', { name: choiceLabel('Format') }));
     const menu = view
       .getByRole('dialog', { name: 'Format' })
       .querySelector<HTMLElement>('.context-menu')!;
@@ -118,6 +122,55 @@ it.each(surfaces)(
     expectClearOf(menu);
   },
 );
+
+it.each(surfaces)(
+  'keeps a menu above its button against it as a search shortens its list on the $name',
+  ({ inDialog, offset }) => {
+    origin = offset;
+    triggerBox = new DOMRect(400, 500, 120, 30);
+    menuHeight = 300;
+    const many = Array.from({ length: 12 }, (_, index) => ({
+      value: 'f' + index,
+      label: 'Format ' + index,
+    }));
+    const view = render(
+      surface(
+        <ChoiceButton label="Format" value="f0" choices={many} onChoose={vi.fn()} />,
+        inDialog,
+      ),
+    );
+    fireEvent.click(view.getByRole('button', { name: choiceLabel('Format') }));
+    const menu = view
+      .getByRole('dialog', { name: 'Format' })
+      .querySelector<HTMLElement>('.context-menu')!;
+    expect(menu.getBoundingClientRect().bottom).toBe(triggerBox.top - 4);
+    // two rows found: the menu is shorter, its bottom where it was
+    menuHeight = 80;
+    fireEvent.change(view.getByRole('textbox'), { target: { value: 'Format 1' } });
+
+    expect(menu.getBoundingClientRect().height).toBe(80);
+    expect(menu.getBoundingClientRect().bottom).toBe(triggerBox.top - 4);
+    expect(menu.style.top).toBe('auto');
+  },
+);
+
+it('keeps three rows under its search field beside a button as tall as the window', () => {
+  triggerBox = new DOMRect(400, 2, 120, 596);
+  menuHeight = 400;
+  const many = Array.from({ length: 12 }, (_, index) => ({
+    value: 'f' + index,
+    label: 'Format ' + index,
+  }));
+  const view = render(<ChoiceButton label="Format" value="f0" choices={many} onChoose={vi.fn()} />);
+  fireEvent.click(view.getByRole('button', { name: choiceLabel('Format') }));
+  const menu = view
+    .getByRole('dialog', { name: 'Format' })
+    .querySelector<HTMLElement>('.context-menu')!;
+
+  // the 41 px search field, then three 34 px rows and the list's padding
+  expect(menu.style.maxHeight).toBe(`${41 + 3 * 34 + 10}px`);
+  expect(menu.getBoundingClientRect().bottom).toBe(600 - 8);
+});
 
 it.each(surfaces)(
   'shrinks below without covering its trigger when below has more room on the $name',
@@ -130,7 +183,7 @@ it.each(surfaces)(
         inDialog,
       ),
     );
-    fireEvent.click(view.getByRole('button', { name: /^Format / }));
+    fireEvent.click(view.getByRole('button', { name: choiceLabel('Format') }));
     const menu = view
       .getByRole('dialog', { name: 'Format' })
       .querySelector<HTMLElement>('.context-menu')!;
@@ -189,7 +242,7 @@ it('opens below its button in a dialog offset in the window, so a second press c
       <ChoiceButton label="Format" value="webp" choices={choices} onChoose={onChoose} />
     </dialog>,
   );
-  const trigger = view.getByRole('button', { name: /^Format / });
+  const trigger = view.getByRole('button', { name: choiceLabel('Format') });
   fireEvent.click(trigger);
   const menu = view
     .getByRole('dialog', { name: 'Format' })
@@ -215,7 +268,7 @@ it('uses the fixed layer containing block when it has an offset from the window'
       <ChoiceButton label="Format" value="png" choices={choices} onChoose={vi.fn()} />
     </dialog>,
   );
-  fireEvent.click(view.getByRole('button', { name: /^Format / }));
+  fireEvent.click(view.getByRole('button', { name: choiceLabel('Format') }));
   const menu = view
     .getByRole('dialog', { name: 'Format' })
     .querySelector<HTMLElement>('.context-menu')!;
@@ -230,7 +283,7 @@ it('shrinks a choice menu above its trigger when neither side fits inside an off
       <ChoiceButton label="Format" value="png" choices={choices} onChoose={vi.fn()} />
     </dialog>,
   );
-  fireEvent.click(view.getByRole('button', { name: /^Format / }));
+  fireEvent.click(view.getByRole('button', { name: choiceLabel('Format') }));
   const layer = view.getByRole('dialog', { name: 'Format' });
   const menu = layer.querySelector<HTMLElement>('.context-menu')!;
   const placed = menu.getBoundingClientRect();

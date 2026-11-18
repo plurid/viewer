@@ -272,7 +272,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-/** The window as the person speaks in it: Job 1042 shown in a folder plane, its check, the panel. */
+/** The window as the person speaks in it: Job 1042 shown in a files plane, its check, the panel. */
 function window_() {
   const registry = new CommandRegistry();
   const here = (): CommandContext => ({

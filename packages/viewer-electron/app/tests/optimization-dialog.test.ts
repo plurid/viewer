@@ -157,7 +157,7 @@ it('reads a file as saved when another file of its export failed', async () => {
   expect(result(pdf)).toBe('Generated encoder failure');
 });
 
-it('preserves digit-by-digit scan entry and validates before preparing', async () => {
+it('preserves digit-by-digit entry, clamps once when applied and prepares with it', async () => {
   const optimization = vi.fn<ViewerAPI['optimization']>(async (request) =>
     request.kind === 'prepare' ? candidate(files[1]!) : undefined,
   );
@@ -175,12 +175,13 @@ it('preserves digit-by-digit scan entry and validates before preparing', async (
     fireEvent.change(input, { target: { value } });
     expect(input.value).toBe(value);
   }
+  // a value past the limit is held to it once, when it is applied, not at each digit
   fireEvent.change(input, { target: { value: '9000' } });
-  expect(screen.getByRole('button', { name: 'Prepare candidates' }).hasAttribute('disabled')).toBe(
-    true,
-  );
+  fireEvent.blur(input);
+  expect(input.value).toBe('8192');
   expect(optimization).not.toHaveBeenCalled();
   fireEvent.change(input, { target: { value: '1600' } });
+  fireEvent.blur(input);
   fireEvent.click(screen.getByRole('button', { name: 'Prepare candidates' }));
   await waitFor(() =>
     expect(optimization).toHaveBeenCalledWith(

@@ -357,10 +357,12 @@ function MediaPlayer(
           {subtitles.track.name}.
         </p>
       )}
+      {/* over the player, so the player keeps its full height; the ways to open it elsewhere
+          show only once loading is slow, never as a flash on every video */}
       {!ready && (
         <div className="media-loading" role="status">
           <span>{slow ? 'Media is taking longer to load.' : 'Loading media…'}</span>
-          <NativeOpenActions path={resource.entry.path} />
+          {slow && <NativeOpenActions path={resource.entry.path} />}
         </div>
       )}
     </div>

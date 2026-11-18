@@ -16,6 +16,7 @@ import { errorMessage } from '../../domain/errors';
 import { onWindowEvent } from '../app/window-events';
 import { plural } from '../../domain/plural';
 import { statusLabel } from '../ui/status-labels';
+import { NumberField } from '../ui/NumberField';
 const busy = (plan: ActionPlan) => ['planning', 'applying'].includes(plan.status);
 const name = (path: string) => baseName(path);
 function destinationParts(path: string) {
@@ -279,14 +280,11 @@ function ConfigureTask({
             </label>
             <label className="field-label">
               Number padding
-              <input
-                type="number"
+              <NumberField
                 min={0}
                 max={12}
                 value={options.padding ?? 0}
-                onChange={(event) =>
-                  setOptions({ ...options, padding: Number(event.target.value) })
-                }
+                onCommit={(padding) => setOptions({ ...options, padding })}
               />
             </label>
             <label className="check-row">
@@ -317,11 +315,10 @@ function ConfigureTask({
             </label>
             <label className="field-label">
               Start numbering at
-              <input
-                type="number"
+              <NumberField
                 min={0}
                 value={options.start ?? 1}
-                onChange={(event) => setOptions({ ...options, start: Number(event.target.value) })}
+                onCommit={(start) => setOptions({ ...options, start })}
               />
             </label>
           </div>

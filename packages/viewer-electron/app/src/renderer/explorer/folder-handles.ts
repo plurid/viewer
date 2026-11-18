@@ -1,6 +1,6 @@
 import type { FileEntry } from '../../domain/contracts';
 
-/** What a folder plane lets a line do with its items: `:select` and `:deselect`. */
+/** What a files plane lets a line do with its items: `:select` and `:deselect`. */
 export interface FolderHandle {
   path(): string;
   /** The items it shows, in their order. */
@@ -10,7 +10,7 @@ export interface FolderHandle {
   select(entries: readonly FileEntry[]): void;
 }
 const handles = new Map<string, FolderHandle>();
-/** Each folder plane's, while it is shown. */
+/** Each files plane's, while it is shown. */
 export function registerFolderHandle(paneID: string, handle: FolderHandle): () => void {
   handles.set(paneID, handle);
   return () => {

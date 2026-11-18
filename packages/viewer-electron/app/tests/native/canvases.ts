@@ -135,9 +135,7 @@ const click = async (main: Connection, id: string, label: string) => {
       pageCall(
         (id) =>
           document
-            .querySelector<HTMLButtonElement>(
-              `[data-canvas-id="${id}"] [aria-label="Canvas tools"]`,
-            )!
+            .querySelector<HTMLButtonElement>(`[data-canvas-id="${id}"] button.canvas-tools`)!
             .click(),
         id,
       ),

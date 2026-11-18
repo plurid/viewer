@@ -66,8 +66,8 @@ describe('an application is one item', () => {
     expect(browsable(app)).toBe(false);
     expect(kindLabel(folder)).toBe('Folder');
     expect(kindLabel(app)).toBe('Application');
-    expect(kindLabel(pages)).toBe('PAGES');
-    expect(kindLabel(notes)).toBe('MD');
+    expect(kindLabel(pages)).toBe('Pages document');
+    expect(kindLabel(notes)).toBe('Markdown document');
   });
   it('labels folder and file links as aliases and groups them without changing navigation', () => {
     const drive = {

@@ -31,6 +31,9 @@ import { folderCheckConcurrency, folderCheckTimeout } from '../../domain/files/f
 import { rankWorkspaceChoices } from '../../domain/workspaces/definitions/query';
 import type { DefinedWorkspaces } from './defined-workspaces';
 import type { FoundWorkspaces } from './found-workspaces';
+import { OfferDismissals } from './offer-dismissals';
+import type { FileChange } from '../../domain/files/changes';
+import { pathMapper } from '../../domain/files/changes';
 import type { SettingsSnapshot } from '../../domain/services';
 import { builtInProfiles } from '../../domain/preferences/profiles';
 import { errorMessage } from '../../domain/errors';
@@ -109,7 +112,7 @@ function documentSourceChoice(text: string, added?: Set<string>): string {
 
 export interface WorkspaceDefinitionsPorts {
   found?: Pick<FoundWorkspaces, 'load' | 'snapshot' | 'subscribe' | 'configure' | 'recovery'> &
-    Partial<Pick<FoundWorkspaces, 'available' | 'reconcileKeys' | 'hide' | 'show'>>;
+    Partial<Pick<FoundWorkspaces, 'available' | 'reconcileKeys' | 'hide' | 'show' | 'hideAgain'>>;
   access(files: readonly string[]): Promise<void>;
   settings(): SettingsSnapshot['settings'];
   emit(catalog: DefinitionCatalog): void;
@@ -142,11 +145,16 @@ export class WorkspaceDefinitions {
   private problems: DefinitionProblem[] = [];
   private rootProblems = new Map<string, DefinitionProblem>();
   private current: DefinitionCatalog;
+  /** Roots whose workspace offer the person dismissed: a private file beside this catalog. */
+  readonly offers: OfferDismissals;
+  /** The dismissals the latest Clear recent folders removed, for its Undo. */
+  private clearedOffers: string[] = [];
   constructor(
     directory: string,
     readonly home: string,
     private ports: WorkspaceDefinitionsPorts,
   ) {
+    this.offers = new OfferDismissals(directory);
     this.configuration = new JsoncConfiguration(directory, readWorkspacesFile, undefined, {
       name: 'workspaces.jsonc',
       schemaName: 'workspaces.schema.json',
@@ -192,15 +200,54 @@ export class WorkspaceDefinitions {
     await this.ports.found.hide(definition.root);
     await this.reload();
   }
-  /** Shows a hidden root again, or every hidden root. */
-  async showFound(root?: string): Promise<void> {
-    await this.ports.found?.show?.(root === undefined ? undefined : [root]);
+  /**
+   * Shows a hidden root again, or every hidden root; with `again`, Undo of Show all hides them
+   * again. Gives how many roots changed.
+   */
+  async showFound(root?: string, again = false): Promise<number> {
+    const changed = again
+      ? await this.ports.found?.hideAgain?.()
+      : await this.ports.found?.show?.(root === undefined ? undefined : [root]);
     await this.reload();
+    return changed ?? 0;
+  }
+  /** The person dismissed the workspace offer for these roots. A failed save throws. */
+  async dismissOffers(roots: readonly string[]): Promise<void> {
+    if (await this.offers.dismiss(roots)) await this.reload();
+  }
+  /** Show Hidden Insights: every workspace offer shows again. */
+  async clearOffers(): Promise<void> {
+    if ((await this.offers.clear()).length) await this.reload();
+  }
+  /**
+   * Clear recent folders: dismissals of found workspaces go with the history that found them.
+   * Explicit definitions' dismissals are the person's own choice and stay. The cleared ones are
+   * held for Clear's Undo.
+   */
+  async clearFoundOffers(): Promise<void> {
+    const explicit = new Set(
+      this.current.definitions.flatMap((item) => (item.source === 'found' ? [] : [item.root])),
+    );
+    this.clearedOffers = await this.offers.clear((root) => explicit.has(root));
+    if (this.clearedOffers.length) await this.reload();
+  }
+  /** Undo of Clear recent folders: the dismissals it cleared return. */
+  async restoreOffers(): Promise<void> {
+    const cleared = this.clearedOffers;
+    this.clearedOffers = [];
+    if (cleared.length && (await this.offers.dismiss(cleared))) await this.reload();
+  }
+  /** Viewer's own moves carry dismissed roots, and the ones Clear's Undo would restore. */
+  async remapOffers(changes: readonly FileChange[]): Promise<void> {
+    const map = pathMapper(changes);
+    this.clearedOffers = [...new Set(this.clearedOffers.map(map))];
+    if (await this.offers.remap(changes)) await this.reload();
   }
   load(): Promise<void> {
     return (this.loading ??= (async () => {
       await this.ports.memory?.load();
       await this.ports.found?.load();
+      await this.offers.load();
       this.stopFound = this.ports.found?.subscribe(() => this.schedule());
       this.stopMemory = this.ports.memory?.subscribe(() => this.publishMemory());
       await this.reload();
@@ -378,6 +425,7 @@ export class WorkspaceDefinitions {
       file: { path: this.configuration.file, state: fileState },
       projectManager: status,
       ...(found ? { found: found.state } : {}),
+      ...(this.offers.roots().length ? { dismissedOffers: [...this.offers.roots()] } : {}),
       definitions: resolved.definitions.map((item) => ({
         ...item,
         openedAt: this.ports.memory?.openedAt(item.key) ?? previous.get(item.key),
@@ -743,5 +791,6 @@ export class WorkspaceDefinitions {
     this.stopMemory?.();
     this.stopFound?.();
     await this.queue.catch(() => {});
+    await this.offers.close();
   }
 }

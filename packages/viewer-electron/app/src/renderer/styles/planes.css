@@ -94,6 +94,16 @@
   font-size: var(--text-body);
   font-weight: 600;
 }
+/* a long lens name keeps the header's other controls in it: the button stops at 140 px */
+.plane-lens-button {
+  max-width: 140px;
+}
+.plane-lens-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* text not saved: a file's edits, or a scratch plane's text */
 .plane-unsaved {
   width: 7px;
@@ -171,7 +181,8 @@
   max-width: 110px;
 }
 .plane-module-controls .preview-toolbar input.page-number {
-  width: 42px;
+  /* four figures and the field's padding: page 1000 shows whole */
+  width: calc(4ch + 20px);
 }
 .plane-spatial-controls {
   display: flex;

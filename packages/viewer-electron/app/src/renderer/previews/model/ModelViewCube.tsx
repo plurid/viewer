@@ -232,6 +232,8 @@ export function ModelViewCube({
             className="model-viewcube-home"
             icon="fit"
             label={homeLabel}
+            // The caption beside the cube names it; a tooltip as well would say it twice.
+            title={undefined}
             data-view="home"
             tabIndex={-1}
             aria-keyshortcuts="Home"

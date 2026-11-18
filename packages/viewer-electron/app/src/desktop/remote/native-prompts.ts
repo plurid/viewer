@@ -4,23 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { macFiles } from '../native/macos-files';
 import type { PromptAnswer, RemotePrompt } from './askpass';
 
-/** The empty secure field names what OpenSSH asked for. */
-export function secretPlaceholder(text: string): string {
-  if (/passphrase/i.test(text)) {
-    return 'Passphrase';
-  }
-  if (/\bPIN\b/.test(text)) {
-    return 'PIN';
-  }
-  if (/verification|one-time|\bcode\b|\bOTP\b|token/i.test(text)) {
-    return 'Verification code';
-  }
-  if (/password/i.test(text)) {
-    return 'Password';
-  }
-  return 'Answer';
-}
-
+/** Cancel is first and the default: Return or Esc never trusts a key or confirms anything. */
 async function question(
   window: BrowserWindow,
   prompt: RemotePrompt,
@@ -51,14 +35,7 @@ export function nativeRemotePrompt(
       case 'host-key': {
         const response = await question(window, prompt, {
           type: 'warning',
-          buttons: ['Cancel', 'Trust this host key'],
-        });
-        return response === 1 ? 'yes' : null;
-      }
-      case 'confirm': {
-        const response = await question(window, prompt, {
-          type: 'question',
-          buttons: ['Cancel', 'Allow'],
+          buttons: ['Cancel', 'Trust Host Key'],
         });
         return response === 1 ? 'yes' : null;
       }
@@ -72,7 +49,9 @@ export function nativeRemotePrompt(
     }
     const native = macFiles();
     if (!native.remotePrompt || !native.cancelRemotePrompt) {
-      throw new Error('The secure server prompt helper is unavailable.');
+      throw new Error(
+        'This build of Viewer can’t ask for a password. Install the latest Viewer, then connect again.',
+      );
     }
     const id = randomUUID();
     const cancel = () => native.cancelRemotePrompt!(id);
@@ -83,7 +62,7 @@ export function nativeRemotePrompt(
         window.getNativeWindowHandle(),
         prompt.title,
         prompt.text,
-        secretPlaceholder(prompt.text),
+        prompt.placeholder,
       );
       return prompt.signal.aborted || window.isDestroyed() ? null : answer;
     } finally {

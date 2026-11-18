@@ -1,6 +1,24 @@
 .worktrees-dialog {
   width: min(900px, 94vw);
 }
+/* One height while you search, so the dialog never re-centers and moves its field under the
+   caret; the list takes what is left. */
+.worktrees-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  height: min(560px, calc(100dvh - 60px));
+}
+.worktrees-dialog[open] > * {
+  flex: none;
+}
+.worktrees-dialog[open] > .worktrees-list {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+.worktrees-dialog[open] > footer {
+  margin-top: auto;
+}
 .worktree-create {
   padding: var(--gap-small) var(--gap-dialog) 0;
   display: flex;

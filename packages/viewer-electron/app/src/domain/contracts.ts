@@ -179,11 +179,14 @@ export interface FolderPane {
   sidebar?: PaneSidebar;
   /** Opened by Explode folder from that plane: Collapse closes it again. */
   exploded?: string;
-  /** The folder plane it is paired with, as a commander's two panels: copies and
+  /** The files plane it is paired with, as a commander's two panels: copies and
    * moves go there; each names the other. */
   pair?: string;
   /** The pair follows each other into subfolders and back up. */
   pairSync?: boolean;
+  /** The Columns preview's width the person gave this plane, saved with the workspace: it keeps
+   * it in every folder it goes to, as a Finder window does. */
+  previewWidth?: number;
 }
 export interface PaneSidebar {
   visible: boolean;
@@ -536,6 +539,8 @@ export interface UIPreferences {
 }
 export type TextEditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll';
 export interface Bootstrap {
+  /** The hidden QA runtime (desktop/bridge.ts `qaRuntime`): review runs read its command list. */
+  qaRuntime?: boolean;
   definitions?: DefinitionCatalog;
   agentDriven?: boolean;
   checkedFolders?: string[];
@@ -755,6 +760,8 @@ export type DesktopEvent =
   /** A trackpad's rotation over the window (macOS): degrees since the last report,
    * counterclockwise; 0 once the fingers lift. Only the window it happened in gets it. */
   | { type: 'rotate-gesture'; rotation: number }
+  /** The window is being dragged by its title bar: an open menu closes, as on macOS. */
+  | { type: 'window-moved' }
   | { type: 'service-error'; service: string; message: string }
   | { type: 'agent-proposal'; proposal: AgentProposal }
   | { type: 'agent-task'; id: string; bundle: AgentTaskBundle; deadline: number }

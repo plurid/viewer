@@ -236,6 +236,7 @@ export default function LayoutPlane({ pane }: { pane: LayoutPane }) {
     }, 0) > sourceLimits.pdfs;
   const reasonOf = (value: LayoutMode) => suggested.find((item) => item.mode === value)?.reason;
 
+  const summary = plan?.summary ?? (settings.mode === 'nesting' ? reasonOf('nesting') : '');
   return (
     <section className="layout-plane" aria-label="Layout">
       <div className="preview-toolbar layout-toolbar">
@@ -253,8 +254,8 @@ export default function LayoutPlane({ pane }: { pane: LayoutPane }) {
           ))}
         </div>
         <span className="toolbar-spacer" />
-        <span className="muted" role="status">
-          {plan?.summary ?? (settings.mode === 'nesting' ? reasonOf('nesting') : '')}
+        <span className="muted layout-summary" role="status" title={summary || undefined}>
+          {summary}
         </span>
       </div>
       {read.skipped.length > 0 && (

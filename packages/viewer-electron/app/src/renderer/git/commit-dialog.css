@@ -43,10 +43,6 @@
   resize: vertical;
 }
 
-.git-commit-dialog textarea:focus-visible {
-  border-color: var(--accent);
-}
-
 .git-commit-dialog .error {
   margin: 0;
 }

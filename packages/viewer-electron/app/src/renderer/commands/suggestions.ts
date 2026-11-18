@@ -88,6 +88,17 @@ export function offerSuggestions(
   return command ? [{ command, reason: offer.reason }] : [];
 }
 
+/** The palette's Suggested section: the selection's suggestions, then the workspace offer, three in
+ * all. */
+export function paletteSuggested(
+  applicable: readonly ResolvedCommand[],
+  selection: readonly FileEntry[],
+  offer: WorkspaceInsight | undefined,
+): Suggestion[] {
+  const offered = offerSuggestions(applicable, offer);
+  return [...suggestionsFor(applicable, selection, 3 - offered.length), ...offered];
+}
+
 /** The suggestions for a selection, from the person's settings and history; none when they turned
  * suggestions off. */
 export function suggestionsFor(

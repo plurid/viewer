@@ -134,11 +134,13 @@ export function BackupDialog({
                 </div>
               ))}
             </dl>
-            <div className="backup-notices">
-              {review.warnings.map((warning) => (
-                <p key={warning}>{warning}</p>
-              ))}
-            </div>
+            {review.warnings.length > 0 && (
+              <div className="backup-notices">
+                {review.warnings.map((warning) => (
+                  <p key={warning}>{warning}</p>
+                ))}
+              </div>
+            )}
             {review.mode === 'import' && (
               <>
                 <h3>Source folders</h3>

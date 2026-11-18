@@ -22,16 +22,22 @@ function rootIndex(definitions: readonly WorkspaceDefinition[]) {
   }
   return index;
 }
+/**
+ * The deepest definition root holding the folder. With `accept`, roots whose definition it refuses
+ * are passed over, so an outer root still owns the folder.
+ */
 export function owningDefinition(
   folder: string,
   definitions: readonly WorkspaceDefinition[],
+  accept: (definition: WorkspaceDefinition) => boolean = () => true,
 ): WorkspaceDefinition | undefined {
   const index = rootIndex(definitions);
   for (let root = folder; root !== '/'; root = parentFolder(root)) {
     const definition = index.get(root);
-    if (definition) return definition;
+    if (definition && accept(definition)) return definition;
   }
-  return index.get('/');
+  const top = index.get('/');
+  return top && accept(top) ? top : undefined;
 }
 export function supportedPlaneFolder(pane: Pane): string | undefined {
   if (pane.type === 'search' && pane.allLocations) return;
@@ -77,6 +83,24 @@ export function mostlyIn(
   return primary && ((primary.planes.length >= 2 && primary.share >= 0.6) || primary.share === 1)
     ? primary.definition
     : undefined;
+}
+/**
+ * Whether most of the workspace's planes are anywhere inside the root, inner definitions' roots
+ * included: planes in `acme/web` and `acme/api` are all in `acme`.
+ */
+export function mostlyInside(workspace: Workspace, root: string): boolean {
+  const supported = workspace.panes.filter((pane) =>
+    ['folder', 'preview', 'terminal', 'scratch', 'search'].includes(pane.type),
+  );
+  const inside = supported.filter((pane) => {
+    const folder = supportedPlaneFolder(pane);
+    return !!folder && insideRoot(root, folder);
+  }).length;
+  // the same measure as mostlyIn: two or more planes and 60% of them, or every plane
+  return (
+    supported.length > 0 &&
+    ((inside >= 2 && inside / supported.length >= 0.6) || inside === supported.length)
+  );
 }
 export function addsToDefinition(workspace: Workspace, definition: WorkspaceDefinition): boolean {
   const represented = definition.planes.map(({ plane }) => plane);

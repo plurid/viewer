@@ -1,5 +1,5 @@
 import { chooseOpening } from './opening';
-import { memo, useMemo, useRef, useState } from 'react';
+import { memo, useId, useMemo, useRef, useState } from 'react';
 import type { FileEntry, SearchPane } from '../../domain/contracts';
 import {
   activeWorkspace,
@@ -15,7 +15,8 @@ import { useWorkspace } from '../workspace/context';
 import { useIndexedSearch } from './useIndexedSearch';
 import { SearchCoverage } from './SearchCoverage';
 import { indexedCoverage } from '../../domain/search/coverage';
-import { ListView, type FileViewProps } from './views';
+import { ListView, fileRowID, type FileViewProps } from './views';
+import { PathLabel } from '../ui/PathLabel';
 import { ContextMenu } from '../ui/ContextMenu';
 import { Empty, Loading } from '../ui/primitives';
 import { useCommandSource } from '../commands/context';
@@ -75,6 +76,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
     );
   };
   const surface = useRef<HTMLDivElement>(null);
+  const rowPrefix = useId();
   const search = useIndexedSearch(
     pane?.query || '',
     pane?.allLocations ? undefined : pane?.path,
@@ -160,6 +162,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
   if (!pane) return <Empty title="This search plane is gone" detail="Open the search again." />;
   const props: FileViewProps = {
     paneID: id,
+    idPrefix: rowPrefix,
     entries,
     selection,
     cursor: session.cursor,
@@ -206,7 +209,9 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
     <div
       className="folder-explorer search-explorer"
       tabIndex={0}
+      role="group"
       aria-label={pane.name}
+      aria-activedescendant={session.cursor ? fileRowID(rowPrefix, session.cursor) : undefined}
       onFocus={() => setActivePane(id)}
       ref={surface}
       data-file-owner={id}
@@ -257,7 +262,12 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
           />
           Document text
         </label>
-        <span>{pane.allLocations ? 'Indexed locations' : pane.path}</span>
+        {/* the scope keeps its own folder's name, home as ~, as every shown path */}
+        {pane.allLocations ? (
+          <span>Indexed locations</span>
+        ) : (
+          <PathLabel className="search-scope" path={pane.path} />
+        )}
       </div>
       <SearchCoverage
         result={search.result}
@@ -292,9 +302,18 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
           <ListView {...props} />
         )}
       </FileTable>
+      {/* A document search keeps its passage strip, selected or not, at one height, so the list
+          never resizes as the selection changes. */}
       {pane.content &&
-        selected.length === 1 &&
         (() => {
+          if (selected.length !== 1)
+            return (
+              <div className="search-evidence muted">
+                {selected.length
+                  ? `${plural(selected.length, 'result')} selected`
+                  : 'Select a result to see its passage.'}
+              </div>
+            );
           const hit = search.result?.evidence?.find((hit) => hit.path === selected[0]?.path);
           return hit ? (
             <div className="search-evidence">

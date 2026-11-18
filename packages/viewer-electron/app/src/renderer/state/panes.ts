@@ -138,7 +138,7 @@ export function navigate(id: string, path: string, fromPair = false): void {
   if (!fromPair) followPair(id, previous, path);
 }
 /**
- * A folder plane's partner, as a commander's other panel: the folder plane it is
+ * A files plane's partner, as a commander's other panel: the files plane it is
  * paired with, while each names the other.
  */
 export function pairOf(id: string): FolderPane | undefined {
@@ -148,7 +148,7 @@ export function pairOf(id: string): FolderPane | undefined {
   const partner = panes.find((item) => item.id === pane.pair);
   return partner?.type === 'folder' && partner.pair === id ? partner : undefined;
 }
-/** Two folder planes paired; a plane paired before with another lets it go. */
+/** Two files planes paired; a plane paired before with another lets it go. */
 export function pairPanes(first: string, second: string): void {
   if (first === second) return;
   for (const id of [first, second]) {

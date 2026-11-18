@@ -1,3 +1,4 @@
+import { FileName } from '../ui/FileName';
 import { useRef, type ReactNode } from 'react';
 import type { FileEntry } from '../../domain/contracts';
 import { browserColumnWidth } from '../../domain/preferences/folder-presentation';
@@ -43,11 +44,10 @@ export function BrowserColumn({
     >
       <button
         className="column-title"
-        title={path}
         onClick={onActivate}
         aria-current={active ? 'location' : undefined}
       >
-        {baseName(path)}
+        <FileName name={baseName(path)} />
       </button>
       {children}
       <button

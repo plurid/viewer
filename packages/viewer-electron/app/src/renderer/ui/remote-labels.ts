@@ -38,6 +38,10 @@ function subscribe(listener: () => void) {
   };
 }
 
+/** A local path's label never re-renders for a server connection's news. */
+const ignore = () => () => {};
+const none = () => undefined;
+
 /**
  * How a window names its server connections (`al@build`), for a label that shows a server
  * location. A window that shows only local paths never asks the desktop.
@@ -46,6 +50,5 @@ export function useRemoteLabels(remote: boolean): RemoteLabels | undefined {
   useEffect(() => {
     if (remote) start();
   }, [remote]);
-  const current = useSyncExternalStore(subscribe, () => labels);
-  return remote ? current : undefined;
+  return useSyncExternalStore(remote ? subscribe : ignore, remote ? () => labels : none);
 }

@@ -158,58 +158,68 @@ export const previewValuesSchema = z
   .record(z.string().max(200), jsonValueSchema)
   .refine((value) => JSON.stringify(value).length <= 256000);
 
-// Shared presentation validation lives in the domain, including partial list fields.
-export const folderOverrideSchema = z
-  .object({
-    mode: z.enum(viewModes).optional(),
-    sort: z.enum(['name', 'modified', 'created', 'size', 'kind', 'extension']).optional(),
-    descending: z.boolean().optional(),
-    showHidden: z.boolean().optional(),
-    density: z.enum(['comfortable', 'compact']).optional(),
-    foldersFirst: z.boolean().optional(),
-    group: z.enum(['none', 'kind', 'modified', 'lens']).optional(),
-    /** The lens grouping this folder when `group` is `lens`. */
-    lens: z.uuid().optional(),
-    columnWidth: z.number().int().min(160).max(1600).optional(),
-    previewWidth: z.number().int().min(320).max(1600).optional(),
-    list: z
-      .object({
-        visible: z
-          .object({
-            modified: z.boolean(),
-            created: z.boolean(),
-            kind: z.boolean(),
-            extension: z.boolean(),
-            size: z.boolean(),
-            git: z.boolean(),
-          })
-          .partial()
-          .strict()
-          .optional(),
-        widths: z
-          .object({
-            name: z.number().min(0).max(1600),
-            modified: z.number().min(60).max(600),
-            created: z.number().min(60).max(600),
-            kind: z.number().min(60).max(600),
-            extension: z.number().min(60).max(600),
-            size: z.number().min(60).max(600),
-            git: z.number().min(60).max(600),
-          })
-          .partial()
-          .strict()
-          .optional(),
-        wrapNames: z.boolean().optional(),
-        order: z
-          .array(z.enum(['name', 'modified', 'created', 'kind', 'extension', 'size', 'git']))
-          .max(7)
-          .refine((items) => items[0] === 'name' && new Set(items).size === items.length)
-          .optional(),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict();
+// Shared presentation validation lives in the domain, including partial list fields. The Columns
+// preview's width is its plane's (FolderPane.previewWidth), never a folder's: one a file holds
+// with a folder is dropped as it is read.
+const withoutPreviewWidth = (value: unknown) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !('previewWidth' in value))
+    return value;
+  const { previewWidth: _previewWidth, ...rest } = value as Record<string, unknown>;
+  return rest;
+};
+export const folderOverrideSchema = z.preprocess(
+  withoutPreviewWidth,
+  z
+    .object({
+      mode: z.enum(viewModes).optional(),
+      sort: z.enum(['name', 'modified', 'created', 'size', 'kind', 'extension']).optional(),
+      descending: z.boolean().optional(),
+      showHidden: z.boolean().optional(),
+      density: z.enum(['comfortable', 'compact']).optional(),
+      foldersFirst: z.boolean().optional(),
+      group: z.enum(['none', 'kind', 'modified', 'lens']).optional(),
+      /** The lens grouping this folder when `group` is `lens`. */
+      lens: z.uuid().optional(),
+      columnWidth: z.number().int().min(160).max(1600).optional(),
+      list: z
+        .object({
+          visible: z
+            .object({
+              modified: z.boolean(),
+              created: z.boolean(),
+              kind: z.boolean(),
+              extension: z.boolean(),
+              size: z.boolean(),
+              git: z.boolean(),
+            })
+            .partial()
+            .strict()
+            .optional(),
+          widths: z
+            .object({
+              name: z.number().min(0).max(1600),
+              modified: z.number().min(60).max(600),
+              created: z.number().min(60).max(600),
+              kind: z.number().min(60).max(600),
+              extension: z.number().min(60).max(600),
+              size: z.number().min(60).max(600),
+              git: z.number().min(60).max(600),
+            })
+            .partial()
+            .strict()
+            .optional(),
+          wrapNames: z.boolean().optional(),
+          order: z
+            .array(z.enum(['name', 'modified', 'created', 'kind', 'extension', 'size', 'git']))
+            .max(7)
+            .refine((items) => items[0] === 'name' && new Set(items).size === items.length)
+            .optional(),
+        })
+        .strict()
+        .optional(),
+    })
+    .strict(),
+);
 const planeBase = { id, target: projectPathSchema, state: previewValuesSchema.optional() };
 const portableDiffSourceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('file'), target: projectPathSchema }).strict(),

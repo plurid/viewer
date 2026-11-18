@@ -1,5 +1,6 @@
 import { effectiveWindowSettings } from '../../state/effective-ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import Prism from 'prismjs';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
@@ -68,7 +69,13 @@ function Code({
       ref={scroll}
       tabIndex={0}
       aria-label="File text"
-      style={editorFont(settings)}
+      // the gutter holds the last line's number at any text size: past line 9,999 it widens
+      style={
+        {
+          ...editorFont(settings),
+          '--gutter-digits': String(Math.max(3, String(lines.length).length)),
+        } as CSSProperties
+      }
     >
       <div
         style={{
@@ -227,13 +234,15 @@ export default function TextPreview(context: TextPreviewProps) {
         : null,
     [data, resource.entry.extension],
   );
+  // a CSV or TSV shows as a table, which has no text size or line wrapping
+  const table = ['csv', 'tsv'].includes(resource.entry.extension);
   usePreviewCommands(
     context,
     useMemo(
       () => [
         {
           id: 'view-source',
-          label: raw ? 'Show document' : 'Show source',
+          label: raw ? 'Show Document' : 'Show Source',
           aliases: ['vs'],
           available:
             !!data &&
@@ -245,34 +254,34 @@ export default function TextPreview(context: TextPreviewProps) {
         // the header's size and wrap buttons, which Essential leaves here
         {
           id: 'text-smaller',
-          label: 'Smaller preview text',
+          label: 'Smaller Preview Text',
           aliases: ['zoom out', 'font size'],
-          available: !!data && !data.binary && scale > 0.6,
+          available: !!data && !data.binary && !table && scale > 0.6,
           run: () => setScale((value) => Math.max(0.6, value - 0.1)),
         },
         {
           id: 'text-larger',
-          label: 'Larger preview text',
+          label: 'Larger Preview Text',
           aliases: ['zoom in', 'font size'],
-          available: !!data && !data.binary && scale < 2.5,
+          available: !!data && !data.binary && !table && scale < 2.5,
           run: () => setScale((value) => Math.min(2.5, value + 0.1)),
         },
         {
           id: 'text-size-reset',
-          label: 'Reset preview text size',
+          label: 'Reset Preview Text Size',
           aliases: ['actual size', 'font size'],
-          available: !!data && !data.binary && scale !== 1,
+          available: !!data && !data.binary && !table && scale !== 1,
           run: () => setScale(1),
         },
         {
           id: 'text-wrap',
-          label: wrap ? 'Stop wrapping lines' : 'Wrap lines',
+          label: wrap ? 'Stop Wrapping Lines' : 'Wrap Lines',
           aliases: ['wrap', 'word wrap'],
-          available: !!data && !data.binary,
+          available: !!data && !data.binary && !table,
           run: () => setWrap((value) => !value),
         },
       ],
-      [raw, data, resource.entry.extension, setRaw, scale, setScale, wrap, setWrap],
+      [raw, data, resource.entry.extension, setRaw, scale, setScale, wrap, setWrap, table],
     ),
   );
   if (editing && paneID)
@@ -313,6 +322,7 @@ export default function TextPreview(context: TextPreviewProps) {
               <button
                 {...headerItem('document', 5, ['preview.view-source'])}
                 className={!raw ? 'selected' : ''}
+                aria-pressed={!raw}
                 onClick={() => setRaw(false)}
               >
                 {markdown ? 'Document' : 'Tree'}
@@ -320,6 +330,7 @@ export default function TextPreview(context: TextPreviewProps) {
               <button
                 {...headerItem('source', 5, ['preview.view-source'])}
                 className={raw ? 'selected' : ''}
+                aria-pressed={raw}
                 onClick={() => setRaw(true)}
               >
                 Source
@@ -336,8 +347,8 @@ export default function TextPreview(context: TextPreviewProps) {
             </button>
           )}
           <span className="toolbar-spacer" />
-          {/* Essential leaves the text size to "…" */}
-          {context.toolbar !== 'essential' && (
+          {/* Essential leaves the text size to "…"; a CSV or TSV table has neither size nor wrap */}
+          {context.toolbar !== 'essential' && !table && (
             <>
               <button
                 {...headerItem('smaller', 8, ['preview.text-smaller'])}
@@ -364,13 +375,15 @@ export default function TextPreview(context: TextPreviewProps) {
               </button>
             </>
           )}
-          <button
-            {...headerItem('wrap', 6, ['preview.text-wrap'])}
-            aria-pressed={wrap}
-            onClick={() => setWrap((value) => !value)}
-          >
-            Wrap
-          </button>
+          {!table && (
+            <button
+              {...headerItem('wrap', 6, ['preview.text-wrap'])}
+              aria-pressed={wrap}
+              onClick={() => setWrap((value) => !value)}
+            >
+              Wrap
+            </button>
+          )}
         </PreviewToolbar>
       )}
       {data.truncated && (
@@ -378,7 +391,7 @@ export default function TextPreview(context: TextPreviewProps) {
           Showing the first 4 MB. Open in another app to read the entire file.
         </p>
       )}
-      {['csv', 'tsv'].includes(ext) ? (
+      {table ? (
         <DelimitedTable
           text={data.text}
           state={context.state}
@@ -399,11 +412,30 @@ export default function TextPreview(context: TextPreviewProps) {
           data={structured}
           viewControls={
             <>
-              <button aria-pressed={true} onClick={() => setRaw(false)}>
+              {/* as its own toolbar's: one Tree or Source item, and Edit */}
+              <button
+                {...headerItem('document', 5, ['preview.view-source'])}
+                className="selected"
+                aria-pressed={true}
+                onClick={() => setRaw(false)}
+              >
                 Tree
               </button>
-              <button onClick={() => setRaw(true)}>Source</button>
-              {editable && <button onClick={startEditing}>Edit</button>}
+              <button
+                {...headerItem('source', 5, ['preview.view-source'])}
+                onClick={() => setRaw(true)}
+              >
+                Source
+              </button>
+              {editable && (
+                <button
+                  {...headerItem('edit', 3, ['edit-file'])}
+                  title={withShortcut('Edit Text', editKeys)}
+                  onClick={startEditing}
+                >
+                  Edit
+                </button>
+              )}
             </>
           }
         />

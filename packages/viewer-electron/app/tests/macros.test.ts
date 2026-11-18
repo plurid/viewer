@@ -44,7 +44,7 @@ describe('a command sequence', () => {
     const command = programCommands({} as WorkspaceController, invoke, undefined, () => later).find(
       (item) => item.id === 'custom.macro',
     )!;
-    // a sequence is available outside a folder plane too
+    // a sequence is available outside a files plane too
     expect(command.when(first)).toBe(true);
     await command.run(first);
     expect(invoke.mock.calls).toEqual([

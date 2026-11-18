@@ -49,7 +49,8 @@ STEP, STP, IGES, IGS, STL, 3MF and 3DS start with **Free** rotation. glTF, OBJ, 
 USDZ, X3D, VRML and OFF start with **Turntable**. Choose either mode with **Rotation** in the full
 preview toolbar. With Essential headers, use **Use free rotation** or **Use turntable rotation** in
 the plane's **…** menu or command palette. Switching keeps the camera where it is; a camera rolled
-in **Free** levels in **Turntable**, which always turns around the model's top.
+in **Free** turns level in a third of a second for **Turntable**, which always turns around the
+model's top.
 
 Drag to rotate and right-drag to pan. A two-finger scroll on a trackpad or Magic Mouse pans: the
 model moves with your fingers, as a page does. A mouse wheel zooms, a notch at a time, and so does a
@@ -94,8 +95,8 @@ A STEP, IGES, STL, PLY or OFF model opened again shows at once, with its remembe
 is not read again either, but it waits for its material library, which is. Each window keeps the
 last 16 models it read in memory, up to 512 MiB of geometry, one version of each file: a file whose
 size, modification time or identity changed is read again. Two previews of one file opening
-together, such as a plane and Quick Preview, read it once. Revoking a folder's access or ejecting
-its volume forgets its models. Nothing is written to disk.
+together, such as a plane and Quick Preview, each read the file, and it is converted once. Revoking
+a folder's access or ejecting its volume forgets its models. Nothing is written to disk.
 
 Files on a server are read each time they open. On a disk whose times have whole seconds, such as
 HFS+, or two seconds, such as FAT, a file rewritten at the same size within that time shows its

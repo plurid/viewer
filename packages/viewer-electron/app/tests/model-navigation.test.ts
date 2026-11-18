@@ -568,12 +568,14 @@ describe.each(modes)('the wheel in %s rotation', (rotation) => {
     canvas.dispatchEvent(macWheel(6, -18));
     for (let index = 0; index < 200; index += 1) navigation.update();
     expect(camera.position.distanceTo(navigation.target)).toBeCloseTo(start, 9);
-    for (let index = 0; index < 20; index += 1) canvas.dispatchEvent(macWheel(40, -120));
+    for (let index = 0; index < 20; index += 1)
+      canvas.dispatchEvent(macWheel(40.00244140625, -120));
     for (let index = 0; index < 100; index += 1) navigation.update();
     expect(camera.position.distanceTo(navigation.target)).toBeCloseTo(12, 9);
     expect(navigation.update()).toBe(false);
     // Zoom past a limit is dropped, not saved up: the next notch back moves at once.
-    for (let index = 0; index < 20; index += 1) canvas.dispatchEvent(macWheel(40, -120));
+    for (let index = 0; index < 20; index += 1)
+      canvas.dispatchEvent(macWheel(40.00244140625, -120));
     navigation.update();
     navigation.update();
     canvas.dispatchEvent(macWheel(-40, 120));
@@ -584,17 +586,17 @@ describe.each(modes)('the wheel in %s rotation', (rotation) => {
   it('pans sideways with Shift and a mouse, and zooms by notches with the Control key held', () => {
     const { canvas, camera, navigation } = fixture(rotation);
     const distance = camera.position.distanceTo(navigation.target);
-    const shifted = macWheel(40, -120);
+    const shifted = macWheel(40.00244140625, -120);
     Object.defineProperty(shifted, 'shiftKey', { value: true });
     canvas.dispatchEvent(shifted);
     expect(navigation.target.length()).toBeGreaterThan(0.01);
     expect(camera.position.distanceTo(navigation.target)).toBeCloseTo(distance, 9);
     const held = fixture(rotation);
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control' }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true }));
     const control = macWheel(4.000244140625, -120);
     Object.defineProperty(control, 'ctrlKey', { value: true });
     held.canvas.dispatchEvent(control);
-    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control' }));
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control', ctrlKey: false }));
     const first = held.camera.position.distanceTo(held.navigation.target);
     for (let index = 0; index < 60; index += 1) held.navigation.update();
     // Eased over frames, as a notch: not at once, as a pinch would be.
@@ -660,4 +662,103 @@ it('rolls a free camera’s up vector with Shift and the arrows', () => {
     new KeyboardEvent('keydown', { key: 'ArrowUp', shiftKey: true, cancelable: true }),
   );
   expect(camera.up.angleTo(up)).toBeCloseTo(0.08, 9);
+});
+
+describe('zoom easing and the Control key', () => {
+  const notch = () => macWheel(40.00244140625, -120);
+  const pinch = () => {
+    const event = macWheel(-2, 6);
+    Object.defineProperty(event, 'ctrlKey', { value: true });
+    return event;
+  };
+
+  it('eases a notch over frames, and a new view drops what is left of it', () => {
+    const { canvas, camera, navigation } = fixture('free');
+    const distance = camera.position.distanceTo(navigation.target);
+    canvas.dispatchEvent(notch());
+    navigation.update();
+    const first = camera.position.distanceTo(navigation.target) / distance;
+    expect(first).toBeCloseTo(1.1 ** 0.35, 9);
+    const view = navigation.snapshot();
+    navigation.view(view);
+    for (let index = 0; index < 60; index += 1) navigation.update();
+    expect(camera.position.distanceTo(navigation.target) / distance).toBeCloseTo(first, 9);
+  });
+
+  it('reads a pinch again once the window loses focus with Control down', () => {
+    const { canvas, camera, navigation } = fixture('turntable');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true }));
+    window.dispatchEvent(new Event('blur'));
+    const distance = camera.position.distanceTo(navigation.target);
+    canvas.dispatchEvent(pinch());
+    // A pinch zooms at once; a notch with Control held would ease in over frames.
+    expect(distance / camera.position.distanceTo(navigation.target)).toBeCloseTo(Math.exp(0.02), 9);
+  });
+
+  it('reads a pinch again once a key or pointer event shows Control is up', () => {
+    for (const release of [
+      () => document.dispatchEvent(new MouseEvent('pointermove', { bubbles: true })),
+      () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true })),
+    ]) {
+      const { canvas, camera, navigation } = fixture('free');
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true }));
+      release();
+      const distance = camera.position.distanceTo(navigation.target);
+      canvas.dispatchEvent(pinch());
+      expect(distance / camera.position.distanceTo(navigation.target)).toBeCloseTo(
+        Math.exp(0.02),
+        9,
+      );
+    }
+  });
+});
+
+describe('levelling for a turntable', () => {
+  it('turns a rolled free camera level over the given time, then hands over', () => {
+    let now = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const { camera, navigation } = fixture('free');
+    navigation.turn(0, 1.1);
+    navigation.turn(0.9, 0);
+    const rolled = navigation.snapshot();
+    expect(
+      new THREE.Vector3().fromArray(rolled.up).angleTo(new THREE.Vector3(0, 0, 1)),
+    ).toBeGreaterThan(0.2);
+    navigation.rotation('turntable', 320);
+    expect(navigation.snapshot()).toMatchObject({ rotation: 'turntable', up: [0, 0, 1] });
+    expect(navigation.turning).toBe(true);
+    expect(camera.up.toArray()).toEqual(rolled.up);
+    now += 160;
+    navigation.update();
+    const midway = camera.up.angleTo(new THREE.Vector3(0, 0, 1));
+    expect(midway).toBeGreaterThan(1e-3);
+    expect(midway).toBeLessThan(
+      new THREE.Vector3().fromArray(rolled.up).angleTo(new THREE.Vector3(0, 0, 1)),
+    );
+    now += 200;
+    navigation.update();
+    expect(navigation.turning).toBe(false);
+    expect(camera.up.toArray()).toEqual([0, 0, 1]);
+    expect(camera.position.toArray()).toEqual(rolled.position);
+  });
+
+  it('keeps the picture’s top when it levels a camera straight above or below', () => {
+    const { camera, navigation } = fixture('turntable');
+    navigation.view({
+      position: [0, 0, 20],
+      target: [0, 0, 0],
+      up: [0, 1, 0],
+      rotation: 'turntable',
+    });
+    const screenUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+    expect(screenUp.y).toBeGreaterThan(0.999);
+    navigation.view({
+      position: [0, 0, -20],
+      target: [0, 0, 0],
+      up: [-1, 0, 0],
+      rotation: 'turntable',
+    });
+    expect(new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).x).toBeLessThan(-0.999);
+    expect(camera.up.toArray()).toEqual([0, 0, 1]);
+  });
 });

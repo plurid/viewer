@@ -4,7 +4,8 @@ export const defaultShortcuts: Record<string, string> = {
   palette: 'Cmd+K',
   dictate: 'Ctrl+Shift+Space',
   'find-file': 'Cmd+F',
-  'new-root-folder': 'Cmd+Shift+N',
+  // Finder's: ⌘N a new window of files, here a files plane; ⇧⌘N a new folder
+  'new-root-folder': 'Cmd+N',
   settings: 'Cmd+,',
   'frame-all': 'Cmd+0',
   dock: 'Cmd+Enter',
@@ -27,7 +28,7 @@ export const defaultShortcuts: Record<string, string> = {
   info: 'Cmd+I',
   duplicate: 'Cmd+D',
   trash: 'Cmd+Backspace',
-  'new-folder': 'Cmd+N',
+  'new-folder': 'Cmd+Shift+N',
   'new-folder-with-selection': 'Ctrl+Cmd+N',
   'view-list': 'Cmd+1',
   'view-grid': 'Cmd+2',
@@ -70,6 +71,8 @@ export const alternateShortcuts: Readonly<Record<string, string>> = { 'go-to': '
 /** Menu accelerators handled only by the native menu: the renderer must not also run
  * them (a second Undo would undo another job). Listed for remapping and conflicts. */
 export const menuShortcuts: Record<string, string> = {
+  // a window of its own, with ⌥ as ⌘N's: ⌘N opens a files plane in this one
+  'new-native-window': 'Cmd+Alt+N',
   'choose-folder': 'Cmd+Shift+O',
   'undo-file': 'Cmd+Z',
   'redo-file': 'Cmd+Shift+Z',
@@ -225,15 +228,26 @@ export function shortcutGlyphs(value: string): string {
       .join('+'),
   );
 }
-/** A command's shortcut as saved, else its default; "" when it has none or was cleared. */
+/**
+ * A command's shortcut as saved, else as shipped; "" when it has none, was cleared, or the person
+ * gave its shipped key to another command, which keeps it. For hints, from the saved keys alone:
+ * `resolvedShortcut` also counts recipes and custom actions.
+ */
 export function shortcutFor(
   shortcuts: Readonly<Record<string, string>> | undefined,
   id: string,
 ): string {
-  return shortcuts?.[id] ?? builtInShortcut(id) ?? '';
+  const saved = shortcuts?.[id];
+  if (saved !== undefined) return saved;
+  const shipped = shippedShortcut(id) ?? '';
+  const taken = Object.entries(shortcuts ?? {}).some(
+    ([other, shortcut]) =>
+      other !== id && sameKey(shortcut, shipped) && !sharedAsShipped(id, shipped, other, shortcut),
+  );
+  return taken ? '' : shipped;
 }
-/** A command's own shortcut before any change, if it has one. */
-function builtInShortcut(id: string): string | undefined {
+/** A command's own shortcut before any change, if it ships with one. */
+export function shippedShortcut(id: string): string | undefined {
   return defaultShortcuts[id] ?? menuShortcuts[id] ?? previewShortcuts[id];
 }
 /** A control's name with its key, as a tooltip shows it: "Edit Text (⌘E)", or the name alone. */
@@ -246,7 +260,7 @@ const shortcutNames: Readonly<Record<string, string>> = {
   palette: 'Commands…',
   dictate: 'Ask Viewer by Voice…',
   'find-file': 'Find File…',
-  'new-root-folder': 'New Folder Plane',
+  'new-root-folder': 'New Files Plane',
   settings: 'Settings…',
   'frame-all': 'Frame All Planes',
   dock: 'Dock Plane',
@@ -286,6 +300,7 @@ const shortcutNames: Readonly<Record<string, string>> = {
   'move-to-pair': 'Move to the Other Folder',
   'select-by-pattern': 'Select by Pattern…',
   'deselect-by-pattern': 'Deselect by Pattern…',
+  'new-native-window': 'New Window',
   'choose-folder': 'Open Folder…',
   'undo-file': 'Undo',
   'redo-file': 'Redo',
@@ -303,6 +318,140 @@ export function shortcutLabel(id: string): string {
   const words = shortcutCommandID(id).replace(/[-.]/g, ' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
+/** A binding: what answers, its chord, and its name as Settings shows it. */
+type Binding = readonly [id: string, shortcut: string, label: string];
+const sameKey = (a: string, b: string) => !!a && !!b && shortcutKey(a) === shortcutKey(b);
+/** Two built-ins that share a chord as shipped, a picture's and a window command's as ⌘L, each
+ * holding its own: no conflict, for each answers in its own place. */
+function sharedAsShipped(a: string, aChord: string, b: string, bChord: string): boolean {
+  const own = (id: string, chord: string) => sameKey(shippedShortcut(id) ?? '', chord);
+  return sameKey(aChord, bChord) && own(a, aChord) && own(b, bChord);
+}
+/** The bindings the person made, but `except`'s: keys they gave commands, recipes and custom
+ * actions, and the prefix. */
+function ownBindings(settings: ApplicationSettings, except?: string): Binding[] {
+  return [
+    ...Object.entries(settings.shortcuts)
+      .filter(([id, shortcut]) => id !== except && !!shortcut)
+      .map(([id, shortcut]): Binding => [id, shortcut, shortcutLabel(id)]),
+    ...settings.recipes.map((recipe): Binding => [
+      `recipe.${recipe.id}`,
+      recipe.shortcut ?? '',
+      recipe.name,
+    ]),
+    ...settings.customActions.map((action): Binding => [
+      `custom.${action.id}`,
+      action.shortcut,
+      action.name,
+    ]),
+    ['keymap-prefix', settings.keymap.prefix, 'Prefix key'],
+  ];
+}
+/**
+ * Who holds the key built-in `id` ships with, which it then leaves to them: a recipe, custom action
+ * or command the person gave that key before it was this command's, as a recipe on ⌘R before ⌘R
+ * turned pictures. None while the key is free, or shared as shipped.
+ */
+export function shippedKeyHolder(settings: ApplicationSettings, id: string): string | undefined {
+  const shipped = shippedShortcut(id);
+  if (!shipped) return;
+  return ownBindings(settings, id).find(
+    ([other, shortcut]) =>
+      sameKey(shortcut, shipped) && !sharedAsShipped(id, shipped, other, shortcut),
+  )?.[2];
+}
+/**
+ * A command's key in effect: as the person set it, else as shipped, unless the person gave that
+ * key to something else, which keeps it: Settings → Shortcuts says so in the command's row. The
+ * keys shipped come from here, never from a saved copy, so a key shipped differently reaches
+ * every person who never changed it. '' for none.
+ */
+export function resolvedShortcut(settings: ApplicationSettings, id: string): string {
+  return (
+    settings.shortcuts[id] ?? (shippedKeyHolder(settings, id) ? '' : (shippedShortcut(id) ?? ''))
+  );
+}
+/** The key a command in the keymap shows in ⌘K and menus, as `resolvedShortcut` has it: none for
+ * a command the keymap does not hold, which shows the one it declares. */
+export function commandGlyphs(settings: ApplicationSettings, command: string): string | undefined {
+  const id = commandShortcutID(command);
+  return Object.hasOwn(settings.shortcuts, id) || shippedShortcut(id) !== undefined
+    ? shortcutGlyphs(resolvedShortcut(settings, id))
+    : undefined;
+}
+/** The picture keys in effect, as `resolvedShortcut` says: '' for none. */
+export function pictureShortcuts(settings: ApplicationSettings): Record<string, string> {
+  return Object.fromEntries(
+    Object.keys(previewShortcuts).map((id) => [id, resolvedShortcut(settings, id)]),
+  );
+}
+/** Every binding in effect but a picture's keys: commands' and the menu's, Finder's second keys,
+ * recipes, custom actions and the prefix. */
+function windowBindings(settings: ApplicationSettings): Binding[] {
+  const commands = {
+    ...Object.fromEntries(
+      Object.keys({ ...defaultShortcuts, ...menuShortcuts }).map((id) => [
+        id,
+        resolvedShortcut(settings, id),
+      ]),
+    ),
+    ...Object.fromEntries(
+      Object.entries(settings.shortcuts).filter(([id]) => !isPreviewShortcut(id)),
+    ),
+  };
+  return [
+    ...Object.entries(commands).map(([id, shortcut]): Binding => [id, shortcut, shortcutLabel(id)]),
+    ...Object.entries(alternateShortcuts).map(([id, shortcut]): Binding => [
+      `${id}:alternate`,
+      shortcut,
+      shortcutLabel(id),
+    ]),
+    ...ownBindings(settings).filter(([id]) => !Object.hasOwn(settings.shortcuts, id)),
+  ];
+}
+/** Every binding in effect, a picture's keys too. */
+function bindings(settings: ApplicationSettings): Binding[] {
+  return [
+    ...windowBindings(settings),
+    ...Object.entries(pictureShortcuts(settings)).map(([id, shortcut]): Binding => [
+      id,
+      shortcut,
+      shortcutLabel(id),
+    ]),
+  ];
+}
+/** The window command a picture key shares its chord with, as ⌘L is Go to Folder…'s elsewhere. */
+export function pictureKeyPartner(settings: ApplicationSettings, id: string): string | undefined {
+  const chord = pictureShortcuts(settings)[id] ?? '';
+  return windowBindings(settings).find(
+    ([other, shortcut]) => sameKey(shortcut, chord) && sharedAsShipped(id, chord, other, shortcut),
+  )?.[2];
+}
+/** The picture key a window command shares its chord with, as Rotate Picture Left shares ⌘L. */
+export function sharedPictureKey(settings: ApplicationSettings, id: string): string | undefined {
+  const chord = resolvedShortcut(settings, id);
+  return Object.entries(pictureShortcuts(settings)).find(([picture, shortcut]) =>
+    sharedAsShipped(picture, shortcut, id, chord),
+  )?.[0];
+}
+/**
+ * A key two bindings in effect hold at once, as the desktop refuses to save: its name, or none.
+ * A shipped key never clashes, for it leaves a key the person gave elsewhere, and the pair shipped
+ * sharing ⌘L shares it on purpose.
+ */
+export function shortcutClash(settings: ApplicationSettings): string | undefined {
+  const all = bindings(settings).filter(([, shortcut]) => !!shortcut);
+  for (const [index, [id, shortcut, label]] of all.entries())
+    if (
+      all
+        .slice(index + 1)
+        .some(
+          ([other, chord]) =>
+            sameKey(chord, shortcut) && !sharedAsShipped(id, shortcut, other, chord),
+        )
+    )
+      return label;
+}
 /**
  * What already answers a chord, other than `except`: a built-in or menu shortcut, a picture's,
  * a recipe's, a custom action's, or the prefix. Settings says so rather than saving a conflict.
@@ -314,38 +463,8 @@ export function shortcutOwner(
   value: string,
   except: string,
 ): string | undefined {
-  const wanted = shortcutKey(value);
-  const shipped = (id: string, shortcut: string) => {
-    const own = builtInShortcut(id);
-    return !!own && shortcutKey(own) === wanted && shortcutKey(shortcut) === wanted;
-  };
-  const owners: [string, string, string][] = [
-    ...Object.entries({
-      ...defaultShortcuts,
-      ...menuShortcuts,
-      ...previewShortcuts,
-      ...settings.shortcuts,
-    })
-      .filter(([id, shortcut]) => !(shipped(id, shortcut) && shipped(except, value)))
-      .map(([id, shortcut]): [string, string, string] => [id, shortcut, shortcutLabel(id)]),
-    ...Object.entries(alternateShortcuts).map(([id, shortcut]): [string, string, string] => [
-      `${id}:alternate`,
-      shortcut,
-      shortcutLabel(id),
-    ]),
-    ...settings.recipes.map((recipe): [string, string, string] => [
-      `recipe.${recipe.id}`,
-      recipe.shortcut ?? '',
-      recipe.name,
-    ]),
-    ...settings.customActions.map((action): [string, string, string] => [
-      `custom.${action.id}`,
-      action.shortcut,
-      action.name,
-    ]),
-    ['keymap-prefix', settings.keymap.prefix, 'Prefix key'],
-  ];
-  return owners.find(
-    ([id, shortcut]) => id !== except && !!shortcut && shortcutKey(shortcut) === wanted,
+  return bindings(settings).find(
+    ([id, shortcut]) =>
+      id !== except && sameKey(shortcut, value) && !sharedAsShipped(id, shortcut, except, value),
   )?.[2];
 }

@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { ImageConversion } from '../../domain/contracts';
 import { conversionTurns } from '../../domain/operations/image-conversions';
+import { imageTransformSchema, type TransformPlan } from '../../domain/operations/transforms';
 
 /** Writes a new file at `output` from image `sources`; sources are only read. */
 export interface ImageConverter {
@@ -21,15 +22,35 @@ export { convertibleExtensions } from '../../domain/operations/image-conversions
 export function conversionOutput(source: string, conversion: ImageConversion): string {
   const extension = path.extname(source);
   const stem = path.basename(source, extension);
-  const name =
-    conversionTurns[conversion]
-      ? `${stem} rotated${['.png', '.jpg', '.jpeg'].includes(extension.toLowerCase()) ? extension : '.png'}`
-      : conversion === 'jpeg'
-        ? `${stem}.jpg`
-        : conversion === 'office-pdf'
-          ? `${stem}.pdf`
-          : `${stem}.png`;
+  // A rotated copy of a PNG or JPEG keeps its own extension. A HEIC photo's is a JPEG, which keeps
+  // it a photo, about its size and with its capture time; any other picture's is a PNG.
+  const kept = ['.png', '.jpg', '.jpeg'].includes(extension.toLowerCase());
+  const photo = ['.heic', '.heif'].includes(extension.toLowerCase());
+  const name = conversionTurns[conversion]
+    ? `${stem} rotated${kept ? extension : photo ? '.jpg' : '.png'}`
+    : conversion === 'jpeg'
+      ? `${stem}.jpg`
+      : conversion === 'office-pdf'
+        ? `${stem}.pdf`
+        : `${stem}.png`;
   return path.join(path.dirname(source), name);
+}
+/**
+ * What the image processor is asked for to convert or turn a picture into `output`: a JPEG where
+ * `output` is one. A turned JPEG keeps the quality it was saved at, read from its tables, so the
+ * copy neither grows nor loses detail; 92 only where a file has none to read.
+ */
+export function rotatedCopyPlan(
+  conversion: ImageConversion,
+  output: string,
+): Extract<TransformPlan, { kind: 'image' }> {
+  const turn = conversionTurns[conversion];
+  return imageTransformSchema.parse({
+    kind: 'image',
+    format: conversion === 'jpeg' || (turn && /\.jpe?g$/i.test(output)) ? 'jpeg' : 'png',
+    rotate: turn ?? 0,
+    ...(turn ? { quality: 92, keepQuality: true } : {}),
+  });
 }
 /** Rotates a 32-bit bitmap a quarter turn. */
 export function rotateBitmap(

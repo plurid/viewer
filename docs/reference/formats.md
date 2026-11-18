@@ -277,7 +277,7 @@ characters, 16 bytes to a row. A Mach-O file names its CPU type, and a universal
 a PE file its machine, format, subsystem and .NET runtime; an ELF file its class, byte order and
 machine. WebAssembly modules and Java class files name their version. The view reads 64 KiB pages as
 the rows on screen need them and keeps 16, so a file of any size opens without being read whole.
-**Hex** in a preview's footer, or **Show as hex**, shows any other file this way, except one that
+**Hex** in a preview's footer, or **Show as Hex**, shows any other file this way, except one that
 holds a private key.
 
 These formats show in place with **Show as**, whatever the file is called: SQLite; ZIP, JAR, APK,

@@ -182,7 +182,7 @@ describe('authoritative settings', () => {
     expect(loaded.snapshot().settings.browsing.density).toBe('compact');
     expect(loaded.snapshot().look).toBe('light');
   });
-  it('rejects invalid shortcuts, duplicate default bindings, unsafe URLs and template fields', async () => {
+  it('rejects invalid shortcuts, a key two of the person’s own hold, unsafe URLs and template fields', async () => {
     const settings = new SettingsService(
       root,
       root,
@@ -190,7 +190,10 @@ describe('authoritative settings', () => {
       () => {},
     );
     await expect(
-      settings.patch([{ path: 'settings.shortcuts', value: { palette: 'Cmd+F' } }], 0),
+      settings.patch(
+        [{ path: 'settings.shortcuts', value: { palette: 'Cmd+J', 'find-file': 'Cmd+J' } }],
+        0,
+      ),
     ).rejects.toThrow();
     await expect(
       settings.patch([{ path: 'settings.shortcuts', value: { palette: 'Space' } }], 0),
@@ -229,6 +232,12 @@ describe('authoritative settings', () => {
         0,
       ),
     ).rejects.toThrow('unknown field');
+    // a shipped key given to another command: the one it shipped with leaves it (shortcuts.ts)
+    const saved = await settings.patch(
+      [{ path: 'settings.shortcuts', value: { palette: 'Cmd+F' } }],
+      0,
+    );
+    expect(saved.settings.shortcuts).toEqual({ palette: 'Cmd+F' });
     expect(shortcutKey('Control+Shift+A')).toBe(shortcutKey('Shift+Ctrl+a'));
     expect(
       matchesShortcut('Cmd+Shift+R', {

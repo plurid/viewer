@@ -1,0 +1,23 @@
+/* FILE NAMES (ui/FileName.tsx): the text arrives already cut in the middle, so the box only keeps
+   it to its room; an end ellipsis would take the extension the cut kept. */
+.file-name-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  unicode-bidi: isolate;
+}
+.file-name-label[data-fit='line'] {
+  white-space: nowrap;
+}
+.file-name-label[data-fit='two-lines'] {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.file-name-label[data-fit='wrap'] {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}

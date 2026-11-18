@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import { flushSync } from 'react-dom';
 import {
   getDocument,
@@ -19,6 +20,7 @@ import { Empty, IconButton, Loading } from '../../ui/primitives';
 import { PreviewFailure } from '../PreviewFailure';
 import { plural } from '../../../domain/plural';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
+import { NumberField } from '../../ui/NumberField';
 import { getState, report } from '../../state/store';
 import { PDFOutline, PDFThumbnails } from '../pdf/PDFSidebar';
 import { EvidenceOverlay } from '../EvidenceOverlay';
@@ -428,6 +430,8 @@ export default function PDFPreview(
             type="password"
             aria-label="PDF password"
             autoComplete="off"
+            // the prompt asks for one thing: the keys go to it at once
+            autoFocus
             value={entered}
             onChange={(event) => setEntered(event.target.value)}
           />
@@ -440,8 +444,32 @@ export default function PDFPreview(
   if (!pdf) return <Loading label="Opening PDF…" />;
   // Essential leaves Optimize, the sidebars and Print to "…", where each is a command
   const every = context.toolbar !== 'essential';
+  // In a plane, ← and → turn pages, and Space and Page Down turn the page at its end, as Preview
+  // does; Quick Look keeps those keys for its own files and for closing.
+  const pageKeys = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!context.toolbar || event.defaultPrevented || event.metaKey || event.ctrlKey) return;
+    if ((event.target as HTMLElement).closest('input, textarea, select, button')) return;
+    const box = scroll.current;
+    const atEnd = !box || box.scrollTop + box.clientHeight >= box.scrollHeight - 2;
+    const atStart = !box || box.scrollTop <= 1;
+    const back =
+      event.key === 'ArrowLeft' ||
+      (event.key === 'PageUp' && atStart) ||
+      (event.key === ' ' && event.shiftKey && atStart);
+    const ahead =
+      event.key === 'ArrowRight' ||
+      (event.key === 'PageDown' && atEnd) ||
+      (event.key === ' ' && !event.shiftKey && atEnd);
+    if (back && page > 1) {
+      event.preventDefault();
+      setPage(page - 1);
+    } else if (ahead && page < pdf.numPages) {
+      event.preventDefault();
+      setPage(page + 1);
+    }
+  };
   return (
-    <div className="pdf-viewer">
+    <div className="pdf-viewer" onKeyDown={pageKeys}>
       <PreviewToolbar context={context}>
         {every && context.optimize && (
           <button {...headerItem('optimize', 8, ['optimize-files'])} onClick={context.optimize}>
@@ -460,19 +488,16 @@ export default function PDFPreview(
           disabled={page <= 1}
           onClick={() => setPage(page - 1)}
         />
-        <input
+        {/* typing "15" waits for the 5: the page changes on Return or when the field is left */}
+        <NumberField
           className="page-number"
-          type="number"
           aria-label="Page number"
           min={1}
           max={pdf.numPages}
           value={page}
-          onChange={(event) => {
-            const next = Number(event.target.value);
-            if (next >= 1 && next <= pdf.numPages) setPage(next);
-          }}
+          onCommit={setPage}
         />
-        <span className="muted">/ {pdf.numPages}</span>
+        <span className="muted readout pdf-page-count">/ {pdf.numPages}</span>
         <IconButton
           {...headerItem('next', 3, ['preview.pdf-next'])}
           icon="right"
@@ -482,6 +507,7 @@ export default function PDFPreview(
         />
         <ChoiceButton
           label="PDF zoom"
+          className="pdf-zoom-choice"
           value={String(zoom)}
           choices={[
             { value: 'page', label: 'Fit Page' },
@@ -557,6 +583,22 @@ export default function PDFPreview(
             placeholder="Find"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              // Return goes to the next page with a match, ⇧Return to the one before; Esc closes
+              // the row and nothing else, not the Quick Look around it
+              if (event.key === 'Enter' && matches.length) {
+                event.preventDefault();
+                const ahead = event.shiftKey
+                  ? matches.findLast((index) => index < page)
+                  : matches.find((index) => index > page);
+                setPage(ahead ?? (event.shiftKey ? matches.at(-1)! : matches[0]!));
+              } else if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                setSearchOpen(false);
+                setQuery('');
+              }
+            }}
           />
           <IconButton
             icon="close"

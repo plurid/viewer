@@ -27,6 +27,20 @@ export function useConversation(pane: ChatPane) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [recent, setRecent] = useState<ChatSummary[]>([]);
+  // The Conversations menu lists the recent conversations as the plane opens, without making the
+  // plane busy: a slow list leaves every control as it was.
+  useEffect(() => {
+    let live = true;
+    void window.viewer
+      .chat({ kind: 'list' })
+      .then((reply) => {
+        if (live && Array.isArray(reply)) setRecent(reply);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [pane.conversationID]);
   const providers = useViewer((state) => state.settings.settings.providers);
   const provider = providers.find((item) => item.id === providerID) ?? providers[0];
   const permission = useModelPermission(provider);

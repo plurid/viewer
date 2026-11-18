@@ -233,6 +233,7 @@ const pane = z.discriminatedUnion('type', [
     exploded: id.optional(),
     pair: id.optional(),
     pairSync: z.boolean().optional(),
+    previewWidth: z.number().int().min(320).max(1600).optional(),
   }),
   z.object({
     id,

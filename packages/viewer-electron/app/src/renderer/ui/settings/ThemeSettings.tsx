@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useConfirmation } from './ConfirmAction';
 import {
   builtInTheme,
   shellTokens,
@@ -107,6 +108,7 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
   const themes = settings.themes;
   const file = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const confirmation = useConfirmation();
   const change = (id: string, update: (theme: Theme) => Theme) =>
     save((current) => {
       if (!current.settings.themes.some((theme) => theme.id === id)) return [];
@@ -138,7 +140,7 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
     setOpen(id);
   };
   const chooser = (look: Look) => (
-    <label className="settings-row">
+    <div className="settings-row">
       <span>{look === 'dark' ? 'Dark theme' : 'Light theme'}</span>
       <ChoiceButton
         label={look === 'dark' ? 'Dark theme' : 'Light theme'}
@@ -155,7 +157,7 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
           ])
         }
       />
-    </label>
+    </div>
   );
   return (
     <>
@@ -239,7 +241,7 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
                 }
               />
             </label>
-            <label className="settings-row">
+            <div className="settings-row">
               <span>Interface density</span>
               <ChoiceButton
                 label="Theme interface density"
@@ -252,7 +254,7 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
                   changeMetrics(theme.id, { density: density as 'compact' | 'comfortable' })
                 }
               />
-            </label>
+            </div>
             <label className="settings-row">
               <span>Corner radius</span>
               <input
@@ -297,20 +299,27 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
                 onError={(failure) => error(errorMessage(failure))}
               />
               <button
-                onClick={() => {
-                  save((current) => {
-                    const selected = { ...current.settings.theme };
-                    for (const look of ['dark', 'light'] as const)
-                      if (selected[look] === theme.id) selected[look] = '';
-                    return [
-                      {
-                        path: 'settings.themes',
-                        value: current.settings.themes.filter((item) => item.id !== theme.id),
-                      },
-                      { path: 'settings.theme', value: selected },
-                    ];
-                  });
-                }}
+                className="danger"
+                onClick={() =>
+                  confirmation.ask({
+                    title: `Remove the theme “${theme.name}”?`,
+                    detail: 'A look that uses it goes back to the built-in theme.',
+                    action: 'Remove',
+                    run: () =>
+                      save((current) => {
+                        const selected = { ...current.settings.theme };
+                        for (const look of ['dark', 'light'] as const)
+                          if (selected[look] === theme.id) selected[look] = '';
+                        return [
+                          {
+                            path: 'settings.themes',
+                            value: current.settings.themes.filter((item) => item.id !== theme.id),
+                          },
+                          { path: 'settings.theme', value: selected },
+                        ];
+                      }),
+                  })
+                }
               >
                 Remove
               </button>
@@ -318,6 +327,7 @@ export function ThemeSettings({ editor }: { editor: SettingsEditor }) {
           </Disclosure>
         );
       })}
+      {confirmation.dialog}
     </>
   );
 }

@@ -23,11 +23,20 @@ reads its own configuration normally. Saved server connections belong in the pri
 create connections or connect.
 
 Connect explicitly creates one master per connection with
-`ssh -f -N -M -S <control-path> -o ControlPersist=600`. File channels and terminals reuse that
-master with `-S <control-path> -o ControlMaster=no`. Automatic reconnects use `BatchMode=yes` and
-`SSH_ASKPASS=/usr/bin/false`; they never prompt. Up to three SFTP channels separate browse, transfer
-and walk work because OpenSSH serializes requests within a channel. One utility process owns SFTP
-clients and bulk byte movement; desktop services retain policy and authority.
+`ssh -f -N -S <control-path> -o ControlMaster=yes -o ControlPersist=600`, never with `-M`: a `-M`
+after `ControlMaster=yes` turns it into `ask`, which asks before every session (a refused one signs
+in directly) and refuses `-O exit`. File channels and terminals reuse that master with
+`-S <control-path> -o ControlMaster=no`. Only the master gets the port, user, jump hosts and key. A
+file channel gets `ProxyCommand=/usr/bin/false` instead and no `-J` (a command-line ProxyJump would
+replace it), so a channel whose master is gone fails rather than signing in by itself. The chosen
+key goes in as `-o IdentityFile="…"` with `IdentitiesOnly=yes`: `-i` looks for the path before
+expanding `%%`, warns when it finds nothing and then offers the person's default keys. Main also
+checks that the key file exists and can be opened, without reading it, before ssh starts. Automatic
+reconnects use `BatchMode=yes` and `SSH_ASKPASS=/usr/bin/false`; they never prompt. Up to three SFTP
+channels separate browse, transfer and walk work because OpenSSH serializes requests within a
+channel. One utility process owns SFTP clients and bulk byte movement; desktop services retain
+policy and authority. ssh, its askpass helper and the channels get an allowlisted environment: home,
+user, path, shell, temporary folder, language, the agent's socket and Kerberos tickets.
 
 A small Swift `viewer-askpass` helper relays prompts over a private socket with a per-attempt token
 to a native sheet on the window that clicked Connect. Secret input uses a native secure text field.
@@ -43,50 +52,68 @@ may save or remove an endpoint. Window IPC refuses agents and agent-driven windo
 read-only connection discovery. The Store edition and a disabled feature flag have no service.
 
 `RemoteControl` creates explicit masters in a private 0700 temporary folder with short socket names.
-OpenSSH first binds a master at its control path plus a 17-byte temporary suffix, so the path budget
-leaves that room inside macOS's 104-byte socket path; `/tmp` replaces a temporary folder whose path
-is too long. Literal percent signs are escaped in control and identity paths. OpenSSH expands
-`${VARIABLE}` in both with no escape, so such paths are refused. The worker owns the three lazy SFTP
-channels and schedules foreground browse requests ahead of thumbnails, at most two thumbnails at a
-time. Its main-process port exposes bounded list, stat, realpath, read and exclusive-write
-primitives; failures keep the SFTP code and the server's sanitized message. Large transfer staging
-belongs to the operations work packages. Disconnect uses an extensible `quiesceConnection(id)` and
-the remote connection prefix for Operations; it never invokes local root revocation or file
-coordination. Five minutes after the last plane, terminal or request releases a connection, its SFTP
-channels close and its master stays for ControlPersist. A request in that time checks the master
-with `-O check` and reopens channels through it. When ControlPersist has ended the master, the
-connection becomes not connected without a new sign-in or retry: a channel opened without a master
-would sign in directly. Editing a connection's name, starting folder or preferences keeps it
-connected; a new host, user, port, jump host or key disconnects it first. Quit closes all masters
-concurrently within the two-second transport budget.
+OpenSSH first binds a master at its control path plus a 17-byte temporary suffix, so a control path
+may use 86 bytes, not 104: a longer one would fail to bind only after the person has signed in, so
+Viewer checks it first. `/tmp` replaces a temporary folder whose path is too long, and the empty
+folders are removed at Quit. `ssh -f` also exits 0 when it carried on without a socket, so a sign-in
+counts only once `-O check` answers; Viewer keeps the process ID it names. When `-O exit` fails and
+the socket still names that same process, Viewer sends it SIGTERM; a recorded ID alone could belong
+to another program by then. A check with no answer within five seconds counts as unknown, not gone.
+Literal percent signs are escaped in control and identity paths. OpenSSH expands `${VARIABLE}` in
+both with no escape, so such paths are refused. The worker owns the three lazy SFTP channels and
+schedules foreground browse requests ahead of thumbnails, at most two thumbnails at a time. Its
+main-process port exposes bounded list, stat, realpath, read and exclusive-write primitives;
+failures keep the SFTP code and the server's sanitized message. Large transfer staging belongs to
+the operations work packages. Disconnect uses an extensible `quiesceConnection(id)` and the remote
+connection prefix for Operations; it never invokes local root revocation or file coordination. Five
+minutes after the last plane, terminal or request releases a connection, its SFTP channels close and
+its master stays for ControlPersist. A request in that time checks the master with `-O check` and
+reopens channels through it. When ControlPersist has ended the master, the connection becomes not
+connected without a new sign-in or retry, and a request says to connect again. Editing a
+connection's name, starting folder or preferences keeps it connected; a new host, user, port, jump
+host or key disconnects it first. Quit closes all masters concurrently within the two-second
+transport budget.
 
 The Swift helper only relays a prompt and its answer. Main attaches an AppKit secure sheet to the
 requesting window through `macos-files`, using `NSSecureTextField` with a placeholder naming what
 was asked (password, passphrase, PIN or verification code); host-key questions use
-`dialog.showMessageBox`. OpenSSH's `SSH_ASKPASS_PROMPT` hint reaches the relay: `confirm` asks yes
-or no, and `none`, such as a request to touch a security key, shows a notice that closes when
-OpenSSH ends the helper. A helper that ends closes its question without ending the sign-in; choosing
-Cancel ends the sign-in. Each clicked attempt has a random token with a 120-second expiry and one
-prompt at a time. Disconnect, a closed window or agent ownership cancels it. Server text is quoted,
-its line breaks become spaces, controls, bidi and other invisible characters are removed, and it is
-capped at 2,000 characters. Inherited askpass variables and `DISPLAY` are removed. Reconnects
-receive neither token nor socket. Relay fields are redacted from diagnostic exports; answers and raw
-SSH stderr are never logged. The helper ships only in the direct build.
+`dialog.showMessageBox` with Cancel as the default button. Questions OpenSSH asks on the Mac (a
+key's passphrase, a security key's PIN, a password, an unknown host key) are worded as Viewer's own:
+"Passphrase for key “id_ed25519”", never "Build box asks:". OpenSSH prefixes a server's
+keyboard-interactive questions with `(user@host)`, so a server cannot word one as a Mac question:
+those and anything unrecognized are quoted and attributed to the server. OpenSSH's
+`SSH_ASKPASS_PROMPT` hint reaches the relay. `none`, such as a request to touch a security key,
+shows a notice that closes when OpenSSH ends the helper. `confirm` comes only from
+`ControlMaster ask`, which Viewer never uses: it is answered no without a sheet and ends the sign-in
+as an error. A helper that ends closes its question without ending the sign-in; choosing Cancel ends
+the sign-in. Each clicked attempt has a random token with a 120-second expiry and one prompt at a
+time. Disconnect, a closed window or agent ownership cancels it. The token is per attempt, not per
+question, because OpenSSH starts every askpass of an attempt with the same environment; Node cannot
+tell which process is at the other end of a Unix socket, so the 0700 folder, the 256-bit token and
+its expiry stand in for a peer check. Server text is quoted, its line breaks become spaces,
+controls, bidi and other invisible characters are removed, and it is capped at 2,000 characters.
+Inherited askpass variables and `DISPLAY` are removed. Reconnects receive neither token nor socket.
+Relay fields are redacted from diagnostic exports; answers and raw SSH stderr are never logged. The
+helper ships only in the direct build.
 
 A failed keepalive check marks a connection offline. So does a lost channel or worker when the
 master no longer answers `-O check`; while it answers, the lane's next request opens a new channel
 through it, so a server that needs a password is not asked again. Reconnects wait 2, 5, 15, 30 and
 then 60 seconds, stopping after ten attempts. A click replaces an automatic attempt. Authentication
-and changed-host-key failures stop retries. The pure exit classifier consumes bounded stderr and
-publishes only `needs-sign-in`, `host-key-changed` or `unreachable`, plus, for a changed key, the
-key type and SHA256 fingerprint OpenSSH printed. At `LogLevel=ERROR` a server's own words reach
-stderr only in a disconnect message or a channel open failure; when either is present no fingerprint
-is shown. Connection snapshots also carry when their state began. Fixtures substitute portable
-endpoints in OpenSSH 9.9
+and changed-host-key failures stop retries. A jump host that fails leaves standard error empty,
+because ControlPersist sends the jump's own messages to /dev/null: exit 255 with nothing to read on
+a connection with jump hosts counts as needs sign-in, with no automatic retries. The pure exit
+classifier consumes bounded stderr and publishes only `needs-sign-in`, `host-key-changed` or
+`unreachable`, plus, for a changed key, the key type and SHA256 fingerprint OpenSSH printed. At
+`LogLevel=ERROR` a server's own words reach stderr only in a disconnect message or a channel open
+failure; when either is present no fingerprint is shown. A channel's loss is classified once its
+process has closed, when all of standard error has arrived. Connection snapshots also carry when
+their state began. Fixtures substitute portable endpoints in OpenSSH 9.9
 [connection messages](https://github.com/openssh/openssh-portable/blob/V_9_9_P2/sshconnect.c),
 [authentication messages](https://github.com/openssh/openssh-portable/blob/V_9_9_P2/sshconnect2.c)
-and [resolution messages](https://github.com/openssh/openssh-portable/blob/V_9_9_P2/ssh.c). They are
-source-derived fixtures, not evidence from a real SSH session.
+and [resolution messages](https://github.com/openssh/openssh-portable/blob/V_9_9_P2/ssh.c), with the
+CRLF line endings and unknown-key wording seen against a loopback sshd. `tests/remote-sshd.test.ts`
+runs the transport against a scratch loopback sshd when `VIEWER_TEST_SSHD=1`.
 
 SSH host suggestions require an explicit yes, remembered with the saved record. The reader stays
 inside `~/.ssh`, caps Include depth at four and combined bytes at 1 MiB, and excludes wildcard and
@@ -147,28 +174,37 @@ The codec caps metadata strings at 64 KiB, wire names at 4 KiB, DATA at 256 KiB 
 at 128. A packet keeps at most 128 extended-attribute pairs to bound Buffer views; it reads and
 drops the rest, so a server that attaches a pair to every entry still lists. Identity IDs must fit
 in one bounded string. Handle budgets and the queue budget for requests outside streams derive from
-the shared channel and resource limits. Stream blocks skip the queue budget because each stream's
-window bounds them. Each stream is a flow and other requests form one more; flows take turns for
-wire credit, so any number of streams and a listing share a channel without refusals, and a listing
-request waits one turn per stream. Advertised limits can lower packet, read, write and handle
-budgets; an open waits for a free handle slot. Zero server limits mean unspecified. OPEN and MKDIR
-accept only creation permissions, because OpenSSH ignores other creation attributes; set times with
-FSETSTAT or SETSTAT afterwards. OpenSSH applies its umask to both. `pread` and `pwrite` keep
-caller-owned handles, apply byte backpressure and share a progress-based stall clock. Their default
-block is 128 KiB, lowered by server limits, filling the 8 MiB window at 64 requests. The clock runs
-only while waiting for outstanding wire requests, pausing for a local consumer, producer or credit
-wait. Server-side copy uses positive blocks of at most one stream window with progress and the same
-stall rules; an explicit zero length copies nothing. OpenSSH's copy-data stops at the source's end
-of file and still answers OK, so the client checks the source size with FSTAT before the first block
-and after the last: a range past the end fails with `VIEWER_REMOTE_SHORT_SOURCE`, and a source
-without a reported size with `ENOTSUP`. Queue expiry rejects only its waiter; the wire deadline
-starts when written. Sent cancellations retain wire credit until a reply arrives; an undrained
-cancellation retires the channel after its deadline. A late handle from a cancelled open is closed
-by the client. Every CLOSE reply releases its tracked generation, including failed closes and reused
-server slots. Metadata wire timeouts and malformed replies close the channel. Protocol errors use
-`VIEWER_REMOTE_PROTOCOL`, cancellation `ABORT_ERR`. Server error messages are bounded display text
-with control, format, line and paragraph separator, and default-ignorable characters stripped. Raw
-bytes remain separate; callers must branch on codes. OpenSSH is single-threaded: the listing and
+the shared channel and resource limits. Only a stream lifetime can name a stream; each stream's
+window bounds its blocks, so they skip the queue budget. Each stream is a flow and other requests
+form one more; flows take turns for wire credit, least recently served first, and a new flow joins
+at the current turn. Any number of streams and a listing share a channel without refusals, and a
+listing request waits one turn per stream with queued work when the request was queued. Streams on a
+channel split a 16 MiB byte budget evenly, each within its own 8 MiB window; a stream holding
+nothing may always take one block, so streams wait for room and are never refused. Advertised limits
+can lower packet, read, write and handle budgets; an open waits for a free handle slot. Zero server
+limits mean unspecified. OPEN and MKDIR accept only creation permissions, because OpenSSH ignores
+other creation attributes; set times with FSETSTAT or SETSTAT afterwards. OpenSSH applies its umask
+to both. `pread` and `pwrite` keep caller-owned handles, apply byte backpressure and share a
+progress-based stall clock. Their default block is 128 KiB, lowered by server limits, filling the 8
+MiB window at 64 requests. The clock runs only while waiting for outstanding wire requests, pausing
+for a local consumer, producer or credit wait; sending a block is not progress. Server-side copy
+uses positive blocks of at most one stream window with the same stall rules; an explicit zero length
+checks the extension and sends nothing. OpenSSH answers copy-data OK when the last 64 KiB of a
+request fail or end early, so the client verifies sizes: FSTAT of both handles first, then of the
+destination after every block, which must reach the bytes copied so far. Progress counts only
+verified blocks. A source that ends before the range, or an END OF FILE answer, fails with
+`VIEWER_REMOTE_SHORT_SOURCE`; a short destination with an intact source fails with
+`VIEWER_REMOTE_FAILURE`; an unreported size, or a destination already past the copy offset, gives
+`ENOTSUP`, and the caller copies by streaming. Queue expiry rejects only its waiter, unless the
+channel held credit through a whole metadata timeout without one reply: then the server is hung and
+the channel closes. A metadata wire deadline starts when written and restarts while requests written
+before it are still being answered. Sent cancellations retain wire credit until a reply arrives; an
+undrained cancellation retires the channel after its deadline. A late handle from a canceled open is
+closed by the client. Every CLOSE reply releases its tracked generation, including failed closes and
+reused server slots. Metadata wire timeouts and malformed replies close the channel. Protocol errors
+use `VIEWER_REMOTE_PROTOCOL`, cancellation `ABORT_ERR`. Server error messages are bounded display
+text with control, format, line and paragraph separator, and default-ignorable characters stripped.
+Raw bytes remain separate; callers must branch on codes. OpenSSH is single-threaded: the listing and
 preview owners in packages 4 and 6 must LSTAT before OPEN, because opening a FIFO can block its
 channel.
 

@@ -9,6 +9,7 @@ import MediaPreview from '../src/renderer/previews/modules/MediaPreview';
 import type { FileEntry, Resource, ResourceRead } from '../src/domain/contracts';
 import type { PreviewContext } from '../src/renderer/previews/contracts';
 import { PreviewFrameFixture } from './support/preview-frame';
+import { choiceLabel } from './support/choice-button';
 
 vi.mock('../src/renderer/ui/navigation/NativeOpenActions', () => ({
   NativeOpenActions: () => null,
@@ -98,7 +99,7 @@ function fixture({
 }
 const track = (container: HTMLElement) => container.querySelector('video > track');
 async function choose(label: string) {
-  fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }));
+  fireEvent.click(screen.getByRole('button', { name: choiceLabel('Subtitles') }));
   const menu = await screen.findByRole('dialog', { name: 'Subtitles' });
   const row = [...menu.querySelectorAll<HTMLElement>('.command-result')].find(
     (item) => item.textContent === label,
@@ -120,7 +121,7 @@ it('attaches the first subtitle file as a WebVTT track and offers the others', a
   expect(await blobs.get('blob:track-1')!.text()).toBe(
     'WEBVTT\n\n1\n00:00:00.200 --> 00:00:01.000\nShapes in <i>motion</i>.\n',
   );
-  const button = screen.getByRole('button', { name: 'Subtitles' });
+  const button = screen.getByRole('button', { name: choiceLabel('Subtitles') });
   expect(button.textContent).toContain('Movie.srt');
   fireEvent.click(button);
   const menu = await screen.findByRole('dialog', { name: 'Subtitles' });
@@ -154,7 +155,7 @@ it('remembers turning subtitles off and choosing another file', async () => {
   reopened.unmount();
   const off = fixture({ saved: { 'media.subtitles': '' } });
   const silent = render(<MediaPreview {...off.context} />);
-  await screen.findByRole('button', { name: 'Subtitles' });
+  await screen.findByRole('button', { name: choiceLabel('Subtitles') });
   expect(track(silent.container)).toBeNull();
   expect(off.services.resource).not.toHaveBeenCalled();
 });
@@ -210,5 +211,5 @@ it('offers nothing for audio, or for a video inside an archive', async () => {
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(audio.services.list).not.toHaveBeenCalled();
   expect(archived.services.list).not.toHaveBeenCalled();
-  expect(screen.queryByRole('button', { name: 'Subtitles' })).toBeNull();
+  expect(screen.queryByRole('button', { name: choiceLabel('Subtitles') })).toBeNull();
 });

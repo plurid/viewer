@@ -12,6 +12,7 @@ import { ChoiceButton } from '../ui/ChoiceMenu';
 import { DestinationField } from '../ui/DestinationField';
 import { FileNameField, fileNameError } from '../ui/FileNameField';
 import { FormField } from '../ui/FormField';
+import { NumberField } from '../ui/NumberField';
 import { useHomeText } from '../ui/PathLabel';
 import { measureLocalPoint } from '../ui/projectedResize';
 import type { Point } from '../ui/projectedResize';
@@ -338,32 +339,25 @@ export function ImageToolsDialog({
             )}
             <div className="image-tools-dimensions">
               <FormField label="Width">
-                <input
+                <NumberField
                   aria-label="Output width"
-                  type="number"
+                  empty
                   min={1}
                   max={32768}
                   placeholder="Original"
-                  value={plan.width ?? ''}
-                  onChange={(event) =>
-                    setPlan((plan) => ({ ...plan, width: Number(event.target.value) || undefined }))
-                  }
+                  value={plan.width}
+                  onCommit={(width) => setPlan((plan) => ({ ...plan, width }))}
                 />
               </FormField>
               <FormField label="Height">
-                <input
+                <NumberField
                   aria-label="Output height"
-                  type="number"
+                  empty
                   min={1}
                   max={32768}
                   placeholder="Original"
-                  value={plan.height ?? ''}
-                  onChange={(event) =>
-                    setPlan((plan) => ({
-                      ...plan,
-                      height: Number(event.target.value) || undefined,
-                    }))
-                  }
+                  value={plan.height}
+                  onCommit={(height) => setPlan((plan) => ({ ...plan, height }))}
                 />
               </FormField>
             </div>
@@ -433,9 +427,8 @@ export function ImageToolsDialog({
             <div className="image-tools-dimensions">
               {(['x', 'y', 'width', 'height'] as const).map((field) => (
                 <FormField key={field} label={'Crop ' + field}>
-                  <input
+                  <NumberField
                     aria-label={'Crop ' + field}
-                    type="number"
                     min={field === 'x' || field === 'y' ? 0 : 1}
                     max={
                       field === 'x'
@@ -447,21 +440,9 @@ export function ImageToolsDialog({
                             : height - crop.y
                     }
                     value={crop[field]}
-                    onChange={(event) => {
-                      const maximum =
-                        field === 'x'
-                          ? width - crop.width
-                          : field === 'y'
-                            ? height - crop.height
-                            : field === 'width'
-                              ? width - crop.x
-                              : height - crop.y;
-                      const value = Math.max(
-                        field === 'x' || field === 'y' ? 0 : 1,
-                        Math.min(maximum, Number(event.target.value) || 0),
-                      );
-                      setPlan((plan) => ({ ...plan, crop: { ...crop, [field]: value } }));
-                    }}
+                    onCommit={(value) =>
+                      setPlan((plan) => ({ ...plan, crop: { ...crop, [field]: value } }))
+                    }
                   />
                 </FormField>
               ))}
@@ -502,11 +483,7 @@ export function ImageToolsDialog({
               disabled={working}
             />
           )}
-          <DestinationField
-            path={folder}
-            onChange={setFolder}
-            disabled={working}
-          />
+          <DestinationField path={folder} onChange={setFolder} disabled={working} />
         </div>
       </div>
       {error && (

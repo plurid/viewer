@@ -33,9 +33,11 @@
   padding: var(--gap-content);
 }
 .task-list > button {
+  /* a list row, not a label: a long task title wraps */
+  white-space: normal;
   width: 100%;
   display: grid;
-  grid-template-columns: 1fr auto 90px;
+  grid-template-columns: minmax(0, 1fr) auto 90px;
   gap: 20px;
   padding: 14px;
   text-align: left;
@@ -298,13 +300,21 @@
   width: auto;
 }
 
+/* a selection's size keeps to its status line's one row: its words end in an ellipsis */
 .selection-size {
   display: inline-flex;
   align-items: center;
   gap: var(--gap-small);
   min-width: 0;
+  white-space: nowrap;
+}
+.selection-size > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .selection-size .icon-button {
+  flex: none;
   width: 22px;
   height: 22px;
 }

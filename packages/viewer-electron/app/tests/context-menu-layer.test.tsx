@@ -170,7 +170,7 @@ it.each([
     name: 'button menu',
     anchorMenu: true,
     passes: false,
-    outcome: 'keeps the press, as on macOS',
+    outcome: 'keeps the press and its click, as on macOS',
   },
 ])('closes a $name on a press outside and $outcome', ({ anchorMenu, passes }) => {
   const view = render(
@@ -180,10 +180,30 @@ it.each([
   trigger.getBoundingClientRect = () => new DOMRect(400, 130, 120, 30);
   fireEvent.click(trigger);
   const outside = document.createElement('button');
+  const pressed = vi.fn();
+  outside.addEventListener('click', pressed);
   view.container.append(outside);
 
+  // a press as the browser delivers it: down, up and a click counting one, in one task
   expect(fireEvent.pointerDown(outside)).toBe(passes);
+  fireEvent.pointerUp(outside);
+  fireEvent.click(outside, { detail: 1 });
   expect(view.queryByRole('dialog', { name: 'Actions' })).toBeNull();
+  expect(pressed).toHaveBeenCalledTimes(passes ? 1 : 0);
+});
+
+it('measures a menu at the pointer within its fit, so it opens at the pointer', () => {
+  // content of 900 px, held to 540: it fits under the pointer in a window 1200 px tall
+  vi.stubGlobal('innerHeight', 1200);
+  menuHeight = 900;
+  const view = render(<Opener inDialog={false} point={{ x: 100, y: 500 }} />);
+  fireEvent.click(view.getByRole('button', { name: 'Actions' }));
+  const menu = view
+    .getByRole('dialog', { name: 'Actions' })
+    .querySelector<HTMLElement>('.context-menu')!;
+
+  expect(menu.getBoundingClientRect().top).toBe(500);
+  expect(menu.getBoundingClientRect().height).toBe(540);
 });
 
 it.each(surfaces)(

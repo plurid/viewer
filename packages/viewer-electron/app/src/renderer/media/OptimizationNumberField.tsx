@@ -1,28 +1,34 @@
-import { useState, type InputHTMLAttributes } from 'react';
+import type { InputHTMLAttributes } from 'react';
+import { NumberField } from '../ui/NumberField';
 
-/** Preserve an incomplete numeric edit (including empty text) while the parent
- * validates its numeric value. Loading a recipe replaces the draft. */
+/** An Optimize number: the shared number field, decimal where its step is `any` (a target size in
+ * kB or MB), whole otherwise. A recipe that loads replaces what shows. */
 export function OptimizationNumberField({
   value,
   onValue,
+  min,
+  max,
+  step,
   ...props
-}: Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'> & {
+}: Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'value' | 'onChange' | 'type' | 'min' | 'max' | 'step'
+> & {
   value: number;
   onValue(value: number): void;
+  min?: number;
+  max?: number;
+  step?: number | 'any';
 }) {
-  const [draft, setDraft] = useState({ value, text: String(value) });
-  if (draft.value !== value) setDraft({ value, text: String(value) });
   return (
-    <input
+    <NumberField
       {...props}
-      type="number"
-      value={draft.value === value ? draft.text : String(value)}
-      onChange={(event) => {
-        const text = event.target.value;
-        const next = Number(text) || 0;
-        setDraft({ value: next, text });
-        onValue(next);
-      }}
+      value={value}
+      onCommit={onValue}
+      min={min}
+      max={max}
+      kind={step === 'any' ? 'decimal' : 'integer'}
+      step={typeof step === 'number' ? step : 1}
     />
   );
 }

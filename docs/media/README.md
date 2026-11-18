@@ -52,7 +52,7 @@ chords actually dispatched to Viewer. It does not invoke application actions.
 For a canvas in a separate renderer, use `mapPointer()` to project its local input coordinates onto
 the recorded window. Dispatch the input to that renderer; the overlay records both coordinate sets.
 
-Use `cue()` to name the current action, such as **Open linked plane** or **Back to parent plane**.
+Use `cue()` to name the current action, such as **Open Linked Plane** or **Back to parent plane**.
 Modifier keys and navigation keys appear as separate keycaps. Click feedback stays neutral, and the
 cue remains briefly after release. Ordinary typed text is excluded from the overlay and its input
 log; only its character count is retained. This avoids displaying private paths or credentials as

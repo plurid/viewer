@@ -6,7 +6,7 @@ import { keyGlyphs } from '../../domain/preferences/keymap';
 import { defaultShortcuts } from '../../domain/preferences/shortcuts';
 import type { FolderInsight, InsightID, WorkspaceInsight } from '../../domain/suggestions/insights';
 import { folderInsights, insightLimit } from '../../domain/suggestions/insights';
-import { insideRoot } from '../../domain/workspaces/found/roots';
+import { offeredDefinition } from '../../domain/workspaces/offer';
 import {
   activeWorkspace,
   dismissFirstRunHint,
@@ -18,7 +18,7 @@ import {
 import { effectiveWindowUI } from '../state/effective-ui';
 import { useCommandRevision, useCommands } from '../commands/context';
 import type { CommandRegistry, ResolvedCommand } from '../commands/registry';
-import { useWorkspaceOffer } from '../workspace/workspace-offer';
+import { dismissOffer, useWorkspaceOffer } from '../workspace/workspace-offer';
 import { Icon, type IconName } from '../ui/Icon';
 import { PathLabel } from '../ui/PathLabel';
 import { IconButton } from '../ui/primitives';
@@ -44,18 +44,23 @@ const isWorkspace = (insight: FolderInsight): insight is WorkspaceInsight =>
   insight.id === 'workspace.open';
 
 /**
- * The workspace offer for this plane's folder, shown in the workspace's first folder plane inside
- * its root alone, so planes browsing one project do not repeat it.
+ * The workspace offer for this plane's folder, shown only in the workspace's first files plane
+ * that the same root holds, so planes browsing one project do not repeat it. A plane in an inner
+ * root belongs to that root, and leaves the card to a plane of the outer root's own.
  */
 function useOfferCard(paneID: string, folder: string, enabled: boolean) {
   const offer = useWorkspaceOffer(enabled ? folder : undefined);
-  const first = useViewer(
-    (state) =>
+  const first = useViewer((state) => {
+    const definitions = state.bootstrap.definitions?.definitions;
+    return (
       !!offer &&
+      !!definitions &&
       activeWorkspace(state).panes.find(
-        (pane) => pane.type === 'folder' && insideRoot(offer.root, pane.path),
-      )?.id === paneID,
-  );
+        (pane) =>
+          pane.type === 'folder' && offeredDefinition(pane.path, definitions)?.root === offer.root,
+      )?.id === paneID
+    );
+  });
   return first ? offer : undefined;
 }
 
@@ -85,7 +90,7 @@ function applicable(
 }
 
 /**
- * A new profile's first-run tips, in its workspace's first folder plane: the steps not used yet,
+ * A new profile's first-run tips, in its workspace's first files plane: the steps not used yet,
  * with the keys the palette answers to, and title dragging while planes move by their title.
  */
 function useFirstRunTips(paneID: string): ReactNode {
@@ -114,7 +119,7 @@ function useFirstRunTips(paneID: string): ReactNode {
     ) : step === 'frame-all' ? (
       multiple && frameAll ? (
         <li key={step}>
-          <kbd>{keyGlyphs(frameAll)}</kbd> brings all planes into view
+          <kbd>{keyGlyphs(frameAll)}</kbd> frames all planes
         </li>
       ) : (
         []
@@ -217,9 +222,15 @@ export const FolderInsights = memo(function FolderInsights({
               card.insight.detail && <span>{card.insight.detail}</span>
             )}
           </div>
-          <button type="button" onClick={() => run(card)}>
-            {/* a command that asks first says so, as its menu row does */}
-            {card.insight.action + (card.command.label.endsWith('…') ? '…' : '')}
+          <button
+            type="button"
+            aria-label={isWorkspace(card.insight) ? card.insight.actionName : undefined}
+            onClick={() => run(card)}
+          >
+            {/* a file command that asks first says so, as its menu row does; a workspace row's
+                label is the workspace's name, which can end in anything */}
+            {card.insight.action +
+              (!isWorkspace(card.insight) && card.command.label.endsWith('…') ? '…' : '')}
           </button>
           <IconButton
             icon="close"
@@ -227,7 +238,7 @@ export const FolderInsights = memo(function FolderInsights({
             className="folder-insight-dismiss"
             onClick={() =>
               isWorkspace(card.insight)
-                ? dismissInsight(card.insight.root, card.insight.id)
+                ? void dismissOffer(card.insight.root).catch(report)
                 : dismissInsight(folder, card.insight.id)
             }
           />

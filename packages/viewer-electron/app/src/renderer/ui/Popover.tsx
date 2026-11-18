@@ -36,19 +36,22 @@ const edge = 8;
 const offset = 4;
 /** About three menu rows: the least room a layer gets before it may cover its anchor's edge. */
 const leastHeight = 3 * 34 + 10;
+/** A menu's search field, which stays above the rows it shows. */
+const searchField = '.command-search-field';
 
 /**
  * Where a layer of `size` goes in a `view`, 8 px inside it. From an anchor's box: lined up with
  * its `align` edge, below it if the layer fits there, else above it if it fits there, else on the
  * side with more room, its height bounded to that room, so it never covers its anchor. Only when
- * neither side has room for about three rows does it cover the anchor's edge, as little as it
- * can. From a point: at the point, moved back inside the window.
+ * neither side has room for `least`, about three rows, does it cover the anchor's edge, as little
+ * as it can. From a point: at the point, moved back inside the window.
  */
 export function anchoredPosition(
   size: Size,
   from: LayerAnchor,
   view: Size,
   align: LayerAlign = 'end',
+  floor = leastHeight,
 ): LayerPosition {
   const clamp = (value: number, length: number, room: number) =>
     Math.max(edge, Math.min(value, room - length - edge));
@@ -67,7 +70,7 @@ export function anchoredPosition(
   const above = Math.min(view.height - edge, from.top - offset);
   const roomBelow = Math.max(0, view.height - edge - below);
   const roomAbove = Math.max(0, above - edge);
-  const least = Math.min(size.height, leastHeight);
+  const least = Math.min(size.height, floor);
   if (roomBelow < least && roomAbove < least) {
     if (roomBelow >= roomAbove) {
       const top = Math.max(edge, Math.min(below, view.height - edge - least));
@@ -117,12 +120,14 @@ function pressesTrigger(target: Node, trigger: HTMLElement | undefined): boolean
 }
 
 /**
- * Swallows the click that ends a press which closed a button's menu, as on macOS, where that
- * press reaches nothing else. It goes when the press's task ends, or at the next press.
+ * Swallows the click or context menu that ends a press which closed a button's menu, as on macOS,
+ * where that press reaches nothing else. It goes when the press's task ends, or at the next press.
  */
-function swallowClick(pressed: Node): void {
+function swallowPress(pressed: Node): void {
+  const lands = (event: Event) => event.target instanceof Node && event.target.contains(pressed);
   const swallow = (event: MouseEvent) => {
-    if (!(event.target instanceof Node) || !event.target.contains(pressed)) return;
+    // a click that counts no presses comes from the keyboard, which pressed nothing outside
+    if ((event.type === 'click' && event.detail === 0) || !lands(event)) return;
     event.preventDefault();
     event.stopPropagation();
     stop();
@@ -130,11 +135,13 @@ function swallowClick(pressed: Node): void {
   const later = () => setTimeout(stop);
   const stop = () => {
     window.removeEventListener('click', swallow, true);
+    window.removeEventListener('contextmenu', swallow, true);
     window.removeEventListener('pointerup', later, true);
     window.removeEventListener('pointercancel', later, true);
     window.removeEventListener('pointerdown', stop, true);
   };
   window.addEventListener('click', swallow, true);
+  window.addEventListener('contextmenu', swallow, true);
   window.addEventListener('pointerup', later, true);
   window.addEventListener('pointercancel', later, true);
   window.addEventListener('pointerdown', stop, true);
@@ -143,23 +150,35 @@ function swallowClick(pressed: Node): void {
 /** The views `focusPlane` gives the keyboard to. */
 const planeViews = '.folder-explorer, .preview-plane, .terminal-plane';
 const focusable =
-  'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), ' +
-  'a[href], [tabindex]:not([tabindex="-1"])';
+  'button, input:not([type="hidden"]), select, textarea, summary, a[href], ' +
+  '[tabindex]:not([tabindex="-1"])';
+/**
+ * Whether a control can take the keyboard: enabled, shown and not inert. Where nothing is laid
+ * out, `checkVisibility` is missing and only the attributes tell.
+ */
+const reachable = (element: HTMLElement) =>
+  !element.matches(':disabled') &&
+  !element.closest('[hidden], [inert]') &&
+  (element.checkVisibility?.() ?? true);
+const firstReachable = (within: Element, selector: string) =>
+  [...within.querySelectorAll<HTMLElement>(selector)].find(reachable);
 
 /**
  * Where focus goes when what opened a layer is gone: its plane's view, else the first control
- * left in the nearest place that held it. Nothing when only the page is left, so a closing
- * dialog keeps its own restoration.
+ * left in the nearest place that held it. Nothing when the dialog or plane that held it closed,
+ * whose own focus rules then apply, or when only the page is left.
  */
 function focusHome(ancestry: readonly HTMLElement[]): HTMLElement | undefined {
+  const surface = ancestry.find((element) =>
+    element.matches('dialog, [data-plurid-entity="PluridPlane"]'),
+  );
+  if (surface && !surface.isConnected) return undefined;
   const home = ancestry.find((element) => element.isConnected);
   if (!home || home === document.body || home === document.documentElement) return undefined;
-  const plane = home.closest('[data-plurid-entity="PluridPlane"]');
-  return (
-    plane?.querySelector<HTMLElement>(planeViews) ??
-    home.querySelector<HTMLElement>(focusable) ??
-    undefined
-  );
+  const view = surface?.matches('dialog')
+    ? undefined
+    : surface && firstReachable(surface, planeViews);
+  return view ?? firstReachable(home, focusable);
 }
 
 /** Whether a box moved on screen by more than a pixel. */
@@ -178,11 +197,12 @@ export interface AnchoredLayer {
 }
 /**
  * A layer anchored to an element or a point, outside any plane, so its position comes from
- * `getBoundingClientRect`, which already includes a plane's 3D transforms. Placed once as it
- * opens, inside the window and clear of its anchor; an outside press or Escape closes it, and
- * focus goes back, unless a dialog it is not in opened meanwhile. As a macOS menu does, it also
- * closes when the window loses focus or is resized, and an anchored one when what holds its
- * anchor scrolls, the camera moves its anchor's plane, or the anchor is gone.
+ * `getBoundingClientRect`, which already includes a plane's 3D transforms. Placed as it opens,
+ * inside the window and clear of its anchor, and placed again as its anchor moves on its own; an
+ * outside press or Escape closes it, and focus goes back, unless a dialog it is not in opened
+ * meanwhile. As a macOS menu does, it also closes when the window loses focus, moves or is resized, and
+ * an anchored one when what holds its anchor scrolls, the person turns the wheel or pinches
+ * outside it, or the anchor is gone.
  *
  * What it returns goes on the layer's root; `select` finds what is placed in it.
  */
@@ -215,59 +235,81 @@ export function useAnchoredLayer({
   useLayoutEffect(() => {
     const layer = root.current;
     const element = layer && select(layer);
-    const from = anchor?.getBoundingClientRect() ?? point;
-    if (element && from) {
-      if (fit !== undefined) element.style.maxHeight = `${fit}px`;
-      const rect = element.getBoundingClientRect();
+    let anchorBox = anchor?.getBoundingClientRect();
+    const from = anchorBox ?? point;
+    let size: Size | undefined;
+    let floor = leastHeight;
+    const place = (at: LayerAnchor) => {
+      if (!element || !size) return;
       const view = { width: innerWidth, height: innerHeight };
-      const position = anchoredPosition(rect, from, view, align ?? (point ? 'start' : 'end'));
+      const position = anchoredPosition(size, at, view, align ?? (point ? 'start' : 'end'), floor);
       const { left, top } = layerCoordinates(element, position);
       // Without a `fit`, its stylesheet's height limit holds: it grows no taller than measured.
-      const height = Math.min(fit ?? rect.height, position.maxHeight);
+      const height = Math.min(fit ?? size.height, position.maxHeight);
       element.style.left = `${left}px`;
       element.style.maxHeight = `${height}px`;
       // Above its anchor it is held by its bottom, so a list that shortens as it is searched
       // stays against the anchor.
       if (position.side === 'above')
-        element.style.bottom = `${layerBottom(element, position.top + Math.min(rect.height, height))}px`;
-      else element.style.top = `${top}px`;
+        element.style.bottom = `${layerBottom(element, position.top + Math.min(size.height, height))}px`;
+      else {
+        element.style.bottom = '';
+        element.style.top = `${top}px`;
+      }
+    };
+    if (element && from) {
+      if (fit !== undefined) element.style.maxHeight = `${fit}px`;
+      size = element.getBoundingClientRect();
+      // three rows under its search field, which stays above them
+      floor += element.querySelector(searchField)?.getBoundingClientRect().height ?? 0;
+      place(from);
     }
     const dismiss = (event: PointerEvent) => {
       const target = event.target as Node;
       if (layer?.contains(target) || pressesTrigger(target, trigger.current)) return;
-      // A press outside a button's menu only closes it, as on macOS: focus stays and the press
-      // reaches nothing. A context menu at the pointer lets the press go on to what it lands on.
+      // A press outside a button's menu only closes it, as on macOS: focus stays and the press,
+      // its click or its context menu, reaches nothing. A context menu at the pointer lets the
+      // press go on to what it lands on.
       if (trigger.current) {
         event.preventDefault();
-        swallowClick(target);
+        swallowPress(target);
       }
       close.current();
     };
     const scrolled = (event: Event) => {
       const box = event.target;
-      if (anchor && box instanceof Node && !layer?.contains(box) && box.contains(anchor))
-        close.current();
+      // its own list scrolling holds no anchor
+      if (anchor && box instanceof Node && box.contains(anchor)) close.current();
     };
-    // the window's own blur, as the app loses focus: an element's blur does not bubble
-    const leave = (event: Event) => {
-      if (event.target === event.currentTarget) close.current();
+    // the person's own pan or zoom of the space, or a scroll elsewhere, closes it as on macOS
+    const wheeled = (event: WheelEvent) => {
+      if (anchor && !layer?.contains(event.target as Node)) close.current();
     };
-    const resized = () => close.current();
+    const leave = () => close.current();
     window.addEventListener('pointerdown', dismiss);
     // scroll does not bubble: only a capturing listener hears every box that scrolls
     window.addEventListener('scroll', scrolled, true);
+    window.addEventListener('wheel', wheeled, { capture: true, passive: true });
+    // the window's own blur, as the app loses focus; an element's blur does not bubble here
     window.addEventListener('blur', leave);
-    window.addEventListener('resize', resized);
-    const plane = anchor?.closest('[data-plurid-entity="PluridPlane"]');
-    const planeBox = plane?.getBoundingClientRect();
+    window.addEventListener('resize', leave);
+    // a drag of the window by its title bar moves no element, so the desktop says it moved
+    const stopMoved = window.viewer?.onEvent?.((event) => {
+      if (event.type === 'window-moved') leave();
+    });
     let frame = 0;
-    // The camera moves a plane by its transforms, which no event reports: its box shows it.
-    const watch = () => {
-      if (!anchor?.isConnected || (plane && planeBox && moved(planeBox, plane.getBoundingClientRect())))
-        close.current();
-      else frame = requestAnimationFrame(watch);
+    // Frame, Dock, a new plane or a preview settling moves an anchor by transforms and layout,
+    // which no event reports: the layer follows its anchor's box, and closes when it is gone.
+    const follow = () => {
+      if (!anchor?.isConnected) return close.current();
+      const box = anchor.getBoundingClientRect();
+      if (anchorBox && moved(anchorBox, box)) {
+        anchorBox = box;
+        place(box);
+      }
+      frame = requestAnimationFrame(follow);
     };
-    if (anchor) frame = requestAnimationFrame(watch);
+    if (anchor) frame = requestAnimationFrame(follow);
     const restore = focused.current;
     const ancestry: HTMLElement[] = [];
     for (let parent = restore?.parentElement; parent; parent = parent.parentElement)
@@ -275,14 +317,17 @@ export function useAnchoredLayer({
     return () => {
       window.removeEventListener('pointerdown', dismiss);
       window.removeEventListener('scroll', scrolled, true);
+      window.removeEventListener('wheel', wheeled, true);
       window.removeEventListener('blur', leave);
-      window.removeEventListener('resize', resized);
+      window.removeEventListener('resize', leave);
+      stopMoved?.();
       cancelAnimationFrame(frame);
       const home = restore?.isConnected ? restore : focusHome(ancestry);
       if (home && (home.closest('dialog[open]') || !dialogOpen()))
         home.focus({ preventScroll: true });
     };
-    // Placed once when opened; placing again would move it under the pointer as it changes.
+    // Set up once when opened: it follows its anchor itself, and a menu at the pointer would
+    // otherwise move under the pointer as it changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return {

@@ -16,6 +16,7 @@ import { Dialog, IconButton, PathField } from '../ui/primitives';
 import { Disclosure } from '../ui/Disclosure';
 import { Icon } from '../ui/Icon';
 import { showKeymapHelp } from '../keys/sequences';
+import { useListKeys } from '../ui/useListKeys';
 import { baseName, paneTitle } from '../../domain/workspaces/planes';
 import { previewModules } from '../previews/registry';
 import './capabilities.css';
@@ -63,6 +64,9 @@ export function CapabilitiesDialog({
   useCommandRevision(request.paneID);
   const [query, setQuery] = useState(''),
     [onlyAvailable, setOnlyAvailable] = useState(true);
+  // the row Return runs: the search keeps the keys, as the palette's does
+  const [active, setActive] = useState(0);
+  const listID = useId();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const pinLimitID = useId();
@@ -90,6 +94,20 @@ export function CapabilitiesDialog({
         a.command.group.localeCompare(b.command.group) ||
         a.command.label.localeCompare(b.command.label),
     );
+  const current = Math.min(active, rows.length - 1);
+  const listKeys = useListKeys({
+    labels: rows.map(({ command }) => command.label),
+    active: current,
+    select: (index) => {
+      setActive(index);
+      document.getElementById(`${listID}-${index}`)?.scrollIntoView?.({ block: 'nearest' });
+    },
+    open: (index) => {
+      const command = rows[index]?.command;
+      if (command?.available && !busy) void run(command);
+    },
+    typeAhead: false,
+  });
   const save = async (next: readonly string[] | undefined) => {
     if (!kind || busy) return;
     setBusy(true);
@@ -143,7 +161,15 @@ export function CapabilitiesDialog({
             aria-label="Find an action"
             placeholder="Find an action…"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={listID}
+            aria-activedescendant={rows[current] ? `${listID}-${current}` : undefined}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActive(0);
+            }}
+            onKeyDown={listKeys}
           />
           <label>
             <input
@@ -240,9 +266,18 @@ export function CapabilitiesDialog({
                 )}
               </div>
             )}
-            <ul>
-              {rows.map(({ command }) => (
-                <li key={command.id}>
+            <ul id={listID} role="listbox" aria-label="Actions">
+              {rows.map(({ command }, index) => (
+                <li
+                  key={command.id}
+                  id={`${listID}-${index}`}
+                  role="option"
+                  aria-selected={index === current}
+                  onClick={() => setActive(index)}
+                  onDoubleClick={() => {
+                    if (command.available && !busy) void run(command);
+                  }}
+                >
                   <Icon name={command.icon ?? 'command'} size={18} />
                   <div>
                     <strong>{command.label}</strong>
@@ -256,8 +291,11 @@ export function CapabilitiesDialog({
                   </div>
                   {command.shortcut && <kbd>{command.shortcut}</kbd>}
                   {kind && (
-                    <button
-                      aria-label={`${pinned.includes(command.id) ? 'Unpin' : 'Pin'} ${command.label}`}
+                    // a toggle with one name: pressed while the action is pinned
+                    <IconButton
+                      icon="pin"
+                      className="capability-pin"
+                      label={`${pinned.includes(command.id) ? 'Unpin' : 'Pin'} ${command.label}`}
                       disabled={
                         busy || (!pinned.includes(command.id) && effectivePinned.length >= 8)
                       }
@@ -267,16 +305,15 @@ export function CapabilitiesDialog({
                           : undefined
                       }
                       aria-pressed={pinned.includes(command.id)}
-                      onClick={() =>
+                      onClick={(event) => {
+                        event.stopPropagation();
                         void save(
                           pinned.includes(command.id)
                             ? effectivePinned.filter((id) => id !== command.id)
                             : [...effectivePinned, command.id],
-                        )
-                      }
-                    >
-                      {pinned.includes(command.id) ? 'Unpin' : 'Pin'}
-                    </button>
+                        );
+                      }}
+                    />
                   )}
                   <button
                     aria-label={`Run ${command.label}`}

@@ -678,7 +678,7 @@ export function useWorkspaceController({
         const previous = api.tree.get();
         const nodes = flattenTree(previous);
         const source = nodes.find((node) => hostID(node) === folder.id);
-        if (!source) throw new Error('The folder plane this started from was closed.');
+        if (!source) throw new Error('The files plane this started from was closed.');
         // Bring the pair in front of existing sheets, including a previous split.
         // Bound every rotated corner so an older plane cannot cover either half.
         const front = frontPlaneDepth(nodes);
@@ -714,7 +714,7 @@ export function useWorkspaceController({
             },
           });
           const added = api.tree.get().find((node) => hostID(node) === copy.id);
-          if (!added) throw new Error('The second folder plane could not open. Try again.');
+          if (!added) throw new Error('The second files plane could not open. Try again.');
           const place = (node: TreePlane, location: TreePlaneLocation): TreePlane => ({
             ...node,
             width: geometry.width,

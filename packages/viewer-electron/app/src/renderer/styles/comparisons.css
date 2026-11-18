@@ -66,8 +66,21 @@
   gap: var(--gap-inline);
   text-align: left;
 }
-.git-review-file > span:last-child,
+.git-review-file > .git-review-name {
+  flex: 0 1 auto;
+  max-width: 75%;
+}
+.git-review-file > .git-review-folder {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: var(--text-label);
+}
 .git-review-path {
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -6,7 +6,7 @@ import { sshArguments, validateControlPath } from '../../domain/remote/ssh-argum
 import type { SSHCommand } from '../../domain/remote/ssh-arguments';
 import { classifySSHFailure, SSHConnectionError } from '../../domain/remote/ssh-errors';
 import { remoteEnvironment } from './environment';
-import { privateSocketFolder } from './socket-folder';
+import { privateSocketFolder, removeSocketFolder } from './socket-folder';
 
 export interface SSHRunOptions {
   environment: Record<string, string>;
@@ -14,6 +14,7 @@ export interface SSHRunOptions {
   timeoutMs: number;
 }
 
+/** `code` is null when the process was stopped: by its timeout, or by cancellation. */
 export interface SSHRunResult {
   code: number | null;
   stderr: string;
@@ -21,7 +22,15 @@ export interface SSHRunResult {
 
 export type SSHRunner = (command: SSHCommand, options: SSHRunOptions) => Promise<SSHRunResult>;
 
-const stderrCharacters = 64 * 1024;
+/** What `ssh -O check` says about a master. `unknown`: no answer in time, so nothing is assumed. */
+export type MasterState = 'running' | 'gone' | 'unknown';
+
+export interface MasterStatus {
+  state: MasterState;
+  pid?: number;
+}
+
+const canceledMessage = 'Connection canceled.';
 
 /** Tests serve a fake ssh; a running app always uses the system's, never a PATH lookup. */
 export function testSSHExecutable(executable?: string): string {
@@ -39,7 +48,7 @@ export function sshRunner(sshExecutable?: string): SSHRunner {
   return (command, options) =>
     new Promise((resolve, reject) => {
       if (options.signal?.aborted) {
-        reject(new Error('Connection cancelled.'));
+        reject(new Error(canceledMessage));
         return;
       }
       const child = spawn(executable, command.args, {
@@ -57,8 +66,9 @@ export function sshRunner(sshExecutable?: string): SSHRunner {
       const timer = setTimeout(stop, options.timeoutMs);
       options.signal?.addEventListener('abort', stop, { once: true });
       child.stderr.on('data', (chunk: Buffer) => {
-        if (stderr.length < stderrCharacters) {
-          stderr += chunk.toString('utf8').slice(0, stderrCharacters - stderr.length);
+        const room = remoteLimits.sshStderrCharacters - stderr.length;
+        if (room > 0) {
+          stderr += chunk.toString('utf8').slice(0, room);
         }
       });
       const finish = (code: number | null, error?: Error) => {
@@ -73,7 +83,7 @@ export function sshRunner(sshExecutable?: string): SSHRunner {
         if (error) {
           reject(new Error('The SSH process could not start.'));
         } else if (options.signal?.aborted) {
-          reject(new Error('Connection cancelled.'));
+          reject(new Error(canceledMessage));
         } else {
           resolve({ code, stderr });
         }
@@ -83,11 +93,26 @@ export function sshRunner(sshExecutable?: string): SSHRunner {
     });
 }
 
-/** Signing in through a chain of jump hosts takes one connect timeout per hop. */
-function signInTimeoutMs(record: RemoteConnection, interactive: boolean): number {
+/**
+ * Signing in through a chain of jump hosts takes one connect timeout per hop. A clicked sign-in
+ * also waits as long as the person may take to answer, so typing is never cut short.
+ */
+export function signInTimeoutMs(record: RemoteConnection, interactive: boolean): number {
   const hops = (record.jump?.length ?? 0) + 1;
   const connecting = (remoteLimits.sshConnectTimeoutSeconds * hops + 5) * 1000;
   return interactive ? remoteLimits.promptTimeoutMs + connecting : connecting;
+}
+
+/** OpenSSH answers `-O check` with "Master running (pid=N)" on standard error. */
+export function masterStatus(result: SSHRunResult): MasterStatus {
+  if (result.code === null) {
+    return { state: 'unknown' };
+  }
+  if (result.code !== 0) {
+    return { state: 'gone' };
+  }
+  const pid = /Master running \(pid=(\d{1,10})\)/.exec(result.stderr);
+  return pid ? { state: 'running', pid: Number(pid[1]) } : { state: 'running' };
 }
 
 interface Master {
@@ -97,6 +122,8 @@ interface Master {
   running?: Promise<SSHRunResult>;
   idle?: ReturnType<typeof setTimeout>;
   ready: boolean;
+  /** The process OpenSSH reported for this socket; signalled only after it says so again. */
+  pid?: number;
 }
 
 export interface RemoteControlOptions {
@@ -105,6 +132,8 @@ export interface RemoteControlOptions {
   temporaryDirectory?: string;
   /** Called when nothing has held a ready connection for five minutes. */
   idle?(id: string): Promise<void>;
+  /** Ends a master that refused `-O exit`; tests replace it. */
+  terminate?(pid: number): void;
 }
 
 /** Owns explicit masters only. SFTP children belong to the servers worker. */
@@ -144,11 +173,8 @@ export class RemoteControl {
     if (existing) {
       return existing;
     }
-    if (this.masters.size >= remoteLimits.connections) {
-      throw new Error('Disconnect a server before connecting another.');
-    }
     const folder = await this.directory();
-    // Checked again after the await, so concurrent connects never share a socket.
+    // Checked after the await, so concurrent connects never share a socket or pass the limit.
     const raced = this.masters.get(record.id);
     if (raced) {
       return raced;
@@ -161,6 +187,17 @@ export class RemoteControl {
     const master: Master = { record, controlPath, ready: false };
     this.masters.set(record.id, master);
     return master;
+  }
+
+  private status(
+    master: Master,
+    timeoutMs = remoteLimits.masterCheckTimeoutMs,
+    signal?: AbortSignal,
+  ) {
+    const command = sshArguments(master.record, { kind: 'check', controlPath: master.controlPath });
+    return this.runner(command, { environment: remoteEnvironment(), signal, timeoutMs }).then(
+      masterStatus,
+    );
   }
 
   /** Starts the master. `interactive` only for a click: it may ask through the askpass relay. */
@@ -199,13 +236,25 @@ export class RemoteControl {
       });
       master.running = running;
       const result = await running;
-      const failure = classifySSHFailure(result.code, result.stderr);
+      const failure = classifySSHFailure(result.code, result.stderr, {
+        viaJump: !!record.jump?.length,
+      });
       if (failure) {
         throw new SSHConnectionError(failure);
       }
       if (controller.signal.aborted || this.closing) {
-        throw new Error('Connection cancelled.');
+        throw new Error(canceledMessage);
       }
+      // `ssh -f` also exits 0 when it could not create the socket and carried on without one.
+      const status = await this.status(
+        master,
+        remoteLimits.masterCheckTimeoutMs,
+        controller.signal,
+      );
+      if (status.state !== 'running') {
+        throw new SSHConnectionError('unreachable');
+      }
+      master.pid = status.pid;
       master.ready = true;
       return master.controlPath;
     } finally {
@@ -218,18 +267,16 @@ export class RemoteControl {
   }
 
   /** Asks the master whether it still runs; never signs in or prompts. */
-  async check(id: string, signal?: AbortSignal): Promise<boolean> {
+  async check(id: string, signal?: AbortSignal): Promise<MasterState> {
     const master = this.masters.get(id);
     if (!master?.ready) {
-      return false;
+      return 'gone';
     }
-    const command = sshArguments(master.record, { kind: 'check', controlPath: master.controlPath });
-    const result = await this.runner(command, {
-      environment: remoteEnvironment(),
-      signal,
-      timeoutMs: remoteLimits.quitTimeoutMs,
-    });
-    return result.code === 0;
+    try {
+      return (await this.status(master, remoteLimits.masterCheckTimeoutMs, signal)).state;
+    } catch {
+      return 'unknown';
+    }
   }
 
   /** The control socket of a ready master, for sessions that reuse it. */
@@ -292,6 +339,10 @@ export class RemoteControl {
     this.masters.delete(id);
   }
 
+  /**
+   * `-O exit`, then, only if that failed and the socket still names the same process, SIGTERM:
+   * a recorded pid alone could belong to another program by now. Within the two-second Quit.
+   */
   async disconnect(id: string): Promise<void> {
     const master = this.masters.get(id);
     if (!master) {
@@ -301,15 +352,31 @@ export class RemoteControl {
     master.controller?.abort();
     this.masters.delete(id);
     await master.running?.catch(() => {});
+    const budget = remoteLimits.quitTimeoutMs;
     const command = sshArguments(master.record, { kind: 'exit', controlPath: master.controlPath });
-    await this.runner(command, {
+    const exit = await this.runner(command, {
       environment: remoteEnvironment(),
-      timeoutMs: remoteLimits.quitTimeoutMs - 150,
-    }).catch(() => {});
+      timeoutMs: budget / 2 - 100,
+    }).catch(() => undefined);
+    if (exit?.code === 0 || master.pid === undefined) {
+      return;
+    }
+    const status = await this.status(master, budget / 4).catch(() => undefined);
+    if (status?.state === 'running' && status.pid === master.pid) {
+      try {
+        (this.options.terminate ?? ((pid) => process.kill(pid, 'SIGTERM')))(master.pid);
+      } catch {
+        // It ended between the check and the signal.
+      }
+    }
   }
 
   async close(): Promise<void> {
     this.closing = true;
     await Promise.all([...this.masters.keys()].map((id) => this.disconnect(id)));
+    const folder = await this.directoryPromise?.catch(() => undefined);
+    if (folder) {
+      await removeSocketFolder(folder);
+    }
   }
 }

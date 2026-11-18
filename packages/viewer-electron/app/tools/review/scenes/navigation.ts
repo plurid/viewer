@@ -1,8 +1,12 @@
 /** Finding things: the command palette, menus and dropdowns, and workspaces. */
 import { deepFolder, longName, sampleFolders } from '../samples';
 import type { ReviewArea, Scene } from '../types';
+import { variant } from '../variants';
 
 /** A workspace name long enough to find where the switcher and lists cut it. */
+/** The title bar's workspace button: named "Workspace", with the workspace's name in newer builds. */
+const switcherButton = 'button[aria-label^="Workspace" i][aria-haspopup]';
+
 const otherWorkspace = 'Northwind feeder line, revision 4 for the second production batch';
 
 /** The Anchored Layer Rule (DESIGN.md). */
@@ -39,10 +43,10 @@ const switcher: Scene = {
     'The current workspace is marked; a long workspace name is shortened, never wrapped.',
   ],
   setup: { folder: sampleFolders.samples, view: 'list', otherWorkspace },
-  focus: ['.context-menu', 'button.workspace-switcher'],
+  focus: ['.context-menu', switcherButton],
   async steps(page) {
-    await page.click('button.workspace-switcher');
-    await page.waitFor('.context-menu');
+    await page.clickFirst(switcherButton);
+    await page.waitFor('[role="menu"]');
   },
 };
 
@@ -59,7 +63,7 @@ const changeWorkspace: Scene = {
   focus: ['dialog[open]'],
   async steps(page) {
     await page.palette('Change workspace…');
-    await page.waitFor('dialog[open]');
+    await page.waitFor('dialog[open][aria-label="change workspace" i]');
     await page.settle(500);
   },
 };
@@ -77,7 +81,7 @@ const manageWorkspaces: Scene = {
   focus: ['dialog[open]'],
   async steps(page) {
     await page.palette('Manage workspaces…');
-    await page.waitFor('.workspaces-dialog[open]');
+    await page.waitFor('dialog[open][aria-label="workspaces" i]');
     await page.settle(500);
   },
 };
@@ -91,8 +95,9 @@ const dialogDropdown: Scene = {
   async steps(page) {
     await page.select(page.path(deepFolder, longName('jpg')));
     await page.palette('Image tools…');
-    await page.waitFor('.image-tools-dialog[open]');
-    await page.clickFirst('.image-tools-dialog[open] .choice-button');
+    await page.waitFor('dialog[open][aria-label^="image tools" i]');
+    // the first choice in the form: Format
+    await page.clickFirst('dialog[open] button[aria-haspopup]');
     await page.settle(500);
   },
 };
@@ -104,13 +109,43 @@ const pageDropdown: Scene = {
   setup: { folder: sampleFolders.samples, view: 'list', sidebar: true },
   focus: ['.context-menu', '.plane-controls'],
   async steps(page) {
-    await page.clickFirst('.plane-controls .plane-view-button');
-    await page.waitFor('.context-menu');
+    await page.clickFirst('button[aria-label="View mode" i]');
+    await page.waitFor('[role="menu"]');
   },
 };
+
+/** The palette with a query typed, as a person searches it. */
+const paletteQuery = (id: string, query: string, title: string, select?: string): Scene => ({
+  id: 'palette-query-' + id,
+  title: 'Palette: ' + title,
+  mustBeTrue: [
+    'Results keep one line for the label and one for the detail; matches lead.',
+    'Paths in results start from ~ and show the item’s own name.',
+    'The search field keeps its place and height as results change.',
+  ],
+  setup: { folder: sampleFolders.samples, view: 'list' },
+  variants: [variant('wide', 'dark'), variant('narrow', 'light')],
+  covers: { commands: ['palette'] },
+  focus: ['dialog[open]'],
+  async steps(page) {
+    if (select) await page.select(page.path(sampleFolders.samples, select));
+    await page.openPalette(query);
+    await page.settle(800);
+  },
+});
 
 export const navigation: ReviewArea = {
   id: 'navigation',
   title: 'Palette, menus and workspaces',
-  scenes: [paletteDeep, switcher, changeWorkspace, manageWorkspaces, dialogDropdown, pageDropdown],
+  scenes: [
+    paletteDeep,
+    switcher,
+    changeWorkspace,
+    manageWorkspaces,
+    dialogDropdown,
+    pageDropdown,
+    paletteQuery('image', 'image', 'a picture’s commands', 'Forest.jpg'),
+    paletteQuery('places', 'review', 'folders and places'),
+    paletteQuery('settings', 'dark', 'settings by name'),
+  ],
 };

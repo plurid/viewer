@@ -365,10 +365,7 @@ export async function pwrite(
         lifetime.check();
         const length = Math.min(chunk, item.value.length - index);
         while (blocks.length >= concurrency || !budget.fits(length)) await retire();
-        protocolAssert(
-          offset + BigInt(length) <= 0xffffffffffffffffn,
-          'Invalid SFTP write range.',
-        );
+        protocolAssert(offset + BigInt(length) <= 0xffffffffffffffffn, 'Invalid SFTP write range.');
         // Copied only once the block has room, so a waiting upload holds no second copy.
         const data = Buffer.from(item.value.subarray(index, index + length));
         budget.take(length);

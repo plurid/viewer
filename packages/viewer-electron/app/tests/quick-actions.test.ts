@@ -6,6 +6,7 @@ import { Operations } from '../src/desktop/operations/operations';
 import { ProtectedPaths } from '../src/desktop/files/protected-paths';
 import {
   conversionOutput,
+  rotatedCopyPlan,
   imagesToPDF,
   rotateBitmap,
   type ImageConverter,
@@ -155,6 +156,19 @@ describe('Save PDF copy', () => {
 describe('quick action building blocks', () => {
   it('names outputs beside their source', () => {
     expect(conversionOutput('/a/Photo.JPG', 'rotate-right')).toBe('/a/Photo rotated.JPG');
+    // a turned JPEG at its own quality, read from its tables; 92 only where it has none
+    expect(rotatedCopyPlan('rotate-right', '/a/Photo rotated.JPG')).toMatchObject({
+      format: 'jpeg',
+      rotate: 90,
+      keepQuality: true,
+      quality: 92,
+    });
+    expect(rotatedCopyPlan('rotate-180', '/a/Shot rotated.png')).toMatchObject({
+      format: 'png',
+      rotate: 180,
+    });
+    expect(rotatedCopyPlan('jpeg', '/a/Shot.jpg')).toMatchObject({ format: 'jpeg', rotate: 0 });
+    expect(rotatedCopyPlan('jpeg', '/a/Shot.jpg').keepQuality).toBeUndefined();
     expect(conversionOutput('/a/Scan.tiff', 'rotate-left')).toBe('/a/Scan rotated.png');
     expect(conversionOutput('/a/Scan.tiff', 'jpeg')).toBe('/a/Scan.jpg');
     expect(conversionOutput('/a/Shot.heic', 'png')).toBe('/a/Shot.png');

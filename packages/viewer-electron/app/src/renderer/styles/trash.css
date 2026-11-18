@@ -69,6 +69,7 @@
 .trash-toolbar.has-parent {
   grid-template-columns: 32px minmax(0, 1fr) auto minmax(120px, 170px);
 }
+
 .trash-breadcrumbs,
 .trash-breadcrumbs > span,
 .trash-breadcrumbs button,
@@ -166,13 +167,16 @@
   color: var(--muted);
   margin-left: auto;
 }
-.trash-filename > span:not(.file-icon) {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.trash-filename > .file-name-label {
+  flex: 1 1 0;
+  min-width: 0;
 }
 .trash-heading {
   height: 42px;
   flex: none;
+  /* as wide as the rows beside the list's scroll bar, so each heading stays over its column */
+  width: calc(100% - var(--trash-gutter, 0px));
+  box-sizing: border-box;
   color: var(--muted);
   background: var(--raised);
   font-size: var(--text-compact);
@@ -202,6 +206,9 @@
 .trash-origin-details {
   display: flex;
   flex: none;
+  /* one height whatever is selected: the list above never grows or shrinks */
+  height: 62px;
+  box-sizing: border-box;
   align-items: center;
   justify-content: space-between;
   gap: var(--gap-panel);
@@ -212,10 +219,10 @@
   min-width: 0;
 }
 .trash-origin-details :is(p, .path-field) {
-  max-height: 88px;
   margin: var(--gap-tight) 0 0;
-  overflow: auto;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   user-select: text;
 }
 .trash-origin-details button {

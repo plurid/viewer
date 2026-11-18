@@ -960,6 +960,13 @@ describe('agent removal safety', () => {
     );
     expect(read.ui.insightsDismissed).toEqual({ '/Home/Downloads': ['screenshots'] });
     expect(JSON.stringify(read)).not.toContain('acme-site');
+    // a change preview names changed keys: never a root a dismissal names
+    const preview = await f.call<{ changes: string[] }>('validate_config', {
+      patches: [{ path: 'ui.insightsDismissed', value: {} }],
+    });
+    expect(JSON.stringify(preview)).not.toContain('acme-site');
+    // nor can an agent show them again: Show Hidden Insights is the person's command
+    expect(() => agentCommandID('show-hidden-insights', [])).toThrow('only to the person');
   });
   it('allows only bounded built-in commands and refuses clipboard paste', () => {
     for (const id of ['trash', 'copy-path', 'view-list', 'recipe.books', 'rename'])

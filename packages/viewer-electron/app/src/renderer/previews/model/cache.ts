@@ -112,6 +112,9 @@ export class ModelGeometryCache {
   ): Promise<ParsedModel> {
     if (signal.aborted) return Promise.reject(aborted());
     if (!key) return parse(signal);
+    // A preview whose file read ended after another preview's conversion takes its result.
+    const cached = this.get(key);
+    if (cached) return Promise.resolve(cached);
     let shared = this.parses.get(key);
     if (!shared) {
       const stop = new AbortController();

@@ -367,7 +367,7 @@ export default function CertificatePreview(context: PreviewContext) {
   if (inspection.status === 'failed')
     return (
       <PreviewFailure
-        context={{ resource: context.resource, retry: context.retry }}
+        context={{ openInApp: context.openInApp, retry: context.retry }}
         icon="warning"
         title="Can't read this file"
         detail={inspection.message}

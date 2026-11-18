@@ -52,6 +52,9 @@ import { PreviewRecovery } from './PreviewRecovery';
 import { documentServices } from './document-cache';
 import { PreviewFileInfo } from './PreviewFileInfo';
 import { rotatedCopyRequest } from './rotation';
+import { rotatableImage } from '../../domain/operations/image-conversions';
+import { kindLabel } from '../../domain/files/entries';
+import { pictureShortcuts } from '../../domain/preferences/shortcuts';
 import { saveAttachments } from './attachments';
 import { loadedPreviewModule, preloadPreviewModule } from './module-loading';
 import { useDarkPages } from './dark-pages';
@@ -75,7 +78,12 @@ function componentFor(module: PreviewModule) {
   }
   return component;
 }
-/** Any file's bytes, which the host shows in place of its module with Show as hex. */
+/** While a format's code loads: "Loading PDF…", by the file's kind. */
+function loadingLabel(entry: FileEntry): string {
+  const kind = kindLabel(entry);
+  return kind === 'File' ? 'Loading…' : `Loading ${kind}…`;
+}
+/** Any file's bytes, which the host shows in place of its module with Show as Hex. */
 const hexModule: PreviewModule = {
   id: 'hex',
   label: 'Hex',
@@ -83,7 +91,7 @@ const hexModule: PreviewModule = {
   detect: () => 0,
   load: () => import('./modules/HexPreview'),
 };
-/** Show as hex, which a footer of the caller's own may offer, as Quick Preview's does. */
+/** Show as Hex, which a footer of the caller's own may offer, as Quick Preview's does. */
 export interface HexToggle {
   shown: boolean;
   toggle(): void;
@@ -241,7 +249,7 @@ export const PreviewHost = memo(function PreviewHost({
             if (live)
               setSourceIssue({
                 path,
-                detail: 'The file has moved or its location is unavailable.',
+                detail: 'The file moved, or the disk it’s on isn’t connected.',
               });
           })
           .then(() => {
@@ -271,6 +279,9 @@ export const PreviewHost = memo(function PreviewHost({
   );
   const limits = useViewer((state) => state.settings.settings.previews);
   const fontSize = useViewer((state) => effectiveWindowSettings(state).previews.textFontSize);
+  // a picture's keys, as the person set them, or left to a binding of their own (shortcuts.ts)
+  const windowSettings = useViewer(effectiveWindowSettings);
+  const shortcuts = useMemo(() => pictureShortcuts(windowSettings), [windowSettings]);
   const editing = useMemo(
     () => (editable && paneID && !supplied ? { paneID } : undefined),
     [editable, paneID, supplied],
@@ -304,7 +315,7 @@ export const PreviewHost = memo(function PreviewHost({
     [path, supplied, resource?.id, cancel],
   );
   // A module and the views inside it register commands here: one registry source holds them
-  // all, with the host's own Show as hex.
+  // all, with the host's own Show as Hex.
   const registered = useRef(new Set<readonly PreviewCommand[]>());
   const [hexFor, setHexFor] = useState<string>();
   const hexShown = !!resource && hexFor === resource.id;
@@ -320,7 +331,7 @@ export const PreviewHost = memo(function PreviewHost({
         ? [
             {
               id: 'hex',
-              label: hexShown ? 'Show preview' : 'Show as hex',
+              label: hexShown ? 'Show Preview' : 'Show as Hex',
               aliases: ['hex', 'bytes'],
               run: toggleHex,
             },
@@ -399,25 +410,29 @@ export const PreviewHost = memo(function PreviewHost({
       : undefined;
   if (error)
     return (
-      <Empty icon="warning" title="File unavailable" detail={error}>
-        {!supplied && path && (
-          <PreviewRecovery
-            path={path}
-            retry={() => setRetry((value) => value + 1)}
-            locate={locate}
-          />
-        )}
-        {path && (
-          <button onClick={() => void window.viewer.openExternal(path).catch(report)}>
-            Open in default app
-          </button>
-        )}
-        {path && needsFolderAccess(errorCode) && (
-          <FolderAccessButton
-            folder={path.replace(/[/\\][^/\\]+$/, '') || '/'}
-            onGranted={() => setRetry((value) => value + 1)}
-          />
-        )}
+      <Empty icon="warning" title="Can’t show this file" detail={error}>
+        {/* one row of actions, as every failure shows them */}
+        <div className="empty-actions">
+          {!supplied && path && (
+            <PreviewRecovery
+              path={path}
+              inline
+              retry={() => setRetry((value) => value + 1)}
+              locate={locate}
+            />
+          )}
+          {path && (
+            <button onClick={() => void window.viewer.openExternal(path).catch(report)}>
+              Open in Default App
+            </button>
+          )}
+          {path && needsFolderAccess(errorCode) && (
+            <FolderAccessButton
+              folder={path.replace(/[/\\][^/\\]+$/, '') || '/'}
+              onGranted={() => setRetry((value) => value + 1)}
+            />
+          )}
+        </div>
       </Empty>
     );
   if (!resource) return <Loading label="Opening preview…" />;
@@ -464,7 +479,7 @@ export const PreviewHost = memo(function PreviewHost({
       <PreviewFrameContext value={frame}>
         <div className="preview-body">
           <ErrorBoundary key={`${resource.id}:${hexShown}`}>
-            <Suspense fallback={<Loading label={`Loading ${module.label.toLowerCase()}…`} />}>
+            <Suspense fallback={<Loading label={loadingLabel(resource.entry)} />}>
               <Viewer
                 key={resource.id}
                 resource={resource}
@@ -484,13 +499,14 @@ export const PreviewHost = memo(function PreviewHost({
                 state={viewState}
                 limits={limits}
                 reading={{ fontSize }}
+                shortcuts={shortcuts}
                 openRelated={openRelated}
                 editing={editing}
                 optimize={!supplied ? invokeFile('optimize-files') : undefined}
                 editPDF={!supplied ? invokeFile('pdf-tools') : undefined}
                 editImage={!supplied ? invokeFile('image-tools') : undefined}
                 rotatedCopy={
-                  !supplied
+                  !supplied && rotatableImage(resource.entry)
                     ? (turn) =>
                         void window.viewer
                           .operate(rotatedCopyRequest(current ?? resource.entry, turn))
@@ -528,7 +544,8 @@ export const PreviewHost = memo(function PreviewHost({
         <footer className="preview-info">
           <PreviewFileInfo
             entry={current ?? resource.entry}
-            kind={hexShown ? hexModule.label : module.label}
+            // the file's own kind, as the Kind column names it, not the module that shows it
+            kind={hexShown ? hexModule.label : kindLabel(current ?? resource.entry)}
             details={facts}
           />
           {!supplied && (

@@ -28,6 +28,26 @@ function selection() {
   };
 }
 describe('file input selection', () => {
+  it('goes on from where a hidden entry stood, by the order its list is in', () => {
+    const { session, controller } = selection();
+    // sorted by date, newest last; their names in no order
+    const dated = ['c', 'a', 'b'].map((name, index) => ({
+      ...entries[0]!,
+      path: `/files/${name}`,
+      name,
+      identity: name,
+      modified: (index + 1) * 10,
+    }));
+    const hidden = { ...entries[0]!, path: '/files/d', name: 'd', identity: 'd', modified: 15 };
+    session.cache.set(hidden.path, hidden);
+    session.cursor = hidden.path;
+    // d, made at 15, stood between c (10) and a (20)
+    controller.move(dated, 'ArrowDown', false);
+    expect(session.selection).toEqual(['/files/a']);
+    session.cursor = hidden.path;
+    controller.move(dated, 'ArrowUp', false);
+    expect(session.selection).toEqual(['/files/c']);
+  });
   it('inverts only the active view scope, retaining its order and resetting the range anchor', () => {
     const { session, controller } = selection();
     controller.click(entries[1], plain, entries);

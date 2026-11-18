@@ -537,10 +537,10 @@ node --import tsx tools/plugins/robotics/verify.ts --plugin /path/to/exported-pl
 ```
 
 The packager retains the portable canvas manifest, code asset, pinned meshes and raw source
-snapshots. Open the exported folder with Chat's **Open Canvas…** command. The native check uses an
-isolated profile with no provider configured. It exercises both placement constraints, altered
-targets and limits, then tool management, restart and export/import. This qualifies reuse of the
-existing code. It does not claim new Meta generation or renew a paid allowance.
+snapshots. Open the exported folder with Chat's **More → Open Canvas…** command. The native check
+uses an isolated profile with no provider configured. It exercises both placement constraints,
+altered targets and limits, then tool management, restart and export/import. This qualifies reuse of
+the existing code. It does not claim new Meta generation or renew a paid allowance.
 
 ### Retained station experiment
 

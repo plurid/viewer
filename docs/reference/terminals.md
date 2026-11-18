@@ -141,7 +141,7 @@ is full. Existing receipts were preserved.** Closing a receipt plane keeps the r
 
 | Command                 | Opens                                                                                 |
 | ----------------------- | ------------------------------------------------------------------------------------- |
-| **Open Terminal Plane** | A terminal linked to the folder plane, starting in its folder.                        |
+| **Open Terminal Plane** | A terminal linked to the files plane, starting in its folder.                         |
 | **New Terminal Plane**  | A root terminal plane in the folder where new planes start (**Settings → Browsing**). |
 
 Each terminal plane has its own shell, started from the default shell profile.

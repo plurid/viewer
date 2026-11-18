@@ -24,7 +24,7 @@ available when the button is hidden.
 | **Copy to** _folder_, **Move to** _folder_       | ⌃⌘C, ⌃⌘X | Copies or moves to the other folder of a pair                               |
 | **Duplicate**                                    | ⌘D       | Makes `Name copy.ext` beside each item                                      |
 | **Make Alias**                                   |          | Makes a Finder alias, such as `Report.pdf alias`, beside each item          |
-| **New Folder…**                                  | ⌘N       | Creates an empty folder; it never replaces an existing item                 |
+| **New Folder…**                                  | ⇧⌘N      | Creates an empty folder; it never replaces an existing item                 |
 | **New File…**                                    |          | Creates an empty file; it never replaces an existing item                   |
 | **New Folder with Selection…**                   | ⌃⌘N      | Asks for a name, then moves the selection into a new folder                 |
 | **Rename…**                                      | Return   | Renames one item; a case-only rename works on a case-blind volume           |
@@ -244,21 +244,21 @@ existing name asks before replacing.
 Previewing an archive never runs its contents. **Calculate Size**, **Find Duplicates…** and
 **Compare Locations…** measure only when you choose them.
 
-## Trash and Restore
+## Trash and Put Back
 
 Open **Trash** in the sidebar to browse the system Trash. Select an item for Quick Preview, its
-original location when known, **Restore** or **Restore To…**. A folder lists up to 4,000 items.
+original location when known, **Put Back** or **Put Back To…**. A folder lists up to 4,000 items.
 
-| Restore rule            | Value                                              |
+| Put Back rule           | Value                                              |
 | ----------------------- | -------------------------------------------------- |
 | Items at once           | Up to 1,000                                        |
 | Destination             | Same disk only; an existing name is never replaced |
-| Missing original folder | Not recreated; use **Restore To…**                 |
+| Missing original folder | Not recreated; use **Put Back To…**                |
 | Changed item or folder  | Refused; refresh the Trash                         |
 | Link in the destination | Refused; choose the actual folder                  |
 
 Original locations come from Viewer's own receipts, matched by identity; an item Finder trashed may
-need **Restore To…**. **Date added** is the system's directory date, not a deletion time. Reading
+need **Put Back To…**. **Date added** is the system's directory date, not a deletion time. Reading
 the macOS Trash can require Full Disk Access, which is separate from folder access.
 
 Viewer never empties the Trash: empty it in Finder. There is no command, API or agent tool that

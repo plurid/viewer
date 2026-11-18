@@ -7,6 +7,7 @@ import {
 } from '../src/desktop/windows/application-dispatch';
 import { installApplicationMenu } from '../src/desktop/windows/application-menu';
 import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
+import { defaultSettings } from '../src/domain/services';
 
 const nativeMenu = vi.hoisted(() => ({
   buildFromTemplate: vi.fn((template: MenuItemConstructorOptions[]) => template),
@@ -133,15 +134,47 @@ describe('native application menu dispatch', () => {
       else Reflect.deleteProperty(process, 'mas');
     }
   });
-  it('uses Command N for a folder and Shift Command N for a new plane', () => {
+  it('uses Command N for a files plane, Shift Command N for a folder, as Finder does', () => {
     installApplicationMenu(undefined, () => () => {}, '/generated/diagnostics.log', vi.fn());
     const template = nativeMenu.buildFromTemplate.mock.calls.at(-1)![0];
     const items = template.find((item) => item.label === 'File')!
       .submenu as MenuItemConstructorOptions[];
-    expect(items.find((item) => item.label === 'New Folder…')?.accelerator).toBe('Command+N');
-    expect(items.find((item) => item.label === 'New Folder Plane')?.accelerator).toBe(
-      'Command+Shift+N',
+    const key = (label: string) => items.find((item) => item.label === label)?.accelerator;
+    expect(key('New Files Plane')).toBe('Command+N');
+    expect(key('New Folder…')).toBe('Command+Shift+N');
+    expect(key('New Window')).toBe('Command+Alt+N');
+    // a key the person set, and a shipped key they gave to a recipe, as the keymap has them
+    const settings = defaultSettings('/generated');
+    installApplicationMenu(
+      {
+        ...settings,
+        shortcuts: { 'new-root-folder': 'Cmd+Shift+N' },
+        recipes: [
+          {
+            id: '6f1d1d5e-3c1f-4a43-9d2f-1d6a7d2f0a11',
+            name: 'Rename photos',
+            kind: 'batch-rename',
+            formats: [],
+            recursive: false,
+            instructions: '',
+            template: '{name}',
+            data: 'names',
+            shortcut: 'Cmd+Alt+N',
+          },
+        ],
+      } as unknown as typeof settings,
+      () => () => {},
+      '/generated/diagnostics.log',
+      vi.fn(),
     );
+    const own = (
+      nativeMenu.buildFromTemplate.mock.calls.at(-1)![0].find((item) => item.label === 'File')!
+        .submenu as MenuItemConstructorOptions[]
+    ).map((item) => [item.label, item.accelerator]);
+    expect(Object.fromEntries(own)['New Files Plane']).toBe('Command+Shift+N');
+    // no key: the menu shows none
+    expect(Object.fromEntries(own)['New Folder…']).toBeFalsy();
+    expect(Object.fromEntries(own)['New Window']).toBeFalsy();
   });
   it.each(['none', 'blurred-settings', 'settings', 'workspace'] as const)(
     'creates independent workspaces from the actual New Window menu with %s focused',

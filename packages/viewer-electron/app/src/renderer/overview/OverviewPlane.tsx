@@ -1,3 +1,4 @@
+import { FileName } from '../ui/FileName';
 import { useEffect, useState } from 'react';
 import type { FileEntry, OverviewPane as Pane } from '../../domain/contracts';
 import type { IndexedResult } from '../../domain/services';
@@ -200,7 +201,7 @@ function OverviewCard({
           {card.summary.top.map((entry) => (
             <li key={entry.path}>
               <button type="button" title={entry.path} onClick={() => open(entry.path)}>
-                {entry.name}
+                <FileName name={entry.name} />
               </button>
               <span className="muted">{formatBytes(entry.size)}</span>
             </li>

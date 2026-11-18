@@ -129,7 +129,9 @@ Results go to `out/perf/<time>/preview-latency.json`. What keeps it fast:
   long count would stop every window.
 - **An Office engine starts ahead of its document.** Selecting a Word or PowerPoint file, or
   finishing a layout, starts the engine for the next one. It is still destroyed after its one
-  document, and closes after a minute unused (`desktop/previews/office-renderer.ts`).
+  document, and closes after a minute unused (`desktop/previews/office-renderer.ts`). Quit closes
+  every engine at once and starts none: Electron waits for every window, so a hidden engine started
+  during Quit would keep it waiting.
 
 Preview qualification should record cold-to-usable-content time and warm cache read time separately.
 A derived-resource read excludes PDF parsing and painting. Large CSV/mesh parsing, image decode,

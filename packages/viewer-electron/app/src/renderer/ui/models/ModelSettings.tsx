@@ -108,7 +108,7 @@ export function ModelSettings({
       </div>
       {snapshot.settings.providers.length > 0 && (
         // `>` in the palette: which model turns words into a command line
-        <label className="settings-row">
+        <div className="settings-row">
           <span>
             Default for Ask Viewer
             <small>
@@ -132,7 +132,7 @@ export function ModelSettings({
               save(() => [{ path: 'settings.prompts', value: { providerID } }])
             }
           />
-        </label>
+        </div>
       )}
       {adding && (
         <div className="settings-actions settings-provider-add" aria-label="Add a model">
@@ -211,6 +211,7 @@ export function ModelSettings({
                 <span
                   className="model-status"
                   data-connected={currentConnection?.connected || undefined}
+                  title={status}
                 >
                   {status}
                 </span>
@@ -242,7 +243,7 @@ export function ModelSettings({
                 />
               </div>
               {preset.note && <p className="settings-note">{preset.note}</p>}
-              <label>
+              <label className="model-field-row">
                 Name
                 <Field
                   label="Provider name"
@@ -262,7 +263,7 @@ export function ModelSettings({
                   />
                 </label>
               </Disclosure>
-              <label>
+              <label className="model-field-row">
                 API key
                 <input
                   type="password"
@@ -284,7 +285,7 @@ export function ModelSettings({
                   }}
                 />
               </label>
-              <label>
+              <label className="model-field-wide">
                 Model
                 <Field
                   label="Model"
@@ -300,7 +301,7 @@ export function ModelSettings({
                 </datalist>
               </label>
               {provider.kind === 'local' && (
-                <label>
+                <label className="model-field-wide">
                   Outlines with SAM
                   <Field
                     label="Outlines with SAM"
@@ -311,7 +312,7 @@ export function ModelSettings({
                 </label>
               )}
               {preset.efforts && (
-                <label>
+                <label className="model-field-row">
                   Reasoning effort
                   <ChoiceButton
                     label="Reasoning effort"
@@ -401,16 +402,16 @@ export function ModelSettings({
                   </button>
                 )}
               </div>
-              {(loading[provider.id] || savingKey[provider.id]) && (
-                <p className="settings-note" role="status">
-                  {savingKey[provider.id] ? 'Saving key…' : 'Loading models…'}
-                </p>
-              )}
-              {models[provider.id]?.length ? (
-                <p className="settings-note" role="status">
-                  {plural(models[provider.id]!.length, 'model')} loaded. Choose one in Model above.
-                </p>
-              ) : null}
+              {/* one status line that keeps its height, so the fields under it never jump */}
+              <p className="settings-note model-load-status" role="status">
+                {savingKey[provider.id]
+                  ? 'Saving key…'
+                  : loading[provider.id]
+                    ? 'Loading models…'
+                    : models[provider.id]?.length
+                      ? `${plural(models[provider.id]!.length, 'model')} loaded. Choose one in Model above.`
+                      : ''}
+              </p>
               {provider.kind === 'gemini' && (
                 <Disclosure
                   variant="compact"

@@ -193,7 +193,7 @@ try {
     saved,
     (value) =>
       value.workspaces[0]!.panes.some((p) => p.type === 'folder' && p.path === destination),
-    'Created folder plane',
+    'Created files plane',
   );
   await until(
     saved,

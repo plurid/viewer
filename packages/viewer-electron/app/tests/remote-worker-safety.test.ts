@@ -3,13 +3,17 @@ import path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { RemoteSessions } from '../src/desktop/remote/session';
 import { remoteConnection } from '../src/domain/remote/connections';
-import { buildFakeSSH } from './support/remote-transport';
+import { buildFakeSSH, fakeSSHExecutable } from './support/remote-transport';
+import type { FakeSSHFixture } from './support/remote-transport';
 import { temporaryRoot } from '../tools/temporary';
 
 vi.mock('electron', () => ({ utilityProcess: {} }));
 
-let fixture: Awaited<ReturnType<typeof buildFakeSSH>>;
+let fixture: FakeSSHFixture;
 const sessions: RemoteSessions[] = [];
+const connection = remoteConnection.parse({ id: 'server01', name: 'Build', host: 'build-box' });
+// The fake ssh never binds it; a real master's socket lives in a private folder.
+const controlPath = '/private/tmp/c1';
 
 beforeAll(async () => {
   fixture = await buildFakeSSH();
@@ -23,20 +27,38 @@ afterEach(async () => {
 async function connected() {
   const root = await temporaryRoot('viewer-worker-safety-');
   const log = path.join(root, 'ssh.jsonl');
+  // A master the fake ssh treats as running, as one Viewer started would be.
+  await writeFile(log + '.masters', JSON.stringify({ [controlPath]: 'running' }));
   vi.stubEnv('VIEWER_REMOTE', '1');
-  vi.stubEnv('VIEWER_FAKE_SSH_LOG', log);
   const lost = vi.fn();
   const client = new RemoteSessions(fixture.worker, { backend: 'thread', lost });
   sessions.push(client);
   await client.configure({
-    connection: remoteConnection.parse({ id: 'server01', name: 'Build', host: 'build-box' }),
-    // The fake ssh never binds it; a real master's socket lives in a private folder.
-    controlPath: '/private/tmp/c1',
-    sshExecutable: fixture.sshExecutable,
+    connection,
+    controlPath,
+    sshExecutable: await fakeSSHExecutable(fixture, root, log),
   });
   const channels = async () =>
     (await readFile(log, 'utf8')).split('\n').filter((line) => line.includes('"sftp"')).length;
   return { root, client, lost, channels };
+}
+
+/** A worker that answers like the servers worker but only does what the test scripts. */
+async function scriptedWorker(script: string): Promise<string> {
+  const root = await temporaryRoot('viewer-scripted-worker-');
+  const file = path.join(root, 'worker.cjs');
+  await writeFile(
+    file,
+    [
+      "const { parentPort } = require('node:worker_threads');",
+      'parentPort.on("message", (request) => {',
+      script,
+      '  parentPort.postMessage({ id: request.id, value: undefined });',
+      '});',
+      '',
+    ].join('\n'),
+  );
+  return file;
 }
 
 it('refuses unsafe paths and oversized reads or writes before a file open', async () => {
@@ -91,8 +113,9 @@ it('disconnects a channel during stalled SFTP negotiation without waiting for it
   const { client, root } = await connected();
   await writeFile(path.join(root, 'ssh.jsonl.mode'), JSON.stringify({ hang: true }));
   const work = client.request('server01', 'browse', { type: 'list', path: '/' }).catch(() => {});
-  await vi.waitFor(async () =>
-    expect(await readFile(path.join(root, 'ssh.jsonl'), 'utf8')).toContain('sftp'),
+  await vi.waitFor(
+    async () => expect(await readFile(path.join(root, 'ssh.jsonl'), 'utf8')).toContain('sftp'),
+    { timeout: 5000 },
   );
   const start = performance.now();
   await client.disconnect('server01');
@@ -122,4 +145,31 @@ it('closes idle channels without reporting a lost connection, and reopens them o
     path: '/home',
   });
   expect(await channels()).toBe(2);
+});
+
+it('hears a lost channel only for a connection it configured', async () => {
+  const worker = await scriptedWorker(
+    [
+      "  if (request.method === 'configure') {",
+      "    parentPort.postMessage({ event: 'remote-channel-lost', value: 'other0001' });",
+      "    parentPort.postMessage({ event: 'remote-channel-lost', value: 'server01' });",
+      '  }',
+    ].join('\n'),
+  );
+  const lost = vi.fn();
+  const client = new RemoteSessions(worker, { backend: 'thread', lost });
+  sessions.push(client);
+  await client.configure({ connection, controlPath });
+  await vi.waitFor(() => expect(lost).toHaveBeenCalledWith('server01'));
+  expect(lost).not.toHaveBeenCalledWith('other0001');
+});
+
+it('treats the worker ending as a lost channel for every configured connection', async () => {
+  const worker = await scriptedWorker("  if (request.method === 'request') process.exit(3);");
+  const lost = vi.fn();
+  const client = new RemoteSessions(worker, { backend: 'thread', lost });
+  sessions.push(client);
+  await client.configure({ connection, controlPath });
+  await expect(client.request('server01', 'browse', { type: 'home' })).rejects.toThrow();
+  await vi.waitFor(() => expect(lost).toHaveBeenCalledWith('server01'));
 });

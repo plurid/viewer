@@ -157,17 +157,34 @@ export function modelNavigation(
     }
     pointers.clear();
   };
-  const replace = (view: ModelCamera) => {
+  /**
+   * A turntable turns around the model's top, so its camera is level. Straight above or below,
+   * where level has no direction, it leans a millionth of a turn so the picture keeps the view's
+   * own up at the top: away from it above the model and toward it below, as the cube's Top and
+   * Bottom views do.
+   */
+  const levelled = (view: ModelCamera): ModelCamera => {
+    const target = new THREE.Vector3().fromArray(view.target);
+    const position = new THREE.Vector3().fromArray(view.position);
+    const eye = position.clone().sub(target);
+    if (eye.lengthSq() && eye.clone().normalize().cross(top).lengthSq() < 1e-14) {
+      const given = new THREE.Vector3().fromArray(view.up);
+      const lean = given.addScaledVector(top, -given.dot(top));
+      if (lean.lengthSq() > 1e-12)
+        position.addScaledVector(lean.normalize(), -Math.sign(eye.dot(top)) * eye.length() * 1e-6);
+    }
+    return { ...view, position: position.toArray(), up: top.toArray() };
+  };
+  const replace = (requested: ModelCamera) => {
     motion = undefined;
+    const view = requested.rotation === 'turntable' ? levelled(requested) : requested;
     const { enabled, minDistance, maxDistance } = controls;
     controls.dispose();
     releasePointers();
     zooming = 0;
     rotation = view.rotation;
     camera.position.fromArray(view.position);
-    // A turntable turns around the model's top: a rolled free camera levels when it switches.
-    if (rotation === 'turntable') camera.up.copy(top);
-    else camera.up.fromArray(view.up);
+    camera.up.fromArray(view.up);
     controls = create(
       new THREE.Vector3().fromArray(view.target),
       enabled,
@@ -274,9 +291,9 @@ export function modelNavigation(
     }
     callbacks.wake();
   };
-  const controlKey = (event: KeyboardEvent) => {
-    if (event.key === 'Control') reader.control(event.type === 'keydown');
-  };
+  // Every key and pointer event says whether Control is down, so a release the window never saw,
+  // such as one in a native menu, cannot leave pinches reading as notches.
+  const controlKey = (event: KeyboardEvent | PointerEvent) => reader.control(event.ctrlKey);
   const controlReleased = () => reader.control(false);
   const key = (event: KeyboardEvent) => {
     if (!controls.enabled || event.altKey || event.metaKey) return;
@@ -320,8 +337,8 @@ export function modelNavigation(
   canvas.ownerDocument.addEventListener('pointercancel', up);
   // A pinch arrives as a wheel with Control set; only key events tell the real key apart.
   const owner = canvas.ownerDocument.defaultView;
-  owner?.addEventListener('keydown', controlKey, { capture: true });
-  owner?.addEventListener('keyup', controlKey, { capture: true });
+  const controlEvents = ['keydown', 'keyup', 'pointerdown', 'pointermove'] as const;
+  for (const type of controlEvents) owner?.addEventListener(type, controlKey, { capture: true });
   owner?.addEventListener('blur', controlReleased);
 
   return {
@@ -410,8 +427,27 @@ export function modelNavigation(
       change();
       callbacks.wake();
     },
-    rotation(value: ModelRotation) {
-      if (rotation !== value) replace({ ...settled(), rotation: value });
+    /**
+     * Switches the rotation mode where the camera is. Into a turntable, a rolled camera turns
+     * level over `duration` milliseconds; zero levels it at once.
+     */
+    rotation(value: ModelRotation, duration = 0) {
+      if (rotation === value) return;
+      const rolled = settled();
+      replace({ ...rolled, rotation: value });
+      const level = snapshot();
+      if (duration <= 0 || pose(rolled).orientation.angleTo(pose(level).orientation) < 1e-9) return;
+      camera.position.fromArray(rolled.position);
+      camera.up.fromArray(rolled.up);
+      camera.lookAt(controls.target);
+      motion = {
+        start: performance.now(),
+        duration,
+        view: level,
+        from: pose(rolled),
+        to: pose(level),
+      };
+      callbacks.wake();
     },
     resize,
     update(): boolean {
@@ -440,8 +476,8 @@ export function modelNavigation(
       canvas.ownerDocument.removeEventListener('pointermove', move);
       canvas.ownerDocument.removeEventListener('pointerup', up);
       canvas.ownerDocument.removeEventListener('pointercancel', up);
-      owner?.removeEventListener('keydown', controlKey, { capture: true });
-      owner?.removeEventListener('keyup', controlKey, { capture: true });
+      for (const type of controlEvents)
+        owner?.removeEventListener(type, controlKey, { capture: true });
       owner?.removeEventListener('blur', controlReleased);
     },
   };

@@ -31,7 +31,8 @@ export function OperationsPanel() {
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
-    panel.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    // the first button that can take the keyboard: a disabled one would leave Escape nowhere to go
+    panel.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
     const close = (event: PointerEvent) => {
       if (
         !panel.current?.contains(event.target as Node) &&

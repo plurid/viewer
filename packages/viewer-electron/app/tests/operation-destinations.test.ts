@@ -72,7 +72,8 @@ describe('an output named from its request', () => {
       'a rotated copy',
       { kind: 'convert', sources: ['/Work/Shot.heic'], conversion: 'rotate-left' },
       '/Work/Shot.heic',
-      '/Work/Shot rotated.png',
+      // a HEIC's copy is a JPEG: a PNG would be many times its size and lose the capture time
+      '/Work/Shot rotated.jpg',
     ],
     [
       'a converted copy beside its source',

@@ -421,3 +421,219 @@ it('caps hidden roots at 500, dropping the oldest', async () => {
   expect(stored.hidden[0]).toBe(f.home + '/code/hidden-1');
   expect(stored.hidden.at(-1)).toBe(f.home + '/code/hidden-500');
 });
+
+/** Holds every probe of the next pass until `release()`. */
+function holdProbes(f: Awaited<ReturnType<typeof fixture>>) {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const original = f.probe.getMockImplementation()!;
+  let held = 0;
+  f.probe.mockImplementation(async (folder: string) => {
+    held++;
+    await gate;
+    return original(folder);
+  });
+  return { release, held: () => held };
+}
+const stored = async (f: Awaited<ReturnType<typeof fixture>>) =>
+  JSON.parse(await readFile(f.service.store.file, 'utf8')) as {
+    entries: { key: string; root: string }[];
+    hidden: string[];
+  };
+
+it('keeps an entry Undo put back while a pass ran, and never after Clear or finding off', async () => {
+  // Undo during a pass: the pass decided without the root, yet its entry stays
+  const kept = await fixture();
+  await kept.service.run();
+  const [definition] = kept.service.snapshot().definitions;
+  await kept.service.hide(kept.root);
+  const gate = holdProbes(kept);
+  const pass = kept.service.run();
+  await vi.waitFor(() => expect(gate.held()).toBeGreaterThan(0));
+  expect(await kept.service.show([kept.root])).toBe(1);
+  gate.release();
+  await pass;
+  expect(kept.service.snapshot().definitions.map((item) => item.key)).toEqual([definition!.key]);
+  expect((await stored(kept)).entries.map((entry) => entry.key)).toEqual([definition!.key]);
+  // Undo, then Clear recent folders or finding off, while a pass runs: nothing comes back
+  for (const after of ['clear', 'off'] as const) {
+    const f = await fixture();
+    await f.service.run();
+    await f.service.hide(f.root);
+    const held = holdProbes(f);
+    const running = f.service.run();
+    await vi.waitFor(() => expect(held.held()).toBeGreaterThan(0));
+    await f.service.show([f.root]);
+    if (after === 'clear') await f.service.clearHistory();
+    else {
+      f.enabled(false);
+      await f.service.configure();
+    }
+    held.release();
+    await running;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect((await stored(f)).entries, after).toEqual([]);
+  }
+});
+
+it('hides a root once, shows only the roots asked for, and Undo of Show all hides them again', async () => {
+  const f = await fixture();
+  await f.service.run();
+  const other = f.home + '/code/other';
+  await f.service.hide(f.root);
+  await f.service.hide(f.root);
+  await f.service.hide(other);
+  expect((await stored(f)).hidden).toEqual([f.root, other]);
+  expect(await f.service.show([other])).toBe(1);
+  expect((await stored(f)).hidden).toEqual([f.root]);
+  expect(await f.service.show([other])).toBe(0);
+  await f.service.hide(other);
+  expect(await f.service.show()).toBe(2);
+  expect(f.service.snapshot().state.hidden).toBe(0);
+  expect(await f.service.hideAgain()).toBe(2);
+  expect((await stored(f)).hidden).toEqual([f.root, other]);
+  expect(f.service.snapshot().definitions).toEqual([]);
+  // Undo applies once
+  expect(await f.service.hideAgain()).toBe(0);
+});
+
+it('forgets the entry kept for Undo when finding is turned off', async () => {
+  const f = await fixture();
+  await f.service.run();
+  await f.service.hide(f.root);
+  f.enabled(false);
+  await f.service.configure();
+  f.enabled(true);
+  await f.service.configure();
+  await f.service.show([f.root]);
+  // the hidden list empties; the entry, evidence from history, is not put back
+  expect((await stored(f)).hidden).toEqual([]);
+  expect((await stored(f)).entries).toEqual([]);
+});
+
+it('follows a root Viewer moved within the Undo time', async () => {
+  const f = await fixture();
+  await f.service.run();
+  const [definition] = f.service.snapshot().definitions;
+  await f.service.hide(f.root);
+  const moved = f.home + '/code/renamed';
+  await f.service.remap([{ source: f.root, destination: moved }]);
+  // Manage's Undo sends the root as it hid it
+  expect(await f.service.show([f.root])).toBe(1);
+  expect(f.service.snapshot().state.hidden).toBe(0);
+  expect(f.service.snapshot().definitions.map((item) => [item.key, item.root])).toEqual([
+    [definition!.key, moved],
+  ]);
+});
+
+it('runs a pass after hiding, so roots inside a hidden one can be found', async () => {
+  const f = await fixture();
+  await f.service.run();
+  vi.useFakeTimers();
+  f.service.start();
+  // the first pass of start, then the one hiding asks for, five minutes after the last
+  await vi.advanceTimersByTimeAsync(10_000);
+  const run = vi.spyOn(f.service, 'run');
+  await f.service.hide(f.root);
+  await vi.advanceTimersByTimeAsync(299_000);
+  expect(run).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(run).toHaveBeenCalledOnce();
+});
+
+it('gives way the oldest hidden roots, and says so, when they would pass 1 MB', async () => {
+  const f = await fixture();
+  const long = (index: number) => f.home + '/' + 'x'.repeat(2900) + '/' + index;
+  const hidden = Array.from({ length: 345 }, (_, index) => long(index));
+  await writeFile(
+    f.service.store.file,
+    JSON.stringify({ version: 1, entries: [], hidden: hidden.slice(0, 320), probes: [] }),
+  );
+  await f.service.load();
+  for (const root of hidden.slice(320)) await f.service.hide(root);
+  const text = await readFile(f.service.store.file, 'utf8');
+  expect(Buffer.byteLength(text)).toBeLessThanOrEqual(1_000_000);
+  const saved = JSON.parse(text).hidden as string[];
+  expect(saved.at(-1)).toBe(hidden[344]);
+  expect(saved[0]).not.toBe(hidden[0]);
+  // each hide past the limit gives way one more
+  expect(f.service.recovery).toBe(
+    'Found workspaces reached their 1 MB limit, so the oldest hidden folder shows again.',
+  );
+});
+
+it('never puts back an entry Clear recent folders forgot', async () => {
+  const f = await fixture();
+  await f.service.run();
+  await f.service.hide(f.root);
+  await f.service.clearHistory();
+  expect(await f.service.show([f.root])).toBe(1);
+  expect(f.service.snapshot().definitions).toEqual([]);
+  expect((await stored(f)).entries).toEqual([]);
+});
+
+it('drops the entry Undo kept for a pass that a move cancelled', async () => {
+  const f = await fixture();
+  await f.service.run();
+  await f.service.hide(f.root);
+  const gate = holdProbes(f);
+  const pass = f.service.run();
+  await vi.waitFor(() => expect(gate.held()).toBeGreaterThan(0));
+  await f.service.show([f.root]);
+  // a Viewer move cancels that pass; the folder is then no longer one the person uses
+  await f.service.remap([{ source: f.root + '/src', destination: f.root + '/lib' }]);
+  gate.release();
+  await pass;
+  f.state.visits = {};
+  await f.service.run();
+  // the next pass decides with everything known: no evidence, no entry
+  expect((await stored(f)).entries).toEqual([]);
+});
+
+it('Undo of Show all hides them again beside a Not a Workspace made since, older first', async () => {
+  const f = await fixture();
+  await f.service.run();
+  const other = f.home + '/code/other';
+  const later = f.home + '/code/later';
+  await f.service.hide(f.root);
+  await f.service.hide(other);
+  expect(await f.service.show()).toBe(2);
+  // within Settings' eight seconds the person hides another one in Manage
+  await f.service.hide(later);
+  expect(await f.service.hideAgain()).toBe(2);
+  expect((await stored(f)).hidden).toEqual([f.root, other, later]);
+});
+
+it('Undo of Show all follows a root Viewer moved meanwhile', async () => {
+  const f = await fixture();
+  await f.service.run();
+  await f.service.hide(f.root);
+  expect(await f.service.show()).toBe(1);
+  const moved = f.home + '/code/renamed';
+  await f.service.remap([{ source: f.root, destination: moved }]);
+  expect(await f.service.hideAgain()).toBe(1);
+  expect((await stored(f)).hidden).toEqual([moved]);
+});
+
+it('drops the entry Undo kept once the pass it ran in has finished', async () => {
+  const f = await fixture();
+  await f.service.run();
+  await f.service.hide(f.root);
+  // the next pass decides without the root and saves; Undo comes while that save is under way
+  let release!: () => void;
+  const saving = new Promise<void>((resolve) => (release = resolve));
+  const save = f.service.store.save.bind(f.service.store);
+  const held = vi.spyOn(f.service.store, 'save').mockImplementationOnce(async (value) => {
+    await saving;
+    return save(value);
+  });
+  const pass = f.service.run();
+  await vi.waitFor(() => expect(held).toHaveBeenCalled());
+  const shown = f.service.show([f.root]);
+  release();
+  await Promise.all([pass, shown]);
+  // a later pass that finds no evidence leaves no entry
+  f.state.visits = {};
+  await f.service.run();
+  expect((await stored(f)).entries).toEqual([]);
+});

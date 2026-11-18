@@ -1,18 +1,18 @@
 import { memo, useCallback, useContext, useEffect, useMemo } from 'react';
 import type { FileEntry, Resource } from '../../domain/contracts';
 import {
-  activeWorkspace,
   followQuickPreview,
   getState,
   quickPreview,
   report,
   stepQuickPreview,
 } from '../state/store';
-import { folderPresentation } from '../state/presentation';
 import { editable } from '../commands/editing';
 import { useWorkspace } from '../workspace/context';
-import { selectedFiles, selectionCursor } from '../workspace/sessions';
-import { routeFileKeyboard } from '../explorer/selection';
+import { selectedFiles, selectionCursor, setSelectionCursor } from '../workspace/sessions';
+import { hasFileKeyboard, routeFileKeyboard } from '../explorer/selection';
+import { useShortcutGlyphs } from '../keys/hints';
+import { withShortcut } from '../../domain/preferences/shortcuts';
 import { AppIcon, hasBundleIcon } from '../explorer/app-icon';
 import { Dialog, IconButton } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
@@ -45,13 +45,6 @@ function scrollsWith(event: KeyboardEvent): boolean {
       return true;
   }
   return false;
-}
-/** Whether Left and Right move a plane's selection: in Grid and Gallery they do. */
-function movesSideways(paneID?: string): boolean {
-  const pane = activeWorkspace().panes.find((item) => item.id === paneID);
-  return (
-    pane?.type === 'folder' && ['grid', 'gallery'].includes(folderPresentation(pane.path).mode)
-  );
 }
 
 /** Quick Preview's Edit while it shows a text file: ⌘E reaches it through the window's commands. */
@@ -141,16 +134,27 @@ export const QuickPreview = memo(function QuickPreview({
         scrollsWith(event)
       )
         return;
-      event.preventDefault();
-      // Several selected: the side arrows step through them, as before. Otherwise the arrows move
-      // the plane's selection as they would there, Left and Right only where they move it.
-      const sideways = event.key === 'ArrowLeft' || event.key === 'ArrowRight';
-      if (sideways && (quick.paths.length > 1 || !movesSideways(quick.paneID))) {
-        stepQuickPreview(event.key === 'ArrowLeft' ? -1 : 1);
+      const several = quick.paths.length > 1;
+      const back = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
+      // Several selected: Left and Right step through them, as Finder's Quick Look does.
+      if (several && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        event.preventDefault();
+        stepQuickPreview(back ? -1 : 1);
         return;
       }
-      if (!quick.paneID) return;
-      routeFileKeyboard(quick.paneID, {
+      // The plane it came from closed: the arrows step through what it shows, if anything.
+      const plane = quick.paneID && hasFileKeyboard(quick.paneID) ? quick.paneID : undefined;
+      if (!plane) {
+        if (several) {
+          event.preventDefault();
+          stepQuickPreview(back ? -1 : 1);
+        }
+        return;
+      }
+      // Otherwise every arrow moves the plane's selection as it would there, from the file shown.
+      event.preventDefault();
+      setSelectionCursor(plane, quick.paths[quick.index] ?? quick.paths[0]!);
+      routeFileKeyboard(plane, {
         key: event.key,
         code: event.code,
         shiftKey: event.shiftKey,
@@ -162,12 +166,13 @@ export const QuickPreview = memo(function QuickPreview({
         stopPropagation: () => {},
         fromQuickPreview: true,
       });
-      followQuickPreview(selectedFiles(quick.paneID), selectionCursor(quick.paneID));
+      followQuickPreview(selectedFiles(plane), selectionCursor(plane));
     };
     window.addEventListener('keydown', keydown);
     return () => window.removeEventListener('keydown', keydown);
   }, []);
-  /** Opens the file as its plane, as Open linked plane does; `edit` starts its editor there. */
+  const editKey = useShortcutGlyphs('edit-file');
+  /** Opens the file as its plane, as Open Linked Plane does; `edit` starts its editor there. */
   const open = useCallback(
     (file: string, edit: boolean) => {
       void workspace
@@ -196,7 +201,7 @@ export const QuickPreview = memo(function QuickPreview({
       count > 1 && (
         <div className="quick-preview-navigation">
           <IconButton icon="left" label="Previous file" onClick={() => stepQuickPreview(-1)} />
-          <span>
+          <span className="readout quick-preview-count">
             {session.index + 1} / {count}
           </span>
           <IconButton icon="right" label="Next file" onClick={() => stepQuickPreview(1)} />
@@ -215,7 +220,7 @@ export const QuickPreview = memo(function QuickPreview({
           {/* the dialog's title names the file */}
           <PreviewFileInfo
             entry={resource.entry}
-            kind={module.label}
+            kind={module.id === 'hex' ? module.label : kindLabel(resource.entry)}
             details={details}
             named={false}
           />
@@ -223,7 +228,7 @@ export const QuickPreview = memo(function QuickPreview({
             {navigation}
             {hex && (
               <button type="button" aria-pressed={hex.shown} onClick={hex.toggle}>
-                {hex.shown ? 'Show preview' : 'Show as hex'}
+                {hex.shown ? 'Show Preview' : 'Show as Hex'}
               </button>
             )}
             <OpenDefaultButton path={resource.entry.path} />
@@ -240,18 +245,21 @@ export const QuickPreview = memo(function QuickPreview({
               workspaceID={session.workspaceID}
             />
             {editable && (
-              <button title="Edit (⌘E)" onClick={() => open(resource.entry.path, true)}>
+              <button
+                title={withShortcut('Edit Text', editKey)}
+                onClick={() => open(resource.entry.path, true)}
+              >
                 Edit
               </button>
             )}
             <button className="primary" onClick={() => open(resource.entry.path, false)}>
-              Open linked plane
+              Open Linked Plane
             </button>
           </div>
         </footer>
       );
     },
-    [open, navigation, session.paneID, session.workspaceID],
+    [open, navigation, editKey, session.paneID, session.workspaceID],
   );
   useEffect(
     () => () => {
@@ -282,7 +290,7 @@ export const QuickPreview = memo(function QuickPreview({
               <div className="quick-preview-actions">
                 {navigation}
                 <button className="primary" onClick={() => open(folder.path, false)}>
-                  Open linked plane
+                  Open Linked Plane
                 </button>
               </div>
             </footer>

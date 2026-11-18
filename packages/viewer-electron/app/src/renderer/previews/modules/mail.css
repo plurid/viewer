@@ -43,15 +43,19 @@
   background: var(--field);
   font-size: var(--text-compact);
 }
+/* the name loses its middle first (ui/FileName.tsx); the kind and size give way after it */
 .mail-attachment-name {
+  flex: 0 1 auto;
+}
+.mail-attachments .muted {
+  font-size: var(--text-label);
+}
+.mail-attachment-kind {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.mail-attachments .muted {
-  flex: none;
-  font-size: var(--text-label);
 }
 .mail-attachment-actions,
 .mail-attachments-all {
@@ -103,7 +107,6 @@
   margin: 0;
   padding: 0;
   overflow: auto;
-  scrollbar-gutter: stable;
   list-style: none;
   border-right: 1px solid var(--line);
 }

@@ -181,7 +181,7 @@ export const settingCatalog: SettingDefinition[] = [
   {
     path: 'settings.browsing.newPlaneLocation',
     category: 'Browsing',
-    label: 'New folder planes open at',
+    label: 'New files planes open at',
     kind: 'choice',
     choices: [
       ['current', 'Current folder'],
@@ -354,7 +354,7 @@ export const settingCatalog: SettingDefinition[] = [
   {
     path: 'ui.sidebar.inNewPlanes',
     category: 'Navigation',
-    label: 'Show navigation in new folder planes',
+    label: 'Show navigation in new files planes',
     kind: 'boolean',
   },
   // its key follows on the Navigation page, under the same heading
@@ -605,7 +605,7 @@ export const settingCatalog: SettingDefinition[] = [
   ...(
     [
       ['navigation', 'Window navigation'],
-      ['newPlane', 'New folder plane'],
+      ['newPlane', 'New files plane'],
       ['operations', 'File operations'],
       ['voice', 'Microphone'],
       ['commands', 'Commands'],
@@ -630,7 +630,7 @@ export const settingCatalog: SettingDefinition[] = [
     kind: 'choice',
     choices: [
       ['same', 'A plane like the active one'],
-      ['folder', 'A folder plane'],
+      ['folder', 'A files plane'],
       ['terminal', 'A terminal plane'],
       ['scratch', 'A scratch plane'],
     ],

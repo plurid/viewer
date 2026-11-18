@@ -24,4 +24,9 @@
   color: var(--muted);
   font-size: var(--text-compact);
   margin: var(--gap-content) 0;
+  /* one line whatever it says, so the list under it never jumps as you type */
+  height: 1lh;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

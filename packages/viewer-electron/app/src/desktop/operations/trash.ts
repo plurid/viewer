@@ -89,6 +89,8 @@ type BackingItem = {
   parents: BackingItem[];
 };
 interface TrashServices {
+  /** The hidden QA runtime lists only its generated home's Trash, never a mounted volume's. */
+  homeOnly?: boolean;
   origins?(): Promise<TrashOrigin[]>;
   preview?(file: string): Promise<Resource>;
   release?(id: string): void;
@@ -206,7 +208,7 @@ export class Trash {
     for (const item of items) await this.#verify(item);
     await clipboard.writeText(items.map((item) => item.file).join('\n'));
   }
-  /** "Restore to…": the folder, chosen before the move takes the file operations lock. Chosen inside
+  /** "Put Back To…": the folder, chosen before the move takes the file operations lock. Chosen inside
    * it, the picker held every queued file operation while it was open. */
   async chooseRestoreFolder(window: BrowserWindow): Promise<string | undefined> {
     if (this.#closed || this.#busy || window.isDestroyed())
@@ -220,7 +222,7 @@ export class Trash {
   }
   async #pick(window: BrowserWindow): Promise<string | undefined> {
     const picked = await openDialog(window, {
-      title: 'Restore to…',
+      title: 'Put Back To…',
       message: 'Choose a destination. Existing files will be kept.',
       properties: ['openDirectory', 'dontAddToRecent'],
       securityScopedBookmarks: this.access.scoped,
@@ -271,16 +273,16 @@ export class Trash {
           path.resolve(target) !== target
         )
           throw new Error(
-            'Viewer doesn’t know where this item came from. Use Restore To… to choose a folder.',
+            'Viewer doesn’t know where this item came from. Use Put Back To… to choose a folder.',
           );
         const parent = await realpath(path.dirname(target)).catch(() => {
           throw new Error(
-            'The original folder no longer exists. Use Restore To… to choose a folder.',
+            'The original folder no longer exists. Use Put Back To… to choose a folder.',
           );
         });
         if (parent !== path.dirname(target))
           throw new Error(
-            'The destination contains a symbolic link. Use Restore to… to choose its actual folder.',
+            'The destination contains a symbolic link. Use Put Back To… to choose its actual folder.',
           );
         if (
           [...(this.#last?.available.values() ?? [])].some(
@@ -307,7 +309,7 @@ export class Trash {
         try {
           await lstat(target);
           throw new Error(
-            `“${path.basename(target)}” already exists. Use Restore to… to choose another folder.`,
+            `“${path.basename(target)}” already exists. Use Put Back To… to choose another folder.`,
           );
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
@@ -553,8 +555,9 @@ export class Trash {
   async #read(): Promise<ReadResult> {
     if (process.platform === 'win32') return this.#readWindows();
     const platform = process.platform as DesktopPlatform;
-    const mounts =
-      platform === 'darwin'
+    const mounts = this.services.homeOnly
+      ? []
+      : platform === 'darwin'
         ? await macFiles().volumes()
         : linuxMounts(await readFile('/proc/self/mountinfo', 'utf8'));
     const candidates = trashRoots(

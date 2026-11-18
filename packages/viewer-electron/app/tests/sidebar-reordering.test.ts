@@ -81,10 +81,10 @@ function mount() {
   const order = () =>
     Array.from(
       view.container.querySelectorAll<HTMLElement>('section[aria-label="Locations"] .location'),
-    ).map((item) => item.title);
+    ).map((item) => item.dataset.locationPath);
   const drop = (source: string, before: string) => {
     const target = Array.from(view.container.querySelectorAll<HTMLElement>('.location')).find(
-      (item) => item.title === before,
+      (item) => item.dataset.locationPath === before,
     )!;
     fireEvent.drop(target, {
       dataTransfer: {

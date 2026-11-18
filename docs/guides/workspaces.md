@@ -15,17 +15,17 @@ folders, files and tools are there when you come back. Your files stay in their 
 
 ## Open a second plane
 
-- In Quick Preview, choose **Open linked plane**, or **Option**-double-click a file. The new plane
+- In Quick Preview, choose **Open Linked Plane**, or **Option**-double-click a file. The new plane
   is a child of the folder it came from, and a line joins them: a
   [linked plane](../reference/terms.md#planes-and-the-space).
-- Choose **Open in Another Plane** for a separate folder plane with its own history.
+- Choose **Open in Another Plane** for a separate files plane with its own history.
 - **Related planes** in a plane's header lists its parent and children. Closing a child returns you
   to its parent.
 
 Opening a file that already has a plane in the same branch shows that plane again.
 
-A [root plane](../reference/terms.md#planes-and-the-space), such as one from **Open in another
-plane**, **New Folder Plane** or a tour's stop, opens beside the plane you are working in. It faces
+A [root plane](../reference/terms.md#planes-and-the-space), such as one from **Open in Another
+Plane**, **New Files Plane** or a tour's stop, opens beside the plane you are working in. It faces
 the same way, to the right when there is room there, otherwise to the left, below or above. The
 planes already open stay where they are, and closing a plane leaves the rest in place. Root planes
 then keep their size when the window changes; **⌘0** frames them all again.
@@ -88,7 +88,7 @@ evidence planes to where they were before the comparison.
 
 ## Choose the title bar icons
 
-Open **Settings → Space → Title bar icons**. Toggle **Window navigation**, **New Folder Plane**,
+Open **Settings → Space → Title bar icons**. Toggle **Window navigation**, **New files plane**,
 **File operations**, **Microphone** and **Commands** individually. The microphone starts hidden.
 Their commands and keyboard shortcuts remain available when an icon is hidden. Settings focuses its
 search field when opened; reopening selects the previous query so you can replace it.
@@ -189,14 +189,14 @@ managed from that window. Viewer remembers recent use across restarts.
 
 **Workspace → New Workspace…** in the menu bar also creates a workspace. Give each kind of work its
 own: a writing workspace with a folder, a PDF and notes; a project workspace with an editor, a
-terminal and a browser. Choose where new folder planes open in **Settings → Browsing → New folder
+terminal and a browser. Choose where new files planes open in **Settings → Browsing → New files
 planes open at**.
 
 ## Workspaces Viewer finds
 
 Choose **⌘K → Change Workspace…** or **Manage Workspaces… → Defined** and search for a folder you
 use. **Found** marks a workspace Viewer recognized from your private folder history or open planes.
-Its detail shows the root folder. Opening it adds one folder plane; Close and reopen work as for
+Its detail shows the root folder. Opening it adds one files plane; Close and reopen work as for
 other defined workspaces. It joins **Recently closed** only after Viewer remembers its planes. Found
 workspaces have no written entry to save over.
 
@@ -221,16 +221,22 @@ agents. The Store edition uses only folders whose access is already active. A fo
 directly can itself be a workspace root.
 
 To hide a found workspace, choose **Not a Workspace** on its row in **Manage Workspaces… →
-Defined**. It leaves search, Manage and the workspace card at once, and **Undo** in the list's
-footer brings it back for eight seconds. Close a found workspace before hiding it. Folders inside a
-hidden root can still be found as workspaces of their own. Hidden roots stay hidden through **Clear
-Recent Folders** and while finding is off. Below the finding switch, **Settings → Browsing** counts
-them, such as `12 found · 2 hidden`; **Show Hidden Again** brings every hidden root back.
+Defined**. It leaves search, Manage and the workspace card at once. For eight seconds the footer
+says **Hid “acme-site”** with **Undo**, on either tab; Undo still finds the folder if Viewer moved
+it meanwhile. A workspace that remembers planes keeps them while hidden, and the footer adds
+**Forget Planes…**. Close a found workspace before hiding it. A hidden root's folders belong to no
+found workspace, neither it nor the folder around it; a project inside it can still be found on its
+own. Hiding one repository never folds the ones beside it into the folder around them. Hidden roots
+stay hidden through **Clear Recent Folders** and while finding is off.
+
+Below the finding switch, **Settings → Browsing** counts them, such as `12 found · 2 hidden`. **Show
+2 Hidden Workspaces** brings every hidden root back, with **Undo** for eight seconds, which hides
+them again even beside one you marked Not a Workspace meanwhile.
 
 ## Open the workspace a folder belongs to
 
-When you browse a folder inside a defined or found workspace, the first of your folder planes inside
-its root shows a card after any first-run tips:
+When you browse a folder inside a defined or found workspace, the first of your files planes in that
+workspace shows a card after any first-run tips:
 
 | Card                                 | Shows when                                          | Action             |
 | ------------------------------------ | --------------------------------------------------- | ------------------ |
@@ -238,13 +244,20 @@ its root shows a card after any first-run tips:
 | “acme-site” opens 3 planes           | Its definition opens more than a folder at its root | **Open Workspace** |
 | “acme-site” is open in “Workspace 3” | Another workspace is linked to it                   | **Switch**         |
 
-The card names the innermost workspace holding the folder and shows its root. A workspace that only
-opens a folder at its root shows no card, since you are already browsing there. No card shows in the
-workspace linked to it, or in one whose planes are mostly inside its root: two or more planes and at
-least 60% of them, or its only plane. The card is one of the three insight cards and follows
-**Settings → Browsing → Suggestions → Show folder insights**. Choose **×** to hide it for that root;
-**⌘K** → **Show Hidden Insights** brings it back. Until you hide it, **⌘K** with nothing typed lists
-the same workspace under **Suggested** with the same reason, such as **Remembers 5 planes**.
+The card names the innermost workspace holding the folder and shows its root. A hidden or missing
+inner definition leaves the folder to the workspace around it. A plane in an inner workspace's
+folder belongs to that one, so the outer workspace's card goes to a plane of its own. A workspace
+that only opens a folder at its root shows no card, since you are already browsing there. No card
+shows in the workspace linked to it, or in one whose planes are mostly inside its root, inner
+workspaces included: two or more planes and at least 60% of them, or its only plane.
+
+The card is one of the three insight cards and follows **Settings → Browsing → Suggestions → Show
+folder insights**. Choose **×** to hide it for that workspace's root. Viewer keeps that choice on
+this Mac, outside `config.jsonc`, and follows the folder when Viewer moves it. **⌘K** → **Show
+Hidden Insights** brings the cards back; **Clear Recent Folders** brings back those of found
+workspaces, and its Undo hides them again. Until you hide it, **⌘K** with nothing typed lists the
+same workspace under **Suggested** with the same reason, such as **Remembers 5 planes**; Suggested
+shows three rows at most.
 
 ## Open a defined workspace
 

@@ -1,38 +1,54 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { usePreviewState } from '../state';
 import type { PreviewContext, QuarterTurn } from '../contracts';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
+import { PreviewFailure } from '../PreviewFailure';
 import { usePreviewKeys } from '../keys';
 import {
-  nearestTurn,
+  containedSize,
   normalAngle,
+  savedTurn,
   sideways,
   turnPoint,
   turnedFit,
   useRotateGesture,
 } from '../rotation';
 import { headerItem } from '../../workspace/header-overflow';
-import { Empty, IconButton, Loading } from '../../ui/primitives';
+import { IconButton, Loading } from '../../ui/primitives';
 import { transformableImage } from '../../../domain/operations/image-conversions';
 import { optimizable } from '../../../domain/operations/optimization';
 import { boxRegion, fitRegion } from '../../../domain/files/regions';
+import { shortcutFor, shortcutGlyphs, withShortcut } from '../../../domain/preferences/shortcuts';
 import { EvidenceOverlay } from '../EvidenceOverlay';
 
 /** The stage's margin around a fitted picture (previews.css, `.image-stage img`). */
 const stageMargin = 40;
+const zoomLimits = { least: 0.1, most: 20 };
+const clampZoom = (value: number) => Math.max(zoomLimits.least, Math.min(zoomLimits.most, value));
+/** Where a picture is drawn: its stage, less the margin around it. */
+const roomOf = (stage: HTMLElement) => ({
+  width: stage.clientWidth - stageMargin,
+  height: stage.clientHeight - stageMargin,
+});
+/** Why Save Rotated Copy waits, said to a pointer, the keyboard and VoiceOver alike. */
+const copyWaits = 'Turn the picture first, then save it turned.';
 
 export default function ImagePreview(context: PreviewContext) {
   const { resource, active, interactive } = context;
   const [zoom, setZoom] = usePreviewState(context, 'image.zoom', 1);
   const [pan, setPan] = usePreviewState(context, 'image.pan', { x: 0, y: 0 });
   // the view's quarter turn, clockwise, remembered with the file's view; the picture never turns
-  const [turn, setTurn] = usePreviewState(context, 'image.turn', 0);
+  const [saved, setSaved] = usePreviewState<unknown>(context, 'image.turn', 0);
+  const turn = savedTurn(saved);
+  // The turn as drawn, counting whole turns: from 270 a quarter on is 360, not 0, so the
+  // picture turns a quarter on rather than three back.
+  const [spin, setSpin] = useState(turn);
   // how far two fingers have turned it on the trackpad, until they stop
   const [twist, setTwist] = useState(0);
   const twisting = useRef(0);
   // a quarter turn eases into place; a twist follows the fingers as they go
   const [easing, setEasing] = useState(false);
-  const [dimensions, setDimensions] = useState('');
+  const [loaded, setLoaded] = useState({ width: 0, height: 0 });
   const byteLimited = resource.entry.size > 64000000;
   const large =
     (!!resource.dimensions &&
@@ -63,48 +79,43 @@ export default function ImagePreview(context: PreviewContext) {
   const [error, setError] = useState(false);
   const available = !error && !byteLimited && !thumbnailFailed && (!large || !!thumbnail);
   const stage = useRef<HTMLDivElement>(null);
-  const image = useRef<HTMLImageElement>(null);
-  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
-  const [natural, setNatural] = useState({ width: 0, height: 0 });
   const [room, setRoom] = useState({ width: 0, height: 0 });
   const region = context.evidence?.anchor.kind === 'image' ? context.evidence.anchor : undefined;
   useEffect(() => {
-    const element = image.current;
     const frame = stage.current;
-    if (!element || !frame) return;
-    const resize = () => {
-      setImageSize({ width: element.clientWidth, height: element.clientHeight });
-      setRoom({
-        width: frame.clientWidth - stageMargin,
-        height: frame.clientHeight - stageMargin,
-      });
-    };
+    if (!frame) return;
+    const resize = () => setRoom(roomOf(frame));
     const observer = new ResizeObserver(resize);
-    observer.observe(element);
     observer.observe(frame);
     resize();
     return () => observer.disconnect();
   }, [available, resource.id]);
+  const angle = spin + twist;
+  // As the stylesheet lays it out, from its own size and the room, known with its first loaded
+  // frame: measured after it is drawn, a remembered turn would be fitted one frame late.
+  const shown = useMemo(() => containedSize(loaded, room), [loaded, room]);
   // Turned, the picture is drawn larger or smaller than the stylesheet lays it out, so that it
   // still fits the stage as a whole at zoom 1.
-  const fit = turnedFit(imageSize, natural, room, turn + twist);
-  // the shortest way round to the turn: from 270 to 0 is a quarter on, not three back
-  const shown = useRef(turn);
-  let angle = turn + twist;
-  while (angle - shown.current > 180) angle -= 360;
-  while (angle - shown.current < -180) angle += 360;
-  shown.current = angle;
+  const fit = turnedFit(shown, loaded, room, angle);
+  // on its side, it waits unseen until it can be fitted, so it never shows at the wrong size
+  const waiting = normalAngle(angle) % 180 !== 0 && shown.width <= 0;
+  // the picture's own size: a large one shows a smaller copy, whose pixels are not the picture's
+  const picture = resource.dimensions ?? loaded;
+  // what the person sees, against the picture's own pixels: 100% is one pixel a point
+  const scale =
+    picture.width > 0 && shown.width > 0 ? (shown.width * fit * zoom) / picture.width : 0;
   useEffect(() => {
     if (!easing) return;
     const timer = setTimeout(() => setEasing(false), 200);
     return () => clearTimeout(timer);
-  }, [easing, turn]);
+  }, [easing, spin]);
   const rotate = useCallback(
     (quarters: 1 | -1) => {
       setEasing(true);
-      setTurn((value) => normalAngle(value + quarters * 90));
+      setSpin((value) => value + quarters * 90);
+      setSaved((value: unknown) => normalAngle(savedTurn(value) + quarters * 90));
     },
-    [setTurn],
+    [setSaved],
   );
   useRotateGesture(
     stage,
@@ -119,13 +130,21 @@ export default function ImagePreview(context: PreviewContext) {
       twisting.current = 0;
       setEasing(true);
       setTwist(0);
-      setTurn((value) => nearestTurn(value + total));
+      setSpin((value) => Math.round((value + total) / 90) * 90);
+      setSaved((value: unknown) => savedTurn(savedTurn(value) + total));
     },
   );
+  // the keys and their hints follow the person's own shortcuts (Settings → Shortcuts)
+  const left = shortcutFor(context.shortcuts, 'image-rotate-left');
+  const right = shortcutFor(context.shortcuts, 'image-rotate-right');
   usePreviewKeys(
     stage,
-    { 'Cmd+L': () => rotate(-1), 'Cmd+R': () => rotate(1) },
+    {
+      ...(left ? { [left]: () => rotate(-1) } : {}),
+      ...(right ? { [right]: () => rotate(1) } : {}),
+    },
     active && interactive && available,
+    context.commands?.header,
   );
   // A region small in the picture is zoomed to fill most of the stage, once per evidence; the
   // reader's own zoom and pan take over from there. Turned, the stage is turned with it.
@@ -133,17 +152,17 @@ export default function ImagePreview(context: PreviewContext) {
   useEffect(() => {
     const evidence = context.evidence;
     const element = stage.current;
-    if (!region || !evidence || !element || imageSize.width <= 0 || zoomedFor.current === evidence)
+    if (!region || !evidence || !element || shown.width <= 0 || zoomedFor.current === evidence)
       return;
     zoomedFor.current = evidence;
     const across = sideways(turn);
-    const view = fitRegion(region, imageSize, {
+    const view = fitRegion(region, shown, {
       width: across ? element.clientHeight : element.clientWidth,
       height: across ? element.clientWidth : element.clientHeight,
     });
     setZoom(view.zoom / fit);
     setPan(turnPoint(view.pan, turn));
-  }, [region, context.evidence, imageSize, setZoom, setPan, turn, fit]);
+  }, [region, context.evidence, shown, setZoom, setPan, turn, fit]);
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   useEffect(() => {
     const element = stage.current;
@@ -152,27 +171,36 @@ export default function ImagePreview(context: PreviewContext) {
       if (!active || !interactive) return;
       event.preventDefault();
       event.stopPropagation();
-      setZoom((value) => Math.max(0.1, Math.min(20, value * Math.exp(-event.deltaY * 0.003))));
+      setZoom((value) => clampZoom(value * Math.exp(-event.deltaY * 0.003)));
     };
     element.addEventListener('wheel', wheel, { passive: false });
     return () => {
       element.removeEventListener('wheel', wheel);
     };
   }, [active, interactive, available, setZoom]);
-  // what Save rotated copy does, read when it runs: the host's callback is new each time it renders
+  // what Save Rotated Copy does, read when it runs: the host's callback is new each time it renders
   const copy = useRef(context.rotatedCopy);
-  copy.current = context.rotatedCopy;
-  const copies = !!context.rotatedCopy && transformableImage(resource.entry);
+  useLayoutEffect(() => {
+    copy.current = context.rotatedCopy;
+  });
+  // the host offers it for a picture of its own a rotated copy can be made of
+  const copies = !!context.rotatedCopy;
+  const waitsWhy = useId();
   const saveCopy = useCallback(() => {
     if (turn) copy.current?.(turn as QuarterTurn);
   }, [turn]);
+  const actualSize = useCallback(() => {
+    if (!scale) return;
+    setZoom((value) => clampZoom(value / scale));
+    setPan({ x: 0, y: 0 });
+  }, [scale, setZoom, setPan]);
   usePreviewCommands(
     context,
     useMemo(
       () => [
         {
           id: 'image-fit',
-          label: 'Fit image',
+          label: 'Fit Image',
           aliases: ['fi'],
           primary: true,
           available,
@@ -182,28 +210,38 @@ export default function ImagePreview(context: PreviewContext) {
           },
         },
         {
+          id: 'image-actual-size',
+          label: 'Actual Size',
+          aliases: ['100%', 'one to one', 'pixels'],
+          available: available && scale > 0,
+          run: actualSize,
+        },
+        {
           id: 'zoom-in',
-          label: 'Zoom in',
-          available: available && zoom < 20,
-          run: () => setZoom((value) => Math.min(20, value * 1.25)),
+          label: 'Zoom In',
+          available: available && zoom < zoomLimits.most,
+          run: () => setZoom((value) => clampZoom(value * 1.25)),
         },
         {
           id: 'zoom-out',
-          label: 'Zoom out',
-          available: available && zoom > 0.1,
-          run: () => setZoom((value) => Math.max(0.1, value / 1.25)),
+          label: 'Zoom Out',
+          available: available && zoom > zoomLimits.least,
+          run: () => setZoom((value) => clampZoom(value / 1.25)),
         },
         {
           id: 'image-rotate-left',
-          label: 'Rotate left',
+          label: 'Rotate Left',
           aliases: ['turn left', 'counterclockwise', 'rotate view'],
+          // the person's key, shown beside it in ⌘K and menus
+          shortcut: shortcutGlyphs(left) || undefined,
           available,
           run: () => rotate(-1),
         },
         {
           id: 'image-rotate-right',
-          label: 'Rotate right',
+          label: 'Rotate Right',
           aliases: ['turn right', 'clockwise', 'rotate view'],
+          shortcut: shortcutGlyphs(right) || undefined,
           available,
           run: () => rotate(1),
         },
@@ -211,7 +249,7 @@ export default function ImagePreview(context: PreviewContext) {
           ? [
               {
                 id: 'image-rotated-copy',
-                label: 'Save rotated copy',
+                label: 'Save Rotated Copy',
                 aliases: ['rotated copy', 'keep rotation'],
                 available: available && turn !== 0,
                 run: saveCopy,
@@ -219,38 +257,46 @@ export default function ImagePreview(context: PreviewContext) {
             ]
           : []),
       ],
-      [available, zoom, setPan, setZoom, rotate, copies, turn, saveCopy],
+      [
+        available,
+        zoom,
+        scale,
+        actualSize,
+        setPan,
+        setZoom,
+        rotate,
+        left,
+        right,
+        copies,
+        turn,
+        saveCopy,
+      ],
     ),
   );
-  if (byteLimited || thumbnailFailed)
+  if (byteLimited || thumbnailFailed || error)
     return (
-      <Empty
+      <PreviewFailure
+        context={context}
         icon="image"
-        title="Image preview unavailable"
+        title="Can’t show this image"
         detail={
           byteLimited
-            ? 'This image exceeds the preview file limit (64 MB). Open it in another app to view it.'
-            : 'A bounded preview could not be created. Open the image in another app to view it.'
+            ? 'It’s larger than 64 MB, the most a picture preview reads.'
+            : thumbnailFailed
+              ? 'Viewer couldn’t make a smaller copy of this image to show.'
+              : 'It may be damaged, or saved in a format Viewer can’t read.'
         }
       />
     );
-  if (error)
-    return (
-      <Empty
-        icon="image"
-        title="Image could not be decoded"
-        detail="The image may be damaged or use an unsupported encoding."
-      />
-    );
-  if (large && !thumbnail) return <Loading label="Creating image preview…" />;
+  if (large && !thumbnail) return <Loading label="Making a smaller copy to show…" />;
   const transform = `translate(${pan.x}px, ${pan.y}px) rotate(${angle}deg) scale(${zoom * fit})`;
   const transition = easing ? 'transform 150ms ease-out' : undefined;
   return (
     <div className="image-viewer">
       {large && (
         <p className="inline-warning">
-          Large image · showing a bounded preview. Increase the image pixel limit in Settings to
-          load the full image.
+          Showing a smaller copy of this large image. To see it at full size, raise Image pixel
+          limit in Settings → Previews.
         </p>
       )}
       <PreviewToolbar context={context}>
@@ -261,7 +307,24 @@ export default function ImagePreview(context: PreviewContext) {
         )}
         {context.editImage && transformableImage(resource.entry) && (
           <button {...headerItem('image-tools', 5, ['image-tools'])} onClick={context.editImage}>
-            Image tools…
+            Image Tools…
+          </button>
+        )}
+        {/* Always here, so a turn changes no control's place. Until there is a turn to keep it
+            waits, focusable, saying why to a pointer, the keyboard and VoiceOver. The rarest of
+            the picture's actions, it is the first to show as its icon and the first to give way,
+            so it never costs another action its label. In a plane's Essential header it waits in
+            "…" with Optimize…. */}
+        {copies && context.toolbar !== 'essential' && (
+          <button
+            {...headerItem('rotated-copy', 9, ['preview.image-rotated-copy'])}
+            type="button"
+            aria-disabled={turn ? undefined : true}
+            aria-describedby={turn ? undefined : waitsWhy}
+            title={turn ? undefined : copyWaits}
+            onClick={saveCopy}
+          >
+            Save Rotated Copy
           </button>
         )}
         <IconButton
@@ -277,45 +340,41 @@ export default function ImagePreview(context: PreviewContext) {
           {...headerItem('zoom-out', 4, ['preview.zoom-out'])}
           icon="zoom-out"
           label="Zoom out"
-          onClick={() => setZoom((value) => Math.max(0.1, value / 1.25))}
+          onClick={() => setZoom((value) => clampZoom(value / 1.25))}
         />
-        <span className="tabular" {...headerItem('zoom', 6, 'detail')}>
-          {Math.round(zoom * 100)}%
+        <span className="tabular preview-zoom-level" {...headerItem('zoom', 6, 'detail')}>
+          {Math.round((scale || zoom) * 100)}%
         </span>
         <IconButton
           {...headerItem('zoom-in', 4, ['preview.zoom-in'])}
           icon="zoom-in"
           label="Zoom in"
-          onClick={() => setZoom((value) => Math.min(20, value * 1.25))}
+          onClick={() => setZoom((value) => clampZoom(value * 1.25))}
         />
         <IconButton
           {...headerItem('rotate-left', 5, ['preview.image-rotate-left'])}
           icon="rotate-left"
           label="Rotate left"
-          title="Rotate left (⌘L)"
+          title={withShortcut('Rotate left', shortcutGlyphs(left))}
           onClick={() => rotate(-1)}
         />
         <IconButton
           {...headerItem('rotate-right', 5, ['preview.image-rotate-right'])}
           icon="rotate-right"
           label="Rotate right"
-          title="Rotate right (⌘R)"
+          title={withShortcut('Rotate right', shortcutGlyphs(right))}
           onClick={() => rotate(1)}
         />
-        {copies && turn !== 0 && (
-          <button
-            {...headerItem('rotated-copy', 6, ['preview.image-rotated-copy'])}
-            title="Saves a turned copy beside the picture; the picture stays as it is."
-            onClick={saveCopy}
-          >
-            Save rotated copy
-          </button>
-        )}
         <span className="toolbar-spacer" />
         <span className="muted" {...headerItem('size', 9, 'detail')}>
-          {dimensions}
+          {picture.width > 0 ? `${picture.width} × ${picture.height}` : ''}
         </span>
       </PreviewToolbar>
+      {copies && !turn && (
+        <span id={waitsWhy} hidden>
+          {copyWaits}
+        </span>
+      )}
       <div
         className="image-stage"
         ref={stage}
@@ -350,24 +409,26 @@ export default function ImagePreview(context: PreviewContext) {
         }}
       >
         <img
-          ref={image}
           src={large ? thumbnail || undefined : resource.url}
           alt={resource.entry.name}
           draggable={false}
           onError={() => setError(true)}
           onLoad={(event) => {
-            const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
-            setNatural({ width, height });
-            setDimensions(`${width} × ${height}`);
+            // the room and the picture's own size together, so its first frame is fitted
+            if (stage.current) setRoom(roomOf(stage.current));
+            setLoaded({
+              width: event.currentTarget.naturalWidth,
+              height: event.currentTarget.naturalHeight,
+            });
           }}
-          style={{ transform, transition }}
+          style={{ transform, transition, visibility: waiting ? 'hidden' : undefined }}
         />
-        {region && imageSize.width > 0 && (
+        {region && shown.width > 0 && (
           <div
             className="image-evidence-overlay"
             style={{
-              width: imageSize.width,
-              height: imageSize.height,
+              width: shown.width,
+              height: shown.height,
               transform: `translate(-50%, -50%) ${transform}`,
               transition,
             }}

@@ -26,7 +26,7 @@ import {
   useViewer,
 } from '../state/store';
 import { useWorkspace } from '../workspace/context';
-import { ChoiceButton } from '../ui/ChoiceMenu';
+import { ChoiceButton, MenuButton } from '../ui/ChoiceMenu';
 import { Empty, IconButton, NameDialog } from '../ui/primitives';
 import { JournalSession } from './session';
 import { JournalEvents, journalPlaneName } from './JournalEvents';
@@ -64,6 +64,11 @@ export default function JournalPlane({ pane, active }: { pane: Pane; active: boo
   const [timeRange, setTimeRange] = useState(false);
   const filterKey = JSON.stringify(journalFilterSchema.parse(pane.filter));
   const { filter, page, following } = snapshot;
+  const followLabel = following
+    ? 'Following live'
+    : snapshot.unseen
+      ? `${snapshot.unseen > 999 ? '999+' : snapshot.unseen} new · Show Latest`
+      : 'Paused · Resume';
   const scope = spaces.find((space) => space.id === filter.workspaceID);
   const saved = pane.savedFilters ?? [];
 
@@ -225,14 +230,11 @@ export default function JournalPlane({ pane, active }: { pane: Pane; active: boo
           ]}
           onChoose={(value) => change({ ...filter, planeID: value === 'all' ? undefined : value })}
         />
-        <ChoiceButton
-          label="Journal filters"
-          value="choose"
-          choices={[
-            { value: 'choose', label: 'Filters…' },
-            ...presets,
-            ...saved.map((item) => ({ value: item.id, label: item.name })),
-          ]}
+        {/* an action menu: it applies a set of filters and keeps no value of its own */}
+        <MenuButton
+          label="Filters"
+          className="journal-filters"
+          items={[...presets, ...saved.map((item) => ({ value: item.id, label: item.name }))]}
           onChoose={(value) => {
             const item =
               presets.find((item) => item.value === value) ??
@@ -259,11 +261,17 @@ export default function JournalPlane({ pane, active }: { pane: Pane; active: boo
           className="journal-follow"
           onClick={() => (following ? session.pause() : session.follow())}
         >
-          {following
-            ? 'Following live'
-            : snapshot.unseen
-              ? `${snapshot.unseen} new · Show Latest`
-              : 'Paused · Resume'}
+          {/* every label it can show shares one cell, so new events never change its width */}
+          {[
+            followLabel,
+            ...['Following live', 'Paused · Resume', '999+ new · Show Latest'].filter(
+              (label) => label !== followLabel,
+            ),
+          ].map((label, index) => (
+            <span key={label} aria-hidden={index > 0 || undefined}>
+              {label}
+            </span>
+          ))}
         </button>
         <button
           type="button"

@@ -15,6 +15,7 @@ import { focusFiles } from './sessions';
 import { useCommands, useCommandRevision } from '../commands/context';
 import type { CommandRequest } from '../commands/registry';
 import { Icon } from '../ui/Icon';
+import { FileName } from '../ui/FileName';
 import { IconButton } from '../ui/primitives';
 import { ContextMenu } from '../ui/ContextMenu';
 import { setPreviewControlsSlot } from '../previews/controls';
@@ -71,7 +72,7 @@ function LensButton({
       onClick={(event) => onOpen(event, ids)}
     >
       <Icon name="lens" size={15} />
-      {current && <span>{current.lens.name}</span>}
+      {current && <span className="plane-lens-name">{current.lens.name}</span>}
       <Icon name="down" size={10} />
     </button>
   );
@@ -116,9 +117,12 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
     y: number;
     request: CommandRequest;
   } | null>(null);
+  // Pinned, the plane's content floats in the pinned layer and this header stays behind in the
+  // space, hidden: a format's tools then stand in its content, as where a plane has no header.
+  const pinned = !!node.pinned;
   const slot = useCallback(
-    (element: HTMLDivElement | null) => setPreviewControlsSlot(id, element),
-    [id],
+    (element: HTMLDivElement | null) => setPreviewControlsSlot(id, pinned ? null : element),
+    [id, pinned],
   );
   const header = useRef<HTMLDivElement>(null);
   const lead = useHeaderOverflow(header);
@@ -279,7 +283,13 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           }
           size={16}
         />
-        <span className="plane-title">{pane ? paneTitle(pane, collection?.name) : 'Plane'}</span>
+        {(pane?.type === 'folder' || pane?.type === 'preview') &&
+        paneTitle(pane, collection?.name) === baseName(pane.path) ? (
+          // a file's or a folder's own name loses its middle and keeps its extension
+          <FileName className="plane-title" name={baseName(pane.path)} />
+        ) : (
+          <span className="plane-title">{pane ? paneTitle(pane, collection?.name) : 'Plane'}</span>
+        )}
         {unsaved && (
           <span className="plane-unsaved" role="img" aria-label="Unsaved" title="Unsaved" />
         )}

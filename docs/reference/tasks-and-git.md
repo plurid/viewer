@@ -8,11 +8,11 @@ Git review and Git actions.
 A task area is a named context in one workspace: a checkout or folder, plus references to the tools
 used for that work. References outlive the planes that show them.
 
-| Command                   | Does                                                                                                   |
-| ------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **New Task Area…**        | Opens **Tasks** → **New Task…**: a name and a **Task checkout folder** chosen from open folder planes. |
-| **New Task from Branch…** | Creates a worktree and a task together, then opens its tools. See [worktrees](#worktrees).             |
-| **Tasks…**                | Lists **Task Areas**, and **Command History** for [receipts](terminals.md#command-receipts).           |
+| Command                   | Does                                                                                                  |
+| ------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **New Task Area…**        | Opens **Tasks** → **New Task…**: a name and a **Task checkout folder** chosen from open files planes. |
+| **New Task from Branch…** | Creates a worktree and a task together, then opens its tools. See [worktrees](#worktrees).            |
+| **Tasks…**                | Lists **Task Areas**, and **Command History** for [receipts](terminals.md#command-receipts).          |
 
 The task plane shows the editable name, the checkout path, the branch and commit (or **Folder
 task**) and when they were checked. Any folder can anchor a task, Git or not.
@@ -98,7 +98,7 @@ worktree on disk. A replaced checkout cannot take over a saved task.
 **Git Changes** opens a linked review plane for the repository. **Compare with HEAD** opens one
 selected file against its committed version. Both commands appear when **Settings → Browsing → Git →
 Show Git status** is on, which also turns on Git badges in folders. **Git Changes** appears only for
-a folder Viewer already knows is in a repository: the folder plane's own folder, a folder inside it,
+a folder Viewer already knows is in a repository: the files plane's own folder, a folder inside it,
 or a folder whose listing shows `.git`. Right-click one folder to review its repository; the
 **Suggested** row names the branch and its changes, such as `main · 3 changes`. A task's Git changes
 plane waits for **Load Git changes**.

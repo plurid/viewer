@@ -1,3 +1,4 @@
+import { NumberField } from '../ui/NumberField';
 import { useEffect, useRef, useState } from 'react';
 import type {
   OptimizationCandidate,
@@ -68,15 +69,13 @@ export function OptimizationComparison({
             </button>
             <label>
               Page{' '}
-              <input
-                type="number"
+              <NumberField
                 aria-label="Comparison page"
+                className="readout"
                 min={1}
                 max={review.pages ?? 1}
                 value={page}
-                onChange={(event) =>
-                  setPage(Math.max(1, Math.min(review.pages ?? 1, Number(event.target.value) || 1)))
-                }
+                onCommit={setPage}
               />{' '}
               of {review.pages}
             </label>

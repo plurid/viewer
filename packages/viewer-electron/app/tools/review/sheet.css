@@ -149,29 +149,175 @@ main {
 }
 
 .captures {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 12px;
+  overflow-x: auto;
+  margin-bottom: 8px;
+}
+
+.row-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 figure {
   margin: 0;
-  min-width: 0;
+  flex: none;
 }
 
+/* every capture the same height, wide and narrow alike, so a row lines up */
 .shot {
   position: relative;
+  display: inline-block;
   border: 1px solid var(--line);
   border-radius: 6px;
   overflow: hidden;
   cursor: zoom-in;
   background: var(--raised);
+  vertical-align: top;
 }
 
 .shot img {
   display: block;
-  width: 100%;
-  height: auto;
+  height: 180px;
+  width: auto;
+}
+
+.modes {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.problems {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.problem {
+  border-left: 3px solid var(--danger);
+  background: var(--danger-fill);
+  padding: 4px 8px;
+  margin: 4px 0;
+  border-radius: 0 4px 4px 0;
+}
+
+.problem.allowed {
+  border-left-color: var(--line);
+  background: var(--raised);
+  color: var(--muted);
+}
+
+.problem-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.problem-head b {
+  color: var(--danger);
+}
+
+.problem.allowed .problem-head b {
+  color: var(--muted);
+}
+
+.problem details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.elements {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+
+.elements li {
+  margin: 4px 0;
+}
+
+.elements code {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.chip {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.chip.count {
+  color: var(--ink);
+}
+
+.must li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 2px 0;
+}
+
+.must {
+  list-style: none;
+  padding-left: 0;
+}
+
+button.mark {
+  font-size: 11px;
+  padding: 0 6px;
+  min-width: 84px;
+}
+
+button.mark[data-mark='pass'] {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+button.mark[data-mark='fail'] {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.pending {
+  color: var(--muted);
+  background: var(--raised);
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+.summary table {
+  width: auto;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.summary th,
+.summary td {
+  padding: 2px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.summary td.bad a {
+  color: var(--danger);
+  font-weight: 600;
 }
 
 .outline {
@@ -200,40 +346,6 @@ figcaption {
   align-items: center;
   flex-wrap: wrap;
   margin: 6px 0;
-}
-
-.findings {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.findings li {
-  border-left: 3px solid var(--danger);
-  background: var(--danger-fill);
-  padding: 4px 8px;
-  margin: 4px 0;
-  border-radius: 0 4px 4px 0;
-  overflow-wrap: anywhere;
-}
-
-.findings li.allowed {
-  border-left-color: var(--line);
-  background: var(--raised);
-  color: var(--muted);
-}
-
-.findings b {
-  color: var(--danger);
-}
-
-.findings li.allowed b {
-  color: var(--muted);
-}
-
-.findings code {
-  font-size: 11px;
-  color: var(--muted);
 }
 
 .error {
@@ -325,16 +437,20 @@ details.coverage summary {
   color: #fff;
 }
 
+/* the enlarged capture at its true pixels; the view scrolls around it */
+.lightbox .view {
+  flex: 1;
+  overflow: auto;
+}
+
 .lightbox .frame {
   position: relative;
-  margin: auto;
-  max-width: 100%;
+  width: max-content;
+  margin: 0 auto;
 }
 
 .lightbox .frame img {
   display: block;
-  max-width: 100%;
-  max-height: calc(100vh - 80px);
 }
 
 .hidden {

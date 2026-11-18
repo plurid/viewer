@@ -3,6 +3,8 @@
  * its script and the run's results are inside it; the captures are next to it.
  */
 import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { reviewSheetScript } from './sheet-script';
 import type { RunResults } from './types';
 
@@ -16,7 +18,10 @@ const runScript = (fn: () => void) =>
   `(() => {\n  const __name = (target) => target;\n  (${fn.toString()})();\n})();`;
 
 export async function reviewSheet(results: RunResults, hasBaseline: boolean): Promise<string> {
-  const styles = await readFile(new URL('./sheet.css', import.meta.url), 'utf8');
+  const styles = await readFile(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), 'sheet.css'),
+    'utf8',
+  );
   // a script element ends at the first `</`, wherever it is
   const data = JSON.stringify({ ...results, hasBaseline }).replace(/<\//g, '<\\/');
   const captures = results.scenes.reduce((total, scene) => total + scene.captures.length, 0);
@@ -39,11 +44,12 @@ ${styles}
     <header class="top">
       <h1>Viewer review ${escaped(results.run)}</h1>
       <div class="meta">
-        ${results.scenes.length} scenes · ${captures} captures · ${minutes} min ${seconds} s ·
-        ${escaped(results.binary)}
+        ${results.scenes.length} scenes · ${captures} captures · ${minutes} min ${seconds} s with
+        ${results.parallel} at once · ${escaped(results.binary)} · commands from the
+        ${results.commandSource === 'runtime' ? 'app' : 'source'}
       </div>
       ${stopped}
-      <div class="bar" id="totals"></div>
+      <div id="summary" class="summary"></div>
       <div class="bar">
         <button type="button" data-filter="all" aria-pressed="true">All scenes</button>
         <button type="button" data-filter="problems" aria-pressed="false">With problems</button>
@@ -52,6 +58,8 @@ ${styles}
         </button>
         <input id="search" type="search" placeholder="Find a scene" aria-label="Find a scene" />
         <button type="button" id="copy-notes">Copy all notes</button>
+        <span id="picked" class="muted"></span>
+        <button type="button" id="clear-pick" hidden>Show every area</button>
         <a href="#coverage">Coverage</a>
       </div>
     </header>
@@ -66,7 +74,7 @@ ${styles}
         <span class="modes"></span>
         <button type="button" class="close">Close</button>
       </div>
-      <div class="frame"></div>
+      <div class="view"><div class="frame"></div></div>
     </div>
     <script type="application/json" id="review-data">${data}</script>
     <script>

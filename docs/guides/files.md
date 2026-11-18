@@ -1,6 +1,7 @@
 # Browse and organize
 
-Use this guide for everyday file work in a folder plane: picking a view, selecting, copying,
+Use this guide for everyday file work in a
+[files plane](../reference/terms.md#planes-and-the-space): picking a view, selecting, copying,
 renaming, finding files, measuring folders and getting things back from the Trash.
 
 **Find it:** right-click a file or empty space for the file menu · **⌘F** to find files · **⌘K** for
@@ -42,9 +43,11 @@ Trash and archive contents are never learned. See the
 [navigation limits](../reference/capabilities.md#open-and-move-around).
 
 Clearing also forgets found workspace entries and probes, except workspaces linked open or holding
-remembered planes, regardless of their age. Undo restores visits for the background finder.
-Unchanged folder paths and explicit definitions give the same keys when those folders are found
-again. This found metadata is private and excluded from backups.
+remembered planes, regardless of their age, and brings back the workspace cards you hid for found
+workspaces; cards hidden for definitions you wrote stay hidden. Undo restores visits for the
+background finder and hides those cards again. Unchanged folder paths and explicit definitions give
+the same keys when those folders are found again. This found metadata is private and excluded from
+backups.
 
 Clearing also forgets declared commands' **Last run** references. Undo does not restore these
 references. See [Declared commands](../reference/terminals.md#declared-commands).
@@ -96,8 +99,8 @@ into view. Scroll left to reach its ancestors, or use the left and right arrow k
 folder trail.
 
 Drag a column's right divider to resize it. The preview fills the space after the list columns and
-has its own right divider. Viewer remembers its width for that folder. A narrow plane scrolls
-horizontally while the preview keeps at least 320 px.
+has its own right divider. The plane keeps its width in every folder it shows, and two planes keep
+their own. A narrow plane scrolls horizontally while the preview keeps at least 320 px.
 
 Sizes use decimal units, as Finder shows them: 1 KB is 1,000 bytes and 1 MB is 1,000,000 bytes.
 
@@ -165,7 +168,7 @@ its reason:
 | A zip or tar archive                  | **Extract Here**                                                        |
 | A PDF over 10 MB                      | **Optimize…**                                                           |
 | A JPEG or PNG photo over 3 MB         | **Images for web…**                                                     |
-| A HEIC photo                          | **Convert copy to JPEG**                                                |
+| A HEIC photo                          | **Convert Copy to JPEG**                                                |
 | Several photos                        | **Lay Out…**, **Create PDF from Images**                                |
 | Three or more photos                  | **Batch rename…**                                                       |
 | DXF drawings                          | **Nest for Cutting…**                                                   |
@@ -228,8 +231,8 @@ filter and how to save a search.
 **⌘⌫** (**Move to Trash…**) moves the selection to the operating system's Trash. Viewer never
 deletes a file for good. Closing a plane only closes its view; it never deletes files.
 
-To get a file back, choose **Trash** in the sidebar, select the item and choose **Restore**. Choose
-**Restore To…** when Viewer does not know where the file came from, which is the case for files
+To get a file back, choose **Trash** in the sidebar, select the item and choose **Put Back**. Choose
+**Put Back To…** when Viewer does not know where the file came from, which is the case for files
 trashed by other apps. Browsing the Trash needs Full Disk Access for Viewer in **System Settings →
 Privacy & Security**.
 

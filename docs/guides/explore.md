@@ -15,15 +15,17 @@ cards above the files say what and offer one action each:
 
 ![Cards for an extracted archive and five screenshots above a folder's files](../media/insights.png)
 
-| Viewer notices                                 | Action offered             |
-| ---------------------------------------------- | -------------------------- |
-| Installers in Downloads older than a week      | **Move to Trash…**         |
-| Archives already extracted beside their folder | **Move to Trash…**         |
-| PDFs over 10 MB                                | **Optimize…**              |
-| Two or more names ending " copy" or "(1)"      | **Find Duplicates…**       |
-| Five or more screenshots                       | **Put in a folder…**       |
-| Three or more HEIC photos                      | **Convert copies to JPEG** |
-| The folder's workspace remembers its planes    | **Open Workspace**         |
+| Viewer notices                                      | Action offered             |
+| --------------------------------------------------- | -------------------------- |
+| Installers in Downloads older than a week           | **Move to Trash…**         |
+| Archives already extracted beside their folder      | **Move to Trash…**         |
+| PDFs over 10 MB                                     | **Optimize…**              |
+| Two or more names ending " copy" or "(1)"           | **Find Duplicates…**       |
+| Five or more screenshots                            | **Put in a folder…**       |
+| Three or more HEIC photos                           | **Convert copies to JPEG** |
+| The folder's workspace remembers its planes         | **Open Workspace**         |
+| The folder's workspace opens more than a folder     | **Open Workspace**         |
+| The folder's workspace is open in another workspace | **Switch**                 |
 
 The action selects the files it covers first, so you see what it will act on, then opens the same
 command as the file menu. **Move to Trash…** asks first, unless you turned off **Settings → Browsing

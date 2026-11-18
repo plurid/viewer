@@ -54,6 +54,12 @@ interface OfficeTask {
   job: ReturnType<typeof createOfficeJob>;
 }
 
+const quittingMessage = 'Viewer is quitting.';
+/** Every engine not yet destroyed, so Quit can close them all at once. */
+const engines = new Set<OfficeEngine>();
+/** Set once Quit closes the windows: from then on no engine starts. */
+let quitting = false;
+
 /**
  * One engine for one document: a sandboxed window and a nonce-protected loopback server. Closing
  * or cancelling destroys the engine, its RAM files and its workers. No host filesystem mount,
@@ -72,8 +78,10 @@ class OfficeEngine {
   private readonly result: Promise<Buffer>;
   private readonly nonce = randomBytes(24).toString('hex');
   private readonly server: Server;
+  private listening?: Promise<void>;
   private window?: BrowserWindow;
   private origin = '';
+  private destroyed = false;
   failed = false;
   constructor(private directory: string) {
     this.result = new Promise<Buffer>((resolve, reject) => {
@@ -88,12 +96,19 @@ class OfficeEngine {
     this.server = createServer((request, response) => this.serve(request, response));
     this.server.maxConnections = 24;
     this.server.requestTimeout = 45000;
+    engines.add(this);
   }
   async start(): Promise<void> {
-    await new Promise<void>((resolve, reject) => {
+    this.listening = new Promise<void>((resolve, reject) => {
       this.server.once('error', reject);
       this.server.listen(0, '127.0.0.1', resolve);
     });
+    await this.listening;
+    // destroyed while its server was binding: a window made now would outlive the engine
+    if (this.destroyed)
+      throw new Error(
+        quitting ? quittingMessage : 'The Office renderer closed. Retry the layout preview.',
+      );
     const address = this.server.address();
     if (!address || typeof address === 'string')
       throw new Error('Office renderer could not start.');
@@ -148,10 +163,19 @@ class OfficeEngine {
     }
   }
   async destroy(): Promise<void> {
+    this.destroyed = true;
+    engines.delete(this);
     if (this.window && !this.window.isDestroyed()) this.window.destroy();
     activeOrigins.delete(this.origin);
+    // a server still binding would start listening after a close that found it closed
+    await this.listening?.catch(() => {});
     this.server.closeAllConnections();
     await new Promise<void>((resolve) => this.server.close(() => resolve()));
+  }
+  /** Quit: the layout in progress ends and the window closes now. */
+  stop(): Promise<void> {
+    this.fail(new Error(quittingMessage));
+    return this.destroy();
   }
   private serve(request: IncomingMessage, response: ServerResponse): void {
     response.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
@@ -275,6 +299,7 @@ function discardSpare(): void {
 /** Starts an engine for the next Office document, so its layout does not wait for the engine to
  * load. Unused, it closes after a minute. */
 export function warmOffice(directory: string): void {
+  if (quitting) return;
   if (spare?.directory === directory && !spare.engine.failed) {
     clearTimeout(spare.expiry);
     spare.expiry = setTimeout(discardSpare, spareLifetime);
@@ -285,6 +310,19 @@ export function warmOffice(directory: string): void {
   const started = engine.start();
   started.catch(() => {});
   spare = { directory, engine, started, expiry: setTimeout(discardSpare, spareLifetime) };
+}
+
+/**
+ * Quit: every engine closes now and none starts after. Electron closes the windows open when it
+ * begins closing them and then waits until no window is left, so a hidden engine window made
+ * later, such as the one a layout ending at Quit starts for the next document, would keep Viewer
+ * from quitting for that engine's minute.
+ */
+export async function stopOfficeEngines(): Promise<void> {
+  quitting = true;
+  if (spare) clearTimeout(spare.expiry);
+  spare = undefined;
+  await Promise.allSettled([...engines].map((engine) => engine.stop()));
 }
 
 export async function renderOffice(
@@ -298,6 +336,7 @@ export async function renderOffice(
     throw new Error(
       'Choose a Word, Excel or PowerPoint file smaller than 64 MB for layout preview.',
     );
+  if (quitting) throw new Error(quittingMessage);
   const job = createOfficeJob(extension, options);
   const signal = AbortSignal.any([outer, AbortSignal.timeout(45000)]);
   signal.throwIfAborted();

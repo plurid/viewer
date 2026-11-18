@@ -73,16 +73,20 @@ export const Transcript = memo(function Transcript({
       }}
     >
       {selection && onQuote && (
-        <button
-          className="chat-quote-action"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => {
-            onQuote(selection);
-            setSelection(undefined);
-          }}
-        >
-          Ask About Selection
-        </button>
+        // held over the text at the top of the visible transcript, taking no room, so making a
+        // selection never moves the text being selected
+        <div className="chat-quote-anchor">
+          <button
+            className="chat-quote-action"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              onQuote(selection);
+              setSelection(undefined);
+            }}
+          >
+            Ask About Selection
+          </button>
+        </div>
       )}
       {!messages.length && !running && (
         <div className="chat-empty">

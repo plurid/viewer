@@ -63,6 +63,7 @@ describe('the workspace offer', () => {
       title: '“acme-site” remembers 5 planes',
       reason: 'Remembers 5 planes',
       action: 'Open Workspace',
+      actionName: 'Open Workspace “acme-site”',
     });
     expect(workspaceInsight(offer([remembered(found(), 1)])!).title).toBe(
       '“acme-site” remembers 1 plane',
@@ -93,10 +94,14 @@ describe('the workspace offer', () => {
       ],
     };
     const tiled = { ...several, tiling: { layout: 'even-horizontal' as const } };
+    const tiledOne = { ...base, tiling: { layout: 'even-horizontal' as const } };
+    const looked: WorkspaceDefinition = { ...base, look: { spaceColor: '#203040' } };
     for (const [definition, title] of [
       [terminal, '“acme” opens a terminal'],
       [several, '“acme” opens 3 planes'],
       [tiled, '“acme” opens 3 tiled planes'],
+      [tiledOne, '“acme” opens a tiled plane'],
+      [looked, '“acme” has its own look'],
     ] as const) {
       expect(richDefinition(definition)).toBe(true);
       const result = offer([definition]);
@@ -104,6 +109,7 @@ describe('the workspace offer', () => {
       expect(workspaceInsight(result!).title).toBe(title);
     }
     expect(workspaceInsight(offer([several])!).reason).toBe('Opens 3 planes');
+    expect(workspaceInsight(offer([looked])!).reason).toBe('Has its own look');
   });
 
   it('takes the deepest root, and explicit definitions over found ones for the same root', () => {
@@ -112,6 +118,35 @@ describe('the workspace offer', () => {
     expect(offer([outer, inner])?.definition.key).toBe(inner.key);
     const explicit = remembered(sampleDefinition('sample/acme', { root, name: 'acme' }), 2);
     expect(offer([inner, explicit])?.definition.key).toBe('sample/acme');
+  });
+
+  it('passes over a hidden or missing inner definition to the root around it', () => {
+    const outer = remembered(found(home + '/code', 'code'));
+    for (const inner of [
+      { ...remembered(found(), 3), hidden: true },
+      { ...remembered(found(), 3), rootState: 'missing' as const },
+    ])
+      expect(offer([outer, inner])?.definition.key).toBe(outer.key);
+  });
+
+  it('counts planes in inner roots as inside the outer root', () => {
+    const outer = remembered(found(home + '/code', 'code'));
+    const inner = found();
+    // two planes in acme-site, one in another project of code: all inside code
+    const current = sampleWorkspace('current', {
+      panes: [folder('a', root), folder('b', root + '/src'), folder('c', home + '/code/api')],
+    });
+    expect(offer([outer, inner], current, [current], home + '/code/api')).toBeUndefined();
+    // one plane outside code leaves two of three inside: still most of it
+    const mixed = sampleWorkspace('current', {
+      panes: [folder('a', root), folder('c', home + '/code/api'), folder('d', home + '/Desktop')],
+    });
+    expect(offer([outer, inner], mixed, [mixed], home + '/code/api')).toBeUndefined();
+    // one of three is not
+    const few = sampleWorkspace('current', {
+      panes: [folder('a', root), folder('d', home + '/Desktop'), folder('e', home + '/Music')],
+    });
+    expect(offer([outer, inner], few, [few], home + '/code/api')?.definition.key).toBe('code');
   });
 
   it('skips the workspace linked to the definition or mostly in its root', () => {
@@ -125,6 +160,15 @@ describe('the workspace offer', () => {
       panes: [folder('a', root), folder('b', root + '/src'), folder('c', home + '/Downloads')],
     });
     expect(offer([definition], mostly)).toBeUndefined();
+    // exactly 60%, three planes of five, is most of it; two of five is not
+    const five = (inside: number) =>
+      sampleWorkspace('current', {
+        panes: Array.from({ length: 5 }, (_, index) =>
+          folder(String(index), index < inside ? root + '/' + index : home + '/Music/' + index),
+        ),
+      });
+    expect(offer([definition], five(3))).toBeUndefined();
+    expect(offer([definition], five(2))?.reason).toBe('remembered');
     // one of two is not
     const half = sampleWorkspace('current', {
       panes: [folder('a', root + '/src'), folder('c', home + '/Downloads')],
@@ -148,7 +192,12 @@ describe('the workspace offer', () => {
       title: '“acme-site” is open in “Workspace 3”',
       reason: 'Has “acme-site” open',
       action: 'Switch',
+      actionName: 'Switch to “Workspace 3”',
     });
+    // the open workspace wins over remembered planes: opening would only switch to it
+    expect(offer([remembered(definition)], current, [current, open])?.reason).toBe(
+      'open-elsewhere',
+    );
     const same = { ...open, name: 'acme-site' };
     expect(workspaceInsight(offer([definition], current, [current, same])!)).toMatchObject({
       title: '“acme-site” is already open',

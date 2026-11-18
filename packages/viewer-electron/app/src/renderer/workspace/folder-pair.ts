@@ -46,7 +46,7 @@ export function folderPairGeometry(
   axis: 'x' | 'y',
 ) {
   if (area.width <= gap || area.height <= gap)
-    throw new Error('The workspace is too small for two folder planes. Enlarge the window.');
+    throw new Error('The workspace is too small for two files planes. Enlarge the window.');
   const width = axis === 'x' ? (area.width - gap) / 2 : area.width;
   const height = axis === 'y' ? (area.height - gap) / 2 : area.height;
   const first = { ...origin, rotateX: 0, rotateY: 0 };

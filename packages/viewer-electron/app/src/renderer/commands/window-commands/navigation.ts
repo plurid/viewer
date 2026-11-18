@@ -88,11 +88,12 @@ export function navigationCommands({
     },
     {
       id: 'new-root-folder',
-      label: 'New Folder Plane',
+      label: 'New Files Plane',
       group: 'Plane',
       icon: 'plus',
-      aliases: ['np', 'new plane', 'add plane', 'root'],
-      shortcut: '⇧⌘N',
+      // its key is the keymap's (⌘N), as every command's in it
+      // "new folder plane", its earlier name, whole: "folder" alone still finds New Folder… first
+      aliases: ['np', 'new plane', 'add plane', 'files plane', 'new folder plane', 'root'],
       primary: true,
       when: (context) =>
         ['window', 'workspace', 'folder', 'files', 'preview'].includes(context.scope) &&

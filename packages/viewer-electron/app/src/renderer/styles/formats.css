@@ -62,7 +62,6 @@
   flex-shrink: 0;
   padding: 10px var(--gap-content);
   overflow-y: auto;
-  scrollbar-gutter: stable;
   border-left: 1px solid var(--line);
   background: var(--surface);
   font-size: var(--text-label);
@@ -253,7 +252,9 @@
   font-size: var(--text-compact);
 }
 .pdf-outline button span {
+  min-width: 0;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
 }
 .pdf-outline button.selected {
@@ -296,7 +297,17 @@
   background: var(--page);
 }
 .page-number {
-  width: 54px;
+  /* four digits and the field's padding: page 1,000 shows whole */
+  width: calc(4ch + 20px);
+  text-align: center;
+}
+.pdf-page-count {
+  --readout-width: 6ch;
+  text-align: start;
+}
+/* "Fit Page" and "25%" hold one width, so the buttons after it stay put */
+.choice-button.pdf-zoom-choice {
+  min-width: 9ch;
 }
 .pdf-search-results {
   padding: var(--gap-small) var(--gap-content);
@@ -355,7 +366,9 @@
   min-width: 100%;
 }
 .line-number {
-  width: 58px;
+  /* the last line's digits, in the code's own font, so large text and line 10,000 still fit */
+  width: calc((var(--gutter-digits, 3) + 2) * 1ch + var(--gap-panel));
+  box-sizing: border-box;
   flex-shrink: 0;
   text-align: right;
   padding-right: var(--gap-panel);
@@ -686,15 +699,6 @@ button.markdown-link {
   width: auto;
   flex: none;
 }
-@container (max-width: 640px) {
-  .tree-expand-inline {
-    display: none;
-  }
-}
-.office-row-count {
-  white-space: nowrap;
-  font-size: var(--text-compact);
-}
 .office-viewer .preview-toolbar input[type='search'] {
   min-width: 80px;
   flex: 1 1 140px;
@@ -703,11 +707,6 @@ button.markdown-link {
 .office-viewer .preview-toolbar > .choice-button {
   width: auto;
   flex: none;
-}
-@container (max-width: 600px) {
-  .office-row-count {
-    display: none;
-  }
 }
 .workbook-cell-detail strong {
   flex: none;
@@ -818,12 +817,32 @@ button.markdown-link {
   border-bottom: 1px solid color-mix(in srgb, var(--line) 25%, transparent);
   font-size: var(--text-compact);
 }
-.archive-row > span:first-of-type {
+.archive-row > .archive-entry-name {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap-inline);
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
+}
+.archive-entry-name > .file-name-label {
+  flex: 0 1 auto;
+}
+.archive-entry-name > small {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.archive-viewer {
+  position: relative;
+}
+.archive-opening {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 .archive-row > .muted {
   font-size: var(--text-label);
@@ -842,7 +861,6 @@ button.markdown-link {
   gap: var(--gap-panel);
   padding: var(--gap-panel);
   overflow-y: auto;
-  scrollbar-gutter: stable;
 }
 .font-sample-field {
   flex: none;
@@ -951,7 +969,7 @@ button.markdown-link {
   font-size: var(--text-label);
   line-height: 14px;
 }
-/* one line, as every preview's toolbar: below 640 px Expand and Collapse wait in Tree actions */
+/* one line, as every preview's toolbar: what does not fit gives way into its "…" */
 .structured-viewer > .preview-toolbar button {
   white-space: nowrap;
   flex-shrink: 0;
@@ -986,4 +1004,29 @@ button.markdown-link {
   min-width: 100px;
   flex: 1;
   max-width: 300px;
+}
+
+/* Office Sheet's row range, "Rows 1,048,401–1,048,576" at its widest */
+.worksheet-rows {
+  --readout-width: 24ch;
+}
+.workbook-cell-value {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  min-width: 0;
+  flex: 1 1 240px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.workbook-copy-status:empty {
+  display: none;
+}
+/* the bars around a document are chrome: a drag across them selects nothing (base.css) */
+.worksheet-navigation,
+.worksheet-tab-list,
+.pdf-search-results,
+.pdf-thumbnails {
+  user-select: none;
 }

@@ -3,7 +3,7 @@ import type { Pane } from '../src/domain/contracts';
 import { projectBindings } from '../src/renderer/workspace/projects';
 
 describe('a new project binds the folders its planes show outside it', () => {
-  it('binds an outside folder plane and a preview’s folder, never a scratch plane’s', () => {
+  it('binds an outside files plane and a preview’s folder, never a scratch plane’s', () => {
     const panes: Pane[] = [
       { id: 'inside', type: 'preview', path: '/work/project/notes.md' },
       { id: 'photos', type: 'preview', path: '/Users/someone/Pictures/one.png' },

@@ -345,6 +345,15 @@ export const schemas = {
       z.object({ kind: z.literal('project-manager'), enabled: z.boolean() }).strict(),
       z.object({ kind: z.literal('not-a-workspace'), key: definitionKeySchema }).strict(),
       z.object({ kind: z.literal('show-found'), root: localPath.optional() }).strict(),
+      z.object({ kind: z.literal('hide-found-again') }).strict(),
+      z
+        .object({
+          kind: z.literal('dismiss-offers'),
+          // the private file's own limit for a root
+          roots: z.array(localPath.max(4096)).min(1).max(200),
+        })
+        .strict(),
+      z.object({ kind: z.enum(['show-offers', 'restore-offers']) }).strict(),
     ]),
   ]),
   newWindow: z.tuple([]),

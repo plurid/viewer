@@ -5,8 +5,13 @@
  */
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { chooseFilePreview, filePreviewModules } from '../../src/domain/previews/formats';
+import type { BuiltInPreviewKind } from '../../src/domain/previews/formats';
+import type { FileEntry } from '../../src/domain/contracts';
 import { fieldNotesPDF } from '../docs/sample';
+import { localSamples } from '../playground/catalog';
 import { modelSamples } from '../playground/samples/models';
+import { encodePNG } from './png';
 
 /** Relative to the sample home. */
 export const sampleFolders = {
@@ -16,7 +21,65 @@ export const sampleFolders = {
   projects: 'Projects',
   /** Files named as copies, so the folder shows its insight card. */
   copies: 'Copies',
+  /** One file for each preview kind. */
+  kinds: 'Kinds',
+  /** A model for each axis convention, and one that cannot be read. */
+  models: 'Models',
 } as const;
+
+/** The wide picture the preview checklists name: 2400 × 900 pixels. */
+export const widePicture = path.join('Pictures', 'Wide picture 2400x900.png');
+
+/** A picture whose name has a 200-character stem, for the output form checklist. */
+export const longStemPicture = path.join(
+  'Pictures',
+  (
+    'Wedding party at the lake photographed from the north shore at sunset with the whole family ' +
+    'and friends gathered by the boathouse before the evening meal and the fireworks over water'
+  )
+    .padEnd(200, ' x')
+    .slice(0, 200) + '.jpg',
+);
+
+/** A system font, copied as the font preview's sample: the playground makes none. */
+const systemFont = '/System/Library/Fonts/Supplemental/Arial.ttf';
+
+/** The sample file of each preview kind, by name inside the Kinds folder. */
+export type KindSamples = Partial<Record<BuiltInPreviewKind, string>>;
+
+/** Which preview kind the app picks for a file name, as formats.ts decides it. */
+function previewKind(name: string): BuiltInPreviewKind {
+  const extension = name.includes('.') ? name.split('.').at(-1)! : '';
+  const entry: FileEntry = {
+    name,
+    path: '/' + name,
+    parent: '/',
+    extension,
+    mime: '',
+    kind: 'file',
+    directory: false,
+    size: 1,
+    identity: '',
+    modified: 0,
+    created: 0,
+    hidden: false,
+  };
+  return chooseFilePreview(entry, filePreviewModules).id;
+}
+
+/** A picture of the given size: a soft diagonal gradient, so scaling shows. */
+function gradient(width: number, height: number): Buffer {
+  const pixels = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const index = (y * width + x) * 4;
+      pixels[index] = 60 + Math.round((150 * x) / width);
+      pixels[index + 1] = 90 + Math.round((120 * y) / height);
+      pixels[index + 2] = 160;
+      pixels[index + 3] = 255;
+    }
+  return encodePNG({ width, height, pixels });
+}
 
 /** File names inside the sample folders. */
 export const sampleFiles = {
@@ -147,4 +210,45 @@ export async function createSamples(home: string, appRoot: string): Promise<void
   // the folders macOS gives every home, so the sidebar's Locations lead somewhere
   for (const folder of ['Desktop', 'Documents', 'Downloads', 'Pictures', 'Movies', 'Music'])
     await mkdir(path.join(home, folder));
+  await writeFile(path.join(home, widePicture), gradient(2400, 900), { flag: 'wx' });
+  await writeFile(path.join(home, longStemPicture), picture, { flag: 'wx' });
+  const models = path.join(home, sampleFolders.models);
+  await mkdir(models);
+  for (const sample of await modelSamples())
+    if (/Reference block\.(stl|gltf|obj|mtl)$|reference-block\.bin$/.test(sample.path))
+      await writeFile(path.join(models, path.basename(sample.path)), sample.bytes, { flag: 'wx' });
+  await writeFile(path.join(models, 'Broken model.stl'), 'solid broken\nfacet normal x\n', {
+    flag: 'wx',
+  });
+  // the review run's own Trash: a QA build lists only this one (src/desktop/operations/trash.ts)
+  const trash = path.join(home, '.Trash');
+  await mkdir(path.join(trash, 'Project archive'), { recursive: true });
+  await writeFile(path.join(trash, 'Project archive', 'Brief.txt'), sources.text, { flag: 'wx' });
+  await writeFile(path.join(trash, sampleFiles.text), sources.text, { flag: 'wx' });
+  await writeFile(path.join(trash, longName('txt')), sources.text, { flag: 'wx' });
+}
+
+/** The run's file of each preview kind, filled in by createKindSamples before any scene runs. */
+export const kindSamples: KindSamples = {};
+
+/** One sample file for each preview kind, from the playground, in `Kinds`. */
+export async function createKindSamples(home: string): Promise<KindSamples> {
+  const folder = path.join(home, sampleFolders.kinds);
+  await mkdir(folder, { recursive: true });
+  const chosen = kindSamples;
+  // the playground's first file of a kind is its plainest; nested and malformed ones are skipped
+  for (const sample of await localSamples()) {
+    if (!sample.path.startsWith('previews/') || sample.path.split('/').length !== 3) continue;
+    const name = path.basename(sample.path);
+    const kind = previewKind(name);
+    if (chosen[kind]) continue;
+    await writeFile(path.join(folder, name), sample.bytes, { flag: 'wx' });
+    chosen[kind] = name;
+  }
+  const font = await readFile(systemFont).catch(() => undefined);
+  if (font && !chosen.font) {
+    await writeFile(path.join(folder, 'Arial.ttf'), font, { flag: 'wx' });
+    chosen.font = 'Arial.ttf';
+  }
+  return chosen;
 }

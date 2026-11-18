@@ -5,14 +5,59 @@
   min-height: 0;
   container-type: inline-size;
 }
+/* One line, as every toolbar: the draft's state gives way first, and as the last resort the row
+   scrolls rather than wrapping to a second one. */
 .media-editor-toolbar {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.media-editor-toolbar > .muted {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .media-editor-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-inline);
+  min-height: calc(1lh + 2 * var(--gap-inline));
   margin: 0;
   padding: var(--gap-inline) var(--gap-content);
   color: var(--muted);
   border-bottom: 1px solid var(--line);
+}
+.media-editor-notice[data-empty] {
+  border-bottom-color: transparent;
+}
+/* Loading shows over the picture, never in the transport's row, which keeps its place. */
+.media-editor-player {
+  position: relative;
+}
+.media-player-status {
+  position: absolute;
+  inset: auto var(--gap-content) var(--gap-content);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--gap-inline);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-compact);
+}
+.media-editor-player > svg {
+  color: var(--subtle);
+}
+/* Two labels in one cell: the button keeps the wider one's width as it swaps. */
+.swap-label {
+  display: inline-grid;
+}
+.swap-label > span {
+  grid-area: 1 / 1;
+}
+.media-time {
+  --readout-width: 13ch;
 }
 .media-editor-body {
   flex: 1;
@@ -56,7 +101,6 @@
 .media-playback-controls {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: var(--gap-inline);
   padding: var(--gap-small) var(--gap-content);
   font-size: var(--text-label);
@@ -220,4 +264,10 @@
     border-top: 1px solid var(--line);
     overflow: visible;
   }
+}
+/* the transport and range rows are chrome; names and values in fields stay selectable */
+.media-playback-controls,
+.media-range-controls,
+.media-source-strip {
+  user-select: none;
 }

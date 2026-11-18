@@ -18,6 +18,7 @@ import type { WorkspaceController } from '../../workspace/context';
 import { getState, receiveSettings, useViewer } from '../../state/store';
 import { Dialog, IconButton, PathField } from '../../ui/primitives';
 import { PathLabel } from '../../ui/PathLabel';
+import { useListKeys } from '../../ui/useListKeys';
 import './worktrees.css';
 import { CreateWorktree } from './CreateWorktree';
 import { plural } from '../../../domain/plural';
@@ -239,6 +240,18 @@ export function WorktreesDialog({
     }
   };
 
+  // Finder keys: ↑ ↓ Home End and letters choose, Return or ⌘↓ opens, as a double-click does
+  const listKeys = useListKeys({
+    labels: visible.map(worktreeLabel),
+    active: visible.findIndex((tree) => tree.id === selected?.id),
+    select: (index) => {
+      setSelectedID(visible[index]!.id);
+      document
+        .getElementById(`worktree-${visible[index]!.id}`)
+        ?.scrollIntoView({ block: 'nearest' });
+    },
+    open: (index) => void open(false, visible[index]!.id),
+  });
   return (
     <Dialog
       title={taskMode ? 'New Task from Branch' : creating ? 'Create Worktree' : 'Open Worktree'}
@@ -341,28 +354,7 @@ export function WorktreesDialog({
               aria-busy={loading}
               tabIndex={0}
               aria-activedescendant={selected ? `worktree-${selected.id}` : undefined}
-              onKeyDown={(event) => {
-                if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || !visible.length)
-                  return;
-                event.preventDefault();
-                const current = visible.findIndex((tree) => tree.id === selected?.id);
-                const index =
-                  event.key === 'Home'
-                    ? 0
-                    : event.key === 'End'
-                      ? visible.length - 1
-                      : Math.max(
-                          0,
-                          Math.min(
-                            visible.length - 1,
-                            current + (event.key === 'ArrowDown' ? 1 : -1),
-                          ),
-                        );
-                setSelectedID(visible[index]!.id);
-                document
-                  .getElementById(`worktree-${visible[index]!.id}`)
-                  ?.scrollIntoView({ block: 'nearest' });
-              }}
+              onKeyDown={listKeys}
             >
               {visible.map((tree) => (
                 <button
@@ -377,6 +369,7 @@ export function WorktreesDialog({
                     setSelectedID(tree.id);
                     list.current?.focus();
                   }}
+                  onDoubleClick={() => void open(false, tree.id)}
                 >
                   <span className="worktree-branch">{worktreeLabel(tree)}</span>
                   <PathLabel className="worktree-location" path={tree.path} />
@@ -450,7 +443,7 @@ export function WorktreesDialog({
                       });
                   }}
                 />
-                Show Git status in folder planes
+                Show Git status in files planes
               </label>
               <p>
                 Views of one checkout share files and staging. Each view keeps its own navigation.

@@ -235,7 +235,8 @@ try {
   const rowsBefore = await evaluate(pageCall(requiredText, '.journal-rows'));
   await evaluate(pageCall(serverAction, server.id, 'restart'));
   await until(
-    () => evaluate(textOf('.journal-follow')),
+    // the shown label: the others hold the button's width, hidden
+    () => evaluate(textOf('.journal-follow > span:not([aria-hidden])')),
     (text) => text.includes('new'),
     'paused unread indicator',
   );

@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 /**
- * QUICK PREVIEW FOLLOWS THE SELECTION, as Finder's Quick Look does: Up and Down, and in Grid and
- * Gallery all four arrows, move the plane's selection as they would without it, and it shows what
- * is selected now, a folder by name. With several selected, Left and Right step through them. A
- * focused preview that scrolls with the arrows keeps them.
+ * QUICK PREVIEW FOLLOWS THE SELECTION, as Finder's Quick Look does: the arrows move the plane's
+ * selection as its own view would, from the file shown, and it shows what is selected now, a
+ * folder by name. With several selected, Left and Right step through them. A focused preview that
+ * scrolls with the arrows keeps them; with the plane closed, they step through what it shows.
  */
 import { useMemo } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -60,12 +60,14 @@ const item = (name: string, directory = false): FileEntry => ({
   identity: name,
 });
 const entries = [item('a.png'), item('b.png'), item('Photos', true), item('c.png')];
+/** What the plane's list shows now: a search can hide some. */
+let shownEntries = entries;
 const workspace = {
   openPath: vi.fn(async () => {}),
   focusPane: vi.fn(),
 } as unknown as WorkspaceController;
 
-/** The plane Quick Preview came from: its arrows move its selection, as a folder plane's do. */
+/** The plane Quick Preview came from: its arrows move its selection, as a files plane's do. */
 function Plane({ id }: { id: string }) {
   const session = browseSession(id, '/fixtures');
   const selecting = useMemo(
@@ -80,7 +82,7 @@ function Plane({ id }: { id: string }) {
       settings: getState().settings.settings,
       command: vi.fn(),
       clear: () => selecting.clear(),
-      move: (key, range) => selecting.move(entries, key, range),
+      move: (key, range) => selecting.move(shownEntries, key, range),
     }),
   );
   return null;
@@ -125,10 +127,13 @@ function open(...names: string[]) {
   );
   return view;
 }
-const press = (key: string, target: Element = document.body, shiftKey = false) =>
+const press = (key: string, target: Element = document.body, more: KeyboardEventInit = {}) => {
+  const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...more });
   act(() => {
-    fireEvent.keyDown(target, { key, shiftKey });
+    target.dispatchEvent(event);
   });
+  return event;
+};
 /** What Quick Preview shows now. */
 const shown = () => {
   const quick = getState().quickPreview!;
@@ -153,13 +158,13 @@ it('moves the plane’s selection with Up and Down and shows what it selects', (
   expect(selected()).toEqual(['b.png']);
 });
 
-it('names a folder the selection reaches, with its own Open linked plane', () => {
+it('names a folder the selection reaches, with its own Open Linked Plane', () => {
   open('b.png');
   press('ArrowDown');
   expect(selected()).toEqual(['Photos']);
   expect(screen.queryByTestId('preview')).toBeNull();
   expect(screen.getByRole('group', { name: 'Folder' })).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Open linked plane' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open Linked Plane' }));
   expect(workspace.openPath).toHaveBeenCalledWith(
     '/fixtures/Photos',
     expect.objectContaining({ paneID, linked: true }),
@@ -168,29 +173,84 @@ it('names a folder the selection reaches, with its own Open linked plane', () =>
   expect(screen.getByTestId('preview').textContent).toContain('/fixtures/c.png');
 });
 
-it('steps through several selected with Left and Right; Up and Down move to one', () => {
+it('steps through several selected with Left and Right, in any view; Down moves on from the one shown', () => {
+  act(() => updateFolderPresentation('/fixtures', { mode: 'grid' }));
   open('a.png', 'b.png', 'c.png');
   expect(shown()).toContain('a.png');
   press('ArrowRight');
   expect(shown()).toContain('b.png');
+  // the selection stays as it was
+  expect(selected()).toEqual(['a.png', 'b.png', 'c.png']);
   press('ArrowLeft');
   press('ArrowLeft');
   expect(shown()).toContain('c.png');
-  expect(selected()).toEqual(['a.png', 'b.png', 'c.png']);
+  press('ArrowRight');
+  press('ArrowRight');
+  expect(shown()).toContain('b.png');
+  // from b, the file shown, not from the plane's cursor on c
   press('ArrowDown');
-  expect(selected()).toHaveLength(1);
+  expect(selected()).toEqual(['Photos']);
 });
 
-it('moves sideways in Grid and Gallery, where Left and Right move the selection', () => {
-  act(() => updateFolderPresentation('/fixtures', { mode: 'grid' }));
+it('moves the plane’s selection with every arrow when one is selected, as its view does', () => {
+  for (const mode of ['map', 'list', 'grid'] as const) {
+    act(() => updateFolderPresentation('/fixtures', { mode }));
+    open('a.png');
+    expect(press('ArrowRight').defaultPrevented).toBe(true);
+    expect(selected()).toEqual(['b.png']);
+    press('ArrowLeft');
+    expect(selected()).toEqual(['a.png']);
+    cleanup();
+  }
+});
+
+it('extends the selection with Shift, showing the item it reached', () => {
   open('a.png');
-  press('ArrowRight');
-  expect(selected()).toEqual(['b.png']);
-  expect(shown()).toContain('b.png');
-  act(() => updateFolderPresentation('/fixtures', { mode: 'list' }));
-  press('ArrowRight');
-  // in List they move nothing with one selected
-  expect(selected()).toEqual(['b.png']);
+  press('ArrowDown', document.body, { shiftKey: true });
+  expect(selected()).toEqual(['a.png', 'b.png']);
+  expect(shown()).toBe('/fixtures/b.png');
+});
+
+it('leaves an arrow with ⌘, ⌥ or ⌃ to the window', () => {
+  open('a.png');
+  for (const modifier of ['metaKey', 'altKey', 'ctrlKey'] as const)
+    expect(press('ArrowDown', document.body, { [modifier]: true }).defaultPrevented).toBe(false);
+  expect(selected()).toEqual(['a.png']);
+});
+
+it('steps through what it shows once the plane closed, and leaves a key it cannot use', () => {
+  const view = open('a.png', 'b.png');
+  // the plane goes; Quick Preview stays
+  view.rerender(
+    <WorkspaceContext.Provider value={workspace}>
+      <Shown />
+    </WorkspaceContext.Provider>,
+  );
+  press('ArrowDown');
+  expect(shown()).toBe('/fixtures/b.png');
+  press('ArrowUp');
+  expect(shown()).toBe('/fixtures/a.png');
+  cleanup();
+  const single = open('c.png');
+  single.rerender(
+    <WorkspaceContext.Provider value={workspace}>
+      <Shown />
+    </WorkspaceContext.Provider>,
+  );
+  expect(press('ArrowDown').defaultPrevented).toBe(false);
+  expect(shown()).toBe('/fixtures/c.png');
+});
+
+it('goes on from where the file shown stood once a filter hid it', () => {
+  open('b.png');
+  // a search typed in the plane, by name, hides b.png and the folder
+  shownEntries = entries.filter((entry) => ['a.png', 'c.png'].includes(entry.name));
+  press('ArrowDown');
+  expect(selected()).toEqual(['c.png']);
+  // from c, Up goes back past where b stood
+  press('ArrowUp');
+  expect(selected()).toEqual(['a.png']);
+  shownEntries = entries;
 });
 
 it('leaves the arrows to a focused preview that scrolls with them', () => {
@@ -203,6 +263,8 @@ it('leaves the arrows to a focused preview that scrolls with them', () => {
   expect(selected()).toEqual(['a.png']);
   expect(shown()).toContain('a.png');
   // Space still closes it, once
+  expect(press(' ', document.body, { repeat: true }).defaultPrevented).toBe(false);
+  expect(getState().quickPreview).not.toBeNull();
   press(' ');
   expect(getState().quickPreview).toBeNull();
 });

@@ -284,7 +284,7 @@ describe('the tips above a folder', () => {
     ]);
   });
 
-  it('shows once, in the workspace’s first folder plane', () => {
+  it('shows once, in the workspace’s first files plane', () => {
     profile({ firstRunHint: { used: [] } });
     act(() => {
       addPane(home + '/Documents', 'folder', true, { remember: false });
@@ -314,7 +314,7 @@ describe('the tips above a folder', () => {
     expect(getState().saved.ui.firstRunHint).toEqual({ used: ['quick-preview', 'palette'] });
     expect(tips()).toBeNull();
     act(() => addPane(home + '/Documents', 'folder', true, { remember: false }));
-    expect(tips()?.textContent).toContain('brings all planes into view');
+    expect(tips()?.textContent).toContain('frames all planes');
     act(() => noteFirstRunStep('frame-all'));
     expect(getState().saved.ui.firstRunHint).toBe('retired');
     expect(tips()).toBeNull();

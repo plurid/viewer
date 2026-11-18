@@ -54,7 +54,7 @@ read at the same time.
 
 ## 4. Keep a file open beside its folder
 
-1. In Quick Preview, choose **Open linked plane**. The file opens in its own plane, linked to the
+1. In Quick Preview, choose **Open Linked Plane**. The file opens in its own plane, linked to the
    folder it came from: a [linked plane](../reference/terms.md#planes-and-the-space).
 2. Press **⌘0** to bring every plane into view.
 3. Press **⌘Return**, or choose **Dock plane** in a plane's header, to give one plane the whole

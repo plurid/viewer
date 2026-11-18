@@ -5,7 +5,7 @@
 import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { CURRENT_STATE_VERSION } from '../../src/domain/contracts';
-import { ownedApp } from '../../tests/owned-app';
+import { ownedApp, until } from '../../tests/owned-app';
 import { pageCall } from '../../tests/native/runtime/page-function';
 import type { ProfileTemplate } from './profile';
 
@@ -43,19 +43,32 @@ export async function quit(app: ReviewApp, connection?: ReviewConnection): Promi
   }
 }
 
+/** What the first launch learns about the binary. */
+export interface BinaryFacts {
+  profile: ProfileTemplate;
+  /** Whether it has the QA runtime's hooks: Trash and places in the sample home, the markers
+   * and the command list. */
+  qaHooks: boolean;
+}
+
+interface ReviewHookWindow {
+  viewerReviewCommands?: unknown;
+}
+
 /** Starts the app once on an empty profile and keeps the settings it reports, and the saved-state
  * version it writes, as the template for every scene's profile (profile.ts says why). */
 export async function readTemplate(
   root: string,
   home: string,
   binary: string,
-): Promise<ProfileTemplate> {
+): Promise<BinaryFacts> {
   const profile = path.join(root, 'Profiles', 'template');
   await mkdir(profile, { recursive: true });
   const app = await launchHidden(binary, profile, home);
   let connection: ReviewConnection | undefined;
   let snapshot: Pick<ProfileTemplate, 'settings' | 'ui'> | undefined;
   let failure: Error | undefined;
+  let qaHooks = false;
   try {
     connection = await app.connect();
     snapshot = await connection.evaluate(
@@ -66,6 +79,17 @@ export async function readTemplate(
         })),
       ),
     );
+    const page = connection;
+    // the window lists its commands once it has mounted, in builds that have the hook
+    qaHooks = await until(
+      () =>
+        page.evaluate(
+          pageCall(() => typeof (window as ReviewHookWindow).viewerReviewCommands === 'function'),
+        ),
+      Boolean,
+      'QA runtime hooks',
+      4000,
+    ).catch(() => false);
   } catch (error) {
     failure = error as Error;
   }
@@ -75,7 +99,10 @@ export async function readTemplate(
     .then((text) => (JSON.parse(text) as { version?: unknown }).version)
     .catch(() => undefined);
   return {
-    ...snapshot,
-    stateVersion: typeof saved === 'number' ? saved : CURRENT_STATE_VERSION,
+    profile: {
+      ...snapshot,
+      stateVersion: typeof saved === 'number' ? saved : CURRENT_STATE_VERSION,
+    },
+    qaHooks,
   };
 }

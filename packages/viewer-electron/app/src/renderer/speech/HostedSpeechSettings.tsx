@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useConfirmation } from '../ui/settings/ConfirmAction';
 import {
   newSpeechProvider,
   speechProviderKinds,
@@ -54,8 +55,10 @@ function ProviderEditor({
             }}
           />
         </div>
-        <label className="field-label">
-          Name
+        {/* a short value: a row, its field at the shared edge; the address and model ID are long
+            and take the whole row under their labels */}
+        <label className="settings-row">
+          <span>Name</span>
           <input
             aria-label="Speech provider name"
             value={draft.name}
@@ -121,6 +124,7 @@ export function HostedSpeechSettings({
   const [draft, setDraft] = useState<SpeechProvider>();
   const [key, setKey] = useState<{ id: string; value: string }>();
   const [checking, setChecking] = useState(false);
+  const confirmation = useConfirmation();
   const selected = snapshot.providers.find((item) => item.id === selectedID);
   const save = async () => {
     if (!draft) return;
@@ -193,9 +197,16 @@ export function HostedSpeechSettings({
                 </button>
                 <button
                   type="button"
+                  className="danger"
                   disabled={busy}
                   onClick={() =>
-                    void request({ kind: 'provider-remove', id: selected.id }).catch(() => {})
+                    confirmation.ask({
+                      title: `Remove the speech provider “${selected.name}”?`,
+                      detail: 'Its saved key and its permission to receive recordings go with it.',
+                      action: 'Remove',
+                      run: () =>
+                        void request({ kind: 'provider-remove', id: selected.id }).catch(() => {}),
+                    })
                   }
                 >
                   Remove Provider
@@ -303,6 +314,7 @@ export function HostedSpeechSettings({
           </>
         )
       )}
+      {confirmation.dialog}
     </section>
   );
 }

@@ -1,4 +1,5 @@
 import { KeyCapture } from './KeyCapture';
+import { useConfirmation } from './ConfirmAction';
 import { shortcutOwner } from '../../../domain/preferences/shortcuts';
 import { useState } from 'react';
 import type { SettingsPatch, SettingsSnapshot } from '../../../domain/services';
@@ -20,6 +21,7 @@ import { PathField } from '../primitives';
 import { PathLabel } from '../PathLabel';
 import { Disclosure } from '../Disclosure';
 import { WorkspaceDefinitionsSettings } from './WorkspaceDefinitionsSettings';
+import { NumberField } from '../NumberField';
 interface Props {
   snapshot: SettingsSnapshot;
   save(patches: SettingsPatch[]): void;
@@ -38,8 +40,9 @@ function JsonField({
   save(value: unknown): void;
 }) {
   const [error, setError] = useState('');
+  // JSON is a long value: the whole row under its label, as a Mac's form puts a text view
   return (
-    <div className="settings-row">
+    <div className="settings-json-field">
       <span>{label}</span>
       <div>
         <Field
@@ -61,20 +64,48 @@ function JsonField({
   );
 }
 /** A Remove button for an item others use: kept, naming them, until they change. */
+/** The configuration sections Reset a Section offers, as people name them. */
+const sectionLabels: Readonly<Record<string, string>> = {
+  browsing: 'Browsing',
+  folders: 'Folder views',
+  fileOpening: 'File opening',
+  previews: 'Previews',
+  terminals: 'Terminals',
+  customActions: 'Custom commands',
+  shortcuts: 'Shortcuts',
+  search: 'Search',
+  recipes: 'Action recipes',
+};
 export function ReferencedRemove({
   users,
   onRemove,
+  name,
   children,
 }: {
   users: string[];
   onRemove(): void;
+  /** What it removes, as the confirmation names it: "the recipe “Organize”". */
+  name: string;
   children: React.ReactNode;
 }) {
+  const confirmation = useConfirmation();
   return (
     <>
-      <button disabled={!!users.length} onClick={onRemove}>
+      <button
+        className="danger"
+        disabled={!!users.length}
+        onClick={() =>
+          confirmation.ask({
+            title: `Remove ${name}?`,
+            detail: 'It is removed from your settings. Nothing on disk changes.',
+            action: 'Remove',
+            run: onRemove,
+          })
+        }
+      >
         {children}
       </button>
+      {confirmation.dialog}
       {!!users.length && (
         <p className="settings-note">
           Used by {users.join(', ')}. Change or remove {users.length === 1 ? 'it' : 'them'} first.
@@ -109,7 +140,7 @@ export function TerminalSettings({ snapshot, save }: EditingProps) {
           save={(app) => patch('application', app)}
         />
       </label>
-      <label className="settings-row">
+      <div className="settings-row">
         <span>Default shell profile</span>
         <ChoiceButton
           label="Default shell profile"
@@ -117,7 +148,7 @@ export function TerminalSettings({ snapshot, save }: EditingProps) {
           choices={value.profiles.map((profile) => ({ value: profile.id, label: profile.name }))}
           onChoose={(id) => patch('profileID', id)}
         />
-      </label>
+      </div>
       <h2>Shell profiles</h2>
       {value.profiles.map((item) => (
         <Disclosure variant="row" className="settings-recipe" key={item.id} summary={item.name}>
@@ -151,6 +182,7 @@ export function TerminalSettings({ snapshot, save }: EditingProps) {
           />
           {value.profiles.length > 1 && item.id !== value.profileID && (
             <ReferencedRemove
+              name={`the terminal profile “${item.name}”`}
               users={referencesTo(snapshot.settings, 'profile', item.id)}
               onRemove={() =>
                 patchProfiles((profiles) => profiles.filter((profile) => profile.id !== item.id))
@@ -213,6 +245,7 @@ export function CustomActionSettings({
   onDraftDone,
 }: EditingProps & { draft?: CustomAction; onDraftDone?(): void }) {
   const actions = snapshot.settings.customActions;
+  const confirmation = useConfirmation();
   const set = (update: (actions: CustomAction[]) => CustomAction[]) =>
     save((current) => [
       { path: 'settings.customActions', value: update(current.settings.customActions) },
@@ -283,7 +316,7 @@ export function CustomActionSettings({
               }
             />
           </label>
-          <label className="settings-row">
+          <div className="settings-row">
             <span>Shortcut</span>
             <KeyCapture
               label="Command shortcut"
@@ -292,7 +325,7 @@ export function CustomActionSettings({
               owner={(value) => shortcutOwner(snapshot.settings, value, 'custom.' + action.id)}
               onChange={(shortcut) => patch(action.id, { shortcut })}
             />
-          </label>
+          </div>
           <label className="settings-row">
             <span>Pin in Commands</span>
             <input
@@ -303,13 +336,9 @@ export function CustomActionSettings({
           </label>
           <label className="settings-row">
             <span>Order</span>
-            <input
-              type="number"
-              value={action.order}
-              onChange={(event) => patch(action.id, { order: Number(event.target.value) })}
-            />
+            <NumberField value={action.order} onCommit={(order) => patch(action.id, { order })} />
           </label>
-          <label className="settings-row">
+          <div className="settings-row">
             <span>Icon</span>
             <ChoiceButton
               label="Icon"
@@ -325,8 +354,8 @@ export function CustomActionSettings({
               ]}
               onChoose={(icon) => patch(action.id, { icon })}
             />
-          </label>
-          <label className="settings-row">
+          </div>
+          <div className="settings-row">
             <span>Available for</span>
             <ChoiceButton
               label="Available for"
@@ -341,7 +370,7 @@ export function CustomActionSettings({
                 when(action.id, { target: target as CustomAction['when']['target'] })
               }
             />
-          </label>
+          </div>
           <label className="settings-row">
             <span>
               File extensions<small>Leave empty for all formats.</small>
@@ -363,26 +392,24 @@ export function CustomActionSettings({
           <div className="settings-row">
             <span>Selection count</span>
             <div className="command-selection-range">
-              <input
+              <NumberField
                 aria-label="Minimum selected items"
-                type="number"
                 min={0}
                 max={action.when.max}
                 value={action.when.min}
-                onChange={(event) => when(action.id, { min: Number(event.target.value) })}
+                onCommit={(min) => when(action.id, { min })}
               />
               <span>to</span>
-              <input
+              <NumberField
                 aria-label="Maximum selected items"
-                type="number"
                 min={action.when.min}
                 max={10000}
                 value={action.when.max}
-                onChange={(event) => when(action.id, { max: Number(event.target.value) })}
+                onCommit={(max) => when(action.id, { max })}
               />
             </div>
           </div>
-          <label className="settings-row">
+          <div className="settings-row">
             <span>Execution</span>
             <ChoiceButton
               label="Execution"
@@ -419,7 +446,7 @@ export function CustomActionSettings({
                 patch(action.id, { executor });
               }}
             />
-          </label>
+          </div>
           {action.executor.kind === 'builtin' && (
             <label className="settings-row">
               <span>
@@ -456,7 +483,7 @@ export function CustomActionSettings({
             </label>
           )}
           {action.executor.kind === 'recipe' && (
-            <label className="settings-row">
+            <div className="settings-row">
               <span>Action recipe</span>
               <ChoiceButton
                 label="Action recipe"
@@ -469,10 +496,10 @@ export function CustomActionSettings({
                   patch(action.id, { executor: { kind: 'recipe', recipeID } })
                 }
               />
-            </label>
+            </div>
           )}
           {action.executor.kind === 'terminal' && (
-            <label className="settings-row">
+            <div className="settings-row">
               <span>Shell profile</span>
               <ChoiceButton
                 label="Shell profile"
@@ -485,7 +512,7 @@ export function CustomActionSettings({
                   patch(action.id, { executor: { kind: 'terminal', profileID } })
                 }
               />
-            </label>
+            </div>
           )}
           {(action.executor.kind === 'executable' || action.executor.kind === 'shell') && (
             <>
@@ -533,7 +560,17 @@ export function CustomActionSettings({
             actions={actions}
             change={(update) => patch(action.id, update)}
           />
-          <button onClick={() => set((actions) => actions.filter((item) => item.id !== action.id))}>
+          <button
+            className="danger"
+            onClick={() =>
+              confirmation.ask({
+                title: `Remove the command “${action.name}”?`,
+                detail: 'Its menu item, shortcut and palette row go with it.',
+                action: 'Remove',
+                run: () => set((actions) => actions.filter((item) => item.id !== action.id)),
+              })
+            }
+          >
             Remove Command
           </button>
         </Disclosure>
@@ -560,6 +597,7 @@ export function CustomActionSettings({
           New Command
         </button>
       </div>
+      {confirmation.dialog}
     </>
   );
 }
@@ -567,6 +605,7 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
   const [message, setMessage] = useState('');
   const config = snapshot.config;
   const [section, setSection] = useState('browsing');
+  const confirmation = useConfirmation();
   const run = (work: Promise<unknown>, success = '') => {
     void work.then(() => setMessage(success)).catch((error: Error) => setMessage(error.message));
   };
@@ -668,29 +707,35 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
         <ChoiceButton
           label="Configuration section"
           value={section}
-          choices={[
-            { value: 'browsing', label: 'Browsing' },
-            { value: 'folders', label: 'Folder views' },
-            { value: 'fileOpening', label: 'File opening' },
-            { value: 'previews', label: 'Previews' },
-            { value: 'terminals', label: 'Terminals' },
-            { value: 'customActions', label: 'Custom commands' },
-            { value: 'shortcuts', label: 'Shortcuts' },
-            { value: 'search', label: 'Search' },
-            { value: 'recipes', label: 'Action recipes' },
-          ]}
+          choices={Object.entries(sectionLabels).map(([value, label]) => ({ value, label }))}
           onChoose={setSection}
         />
         <button
+          className="danger"
           onClick={() => {
-            const defaults = defaultSettings(snapshot.settings.search.roots[0] || '/');
-            save([
-              { path: 'settings.' + section, value: defaults[section as keyof typeof defaults] },
-            ]);
+            const label = sectionLabels[section] ?? section;
+            confirmation.ask({
+              title: `Reset ${label} to its defaults?`,
+              detail:
+                section === 'customActions' || section === 'recipes'
+                  ? `Every ${label.toLowerCase()} entry of your own is removed.`
+                  : `Every ${label} setting goes back to its default.`,
+              action: 'Reset',
+              run: () => {
+                const defaults = defaultSettings(snapshot.settings.search.roots[0] || '/');
+                save([
+                  {
+                    path: 'settings.' + section,
+                    value: defaults[section as keyof typeof defaults],
+                  },
+                ]);
+              },
+            });
           }}
         >
           Reset Section
         </button>
+        {confirmation.dialog}
       </div>
     </>
   );

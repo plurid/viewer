@@ -19,6 +19,7 @@ import {
 import { PreviewToolbar, usePreviewCommands } from '../src/renderer/previews/controls';
 import { headerItem } from '../src/renderer/workspace/header-overflow';
 import { IconButton } from '../src/renderer/ui/primitives';
+import ImagePreview from '../src/renderer/previews/modules/ImagePreview';
 import { PreviewFrameFixture } from './support/preview-frame';
 
 /** The toolbar's and the footer line's width. */
@@ -250,6 +251,98 @@ describe('a preview toolbar where it stands', () => {
     await waitFor(() => expect(toolbar.textContent).toContain('200%'));
     await choose('Optimize…');
     await waitFor(() => expect(optimize).toHaveBeenCalledOnce());
+  });
+
+  const wrap = vi.fn();
+  const mode = vi.fn();
+  /** A text's toolbar: a plain action with no item of its own, and a control that opens a menu. */
+  function TextToolbar() {
+    return (
+      <PreviewToolbar context={context}>
+        <button onClick={wrap}>Wrap Lines</button>
+        <button aria-disabled onClick={wrap}>
+          Waits
+        </button>
+        <button {...headerItem('mode', 9, ['toolbar:mode'])} aria-haspopup="listbox" onClick={mode}>
+          Mode
+        </button>
+        <span className="toolbar-spacer" />
+      </PreviewToolbar>
+    );
+  }
+  const renderText = () => {
+    const view = render(
+      <PreviewFrameFixture>
+        <TextToolbar />
+      </PreviewFrameFixture>,
+    );
+    return view.container.querySelector<HTMLElement>('.preview-toolbar')!;
+  };
+
+  it('gives way with a plain action, pressed from "…", never a control with a menu of its own', async () => {
+    const toolbar = renderText();
+    await resize(60, toolbar);
+    expect(toolbar.querySelectorAll('[data-spilled]')).toHaveLength(3);
+    fireEvent.click(screen.getByRole('button', { name: 'More preview actions' }));
+    const menu = await screen.findByRole('dialog', { name: 'More preview actions' });
+    expect(within(menu).queryByText('Mode')).toBeNull();
+    // one that waits does nothing yet, so it is not offered
+    expect(within(menu).queryByText('Waits')).toBeNull();
+    fireEvent.click(within(menu).getByText('Wrap Lines'));
+    await waitFor(() => expect(wrap).toHaveBeenCalledOnce());
+    expect(mode).not.toHaveBeenCalled();
+  });
+
+  it('closes "…" once nothing gives way, so it never opens again by itself', async () => {
+    const toolbar = renderText();
+    await resize(60, toolbar);
+    fireEvent.click(screen.getByRole('button', { name: 'More preview actions' }));
+    await screen.findByRole('dialog', { name: 'More preview actions' });
+    await resize(400, toolbar);
+    expect(screen.queryByRole('button', { name: 'More preview actions' })).toBeNull();
+    await resize(60, toolbar);
+    const more = screen.getByRole('button', { name: 'More preview actions' });
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('dialog', { name: 'More preview actions' })).toBeNull();
+  });
+});
+
+describe('a picture’s toolbar', () => {
+  /** A picture's preview, as a plane or Quick Preview shows it, with or without Save Rotated Copy. */
+  const picture = (rotatedCopy?: () => void) => {
+    const values = new Map<string, unknown>();
+    return render(
+      <PreviewFrameFixture>
+        <ImagePreview
+          {...({
+            resource: { id: 'photo', url: '', entry: entry('photo.png') },
+            active: true,
+            interactive: true,
+            state: { get: (key: string) => values.get(key), set: values.set.bind(values) },
+            services: { thumbnail: vi.fn() },
+            optimize: vi.fn(),
+            editImage: vi.fn(),
+            rotatedCopy,
+          } as unknown as PreviewContext)}
+        />
+      </PreviewFrameFixture>,
+    );
+  };
+  const labels = () => ['Optimize…', 'Image Tools…'].map((name) => !compact(name));
+
+  it('keeps the labels the others had before a waiting Save Rotated Copy, which shows as its icon first', async () => {
+    Object.assign(window, { viewer: { onEvent: () => () => {} } });
+    for (const width of [480, 420]) {
+      const without = picture();
+      await resize(width, without.container.querySelector<HTMLElement>('.preview-toolbar')!);
+      const before = labels();
+      without.unmount();
+      const view = picture(vi.fn());
+      await resize(width, view.container.querySelector<HTMLElement>('.preview-toolbar')!);
+      expect(labels()).toEqual(before);
+    }
+    // the copy itself gives way to an icon before any of them
+    expect(compact('Save Rotated Copy')).toBe(true);
   });
 });
 

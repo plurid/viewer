@@ -365,7 +365,7 @@ export function resolveCatalog(input: CatalogInput): {
     });
     if (!resolved.length) {
       resolved.push({ index: -1, plane: { kind: 'folder', path: root } });
-      problem(key, 'All planes were skipped. A folder plane opens at the root.', 'warning', [
+      problem(key, 'All planes were skipped. A files plane opens at the root.', 'warning', [
         'planes',
       ]);
     }

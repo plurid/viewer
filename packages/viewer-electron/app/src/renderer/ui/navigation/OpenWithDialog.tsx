@@ -132,8 +132,9 @@ export function OpenWithDialog({ paths, onClose }: { paths: string[]; onClose():
                 aria-selected={app.id === selected?.id}
                 disabled={busy}
                 className="application-option"
-                onMouseMove={() => setIndex(i)}
-                onClick={() => {
+                // as Finder's chooser: a click selects, a double-click or Return opens
+                onClick={() => setIndex(i)}
+                onDoubleClick={() => {
                   void open(app);
                 }}
               >

@@ -198,7 +198,7 @@ its rotation and crop are applied when it is drawn, so the parts a crop hides st
 
 Animated and multipage images use their first frame.
 
-HEIC, HEIF and BMP images are decoded by macOS, as **Convert copy to JPEG** decodes them: upright,
+HEIC, HEIF and BMP images are decoded by macOS, as **Convert Copy to JPEG** decodes them: upright,
 in their own color profile and at the size their largest frame needs at `dpi`, at most 4,096 pixels
 on the long side. Camera RAW files are rendered by Viewer's RAW renderer, as **Render RAW** renders
 them: upright in sRGB, at half the sensor's size and at most 4,096 pixels on the long side. A DNG,

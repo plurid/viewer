@@ -123,8 +123,8 @@ describe('Journal plane integration', () => {
     );
     expect(clear).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Commit completed')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Journal filters' }));
-    const menu = screen.getByRole('dialog', { name: 'Journal filters' });
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const menu = screen.getByRole('dialog', { name: 'Filters' });
     await act(async () =>
       fireEvent.click(menu.querySelector(`[data-menu-id="choice:${pane.savedFilters![0]!.id}"]`)!),
     );

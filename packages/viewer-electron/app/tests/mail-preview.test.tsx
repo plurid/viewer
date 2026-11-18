@@ -76,7 +76,7 @@ describe('email preview', () => {
       'Packing list.txt',
     ])
       expect(screen.getByText(text)).toBeTruthy();
-    expect(screen.getByText(/TXT · 2 KB/)).toBeTruthy();
+    expect(screen.getByText(/Plain text · 2 KB/)).toBeTruthy();
     const frame = await waitFor(() => {
       const element = container.querySelector('iframe');
       expect(element).not.toBeNull();

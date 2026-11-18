@@ -24,7 +24,9 @@ import {
   alternateShortcuts,
   defaultShortcuts,
   menuShortcuts,
-  shortcutKey,
+  previewShortcuts,
+  resolvedShortcut,
+  shortcutClash,
   validShortcut,
   validGlobalShortcut,
 } from '../../domain/preferences/shortcuts';
@@ -386,8 +388,17 @@ export const settingsSchema = z
         path: ['terminals', 'profileID'],
         message: 'Choose an existing terminal profile.',
       });
+    // Every key in effect is a chord, and none answers two bindings at once but the ⌘L shipped
+    // shared by Go to Folder… and Rotate Picture Left, each answering in its own place. A key
+    // shipped where the person put something of their own leaves it to them (shortcuts.ts,
+    // `resolvedShortcut`), so a file whose recipe holds a key a command later shipped with loads.
     const shortcuts = [
-      ...Object.values({ ...defaultShortcuts, ...menuShortcuts, ...value.shortcuts }),
+      ...Object.keys({
+        ...defaultShortcuts,
+        ...menuShortcuts,
+        ...previewShortcuts,
+        ...value.shortcuts,
+      }).map((id) => resolvedShortcut(value, id)),
       ...Object.values(alternateShortcuts),
       ...value.recipes.map((item) => item.shortcut || ''),
       ...value.customActions.map((item) => item.shortcut || ''),
@@ -399,7 +410,6 @@ export const settingsSchema = z
         code: 'custom',
         message: 'Use Cmd or Ctrl plus a key, with optional Alt and Shift.',
       });
-    const normalized = shortcuts.map(shortcutKey);
     for (const item of value.recipes) {
       const fields =
         item.kind === 'batch-rename'
@@ -419,7 +429,7 @@ export const settingsSchema = z
           message: 'The filename template contains an unknown field.',
         });
     }
-    if (new Set(normalized).size !== normalized.length)
+    if (shortcutClash(value))
       context.addIssue({
         code: 'custom',
         message: 'A shortcut is assigned to more than one action.',

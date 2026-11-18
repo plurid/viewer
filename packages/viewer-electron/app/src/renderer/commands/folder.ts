@@ -7,12 +7,7 @@ import { reloadFolder } from '../explorer/useFolder';
 import { browseSession, updateBrowseSession } from '../workspace/sessions';
 import type { FileEntry, ViewMode } from '../../domain/contracts';
 import { parentPath, baseName } from '../../domain/workspaces/planes';
-import {
-  conversionTurns,
-  convertibleImage,
-  inConversionFormat,
-  rotatableImage,
-} from '../../domain/operations/image-conversions';
+import { convertibleImage, inConversionFormat } from '../../domain/operations/image-conversions';
 import {
   favorite,
   getState,
@@ -192,12 +187,9 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       icon: 'image' as const,
       aliases: [...aliases],
       // A selection already in the format is not offered it; in a mixed one, such an image gets a
-      // copy beside it.
-      // A rotated copy is made as Save Rotated Copy makes one: not of a GIF or TIFF, whose other
-      // frames or pages it would drop.
+      // copy beside it. A rotated copy is made as Save Rotated Copy makes one.
       when: (context: CommandContext) =>
         images(context) &&
-        (!conversionTurns[conversion] || context.selection.every(rotatableImage)) &&
         !context.selection.every((entry) => inConversionFormat(entry, conversion)),
       run: async (context: CommandContext) => {
         await window.viewer.operate({ kind: 'convert', conversion, sources: paths(context) });
@@ -343,7 +335,7 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       label: 'Open in Another Plane',
       group: 'Files',
       icon: 'planes',
-      detail: 'New folder plane',
+      detail: 'New files plane',
       aliases: ['another', 'copy plane', 'root plane', 'independent plane'],
       when: selected,
       run: (context) => actions.open(context.selection, true, true),
@@ -492,12 +484,12 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
     },
     {
       id: 'new-folder',
-      unavailable: 'Open a folder plane to create a folder inside it.',
+      unavailable: 'Open a files plane to create a folder inside it.',
       label: 'New Folder…',
       group: 'Folder',
       icon: 'folder-plus',
+      // its key is the keymap's (⇧⌘N), as every command's in it
       aliases: ['nf', 'mkdir'],
-      shortcut: '⌘N',
       primary: (context) => !context.selection.length,
       when: folder,
       run: (context) => actions.dialog('mkdir', context),
@@ -517,7 +509,6 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       group: 'Folder',
       icon: 'folder-plus',
       aliases: ['group', 'nfs', 'folder from selection'],
-      shortcut: '⌃⌘N',
       when: (context) =>
         folder(context) &&
         context.selection.length > 0 &&

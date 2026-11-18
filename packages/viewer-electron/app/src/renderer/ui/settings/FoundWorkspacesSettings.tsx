@@ -1,59 +1,115 @@
-import { useEffect, useState } from 'react';
-import type { DefinitionCatalog } from '../../../domain/workspaces/definitions/schema';
+import { useEffect, useRef, useState } from 'react';
+import type {
+  DefinitionCatalog,
+  WorkspaceDefinitionFileRequest,
+} from '../../../domain/workspaces/definitions/schema';
 import { errorMessage } from '../../../domain/errors';
+import { plural } from '../../../domain/plural';
 import { Button } from '../primitives';
 
+const undoTime = 8000;
+/** The finding switch this line sits under, which takes focus when the line has no button. */
+const findingSwitch = '[data-setting-path="settings.browsing.findWorkspaces"] input';
+
 /**
- * Under Find workspaces from folders I use: how many workspaces Viewer found and how many were
- * marked Not a Workspace, with Show Hidden Again. Hidden roots stay while finding is off.
+ * Under Suggest workspaces from folders you open: how many workspaces Viewer found and how many were
+ * marked Not a Workspace, with a button that shows them all again and, for eight seconds, Undo.
+ * Hidden roots stay while finding is off.
  */
 export function FoundWorkspacesDetail() {
   const [catalog, setCatalog] = useState<DefinitionCatalog>();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [shown, setShown] = useState(0);
+  const row = useRef<HTMLDivElement>(null);
+  // Undo and the button it brings back take each other's place, and Undo leaves after eight
+  // seconds: focus they held moves on once the row has rendered, never to the page
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
+    const element = row.current;
+    (
+      element?.querySelector('button') ??
+      document.querySelector<HTMLElement>(findingSwitch) ??
+      element
+    )?.focus();
+  });
+  // a reply and a pass's event can cross: the newest catalog wins, so counts never step back
+  const accept = (next: DefinitionCatalog) =>
+    setCatalog((current) => (!current || next.revision >= current.revision ? next : current));
   useEffect(() => {
     let live = true;
-    const accept = (next: DefinitionCatalog) => {
-      if (live)
-        setCatalog((current) => (!current || next.revision >= current.revision ? next : current));
-    };
     void window.viewer
       .workspaceDefinitionFile({ kind: 'catalog' })
-      .then(accept)
+      .then((next) => {
+        if (live) accept(next);
+      })
       .catch(() => {});
     const stop = window.viewer.onEvent((event) => {
-      if (event.type === 'workspace-definitions') accept(event.catalog);
+      if (live && event.type === 'workspace-definitions') accept(event.catalog);
     });
     return () => {
       live = false;
       stop();
     };
   }, []);
-  const found = catalog?.found;
-  if (!found) return null;
-  const counts = [
-    ...(found.state === 'ready' ? [`${found.count} found`] : []),
-    ...(found.hidden ? [`${found.hidden} hidden`] : []),
-  ];
-  if (!counts.length && !message) return null;
-  const showHidden = async () => {
+  useEffect(() => {
+    if (!shown) return;
+    const timer = setTimeout(() => {
+      refocus.current = !!row.current?.contains(document.activeElement);
+      setShown(0);
+    }, undoTime);
+    return () => clearTimeout(timer);
+  }, [shown]);
+  const run = async (request: WorkspaceDefinitionFileRequest, then: (changed: number) => void) => {
     setBusy(true);
     setMessage('');
     try {
-      setCatalog(await window.viewer.workspaceDefinitionFile({ kind: 'show-found' }));
+      const next = await window.viewer.workspaceDefinitionFile(request);
+      accept(next);
+      then(next.changed ?? 0);
+      refocus.current = true;
     } catch (error) {
       setMessage(errorMessage(error));
     } finally {
       setBusy(false);
     }
   };
+  const found = catalog?.found;
+  if (!found) return null;
+  const counts = [
+    ...(found.state === 'ready' ? [`${found.count} found`] : []),
+    ...(found.hidden ? [`${found.hidden} hidden`] : []),
+    ...(shown ? [`${shown} shown again`] : []),
+  ];
+  if (!counts.length && !message) return null;
   return (
-    <div className="settings-found-workspaces">
+    <div ref={row} className="settings-found-workspaces" tabIndex={-1}>
       <span role="status">{message || counts.join(' · ')}</span>
-      {found.hidden > 0 && (
-        <Button variant="secondary" disabled={busy} onClick={() => void showHidden()}>
-          Show Hidden Again
+      {shown > 0 ? (
+        <Button
+          variant="secondary"
+          disabled={busy}
+          onClick={() =>
+            void run({ kind: 'hide-found-again' }, (changed) => {
+              setShown(0);
+              if (!changed) setMessage('Those folders are hidden already.');
+            })
+          }
+        >
+          Undo
         </Button>
+      ) : (
+        found.hidden > 0 && (
+          <Button
+            variant="secondary"
+            disabled={busy}
+            onClick={() => void run({ kind: 'show-found' }, setShown)}
+          >
+            Show {plural(found.hidden, 'Hidden Workspace')}
+          </Button>
+        )
       )}
     </div>
   );

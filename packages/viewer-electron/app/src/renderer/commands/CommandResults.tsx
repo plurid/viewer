@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Icon } from '../ui/Icon';
 import { PathLabel } from '../ui/PathLabel';
+import { FileName } from '../ui/FileName';
 import type { DiscoverableCommand, ResolvedCommand } from './registry';
 
 interface ResultOrder {
@@ -16,6 +17,11 @@ const absolutePath = /^(?:\/|[A-Za-z]:[\\/]|\\\\|viewer-sftp:)/i;
 /** A file or folder row's text that is a path, as a typed path's row and a found file's folder. */
 function isPath(row: ResolvedCommand, text: string | undefined): text is string {
   return (row.icon === 'folder' || row.icon === 'file') && !!text && absolutePath.test(text);
+}
+/** A found file's or folder's row: its label is the item's own name. */
+const nameGroups = new Set(['Files', 'Frequent folders', 'Go']);
+function isName(row: ResolvedCommand): boolean {
+  return (row.icon === 'folder' || row.icon === 'file') && nameGroups.has(row.group);
 }
 
 /** Live results retain pointer stability within sections while respecting their current priority. */
@@ -277,7 +283,13 @@ export function CommandResults({
                 size={16}
               />
               <span className="command-result-text">
-                {isPath(row, row.label) ? <PathLabel path={row.label} /> : <span>{row.label}</span>}
+                {isPath(row, row.label) ? (
+                  <PathLabel path={row.label} />
+                ) : isName(row) ? (
+                  <FileName name={row.label} />
+                ) : (
+                  <span>{row.label}</span>
+                )}
                 {row.detail &&
                   (isPath(row, row.detail) ? (
                     <small>

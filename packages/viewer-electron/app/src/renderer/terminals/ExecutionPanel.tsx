@@ -78,26 +78,30 @@ export function ExecutionPanel() {
               </>
             }
           >
-            {task.status === 'running' && (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  void window.viewer.executionCancel(task.id).catch(report);
-                }}
-              >
-                Stop
-              </Button>
-            )}
             {task.error && <p role="alert">{task.error}</p>}
             {task.directory && <PathField className="muted" path={task.directory} />}
             {task.truncated && <p role="status">Showing the last 256 KiB of output.</p>}
-            {task.command && (
-              <button onClick={() => workspace.openReceipt(task.id, task.directory)}>
-                Open Receipt
-              </button>
-            )}
-            {!!task.output && (
-              <CopyButton appearance="text" label="Copy Output" copy={{ text: task.output }} />
+            {(task.status === 'running' || task.command || !!task.output) && (
+              <div className="execution-actions">
+                {task.status === 'running' && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      void window.viewer.executionCancel(task.id).catch(report);
+                    }}
+                  >
+                    Stop
+                  </Button>
+                )}
+                {task.command && (
+                  <button onClick={() => workspace.openReceipt(task.id, task.directory)}>
+                    Open Receipt
+                  </button>
+                )}
+                {!!task.output && (
+                  <CopyButton appearance="text" label="Copy Output" copy={{ text: task.output }} />
+                )}
+              </div>
             )}
             {task.output && <pre>{task.output}</pre>}
           </PanelSection>

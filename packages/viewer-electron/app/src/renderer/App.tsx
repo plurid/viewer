@@ -105,7 +105,7 @@ import { requestRefresh } from './state/refresh';
 import { useWindowEvent } from './app/window-events';
 import { invalidateFolderSizes, receiveFolderSize } from './explorer/sizes';
 import {
-  commandShortcutID,
+  commandGlyphs,
   shortcutFor,
   shortcutGlyphs,
   withShortcut,
@@ -120,6 +120,9 @@ import { SpaceOverlay } from './workspace/tours/TourBar';
 import { CheckPanel } from './fabrication/CheckPanel';
 import { subscribeJobContents } from './fabrication/contents';
 
+/** A document preview's own find, which ⌘F opens in its plane: PDF, DjVu, EPUB. */
+const previewFindIDs = ['preview.pdf-search', 'preview.djvu-search', 'preview.epub-find'] as const;
+
 export function App() {
   const registry = useMemo(
     () =>
@@ -129,7 +132,8 @@ export function App() {
           // Record macro (keys/macro.ts) collects what the person runs
           recordCommand(id);
         },
-        (id) => getState().settings.settings.shortcuts[commandShortcutID(id)],
+        // a command in the keymap shows its key from there; any other, the one it declares
+        (id) => commandGlyphs(getState().settings.settings, id),
       ),
     [],
   );
@@ -148,6 +152,22 @@ function AppWindow() {
   const [openWithPaths, setOpenWithPaths] = useState<string[]>();
   const engine = useRef<PluridApplicationHandle>(null);
   const surface = useRef<HTMLDivElement>(null);
+  // Review runs (tools/review) read every command the window has registered, for coverage. Only
+  // the hidden QA runtime exposes the list, and it only reads.
+  const qaRuntime = useViewer((state) => state.bootstrap.qaRuntime === true);
+  useEffect(() => {
+    if (!qaRuntime) return;
+    const commands = () => {
+      const context = registry.context();
+      return registry
+        .ids()
+        .map((id) => ({ id, label: (context && registry.label(id, context)) ?? id }));
+    };
+    Object.defineProperty(window, 'viewerReviewCommands', { value: commands, configurable: true });
+    return () => {
+      Reflect.deleteProperty(window, 'viewerReviewCommands');
+    };
+  }, [qaRuntime, registry]);
   const [ready, setReady] = useState(false);
   const readyRef = useRef(false);
   const pendingPresentation = useRef<string | undefined>(undefined);
@@ -403,6 +423,12 @@ function AppWindow() {
   useEffect(() => {
     trimTerminals(new Set(terminalPanes ? terminalPanes.split(' ') : []));
   }, [terminalPanes]);
+  /** The first of `ids` the active plane's preview offers now: its own find or zoom. */
+  const previewCommand = (ids: readonly string[]) => {
+    const context = registry.context(getState().activePane);
+    if (context?.scope !== 'preview') return undefined;
+    return registry.list({ ids: [...ids], scope: 'window', paneID: context.paneID, context })[0];
+  };
   /** Runs a command where it belongs; false when nothing ran (a line stops there). */
   const invoke = async (id: string, remember = true): Promise<boolean> => {
     // Edit menu Undo, Redo and Select All reach a CodeMirror editor, which `webContents` does not
@@ -414,6 +440,12 @@ function AppWindow() {
       const terminal = document.activeElement?.closest<HTMLElement>('.terminal-plane');
       if (terminal?.dataset.terminalId && openTerminalFind(terminal.dataset.terminalId))
         return true;
+      // and in a document's preview it finds in the document, as Preview's ⌘F does
+      const find = !overlayOpen() && previewCommand(previewFindIDs);
+      if (find) {
+        await registry.run(find, false);
+        return true;
+      }
     }
     if (
       document.activeElement?.closest('.terminal-plane') &&
@@ -438,6 +470,8 @@ function AppWindow() {
   };
   const invokeRef = useRef(invoke);
   invokeRef.current = invoke;
+  const previewCommandRef = useRef(previewCommand);
+  previewCommandRef.current = previewCommand;
   // THE COMMAND LINE: what a line runs against, and running one from the palette
   const lineHost = useMemo<LineHost>(
     () => ({
@@ -790,6 +824,26 @@ function AppWindow() {
         event.preventDefault();
       }
       if (!(event.metaKey || event.ctrlKey) || event.isComposing || event.repeat) return;
+      // ⌘+ and ⌘− zoom the picture or the document a preview plane shows, as Preview's do
+      const zoom =
+        event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !editable(event.target) &&
+        !overlayOpen()
+          ? event.key === '=' || event.key === '+'
+            ? 'preview.zoom-in'
+            : event.key === '-'
+              ? 'preview.zoom-out'
+              : undefined
+          : undefined;
+      const zoomCommand = zoom && previewCommandRef.current([zoom]);
+      if (zoomCommand) {
+        event.preventDefault();
+        event.stopPropagation();
+        void registry.run(zoomCommand, false).catch(report);
+        return;
+      }
       const id = keyCommand(event, getState().settings.settings);
       if (
         (event.target as Element).closest('.terminal-plane') &&
@@ -825,7 +879,6 @@ function AppWindow() {
       <ComparisonControls />
       <DuplicateControls />
       <CollectionControls />
-      <WorkflowControls />
       <RelationshipControls />
       <div
         className="app-shell"
@@ -886,7 +939,7 @@ function AppWindow() {
           {windowUI.titlebar.newPlane && (
             <IconButton
               icon="plus"
-              label={withShortcut('New folder plane', newPlaneShortcut)}
+              label={withShortcut('New files plane', newPlaneShortcut)}
               disabled={!ready || space.panes.length >= 200}
               onClick={() => {
                 void invoke('new-root-folder').catch(report);
@@ -897,13 +950,20 @@ function AppWindow() {
           <ActionHub />
           {windowUI.titlebar.operations && showOperations && (
             <button
-              className="operations-button"
+              type="button"
+              className="icon-button operations-button"
               aria-label="File operations"
+              title="File operations"
               aria-expanded={operationsOpen}
               onClick={() => setOperationsOpen(!operationsOpen, true)}
             >
-              <Icon name="copy" size={17} />
-              {inProgress > 0 && <span className="count-badge">{inProgress}</span>}
+              <Icon name="operations" />
+              {/* over the icon's corner, so a count moves nothing beside it */}
+              {inProgress > 0 && (
+                <span className="count-badge" aria-hidden="true">
+                  {inProgress}
+                </span>
+              )}
             </button>
           )}
           {windowUI.titlebar.voice && (
@@ -926,6 +986,8 @@ function AppWindow() {
           )}
         </header>
         <ProjectFileNotice />
+        {/* its watch-rule notice is a bar in the window's flow, as the project's is */}
+        <WorkflowControls />
         <LicenseReminder />
         <div className="app-main">
           <Sidebar />
@@ -1011,7 +1073,7 @@ function AppWindow() {
           <FolderHistoryRecovery onEnd={() => focusPlane(getState().activePane)} />
         )}
         {deleted && showWorkspaceUndo && (
-          <div className="bar bar-floating workspace-recovery" role="status">
+          <div className="bar workspace-recovery" role="status">
             <span>Deleted the workspace “{deleted.workspace.name}”.</span>
             <button
               onClick={() => {

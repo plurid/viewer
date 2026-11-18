@@ -4,33 +4,39 @@ import { createServer } from 'node:net';
 import type { Server, Socket } from 'node:net';
 import path from 'node:path';
 import { remoteLimits } from '../../domain/remote/limits';
+import { describePrompt } from '../../domain/remote/prompts';
+import type { PromptPresentation } from '../../domain/remote/prompts';
 import { validateSocketPath } from '../../domain/remote/ssh-arguments';
 import type { AskpassEnvironment } from './environment';
-import { privateSocketFolder } from './socket-folder';
+import { privateSocketFolder, removeSocketFolder } from './socket-folder';
 
-/**
- * `secret`: a password, passphrase, PIN or code, typed into a secure field. `host-key`: OpenSSH
- * asks whether to trust a key it has not seen. `confirm`: a yes or no question
- * (`SSH_ASKPASS_PROMPT=confirm`). `notice`: something to do elsewhere, such as touching a
- * security key (`SSH_ASKPASS_PROMPT=none`); OpenSSH ends it itself.
- */
-export type RemotePromptKind = 'secret' | 'host-key' | 'confirm' | 'notice';
+export type { RemotePromptKind } from '../../domain/remote/prompts';
 
-export interface RemotePrompt {
+export interface RemotePrompt extends PromptPresentation {
   connectionID: string;
   owner: number;
-  title: string;
-  text: string;
-  kind: RemotePromptKind;
   /** Aborted by Disconnect, the attempt's expiry, a closed window, or OpenSSH ending the prompt. */
   signal: AbortSignal;
 }
 
 export type PromptAnswer = (prompt: RemotePrompt) => Promise<string | null>;
 
+/** Ends a sign-in that OpenSSH asked a question Viewer never expects. */
+export class UnexpectedQuestionError extends Error {
+  readonly code = 'VIEWER_REMOTE_UNEXPECTED_QUESTION';
+
+  constructor() {
+    super(
+      'OpenSSH asked to share this connection with another program. Viewer never shares one, so it stopped connecting. Connect again.',
+    );
+    this.name = 'UnexpectedQuestionError';
+  }
+}
+
 interface Attempt {
   id: string;
   name: string;
+  key?: string;
   owner: number;
   token: string;
   expires: number;
@@ -48,32 +54,6 @@ export interface AskpassAttempt {
 /** A request line: the helper's JSON with a prompt of at most 8 KiB, escaped. */
 const requestCharacters = 64 * 1024;
 const answerCharacters = 64 * 1024;
-const invisible = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/u;
-const hostKeyQuestion = /continue connecting|yes\/no|authenticity of host/i;
-
-/**
- * Prompt text as people see it: line breaks and tabs become spaces, every other control, format,
- * bidi or invisible character is removed, and the result is capped at 2,000 characters.
- */
-export function remotePromptText(text: string): string {
-  const visible = [...text.slice(0, 4 * remoteLimits.serverPromptCharacters)]
-    .map((character) => (/[\t\r\n\u2028\u2029]/u.test(character) ? ' ' : character))
-    .filter((character) => !invisible.test(character))
-    .join('')
-    .replace(/ {2,}/g, ' ')
-    .trim();
-  return [...visible].slice(0, remoteLimits.serverPromptCharacters).join('');
-}
-
-function promptKind(hint: unknown, text: string): RemotePromptKind {
-  if (hint === 'none') {
-    return 'notice';
-  }
-  if (hint === 'confirm') {
-    return 'confirm';
-  }
-  return hostKeyQuestion.test(text) ? 'host-key' : 'secret';
-}
 
 function abandoned(signal: AbortSignal): Promise<null> {
   return new Promise((resolve) => {
@@ -85,7 +65,13 @@ function abandoned(signal: AbortSignal): Promise<null> {
   });
 }
 
-/** Each token grants prompts for one clicked attempt and one window, never a connection forever. */
+/**
+ * Each token grants questions for one clicked attempt and one window, never a connection forever.
+ * One token per attempt, not per question: OpenSSH starts every askpass of an attempt with the
+ * same environment, so it cannot carry a new token for each. Node cannot see which process is at
+ * the other end of a Unix socket, so there is no peer check either: the socket sits in a 0700
+ * folder, the token is 256 random bits, and it expires with the attempt.
+ */
 export class AskpassRelay {
   private server?: Server;
   private socketPath?: Promise<string>;
@@ -128,7 +114,8 @@ export class AskpassRelay {
     return this.socketPath;
   }
 
-  async begin(id: string, name: string, owner: number): Promise<AskpassAttempt> {
+  /** `key` is the file name of the connection's chosen key, which OpenSSH may cut short. */
+  async begin(id: string, name: string, owner: number, key?: string): Promise<AskpassAttempt> {
     if (this.closed) {
       throw new Error('Server prompts have closed.');
     }
@@ -148,6 +135,7 @@ export class AskpassRelay {
     const attempt: Attempt = {
       id,
       name,
+      key,
       owner,
       token,
       controller,
@@ -167,14 +155,14 @@ export class AskpassRelay {
     };
   }
 
-  cancel(id: string): void {
+  cancel(id: string, reason?: Error): void {
     const attempt = this.attempts.get(id);
     if (!attempt) {
       return;
     }
     this.attempts.delete(id);
     clearTimeout(attempt.timer);
-    attempt.controller.abort();
+    attempt.controller.abort(reason);
   }
 
   cancelOwner(owner: number): void {
@@ -251,8 +239,17 @@ export class AskpassRelay {
     if (!attempt || !live(attempt)) {
       return null;
     }
-    const text = remotePromptText(request.prompt);
-    const kind = promptKind(request.hint, text);
+    if (request.hint === 'confirm') {
+      // Only `ControlMaster ask` asks this, and Viewer's master never runs in that mode: answer
+      // no without a sheet, and end the attempt.
+      this.cancel(attempt.id, new UnexpectedQuestionError());
+      return 'no';
+    }
+    const presentation = describePrompt(
+      request.prompt,
+      typeof request.hint === 'string' ? request.hint : undefined,
+      { name: attempt.name, key: attempt.key },
+    );
     // One question at a time per connection, in the order OpenSSH asked them.
     const task = attempt.tail.then(async () => {
       if (!live(attempt) || ended.aborted) {
@@ -261,11 +258,9 @@ export class AskpassRelay {
       const signal = AbortSignal.any([attempt.controller.signal, ended]);
       const answer = await Promise.race([
         this.answer({
+          ...presentation,
           connectionID: attempt.id,
           owner: attempt.owner,
-          title: attempt.name + ' asks:',
-          text: '“' + text + '”',
-          kind,
           signal,
         }),
         abandoned(signal),
@@ -297,7 +292,12 @@ export class AskpassRelay {
     }
     const server = this.server;
     if (server) {
+      // Closing the listener unlinks its socket, which leaves the private folder empty.
       await new Promise<void>((resolve) => server.close(() => resolve()));
+      const socket = await this.socketPath?.catch(() => undefined);
+      if (socket) {
+        await removeSocketFolder(path.dirname(socket));
+      }
     }
   }
 }

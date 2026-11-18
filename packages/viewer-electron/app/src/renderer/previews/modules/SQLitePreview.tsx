@@ -13,7 +13,8 @@ import type {
 } from '../../../domain/previews/data/sqlite';
 import { sqliteCellText, sqliteLimits } from '../../../domain/previews/data/sqlite';
 import type { PreviewContext } from '../contracts';
-import { PreviewToolbar, usePreviewCommands } from '../controls';
+import { PreviewToolbar, standaloneToolbar, usePreviewCommands } from '../controls';
+import { headerItem } from '../../workspace/header-overflow';
 import { DataTable } from '../DataTable';
 import type { TableControls } from '../DataTable';
 import { usePreviewState } from '../state';
@@ -280,9 +281,11 @@ function ObjectList({
   );
 }
 
+/** A table's own toolbar, under the database's: measured where it stands, its counts facts the
+ * footer shows with the file's others. */
 function rowControls(controls: TableControls): ReactNode {
   return (
-    <div className="preview-toolbar">
+    <PreviewToolbar context={standaloneToolbar}>
       <input
         type="search"
         aria-label="Filter rows on this page"
@@ -291,16 +294,16 @@ function rowControls(controls: TableControls): ReactNode {
         onChange={(event) => controls.setQuery(event.target.value)}
       />
       <span className="toolbar-spacer" />
-      <span className="muted tabular">
+      <span {...headerItem('rows', 9, 'detail')}>
         {plural(controls.rows, 'row', 'rows')} · {plural(controls.columns, 'column', 'columns')}
       </span>
-    </div>
+    </PreviewToolbar>
   );
 }
 
 function schemaControls(controls: TableControls): ReactNode {
   return (
-    <div className="preview-toolbar">
+    <PreviewToolbar context={standaloneToolbar}>
       <input
         type="search"
         aria-label="Filter columns"
@@ -309,8 +312,10 @@ function schemaControls(controls: TableControls): ReactNode {
         onChange={(event) => controls.setQuery(event.target.value)}
       />
       <span className="toolbar-spacer" />
-      <span className="muted tabular">{plural(controls.rows, 'column', 'columns')}</span>
-    </div>
+      <span {...headerItem('columns', 9, 'detail')}>
+        {plural(controls.rows, 'column', 'columns')}
+      </span>
+    </PreviewToolbar>
   );
 }
 
