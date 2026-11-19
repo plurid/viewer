@@ -30,9 +30,9 @@ Store edition and an unconfigured build have no License page. See the
 ## Folder access
 
 In the App Store edition, use **Allow Folder Access…** or Settings → Permissions when macOS
-authorization is missing. Selecting a parent folder authorizes its descendants. Cancelling the
-picker leaves the current folder in place. A saved location that was moved, removed or became
-unavailable may need to be selected again.
+authorization is missing. Selecting a parent folder authorizes its descendants. Canceling the picker
+leaves the current folder in place. A saved location that was moved, removed or became unavailable
+may need to be selected again.
 
 The Volumes dialog can list mounted devices without authorizing browsing their contents. Opening a
 volume can still require the folder picker. Eject stops Viewer work for that volume before asking
@@ -100,10 +100,11 @@ Failed privacy checks are named and excerpts are omitted. Turning the checkbox o
 default report. Viewer sends neither version to its developer and adds no settings, file listings,
 clipboard contents, environment variables or license buyer details.
 
-Store message excerpts need local account and Home information, a Home realpath check, `id` for the
-full name, `scutil` for computer and host names, and mounted names from `/Volumes`. If the sandbox
-refuses a check, the report names it and omits excerpts while keeping the default failure details.
-Both views use one log snapshot. Oversized reports end at a whole line and say they were shortened.
+In both editions, message excerpts need local account and Home information, a Home realpath check,
+`id` for the full name, `scutil` for computer and host names, and mounted names from `/Volumes`. If
+the sandbox refuses a check, the report names it and omits excerpts while keeping the default
+failure details. Both views use one log snapshot. Oversized reports end at a whole line and say they
+were shortened.
 
 Developers read reported code locations against the
 [source maps kept for that exact release](../development/releases.md#keep-source-maps-for-report-locations).

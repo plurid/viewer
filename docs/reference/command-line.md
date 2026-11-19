@@ -8,12 +8,12 @@ commands work without it.
 
 ## The command line
 
-| Key            | Effect                                                                      |
-| -------------- | --------------------------------------------------------------------------- |
-| **Enter**      | Runs the line, once the whole line parses                                   |
-| **Tab**        | Accepts the highlighted completion                                          |
-| **⌃P**, **⌃N** | Steps back and forward through history                                      |
-| Empty field    | Lists the 30 most recent lines; **Clear recent command lines** forgets them |
+| Key            | Effect                                                        |
+| -------------- | ------------------------------------------------------------- |
+| **Enter**      | Runs the line, once the whole line parses                     |
+| **Tab**        | Accepts the highlighted completion                            |
+| **⌃P**, **⌃N** | Steps back and forward through history                        |
+| Empty field    | Lists the 30 most recent lines; **Clear Recent** forgets them |
 
 A line that does not parse is not run: its message names the problem and the column, and may suggest
 a close spelling (`Did you mean …?`). A suggestion never runs by itself. Lines that parse enter
@@ -51,7 +51,8 @@ step reads the live plane, so `cd ~/x | e %` opens what `cd` reached.
 | Named commands calling each other | 10 deep        |
 
 A command ID alone is a step: `copy`, `view-list`, `setting.ui.space.grid`. It takes no words and no
-`!`. ⌘K's rows carry their IDs; `:help` lists the verbs.
+`!`. Typing a name in the command line completes command IDs, each with its label, and
+[Features and where to find them](capabilities.md) lists them; `:help` lists the verbs.
 
 ## Verbs
 
@@ -96,7 +97,7 @@ Square brackets in a name mark letters you may leave out, as in vim: `q[uit]` an
 | `profile`                                               | `{profile}`                       | Applies a setting profile                                                                |
 | `layout`, `select-layout`, `selectl`                    | `{layout}`                        | A tiling layout or a layout template                                                     |
 | `select-pane`, `selectp`                                | `-L\|-R\|-U\|-D`                  | Focuses the plane left, right, up or down                                                |
-| `resize-pane`, `resizep`                                | `-L\|-R\|-U\|-D [n]`              | Grows the active tile toward a neighbour, 1 to 12 steps                                  |
+| `resize-pane`, `resizep`                                | `-L\|-R\|-U\|-D [n]`              | Grows the active tile toward a neighbor, 1 to 12 steps                                   |
 | `display-panes`, `displayp`                             |                                   | Labels the planes in view to jump to one                                                 |
 | `mode`, `switch-client`, `switchc`                      | `[name]` or `-T name`             | Enters a key mode until Escape; no name leaves it                                        |
 | `bind`, `bind-key`                                      | `[-n\|-r\|-T mode] {keys} {line}` | Binds keys for this session                                                              |
@@ -207,7 +208,8 @@ selected. `:help query` lists the terms with examples.
 ## Keys and modes
 
 The default prefix is **⌃B**, as in tmux. After it, **?** shows every binding, **:** opens the
-command line and **R** enters the `resize` mode. Pressing the prefix twice sends it to a terminal.
+command line and **R** enters the `resize` mode. In a terminal plane the shell receives the prefix
+at once; with `settings.keymap.inTerminals` on, pressing it twice sends it to the shell.
 [Shortcuts](shortcuts.md) lists the default prefix keys; `:help keys` lists the keys in effect.
 
 Keys can be written as Viewer, tmux or vim write them: `Ctrl+b`, `C-b` and `<C-b>` are one key.
@@ -223,9 +225,9 @@ Modifiers are `Ctrl` (`C`, `control`), `Alt` (`M`, `A`, `opt`, `option`, `meta`)
 | `-r`         | After the prefix, then again without it within the repeat time (500 ms by default); one key only |
 | `-T mode`    | In a named mode; mode names are lowercase, up to 31 characters                                   |
 
-A binding is one to four keys in turn. In a mode, digits before a key repeat it; **Escape** leaves
-the mode. Errors include `“x” is not a key.`, `One to four keys, in turn.` and
-`-r is for one prefix key.`
+A binding is one to four keys in turn; for `:bind`, write two or more as one quoted word, as in
+`:bind 'g g' frame-all`. In a mode, digits before a key repeat it; **Escape** leaves the mode.
+Errors include `“x” is not a key.`, `One to four keys, in turn.` and `-r is for one prefix key.`
 
 ## Named commands
 
@@ -243,8 +245,9 @@ A line without `$` placeholders refuses words: `:Name takes no words.` A command
 sequence cannot run another custom action or named command.
 
 **Record Macro** (prefix **q**) records the commands you run by key, menu or palette, up to 50, and
-saves them as a command sequence. It skips custom actions, the palette, Settings, **Show key
-sequences**, plane hints and agent commands. A workspace switch is recorded as `tabn Name`.
+saves them as a command sequence. It skips custom actions, the palette, Settings, **Show Key
+Sequences**, plane hints, agent commands and any other command whose ID contains `:`. A workspace
+switch is recorded as `tabn Name`.
 
 ## Session changes
 
@@ -284,13 +287,13 @@ The model receives the request, the active folder's path, up to 50 selected name
 names and the commands available here. It never receives file contents. A request is at most 1,000
 characters.
 
-| A proposed line is refused when it                                                                                                                                                                          |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Uses `trash`, `mv`, `send-keys`, `bind`, `unbind`, `command`, `delcommand`, `w`, `wa`, `wq` or `x`                                                                                                          |
-| Uses any `!` form                                                                                                                                                                                           |
-| Names a command that uses a terminal, runs a program, opens another application, runs Git program actions, moves to the Trash, renames, saves, moves to the paired folder, undoes file operations or pastes |
-| Expands to more than 50 steps, or nests named commands more than 10 deep                                                                                                                                    |
-| Names a verb, command or named command that does not exist here                                                                                                                                             |
+| A proposed line is refused when it                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Uses `trash`, `mv`, `send-keys`, `bind`, `unbind`, `command`, `delcommand`, `w`, `wa`, `wq` or `x`                                                                                                                                                                                                                         |
+| Uses any `!` form                                                                                                                                                                                                                                                                                                          |
+| Names a command that uses a terminal, runs a program, opens another application, runs Git program actions, opens a defined workspace or starts its commands, manages workspaces or their commands, opens network sharing, moves to the Trash, renames, saves, moves to the paired folder, undoes file operations or pastes |
+| Expands to more than 50 steps, or nests named commands more than 10 deep                                                                                                                                                                                                                                                   |
+| Names a verb, command or named command that does not exist here                                                                                                                                                                                                                                                            |
 
 A refused line is not offered; the reason shows instead. Agents connected to Viewer cannot type
 command lines; they propose commands through their own tools. See

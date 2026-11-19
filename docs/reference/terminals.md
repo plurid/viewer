@@ -7,11 +7,11 @@ Terminal commands use the selected folder, a selected file's folder, or the acti
 
 ## Quick commands in the palette
 
-In **⌘K**, type `!` to open **Quick command**. **Return** runs the text verbatim using the default
-shell profile; **Shift+Return** adds a line. The limit is 16,000 characters. The folder displayed
-above the input is captured on opening: the folder or active browsing column, a terminal's starting
-folder, a preview's parent, or Home when no file context is active. Execution refuses a context
-whose workspace, plane or path has changed.
+In **⌘K**, type `!` to open **Quick Command**. **Return** runs the text verbatim using the default
+shell profile; **⇧Return** adds a line. The limit is 16,000 bytes: a character outside ASCII counts
+as two to four. The folder displayed above the input is captured on opening: the folder or active
+browsing column, a terminal's starting folder, a preview's parent, or Home when no file context is
+active. Execution refuses a context whose workspace, plane or path has changed.
 
 Output streams inline with status, exit code, **Stop**, **Copy Output** and **Open Receipt**.
 Closing the palette does not cancel the command, and reopening returns to its last output. Only one
@@ -25,14 +25,14 @@ a row never runs it.
 
 ## Run one command
 
-**Run Command…** opens the **Run command** dialog for the current folder.
+**Run Command…** opens the **Run Command** dialog for the current folder.
 
-| Control             | Behavior                                                                                         |
-| ------------------- | ------------------------------------------------------------------------------------------------ |
-| **Command**         | One or more shell lines, up to 16,000 characters. **⌘Return** runs it.                           |
-| **Recent**          | The last 20 commands run from this window; **Clear** empties the list.                           |
-| **Run**             | Starts the command in the folder and shows it in **Command Progress**.                           |
-| **Save as Action…** | Names it (**Action name**), then **Review in Settings** sends a draft to **Settings → Actions**. |
+| Control             | Behavior                                                                                  |
+| ------------------- | ----------------------------------------------------------------------------------------- |
+| **Command**         | One or more shell lines, up to 16,000 bytes. **⌘Return** runs it.                         |
+| **Recent**          | The last 20 commands run from this window; **Clear** empties the list.                    |
+| **Run**             | Starts the command in the folder and shows it in **Command Progress**.                    |
+| **Save as Action…** | Names it (**Name**), then **Review in Settings** sends a draft to **Settings → Actions**. |
 
 The command uses the default shell profile. **Settings → Terminals → Command startup** defaults to
 **Load shell configuration**: Viewer adds `-i` for zsh, bash and fish, preserving the profile's
@@ -89,10 +89,11 @@ then the nearest lockfile toward the root, then defaults to npm. At the same lev
 precedence is pnpm, yarn, bun, npm. Viewer reads from the captured folder toward the deepest
 enclosing definition root. Without one, it uses the nearest Git marker within six folders, counting
 the current folder. Without that marker, it reads only the captured folder. Home and its ancestors
-are never owning roots; the walk stops below home. Nearest files lead; duplicate literal lines
-appear once. For package scripts, just recipes and Deno tasks, a parent file is offered only if
-there is no nearer file of the same kind. The tool's own upward search finds that file. A parent
-Makefile uses `make -C ../.. target` to run in its folder. Parent Procfiles are never offered.
+are never owning roots; the walk stops below home, and a command captured in Home itself lists
+nothing. Nearest files lead; duplicate literal lines appear once. For package scripts, just recipes
+and Deno tasks, a parent file is offered only if there is no nearer file of the same kind. The
+tool's own upward search finds that file. A parent Makefile uses `make -C ../.. target` to run in
+its folder. Parent Procfiles are never offered.
 
 Each file is limited to 256 KiB and 50 entries. Names must match
 `^[A-Za-z0-9][A-Za-z0-9:._/@+-]{0,99}$`; invalid names are dropped, never quoted. Generated lines
@@ -122,13 +123,14 @@ asks for permission.
 ## Command receipts
 
 Each quick command and **Run Command…** run writes a private receipt in Viewer's data. **Tasks…** →
-**Command History** lists them, and **Open Receipt** opens one as a plane.
+**Command History** lists the 100 newest that match its search field, and **Open Receipt** opens one
+as a plane.
 
 | Field   | Content                                                                                                  |
 | ------- | -------------------------------------------------------------------------------------------------------- |
 | Outcome | **Running**, **Done**, **Failed with exit code N**, **Stopped**, **Failed to finish** or **Interrupted** |
 | Times   | Start and end                                                                                            |
-| Folder  | The command's working folder, with **Copy path** before it                                               |
+| Folder  | The command's working folder, with **Copy path** beside it                                               |
 | Command | The literal text run                                                                                     |
 | Output  | The last 256 KiB                                                                                         |
 
@@ -144,16 +146,17 @@ is full. Existing receipts were preserved.** Closing a receipt plane keeps the r
 | **Open Terminal Plane** | A terminal linked to the files plane, starting in its folder.                         |
 | **New Terminal Plane**  | A root terminal plane in the folder where new planes start (**Settings → Browsing**). |
 
-Each terminal plane has its own shell, started from the default shell profile.
+Each terminal plane has its own shell, started from the default shell profile unless a custom action
+or a workspace definition names another profile.
 
-| Feature    | Behavior                                                                                                                      |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Find       | **Find in terminal**; **Return** finds the next match, **Shift-Return** the previous; **Escape** or **Close find** closes it. |
-| Paste      | Copy, paste and bracketed paste.                                                                                              |
-| Drop       | Dropping files pastes their quoted paths.                                                                                     |
-| Scrollback | **Terminal scrollback lines**, 100 to 50,000, default 10,000.                                                                 |
-| At once    | 100 terminals, Git terminals included. Another shows **Close a terminal before opening another.**                             |
-| Size       | Resizing the plane changes rows and columns; zooming the space does not.                                                      |
+| Feature    | Behavior                                                                                                                           |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Find       | **⌘F** or **Find in terminal**; **Return** finds the next match, **⇧Return** the previous; **Escape** or **Close find** closes it. |
+| Paste      | Copy, paste and bracketed paste.                                                                                                   |
+| Drop       | Dropping files pastes their quoted paths.                                                                                          |
+| Scrollback | **Terminal scrollback lines**, 100 to 50,000, default 10,000.                                                                      |
+| At once    | 100 terminals, Git terminals included. Another shows **Close a terminal before opening another.**                                  |
+| Size       | Resizing the plane changes rows and columns; zooming the space does not.                                                           |
 
 The shell keeps running while the plane is out of view or another workspace is shown. Closing the
 plane ends its shell. After Viewer restarts, a saved terminal plane starts a fresh shell; nothing is
@@ -223,18 +226,19 @@ report-shaped input and every DECRQSS reply are dropped while the command is pen
 **Settings → Terminals** → **Shell profiles** defines what a terminal starts. **Default shell
 profile** chooses the one used by terminal planes, **Run Command…** and external terminals.
 
-| Field          | Rule                                                                                             |
-| -------------- | ------------------------------------------------------------------------------------------------ |
-| **Name**       | 1 to 100 characters.                                                                             |
-| **Executable** | A program path or name; empty uses your login shell (`$SHELL`, else `/bin/zsh`).                 |
-| Arguments      | Up to 100 literal arguments. The built-in **Login shell** profile uses `-l`.                     |
-| Environment    | Variables named `[A-Za-z_][A-Za-z0-9_]*`. `DYLD_*`, `ELECTRON_*` and `NODE_OPTIONS` are refused. |
-| Count          | 1 to 30 profiles. **New Shell Profile** adds one; **Remove Profile** removes one.                |
+| Field          | Rule                                                                                                                                                  |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Name**       | 1 to 100 characters.                                                                                                                                  |
+| **Executable** | A program path or name; empty uses your login shell (`$SHELL`, else `/bin/zsh`).                                                                      |
+| Arguments      | Up to 100 literal arguments. The built-in **Login shell** profile uses `-l`.                                                                          |
+| Environment    | Variables named `[A-Za-z_][A-Za-z0-9_]*`. `DYLD_*`, `ELECTRON_*` and `NODE_OPTIONS` are refused.                                                      |
+| Count          | 1 to 30 profiles. **New Shell Profile** adds one; **Remove Profile** removes one that is not the default and that nothing else in your settings uses. |
 
-The built-in login shell starts without asking. Any other profile asks **Start terminal profile
-“NAME” for the first time?** in a system dialog, showing exactly what it runs. The answer is kept
-for that exact program, arguments and environment; a change asks again. This applies to profiles
-from edited or imported configuration and to terminal planes restored on launch.
+A profile that starts your login shell with no environment and no argument other than `-l`, as the
+built-in **Login shell** does, starts without asking. Any other profile asks **Start terminal
+profile “NAME” for the first time?** in a system dialog, showing exactly what it runs. The answer is
+kept for that exact program, arguments and environment; a change asks again. This applies to
+profiles from edited or imported configuration and to terminal planes restored on launch.
 
 ## External terminal and tmux
 
@@ -245,7 +249,8 @@ from edited or imported configuration and to terminal planes restored on launch.
 
 **External terminal** is `auto` or an app name or path such as `iTerm2`, `Terminal` or
 `/Applications/YourApp.app`. `auto` uses a running supported terminal, then iTerm, then Terminal. An
-app chosen by path asks a native confirmation once. External terminals are macOS only.
+app path that is not one of the terminal apps Viewer found asks a native confirmation once. External
+terminals are macOS only.
 
 To hand off, Viewer writes a launcher script into `terminal-launches` in its data, a folder only you
 can open (mode 0700). The script holds the profile's environment and arguments, which can carry
@@ -263,8 +268,9 @@ fails, the shell still opens.
 **Open in tmux** creates the session when it does not exist, otherwise adds a window, then attaches
 the terminal app to it. iTerm attaches in control mode (`-CC`) and reuses a control-mode client
 already attached. The default profile's environment applies; its program and arguments do not. The
-tmux executable, socket and environment are confirmed natively before first use. tmux sessions keep
-running after Viewer quits. Up to 20 handoffs can wait at once.
+tmux executable, socket and environment are confirmed natively before first use, except the default:
+`tmux` with no socket path and no profile environment. tmux sessions keep running after Viewer
+quits. Up to 20 handoffs can wait at once.
 
 Typography (**Settings → Terminals**, `settings.terminalFont`) is separate from previews and the
 editor; [configuration](configuration.md) lists every terminal setting and default.

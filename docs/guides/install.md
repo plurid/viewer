@@ -108,7 +108,7 @@ caches and, when you choose them, recovery copies of reviewed changes.
 3. Quit Viewer with **⌘Q**.
 4. Move **Viewer** from **Applications** to the Trash.
 5. To remove its data as well, move `~/Library/Application Support/Viewer` to the Trash. In the
-   Finder, press **⌘⇧G** and enter that path to find it.
+   Finder, press **⇧⌘G** and enter that path to find it.
 
 Removing Viewer never removes your files.
 

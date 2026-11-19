@@ -35,7 +35,7 @@ number elsewhere in a document is insufficient.
 
 Each accepted requirement must name its source, page or passage, value, unit and source version. The
 verifier accepts supported labeled statements and leaves missing or ambiguous statements unverified.
-A person may inspect the source and type a value through **Confirm from source…**. That records
+A person may inspect the source and type a value through **Confirm from Source…**. That records
 **Human confirmed**, separately from **Source verified**.
 
 The same boundary covers quantities and thicknesses. Every request row must be verified before
@@ -67,11 +67,11 @@ policy.
 
 ### Layout is a reversible user action
 
-After a check completes, leave the person's evidence arrangement alone. **Review evidence** opens
+After a check completes, leave the person's evidence arrangement alone. **Review Evidence** opens
 exact version-bound source references, waits for their views and makes a readable comparison.
 Filename suffix matching cannot establish which source a finding cites.
 
-**Stack evidence** is optional. **Compare evidence**, **Restore arrangement** and Undo/Redo must
+**Stack Evidence** is optional. **Compare Evidence**, **Restore Arrangement** and Undo/Redo must
 restore geometry together with stack membership and previous placements. Pinned tools reserve
 visible space. Narrow windows may collapse the check while the person reviews its evidence. Closing,
 changing workspaces or starting a newer review invalidates stale asynchronous work.
@@ -97,7 +97,7 @@ The owner commits and pushes reviewed changes. Agents do not create commits for 
 | Published integration | Exact engine artifacts, CI and registry integrity pass; Viewer passes from registry dependencies in a fresh install                                    |
 | Workflow rehearsal    | Complete Job 1042, reopen exported files and retain fabrication evidence separately from qualification of the current film                             |
 
-Existing profiles keep their onboarding choices. New profiles learn **Frame all planes** using the
+Existing profiles keep their onboarding choices. New profiles learn **Frame All Planes** using the
 configured shortcut. Pin, place, collapse, expand, stack and unstack are discoverable commands; this
 work does not assign speculative default shortcuts.
 

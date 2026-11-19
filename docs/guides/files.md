@@ -35,8 +35,8 @@ unchecked and checked when you open them. The sidebar's **Recent** list keeps it
 order.
 
 Choose **Clear Recent Folders** in **⌘K** or **Go to Folder…**, or **Clear** beside the sidebar's
-**Recent** heading, to clear both the Recent list and visit counts across windows. **Undo clear
-recent folders** restores them from the offer in the clearing window. The offer lasts eight seconds;
+**Recent** heading, to clear both the Recent list and visit counts across windows. **Undo Clear
+Recent Folders** restores them from the offer in the clearing window. The offer lasts eight seconds;
 dismissing it, quitting or clearing again in another window ends it. Renamed folders return under
 their new paths. This history stays on this Mac and is included with recents in a personal backup.
 Trash and archive contents are never learned. See the
@@ -57,10 +57,10 @@ references. See [Declared commands](../reference/terminals.md#declared-commands)
 File, folder and save dialogs open inside the Viewer window that requested them. Settings uses its
 own window. Locations, Favorites and recent folders appear on the left.
 
-1. Choose a location, double-click a folder, or enter a **Folder path** and press **Enter**. **⌘⇧G**
+1. Choose a location, double-click a folder, or enter a **Folder path** and press **Enter**. **⇧⌘G**
    (**Ctrl+Shift+G** on Windows/Linux) focuses the path. `~` opens Home.
 2. Type in **Filter by name…** to narrow the current folder. Press **↓** to move into the list.
-   **Show Hidden Files** includes names starting with a dot and, on macOS with a helper built from
+   **Show hidden files** includes names starting with a dot and, on macOS with a helper built from
    the current source, items with the hidden flag. **File type** limits eligible files.
 3. Select a file and choose **Open**. When multiple selection is available, use **Shift** for a
    range or **⌘** (**Ctrl**) to add an item. **⌘A** (**Ctrl+A**) selects eligible files only.
@@ -84,7 +84,7 @@ system dialogs. Editor save warnings and ordinary app notices use Viewer's dialo
 
 The **View mode** button in the folder's header switches views too. To group items, right-click
 empty space and choose **View → Group by**, then **Group by Kind** or **Group by Date Modified**.
-**⌘⇧.** shows or hides hidden files. Links have kind **Alias**, including links to folders, and
+**⇧⌘.** shows or hides hidden files. Links have kind **Alias**, including links to folders, and
 **Group by Kind** places them in **Aliases** before **Folders**. They still open their targets;
 ordinary name, date and size sorting keep their existing order.
 
@@ -124,18 +124,18 @@ stays at the end.
 
 ## Copy, move and rename
 
-| To                       | Do                                                                        |
-| ------------------------ | ------------------------------------------------------------------------- |
-| Copy and paste           | **⌘C**, then **⌘V** in the destination                                    |
-| Move                     | **⌘C**, then **⌥⌘V** (**Move Copied Items Here**) in the destination      |
-| Move by dragging         | Drag onto a folder: it moves on the same disk and copies to another       |
-| Choose copy or move      | Hold **Option** while you drop to copy, **⌘** to move                     |
-| Rename                   | Select, press **Return**, type, press **Return**                          |
-| Duplicate                | **⌘D**                                                                    |
-| Make a folder            | **⌘N**; **⌃⌘N** (**New Folder with Selection…**) puts the selection in it |
-| Copy a file's full path  | **⌥⌘C** (**Copy Path**)                                                   |
-| Copy a path in a dialog  | Click the path to select all of it, or click the copy button beside it    |
-| See size, dates and tags | **⌘I** (**Get Info…**)                                                    |
+| To                       | Do                                                                         |
+| ------------------------ | -------------------------------------------------------------------------- |
+| Copy and paste           | **⌘C**, then **⌘V** in the destination                                     |
+| Move                     | **⌘C**, then **⌥⌘V** (**Move Copied Items Here**) in the destination       |
+| Move by dragging         | Drag onto a folder: it moves on the same disk and copies to another        |
+| Choose copy or move      | Hold **Option** while you drop to copy, **⌘** to move                      |
+| Rename                   | Select, press **Return**, type, press **Return**                           |
+| Duplicate                | **⌘D**                                                                     |
+| Make a folder            | **⇧⌘N**; **⌃⌘N** (**New Folder with Selection…**) puts the selection in it |
+| Copy a file's full path  | **⌥⌘C** (**Copy Path**)                                                    |
+| Copy a path in a dialog  | Click the path to select all of it, or click the copy button beside it     |
+| See size, dates and tags | **⌘I** (**Get Info…**)                                                     |
 
 With a picture and no copied files on the clipboard, **Paste Here** (**⌘V**) saves and selects
 `Pasted image.png`, using a unique name when needed. **Undo File Operation** moves it to the Trash.
@@ -143,10 +143,10 @@ With a picture and no copied files on the clipboard, **Paste Here** (**⌘V**) s
 A copy on the same disk is instant: on APFS, Viewer clones the file, so the copy shares the
 original's storage until either one changes. Copies to another disk read and write every byte.
 
-When a name already exists at the destination, Viewer asks whether to **Skip**, **Keep both** or
+When a name already exists at the destination, Viewer asks whether to **Skip**, **Keep Both** or
 **Replace**. The **File operations** button in the title bar shows each operation as a
 [job](../reference/terms.md#changes-and-recovery), with its progress and failures. Choose **Clear
-all** in that panel to dismiss finished operations, including failures. Running and queued
+Finished** in that panel to dismiss finished operations, including failures. Running and queued
 operations stay visible. Undo and recovery receipts remain available.
 
 **⌘Z** undoes the last file operation, and **⇧⌘Z** redoes it. An operation offers **Undo** for the
@@ -197,7 +197,7 @@ get a folder inside a folder of the same name.
 2. Say what changes: a **Filename template** such as `Trip {number}{extension}`, a **Prefix** or
    **Suffix**, or **Find text** and **Replace with**. Choose **Prepare Changes**.
 3. Review the old and new names. Untick any file that should keep its name, then choose **Apply 12
-   changes**; the button counts the files that change.
+   Changes**; the button counts the files that change.
 
 **Rename as book…** names PDFs and EPUBs from their own publication details: year, authors, title
 and publisher.
@@ -226,7 +226,7 @@ filter and how to save a search.
 - **Find Duplicates…** lists identical files in the selected folders.
 - **Compare Locations…** shows what differs between two folders.
 
-## Trash and restore
+## Trash and Put Back
 
 **⌘⌫** (**Move to Trash…**) moves the selection to the operating system's Trash. Viewer never
 deletes a file for good. Closing a plane only closes its view; it never deletes files.

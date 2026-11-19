@@ -42,21 +42,25 @@ output.
 
 The Journal is diagnostic history. Operation receipts own changes and Undo; command receipts own
 process output. An event cannot authorize, apply, undo or replay anything. No window can append to
-it, and agents have no route to read it.
+it, and agents have no route to read it. An event has no field for who asked, so it cannot tell an
+agent's approved change from your own. For a client's own calls, see
+[Watch and stop](agents.md#watch-and-stop). An event has no field for who asked: a change an agent
+proposed and you approved reads like your own. **Activity** on a client in **Settings → Agents**
+lists that client's calls.
 
 ## Find an event
 
-| Control                   | Values                                                                               |
-| ------------------------- | ------------------------------------------------------------------------------------ |
-| **Search events or IDs**  | Up to 200 characters, matched against the summary, source and IDs                    |
-| **Event source**          | **All sources** or one source                                                        |
-| **Event severity**        | **All levels**, **Info**, **Warning**, **Error**                                     |
-| **Event time range**      | **All time**, **Last 15 minutes**, **Last hour**, **Last 24 hours**, **Time range…** |
-| **Journal workspace**     | **All workspaces** or one; a closed one shows as **Closed workspace**                |
-| **Journal plane**         | **All planes** or one; a closed one shows as **Closed plane**                        |
-| **Filters**               | A menu of presets and your saved filters                                             |
-| **Save Journal filters**  | Saves the current filters by name, up to 80 characters; 20 per Journal plane         |
-| **Clear Journal filters** | Removes every filter                                                                 |
+| Control                   | Values                                                                                    |
+| ------------------------- | ----------------------------------------------------------------------------------------- |
+| **Search events or IDs**  | Up to 200 characters, matched against the summary, source and IDs                         |
+| **Event source**          | **All sources** or one source                                                             |
+| **Event severity**        | **All levels**, **Info**, **Warning**, **Error**                                          |
+| **Event time range**      | **All time**, **Last 15 minutes**, **Last hour**, **Last 24 hours**, **Time range…**      |
+| **Journal workspace**     | **All workspaces** or one; a closed one shows as **Closed workspace**                     |
+| **Journal plane**         | **All planes** or one, once a workspace is chosen; a closed one shows as **Closed plane** |
+| **Filters**               | A menu of presets and your saved filters                                                  |
+| **Save Journal filters**  | Saves the current filters by name, up to 80 characters; 20 per Journal plane              |
+| **Clear Journal filters** | Removes every filter                                                                      |
 
 | Preset                     | Filter               |
 | -------------------------- | -------------------- |
@@ -95,9 +99,9 @@ overwrites an existing file.
 ## Storage and clearing
 
 The Journal is one private local file. It holds up to 10,000 events or 8 MiB, whichever comes first.
-It does not rotate. When it is full it stops recording, says **Journal is full. Export events, then
-move history to the Trash to continue recording.**, and counts the events it could not record this
-session.
+It does not rotate. When it is full it stops recording, says **Journal is full. Export its events,
+then move its history to the Trash to record again.**, and counts the events it could not record
+this session.
 
 **Move History to Trash…** asks for confirmation, then moves the Journal file to the Trash and
 starts an empty one. If the file changed outside Viewer, recording stops and the file is kept:

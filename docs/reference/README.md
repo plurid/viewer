@@ -39,7 +39,7 @@ Look up current behavior, exact syntax and limits. For a walkthrough, use the
 - [Keyboard shortcuts](shortcuts.md)
 - [Configuration files and settings](configuration.md)
 - [Offline license keys and trial state](license.md)
-- [Platform qualification](platforms.md)
+- [Platform and build status](platforms.md)
 - [Features and where to find them](capabilities.md)
 - [Words Viewer uses](terms.md)
 

@@ -11,9 +11,14 @@ Model requests include the current canvas and its evidence. Historical tool snap
 identical large values in that current context through `$viewerContext` JSON Pointers. Different
 historical values, action results and check failures remain present. This projection does not alter
 the saved transcript or frozen quote context. Meta receives each current-turn result once, paired
-with its native tool call. The existing context and inspection limits still apply.
+with its native tool call. One request, with the current canvas, its state, defaults, sources and
+the conversation, holds at most 256 KiB of JSON, and one turn reads at most 1 MiB of tool results.
+Past either, the turn fails and says so.
 
 ## Tool ownership and management
+
+The interface calls a saved canvas a tool. A plugin is the same saved document seen as a package:
+its interface, code assets, captured sources and inputs.
 
 A plugin includes its interface, application logic and tests. The agent can reuse an existing plugin
 or template and extend its code across requests. Viewer supplies the scaffold, context snapshots,
@@ -149,11 +154,16 @@ certify attachment requirements, material, tool clearance or manufacturing readi
 
 `canvas_read` obtains current content, saved state and revision. `canvas_write` supplies complete
 HTML in `text`, a title in `query`, the expected revision in `commandID`, and default state values
-in `patches`. Canvas writes accept up to 512,000 HTML characters, matching the document limit. Other
-structured turns retain a 32,000-character text limit. `canvas_asset` attaches the explicit paths in
-`path` and `files`, up to 24 unique files. Every path must be in the attached conversation context.
-The full list is authorized before the first attachment. It returns `{assets,revision}`. Attached
-files require the provider's images data level before being sent as model context.
+in `patches`: up to 20, each a string of at most 1,000 characters, a number or a boolean. Canvas
+writes accept up to 512,000 HTML characters, matching the document limit. Other structured turns
+retain a 32,000-character text limit. Every provider except Meta is asked for at most 12,000 output
+tokens a step, so a page written in one `canvas_write` must fit in that. A longer answer fails as
+refused or incomplete. `canvas_asset` attaches the explicit paths in `path` and `files`, up to 24
+unique files. Every path must be in the attached conversation context. The full list is authorized
+before the first attachment. It returns `{assets,revision}`. Attached files need the provider's
+`images` data level (**Text and pictures**), for the attachment and for every later request in that
+conversation. A request carries each asset's name, type, size, hash and source path, never its
+bytes.
 
 Writes use revision checks. A stale response cannot replace a newer revision. The model receives
 current content and state, not the entire revision history. Canvas requests cannot authorize file or
@@ -161,7 +171,7 @@ shell operations.
 
 `canvas_source` inspects an authorized attached file and returns `{source,revision}`. Repeating it
 returns the saved snapshot unchanged; refresh is a user action. Source context requires the
-provider's document-excerpts permission.
+provider's `excerpts` data level (**Document excerpts**).
 
 `canvas_read` and the next model round include `actions`, `lastAction`, `stateRevision`, `enabled`
 and the generic `host` contract. `canvas_invoke` takes JSON in `text`:
@@ -215,9 +225,11 @@ HTML.
 
 ## Photo to 3D
 
-Object selection uses the configured Meta SAM provider and its existing data approval. Generation
-uses a separate encrypted fal credential and the fixed `fal-ai/sam-3/3d-objects` endpoint. The photo
-and full-frame mask are reviewed before a native paid-generation confirmation.
+Object selection sends the photo and your description to the model chosen in **Selection model**:
+Meta, or a **Local endpoint** that names a SAM model in **Outlines with SAM**. It needs that
+provider's `images` approval. Generation uses a separate encrypted fal credential and the fixed
+`fal-ai/sam-3/3d-objects` endpoint. The photo and full-frame mask are reviewed before a native
+paid-generation confirmation.
 
 The desktop saves intent before submission and saves the remote request ID before polling. A lost
 acknowledgment becomes `submission-unknown` and is never automatically submitted again. Restart
@@ -229,4 +241,7 @@ geometry or texture allocation are rejected. Downloads are restricted to fal med
 forwarding the API key. The saved asset includes provenance; reconstruction jobs and credentials are
 excluded from portable backups. Restoring a model restores its asset, not a paid request.
 
-[Canvas walkthrough](../guides/canvases.md) · [Personal backups](configuration.md#personal-backups)
+**Related:** [Build a canvas with a conversation](../guides/canvases.md) ·
+[Models and data levels](agents.md#add-a-model) ·
+[Personal backups](configuration.md#personal-backups) ·
+[Conversation canvases](../adr/0011-conversation-canvases.md)

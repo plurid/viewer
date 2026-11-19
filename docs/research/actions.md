@@ -107,6 +107,9 @@ A delivery profile describes what the recipient or destination needs. It can con
 maximum size, dimensions, codecs, channels, physical units, embedded resources and preservation
 requirements. It is not a credential, a destination grant or authority to publish anything.
 
+Four export presets exist today and are the starting point: **Images for web…**, **Batch convert
+images…**, **PDF for email…** and **Extract audio…**.
+
 | Proposed profile          | Output set                                                                        | Essential review                                                                                         |
 | ------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Email or upload           | Compatible copies within a user-entered attachment budget.                        | Actual size and quality; report an impossible budget without silently discarding content.                |
@@ -232,7 +235,7 @@ dependency requires identity checks, and a missing dependency stays visible.
 
 Use the existing file-operation and workflow owners for persistence, progress and mutation. Extend
 their state models only where a new operation needs it. Proposed service phases include probe,
-awaiting requirements/review, queued, processing, verifying and completed, with failed, cancelled,
+awaiting requirements/review, queued, processing, verifying and completed, with failed, canceled,
 interrupted or completed-with-issues outcomes when appropriate.
 
 Record enough state to explain which outputs were actually published, which checks ran and which
@@ -278,23 +281,23 @@ its own [sharing authority](sharing.md); a local delivery package is not permiss
 These are proposed services, not a commitment to implement them all before the core suite works.
 Prioritize complete tasks with measurable outcomes over a menu of disconnected demos.
 
-| Idea                               | Concrete experience                                                                                                                | Priority and dependency                                                    |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Destination-first export           | “Make these suitable for this upload,” then review a compatible output set and measured size.                                      | P1; capability catalog, profiles and verification.                         |
-| Loss-aware comparison              | Show what changed after conversion: missing sheets, flatter geometry, shifted colors, altered timing or reduced precision.         | P1 foundation, P2 domain depth.                                            |
-| Transcript-based media selection   | Select a passage in the transcript to mark a clip, produce captions or open a quote chat beside the original moment.               | P1/P2; durable timed text and media edits.                                 |
-| Contact sheets and review indexes  | Create image/video contact sheets, waveform overviews or model thumbnails linked back to the selected originals.                   | P1/P2; layout plus bounded extraction.                                     |
-| Format diagnosis and repair        | Explain why a file fails, locate a missing companion, and offer a verified repaired copy for a supported failure mode.             | P2; domain diagnostics and qualified writers.                              |
-| Source-linked deliverables         | Update a drawing or recording, inspect which outputs became stale, and refresh only affected work without losing edits.            | P2; durable provenance and conflict handling.                              |
-| Cross-format semantic comparison   | Compare PDF with DOCX, a table with a workbook, a drawing with a DXF, or a scan with reconstructed CAD.                            | P2; stable selectors and explicit tolerances.                              |
-| Editable scientific/creative views | Turn a selected dataset into an interactive plot or a model into a section view, keeping controls and source citations in a plane. | P2; typed data bindings and sandboxed presentation.                        |
-| Portable handoff verification      | Reopen a package as the recipient, with dependencies and checks visible before it leaves the machine.                              | P1/P2; manifests and isolated reopen.                                      |
-| Search across understood content   | Find spoken phrases, table fields or CAD properties and open the exact time, row or entity.                                        | P2; reuse existing search ownership and scope.                             |
-| Accessible deliverables            | Review OCR reading order, captions, descriptions and supported document structure before export.                                   | P2; qualification by output type, not a blanket accessibility claim.       |
-| Reviewed redaction                 | Remove selected sensitive content and metadata, then inspect the exported bytes/rendered result for remnants.                      | P2/P3; domain-specific removal from the output, not a painted rectangle.   |
-| Change-aware document extraction   | Extract tables, forms or invoice fields with locators, corrections and a trace back to each source value.                          | P2; explicit schemas and uncertain-value review.                           |
-| Point-cloud/scan workspace         | Calibrate, fit, measure, compare and export a reviewed profile or solid through a Viewer-owned workflow.                           | P2; numerical checks and geometry engine.                                  |
-| Media cleanup and restoration      | Optional denoising, source separation or image enhancement with an original/result comparison.                                     | P3; separate model/processor qualification and generated-content labeling. |
+| Idea                               | Concrete experience                                                                                                                                 | Priority and dependency                                                    |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Destination-first export           | “Make these suitable for this upload,” then review a compatible output set and measured size.                                                       | P1; capability catalog, profiles and verification.                         |
+| Loss-aware comparison              | Show what changed after conversion: missing sheets, flatter geometry, shifted colors, altered timing or reduced precision.                          | P1 foundation, P2 domain depth.                                            |
+| Transcript-based media selection   | Select a passage in the transcript to mark a clip, produce captions or open a quote chat beside the original moment.                                | P1/P2; durable timed text and media edits.                                 |
+| Contact sheets and review indexes  | Image contact sheets exist in **Lay Out…**; add video contact sheets, waveform overviews or model thumbnails linked back to the selected originals. | P1/P2; layout plus bounded extraction.                                     |
+| Format diagnosis and repair        | Explain why a file fails, locate a missing companion, and offer a verified repaired copy for a supported failure mode.                              | P2; domain diagnostics and qualified writers.                              |
+| Source-linked deliverables         | Update a drawing or recording, inspect which outputs became stale, and refresh only affected work without losing edits.                             | P2; durable provenance and conflict handling.                              |
+| Cross-format semantic comparison   | Compare PDF with DOCX, a table with a workbook, a drawing with a DXF, or a scan with reconstructed CAD.                                             | P2; stable selectors and explicit tolerances.                              |
+| Editable scientific/creative views | Turn a selected dataset into an interactive plot or a model into a section view, keeping controls and source citations in a plane.                  | P2; typed data bindings and sandboxed presentation.                        |
+| Portable handoff verification      | Reopen a package as the recipient, with dependencies and checks visible before it leaves the machine.                                               | P1/P2; manifests and isolated reopen.                                      |
+| Search across understood content   | Find spoken phrases, table fields or CAD properties and open the exact time, row or entity.                                                         | P2; reuse existing search ownership and scope.                             |
+| Accessible deliverables            | Review OCR reading order, captions, descriptions and supported document structure before export.                                                    | P2; qualification by output type, not a blanket accessibility claim.       |
+| Reviewed redaction                 | Remove selected sensitive content and metadata, then inspect the exported bytes/rendered result for remnants.                                       | P2/P3; domain-specific removal from the output, not a painted rectangle.   |
+| Change-aware document extraction   | Extract tables, forms or invoice fields with locators, corrections and a trace back to each source value.                                           | P2; explicit schemas and uncertain-value review.                           |
+| Point-cloud/scan workspace         | Calibrate, fit, measure, compare and export a reviewed profile or solid through a Viewer-owned workflow.                                            | P2; numerical checks and geometry engine.                                  |
+| Media cleanup and restoration      | Optional denoising, source separation or image enhancement with an original/result comparison.                                                      | P3; separate model/processor qualification and generated-content labeling. |
 
 The first five product bets are destination-first export, direct audio extraction and timed
 transcription, loss-aware review, calibrated scan-to-DXF, and a portable handoff that reopens with
@@ -338,7 +341,7 @@ architecture decisions belong in ADRs when adopted; this page records proposals.
    or neutral export with its units and selection record, and reopen the package without the
    original workspace or cache.
 
-Across these stories, test cancelled jobs, resource limits, changed inputs, missing processors,
+Across these stories, test canceled jobs, resource limits, changed inputs, missing processors,
 revoked access, unavailable providers, Unicode paths and interrupted publication. Keep run-specific
 measurements in qualification artifacts. Promote the resulting behavior to the current guides and
 references only after implementation and platform qualification.

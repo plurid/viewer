@@ -2,8 +2,6 @@
 
 Superseded by [generated tool ownership](0015-generated-tool-host.md).
 
-Status: accepted.
-
 ## Context
 
 An agent-generated workbench can propose joint positions, but its HTML must not certify its own

@@ -6,7 +6,7 @@ built-in static server.
 | View          | For                                                            |
 | ------------- | -------------------------------------------------------------- |
 | Browser plane | Interactive web pages, including a local development server.   |
-| HTML preview  | Looking at one saved HTML file and its neighbouring files.     |
+| HTML preview  | Looking at one saved HTML file and its neighboring files.      |
 | Local server  | Serving a folder's files over `http://127.0.0.1` to a browser. |
 
 ## Browser planes
@@ -32,7 +32,8 @@ a server's **Open in Viewer** open one too.
 | **Try Again**                     | Reloads after a failed load.                                    |
 
 With the page focused, **⌘C**, **⌘V**, **⌘X** and **⌘A** edit, **⌘R** reloads, **⌘+** or **⌘=**
-zooms in, **⌘-** zooms out and **⌘0** resets. Zoom runs from 50% to 300% in steps of 10%.
+zooms in, **⌘-** zooms out, **⌘0** resets and **⌘L** moves to the address field. Zoom runs from 50%
+to 300% in steps of 10%.
 
 | Rule        | Behavior                                                                                                                            |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -94,22 +95,22 @@ serving that folder. **Local Servers…** lists this window's servers with **Sho
 The log has **Time**, **Method**, **Path**, **Status**, **Duration** and **Size** columns. It keeps
 the last 200 requests in memory, and paths exclude query strings.
 
-| Rule            | Behavior                                                                                     |
-| --------------- | -------------------------------------------------------------------------------------------- |
-| Address         | IPv4 loopback `127.0.0.1` only, on a port the system assigns. A restart can change the port. |
-| Host            | The `Host` header must be exactly `127.0.0.1:PORT`. `localhost:PORT` is refused with 403.    |
-| Origin          | Cross-origin and cross-site requests are refused.                                            |
-| Methods         | `GET` and `HEAD` only; requests with a body are refused.                                     |
-| Folders         | `index.html` if present, otherwise a listing of up to 200 entries.                           |
-| Hidden files    | Any path part starting with `.` is refused, as are encoded `/`, `\` and null characters.     |
-| Links           | A link may resolve only inside the served folder.                                            |
-| Files           | Up to 128 MiB each, with byte ranges. Responses are `no-store`.                              |
-| Connections     | 16 at once, 100 requests each; headers within 8 KiB and 5 seconds.                           |
-| Servers running | 16 in all, 8 per window.                                                                     |
-| Server planes   | 64 in all, 32 per window.                                                                    |
+| Rule            | Behavior                                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------- |
+| Address         | IPv4 loopback `127.0.0.1` only, on a port the system assigns. A restart can change the port.            |
+| Host            | The `Host` header must be exactly `127.0.0.1:PORT`. `localhost:PORT` is refused with 403.               |
+| Origin          | Cross-origin and cross-site requests are refused.                                                       |
+| Methods         | `GET` and `HEAD` only; requests with a body are refused.                                                |
+| Folders         | `index.html` if present, otherwise a listing of up to 200 entries.                                      |
+| Hidden files    | Any path part starting with `.` is refused, as are encoded `/`, `\` and null characters.                |
+| Links           | A link may resolve only inside the served folder.                                                       |
+| Files           | Up to 128 MiB each, with byte ranges. Responses are `no-store`, and each must finish within 15 seconds. |
+| Connections     | 16 at once, 100 requests each; headers within 8 KiB and 5 seconds.                                      |
+| Servers running | 16 in all, 8 per window.                                                                                |
+| Server planes   | 64 in all, 32 per window.                                                                               |
 
 The server sends files as they are on disk. It runs no build step, framework server or hot reload;
-start a project's own server with [Run command… or a terminal plane](terminals.md) and open its
+start a project's own server with [Run Command… or a terminal plane](terminals.md) and open its
 address in a browser plane.
 
 A listener belongs to its window, not its plane. Closing the plane keeps a running server; reopen it

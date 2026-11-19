@@ -67,10 +67,10 @@ creates a lens named **Map**, with **⌘Z** to undo it.
 
 ## Where it saves
 
-| Folder                   | Lens file                                                                                   |
-| ------------------------ | ------------------------------------------------------------------------------------------- |
-| Writable ordinary folder | `.viewer/lenses/<name>.lens.jsonc` beside the files; Viewer adds a `README.md` in `.viewer` |
-| Protected or unwritable  | Viewer's private data, labeled **Lens kept on this Mac**                                    |
+| Folder                                                            | Lens file                                                                                   |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Writable ordinary folder                                          | `.viewer/lenses/<name>.lens.jsonc` beside the files; Viewer adds a `README.md` in `.viewer` |
+| Home, an app or document package, or a folder Viewer cannot write | Viewer's private data, labeled **Lens kept on this Mac**                                    |
 
 Opening a folder does not create `.viewer`. A lens file travels with sync, backups and version
 control. Collapsed groups, scroll positions and rename identities stay private. An unknown or
@@ -79,7 +79,9 @@ read-only.
 
 The file name is the lens name in lowercase words joined by hyphens, at most 48 characters, with
 `-2`, `-3` added when taken. Viewer writes the file in a fixed order, one group or item per line, so
-changes merge cleanly. Deleting the file, or `.viewer`, never touches the folder's files.
+changes merge cleanly. Deleting the file, or `.viewer`, never touches the folder's files. **Move
+Lens to Trash…** on a folder's last lens moves `.viewer` itself to the Trash, when it holds only
+that lens and Viewer's own `README.md`.
 
 | Field             | Values                                                                                                           |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -93,7 +95,7 @@ changes merge cleanly. Deleting the file, or `.viewer`, never touches the folder
 
 | Limit              | Value    |
 | ------------------ | -------- |
-| Lens file          | 4 MB     |
+| Lens file          | 4 MiB    |
 | Lenses in a folder | 64       |
 | Groups in a lens   | 1,000    |
 | Group depth        | 8 levels |

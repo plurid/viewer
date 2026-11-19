@@ -16,6 +16,8 @@ generated profiles are separate from the user's files.
 | `overview.png`                | File overview cards across an indexed Home folder     |
 | `layout.png`                  | A collage of three photographs in the Layout plane    |
 | `nesting.png`                 | DXF parts nested on a sheet, with the estimates       |
+| `create.png`                  | Image tools converting a photograph to WebP           |
+| `develop.png`                 | A branch task with its folder, note, terminal and Git |
 | `files.mp4` / `files.gif`     | Search a folder and open Quick Preview                |
 | `create.mp4` / `create.gif`   | Export a WebP through Image tools and open the result |
 | `develop.mp4` / `develop.gif` | Create a branch task and write its project note       |
@@ -310,7 +312,7 @@ Settings window, as a person does; the key is never written to a file or the log
 paid check. `--effort minimal` asks for a faster answer.
 
 It records three takes in native 2880 × 1800 frames: **Check Laser Job…** from **⌘K** and **Check 7
-files**; the findings and the tour; the corrected copy and **Prepare Cut Sheets**. The model's wait
+Files**; the findings and the tour; the corrected copy and **Prepare Cut Sheets**. The model's wait
 falls between the first and second takes and is not recorded. `capture.json` keeps the panel's
 findings and reader line, the progress lines it showed, the tour's stops, the correction and the
 nesting. Each take is also written as an MP4 at its recorded timing for the edit.

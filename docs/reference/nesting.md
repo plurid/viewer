@@ -30,7 +30,7 @@ outlines; loops at odd depth are holes of their parent. An outline drawn inside 
 disc in a ring, is a separate outline.
 
 **Open paths.** A path that does not close is cut as drawn. It counts toward cut length and pierces,
-not area, and it keeps neighbours at the spacing like any edge.
+not area, and it keeps neighbors at the spacing like any edge.
 
 **Marked layers.** A layer marked **mark only** is drawn and saved but never cut. Layer names
 containing `engrav`, `mark`, `etch`, `text`, `scribe`, `label`, `annot`, `bend` or `defpoints`, in
@@ -54,7 +54,7 @@ open ends are 2.00 mm apart.", or "has nothing to cut" when every layer is marke
 
 | Fact        | Meaning                                                               |
 | ----------- | --------------------------------------------------------------------- |
-| Size        | The part's box as drawn, in millimeters                               |
+| Size        | The part's box as drawn                                               |
 | Area        | Outlines less their holes; exact for lines, arcs, bulges and ellipses |
 | Cut length  | Every closed loop and open path; exact for lines, arcs and bulges     |
 | Pierces     | One per closed loop and per open path                                 |
@@ -76,12 +76,13 @@ such as a square's quarter turns, are searched once.
 
 ## Units
 
-**Units** beside the **Sheets** heading reads every length in the panel in millimeters or inches:
-part sizes and areas, sheet formats, edge margin, spacing, kerf, speeds (mm/min or in/min), cut
-length, offcuts, weights (kilograms or pounds), and the saved report and parts list. Values are kept
-in millimeters; a drawing's own units still come from its file, and the sheet DXFs are written in
-millimeters. Thickness stays in millimeters, as the presets and the part names give it. The choice
-is the Layout preference `ui.layout.units`, `mm` or `in`; see [configuration](configuration.md).
+**mm** and **in** beside the **Sheets** heading read every length in the panel in millimeters or
+inches: part sizes and areas, sheet formats, edge margin, spacing, kerf, speeds (mm/min or in/min),
+cut length, offcuts, weights (kilograms or pounds), and the saved report and parts list. Values are
+kept in millimeters; a drawing's own units still come from its file, and the sheet DXFs are written
+in millimeters. Thickness stays in millimeters, as the presets and the part names give it. The
+choice is the Layout preference `ui.layout.units`, `mm` or `in`; see
+[configuration](configuration.md).
 
 | Units  | Typed and shown                               | Long lengths    | Areas           |
 | ------ | --------------------------------------------- | --------------- | --------------- |
@@ -101,9 +102,9 @@ on the preset.
 | **mm** | 1000 × 2000, 1250 × 2500, 1500 × 3000, 2000 × 4000, 2000 × 6000 | 1250 × 2500     |
 | **in** | 48 × 96, 48 × 120, 60 × 120, 60 × 144 (4' × 8' to 5' × 12')     | 48 × 96         |
 
-Changing units while the formats are as they started changes them to the other unit's first format.
-With no format chosen, no sheet is drawn, the summary reads "Choose a sheet format to nest on." and
-**Save Nesting** is off.
+Changing units while the formats are as they started changes them to the format the other unit
+starts with: 48 × 96 in, or 1250 × 2500 mm. With no format chosen, no sheet is drawn, the summary
+reads "Choose a sheet format to nest on." and **Save Nesting** is off.
 
 A sheet lies with its longer side along x. **Edge margin** (10 mm at first) keeps every part that
 far inside the sheet edge. **Spacing** (5 mm at first) is the least distance between any two parts,
@@ -155,7 +156,7 @@ apart. The cell size is a hundredth of the median part's short side, or finer, d
 the smallest part's short side needs it; it stays between a 5,000th and a 600th of the longest sheet
 and is rounded up to a step from 0.25 to 10 mm. A coarse pass at twice that size answers first, and
 past half the time a finer pass at half the size can improve on it. The grid costs up to about 1.5
-cells of extra gap between neighbours.
+cells of extra gap between neighbors.
 
 **Placement.** Copies are placed one at a time, largest first. A copy goes first into a hole of a
 part already placed, on any open sheet: the smallest hole that takes it, at its lowest-leftmost free
@@ -199,7 +200,7 @@ last sheet's [offcut](#direction): "Offcut 1250 × 2178 mm, reusable", or with s
 on sheet 3: …".
 
 **Picking a part.** A click on a part on a sheet picks it: every copy of it lights up on every
-sheet, its row in **Parts** is marked, and **Selected part** gives its number and name, its file,
+sheet, its row in **Parts** is marked, and a card above the sheets gives its number, name, file,
 size, holes, the pieces placed of those requested, and the sheets it is on. A click on empty sheet,
 **Esc** or **×** lets it go. A double click, **Enter** or **Open Drawing** opens its DXF in a plane.
 With a sheet focused, **←** **→** (or **↑** **↓**) step through its parts in number order, and
@@ -215,7 +216,7 @@ Advice appears under the headline:
   than 45° steps: "Letting Bracket and Plate turn in 45° steps would save 1 sheet (3 instead of 4)";
 - the sheets true-shape nesting saves over boxes;
 - a last sheet less than a quarter used;
-- a spacing narrower than the kerf, which would run neighbouring cuts together.
+- a spacing narrower than the kerf, which would run neighboring cuts together.
 
 ## Estimates
 
@@ -228,9 +229,10 @@ Advice appears under the headline:
 Rapid moves, lead-ins, marking and setup are not included. **Material** fills speed, pierce time,
 kerf and density from a table of typical values for about 3 kW fiber, 100 W CO2, 65 A plasma and an
 abrasive water jet; editing any value makes them **Custom values**. It starts at **Mild steel 3 mm ·
-Fiber laser**. **Process** picks that process's preset for the same material at the nearest
-thickness, thicker on a tie, or the process's nearest thickness in another material when it has none
-for this one. Check the values against your machine.
+Fiber laser**, or at mild steel for the thickness the part names give; see
+[nesting by thickness](fabrication.md#nesting-by-thickness). **Process** picks that process's preset
+for the same material at the nearest thickness, thicker on a tie, or the process's nearest thickness
+in another material when it has none for this one. Check the values against your machine.
 
 The kerf is the width of the cut. The machine offsets its path by half of it, so the parts keep the
 drawn size; nesting uses it for the report and to warn about a spacing narrower than it.
@@ -302,8 +304,8 @@ mm. Coordinates are written to a millionth of a millimeter.
 | `SHEET`     | 8     | The sheet outline                                    |
 
 **Report.** A4 landscape. The first page lists the sheets used, the material used, parts placed, cut
-length, pierces, cutting time, cost and weight; a sheets table with the material used and offcut
-length of each; a parts table with each part's number, file, size, quantities, area, cut length and
+length, pierces, cutting time, cost and weight; a sheets table with the material used and the offcut
+of each; a parts table with each part's number, file, size, quantities, area, cut length and
 pierces; and the assumptions behind the estimate, with the closest distance the exact check found.
 Each further page draws one sheet to scale with its margin, every part numbered, and a legend. A
 sheet with more than about 5,000 outlines and holes is drawn without holes and marks, and says so.

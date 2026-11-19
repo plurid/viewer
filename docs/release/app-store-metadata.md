@@ -96,9 +96,9 @@ paths, tokens, paid-provider credentials and unrelated applications.
 ## App Privacy review worksheet
 
 Ordinary browsing/indexing/previews keep data on the Mac. Model calls transmit user instructions and
-approved filename/metadata/excerpt/text evidence directly to the configured provider, with ordinary
-connection/account metadata. External commands, terminal apps and user-connected agents may have
-independent data flows. Support reports are sent manually. Apple distribution/diagnostics are
+approved filename/metadata/excerpt/text/picture evidence directly to the configured provider, with
+ordinary connection/account metadata. External commands, terminal apps and user-connected agents may
+have independent data flows. Support reports are sent manually. Apple distribution/diagnostics are
 separate services.
 
 Resolve the final answers with the publisher and each enabled third-party flow. A lack of analytics

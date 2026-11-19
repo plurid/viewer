@@ -57,15 +57,15 @@ and `$2` onward are the selected paths. Both kinds also receive each parameter a
 variable, `VIEWER_INPUT_` plus its name in capitals (`VIEWER_INPUT_QUALITY`); a script never has
 values spliced into its text.
 
-| Behavior                              | Value                                                  |
-| ------------------------------------- | ------------------------------------------------------ |
-| Working folder                        | The captured folder; it does not confine the program   |
-| Program arguments                     | Up to 100, each up to 32,768 characters                |
-| Output kept                           | The last 256 KB, marked when truncated                 |
-| Exit status other than 0, or a signal | Fails with `Command exited with status N.`             |
-| **Cancel**                            | SIGTERM to the process group, then SIGKILL after 1.5 s |
-| Running or starting at once           | 20                                                     |
-| Runs kept in the list                 | 100, finished ones dropped first                       |
+| Behavior                              | Value                                                                            |
+| ------------------------------------- | -------------------------------------------------------------------------------- |
+| Working folder                        | The captured folder; it does not confine the program                             |
+| Program arguments                     | Up to 100, each up to 32,768 characters                                          |
+| Output kept                           | The last 256 KiB, marked when truncated                                          |
+| Exit status other than 0, or a signal | Fails with `Command exited with status N.` or `Command exited with signal NAME.` |
+| **Cancel**                            | SIGTERM to the process group, then SIGKILL after 1.5 s                           |
+| Running or starting at once           | 20                                                                               |
+| Runs kept in the list                 | 100, finished ones dropped first                                                 |
 
 Before launch Viewer checks that the folder and every selected item are still the ones captured:
 `Selection changed: name. Review the action again.` or
@@ -73,7 +73,7 @@ Before launch Viewer checks that the folder and every selected item are still th
 
 ## Parameters
 
-**Add parameter** adds an input that is asked for each time the command runs. A command has at
+**Add Parameter** adds an input that is asked for each time the command runs. A command has at
 most 20.
 
 | Field        | Values                                                              |
@@ -129,8 +129,9 @@ terminals, move to the Trash, rename or discard text asks before it applies.
 
 ## Recipes
 
-**Settings → Actions → Recipes** holds recipes; **New recipe**, **Duplicate recipe**, **Export
-recipes** and **Import recipes** manage them. Viewer keeps up to 100.
+**Settings → Actions → Recipes** holds recipes; **New Recipe**, **Duplicate Recipe**, **Export
+Recipes** and **Import Recipes** manage them. **Remove Recipe** removes one of your own once no
+custom command uses it; the five built-in recipes stay. Viewer keeps up to 100.
 
 | Built-in recipe              | Kind           | Default data              | Template                                                                                                          |
 | ---------------------------- | -------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -143,6 +144,7 @@ recipes** and **Import recipes** manage them. Viewer keeps up to 100.
 | Recipe field           | Values                                                              |
 | ---------------------- | ------------------------------------------------------------------- |
 | **Name**               | 1 to 100 characters                                                 |
+| **Action type**        | One of the five built-in kinds; choosing one resets the template    |
 | **Formats**            | Up to 100 extensions; empty allows any                              |
 | **Include subfolders** | Reads selected folders recursively                                  |
 | **Filename template**  | Up to 1,000 characters; unknown fields are refused                  |
@@ -162,14 +164,17 @@ expression**, **Ignore case** and **Read document metadata for template fields**
 A recipe prepares a proposal; nothing changes until you choose **Apply N Changes**. Each row shows
 its source, the proposed result and the evidence used. Untick a row to leave it out.
 
-| Row marked and left unticked                | Message                                           |
-| ------------------------------------------- | ------------------------------------------------- |
-| A name that is not valid, or over 255 bytes | `The filename is too long.` or the name problem   |
-| Two rows with one destination               | `Two files have the same destination.`            |
-| A destination that exists                   | `The destination already exists. Edit the name.`  |
-| An unchanged name                           | `The filename is unchanged.`                      |
-| A changed extension                         | `Keep the original extension.`                    |
-| A destination outside the action's scope    | `The destination is outside this action’s scope.` |
+| Row marked and left unticked                  | Message                                                                              |
+| --------------------------------------------- | ------------------------------------------------------------------------------------ |
+| A name that is not valid, or over 255 bytes   | `The filename is too long.` or the name problem                                      |
+| Two rows with one destination                 | `Two files have the same destination.`                                               |
+| A destination that exists                     | `The destination already exists. Edit the name.`                                     |
+| An unchanged name                             | `The filename is unchanged.`                                                         |
+| A changed extension                           | `Keep the original extension.`                                                       |
+| A destination outside the action's scope      | `The destination is outside this action’s scope.`                                    |
+| A model's name that holds a folder            | `Rename must contain only a filename.`                                               |
+| A book name whose quotes are not in the file  | `Unresolved publication evidence. Review and edit the name.`                         |
+| A book named without a model, a field missing | `Missing authors, publisher. Edit the name or configure a model.`, naming the fields |
 
 Edit a marked row's name to include it. A proposal that fails while it is prepared, for example when
 a model names a file twice or leaves one out, shows only its error. Apply checks each source again;
@@ -182,11 +187,20 @@ default).
 A model's answer never changes a file by itself. A model-backed recipe sends only its **Permitted
 data**, and only with that provider's data permission.
 
+| Recipe limit               | Value                                                                                                 |
+| -------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Files in one task          | 2,000: `Choose at most 2,000 files per action.`                                                       |
+| Entries scanned in folders | 100,000; hidden items and symbolic links are skipped                                                  |
+| Tasks kept                 | 100; finished ones are dropped first, then `Review or finish existing tasks before starting another.` |
+| One model request          | 500,000 characters: `This batch contains too much document evidence. Select fewer files.`             |
+| Quotes sent for one file   | **Metadata and excerpts**: 16 of up to 6,000 characters; **Extracted text**: 64 of up to 20,000       |
+
 ## Agents
 
-Agents can propose built-in commands and command sequences for your review. They cannot run
-executable, shell, terminal-profile or workflow commands, because a program can bypass Trash-only
-removal. See [what an agent cannot do](agents.md#what-an-agent-cannot-do).
+Agents can propose a custom command for your review when it runs a built-in command they may
+propose, a recipe, or a sequence of such command IDs without arguments and without `trash`. They
+cannot run executable, shell, terminal-profile or workflow commands, because a program can bypass
+Trash-only removal. See [what an agent cannot do](agents.md#what-an-agent-cannot-do).
 
 **Related:** [Make repeated work a command](../guides/automate.md) ·
 [Command language](command-line.md) · [Workflows and watch rules](automation.md) ·

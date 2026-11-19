@@ -2,10 +2,10 @@
 
 This page lists speech input's settings, local models, hosted providers, limits and permissions.
 
-Speech is explicit dictation into an editable draft in Ask Viewer, notes or chat, or a spoken
-request Viewer plans and runs, using local recognition or a selected hosted provider. **Settings →
-Speech** owns setup, language and microphone choices. **Settings → Models** separately owns the
-model used by Ask Viewer and chat.
+Speech is explicit dictation into an editable draft in Ask Viewer, a note, a chat or a tour stop's
+caption, or a spoken request Viewer plans and runs, using local recognition or a selected hosted
+provider. **Settings → Speech** owns setup, language and microphone choices. **Settings → Models**
+separately owns the model used by Ask Viewer and chat.
 
 ## Settings
 
@@ -25,11 +25,12 @@ Languages: English, Romanian, German, French, Spanish, Italian, Portuguese, Dutc
 Ukrainian, Russian, Chinese, Japanese, Korean, Arabic, Hindi, Turkish, Greek and Hungarian.
 
 Hold the **Ask Viewer by Voice…** shortcut, **⌃⇧Space** at first, in the workspace to ask Viewer by
-voice, and release it to transcribe. The microphone in the title bar and **Ask Viewer by Voice…**
-start a recording that **Finish and Transcribe** ends, or the microphone chosen again. **Settings →
-Shortcuts** changes the shortcut. A missing selected microphone never switches silently to another
-device. [Ask Viewer by voice](agents.md#ask-viewer-by-voice) gives exactly what a spoken request
-sends to a model and what it may run.
+voice, and release it to transcribe. The microphone in the title bar, shown once **Settings → Space
+→ Title bar icons → Microphone** is on, and **Ask Viewer by Voice…** start a recording that
+**Finish** ends (**Finish and Transcribe** with a hosted provider), or the microphone chosen again.
+**Settings → Shortcuts** changes the shortcut. A missing selected microphone never switches silently
+to another device. [Ask Viewer by voice](agents.md#ask-viewer-by-voice) gives exactly what a spoken
+request sends to a model and what it may run.
 
 ## Local recognition
 
@@ -129,7 +130,8 @@ It writes nothing.
 | `--plan-model <id>` | Another Muse Spark model; `muse-spark-1.3` unless given                       |
 | `--text "<words>"`  | Plans these words with Muse Spark, without audio                              |
 
-Each run makes one transcription call, and one Muse Spark call with `--plan` or `--text`.
+A run with a recording makes one transcription call. `--plan` or `--text` adds one Muse Spark call,
+and `--text` alone makes no transcription call.
 
 ## Data and permissions
 

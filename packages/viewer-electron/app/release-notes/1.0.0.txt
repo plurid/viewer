@@ -1,3 +1,5 @@
+# Record of the event build of 2026-11-03 (1.0.0, build 553), since withdrawn: see
+# docs/adr/0019-alpha-versioning.md. It is not part of the 0.1.0-N release series.
 # Release notes for Viewer 1.0.0. Lines starting with # are left out.
 # Write a few short lines below: Check for Updates shows them in its dialog.
 # pnpm direct:release refuses to ship until there is text here.

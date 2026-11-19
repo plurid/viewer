@@ -10,7 +10,7 @@ side as planes in one 3D workspace.
 [Your first five minutes](docs/guides/getting-started.md) · [All guides](docs/guides/README.md)
 
 For Macs with Apple silicon and macOS 14 or later. No account. Your files stay in their own folders,
-and their contents leave your Mac only for a model you add and allow.
+and their contents leave your Mac only for a model or speech service you add and allow.
 
 ## Look inside anything
 
@@ -48,9 +48,9 @@ it needs.
 
 Every open view is a **plane**: a folder, a file, a note, a terminal or a browser. A file opened
 from a folder stays linked to it. The planes stand in a 3D space: **rotate**, **scale** and
-**translate** it from the toolbar at the bottom, dock one plane to focus, tile several, or press
-**⌘0** to see them all. Each workspace keeps its own planes, and a project file brings a whole
-arrangement back.
+**translate** it from the space toolbar (**View → Show Space Toolbar**), dock one plane to focus,
+tile several, or press **⌘0** to see them all. Each workspace keeps its own planes, and a project
+file brings a whole arrangement back.
 
 ![A branch task with its folder, note, terminal and Git changes as planes](docs/media/develop.png)
 
@@ -62,9 +62,9 @@ arrangement back.
 | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | **⌘K** finds any command by what you want to do.                                         | **Suggested** offers the next step for what you selected.                       |
 
-Viewer suggests **Extract Here** for an archive, **Optimize** for a large PDF and **Convert** for
-HEIC photos, and learns what you choose. Cards above a folder point out old installers, likely
-duplicates and piles of screenshots. [Explore a folder](docs/guides/explore.md)
+Viewer suggests **Extract Here** for an archive, **Optimize…** for a large PDF and **Convert Copy to
+JPEG** for HEIC photos, and learns what you choose. Cards above a folder point out old installers,
+likely duplicates and piles of screenshots. [Explore a folder](docs/guides/explore.md)
 
 ## Make something new
 
@@ -80,7 +80,7 @@ The original stays as it was. Each result is a new file beside it, with Undo.
 
 | ![Three photographs laid out as one across and two below, with other layouts ranked](docs/media/layout.png) | ![Nine parts nested on a 1250 × 2500 mm sheet, a disc inside a ring, with the estimates](docs/media/nesting.png) |
 | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **Lay out…** picks the layout for what you selected.                                                        | **Nest for cutting…** fills holes and counts the sheets.                                                         |
+| **Lay Out…** picks the layout for what you selected.                                                        | **Nest for Cutting…** fills holes and counts the sheets.                                                         |
 
 [Make a quick change](docs/guides/create.md) · [Lay out photos and PDFs](docs/guides/layout.md)
 
@@ -111,13 +111,13 @@ log. [Work on a project](docs/guides/develop.md)
 ## Bring a model, if you want one
 
 Viewer works fully without one. Add a local or hosted model in **Settings → Models** and choose
-exactly what it may read: file names, or excerpts too. It can then explore a folder, suggest names
-and actions, or identify an unknown file. Coding agents on your Mac can connect to Viewer, and each
-change they propose waits for your review.
+exactly what it may read: names and metadata, document excerpts, full document text, or text and
+pictures. It can then explore a folder, suggest names and actions, or identify an unknown file.
+Coding agents on your Mac can connect to Viewer, and each change they propose waits for your review.
 
 | ![A model's answer to Explore this folder, with the files it names](docs/media/explore.png) | ![File overview cards across a Home folder](docs/media/overview.png) |
 | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| **Explore This Folder** says what it holds and links the files.                             | **File overview** finds what needs attention across your Home.       |
+| **Explore This Folder** says what it holds and links the files.                             | **File Overview** finds what needs attention across your Home.       |
 
 [Make repeated work a command](docs/guides/automate.md)
 
@@ -126,7 +126,8 @@ change they propose waits for your review.
 - **Nothing is deleted for good.** Removals go to the Trash, and Undo checks that a file is still
   the one it changed.
 - **Originals stay.** Conversions, layouts and exports make new files.
-- **Copies are instant.** On the same disk, Viewer clones a file without copying its bytes.
+- **Copies are instant on APFS.** On the same disk, Viewer clones a file without copying its bytes;
+  other disk formats copy them.
 - **You decide what is shared.** Folder access, model data and agent actions each need your own
   approval.
 - **A stuck window does not trap you.** Viewer offers to reload it, and your workspace comes back.
@@ -151,9 +152,9 @@ change they propose waits for your review.
 3. Open Viewer from Applications. macOS asks once before opening an app from the internet; choose
    **Open**.
 
-Viewer opens your Home folder. It checks for a newer version once a day, and **Viewer → Check for
-Updates…** checks at once. [Install and update Viewer](docs/guides/install.md) covers folder access,
-updates and removal. Windows and Linux are in progress; see
+Viewer opens your Home folder. When it opens, at most once a day, it checks for a newer version, and
+**Viewer → Check for Updates…** checks at once. [Install and update Viewer](docs/guides/install.md)
+covers folder access, updates and removal. Windows and Linux are in progress; see
 [platform status](docs/reference/platforms.md).
 
 To run Viewer from source, you need macOS with the Xcode command-line tools, Node 22.22 or later,

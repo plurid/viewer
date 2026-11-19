@@ -12,14 +12,17 @@ upload of your files or diagnostic reports.
 ## Local files and application records
 
 Viewer reads the files and folders you open or authorize. Its local records include workspace
-layouts, navigation history, configuration, search indexes, preview caches, action proposals and
-operation receipts. Receipts support review of interrupted operations and eligible Undo. These
-records can contain filenames, folder paths, file metadata and, when you enable content indexing or
-actions, extracted document text.
+layouts, navigation history, configuration, search indexes, preview caches, action proposals,
+operation receipts, notes and checklists, unsaved text, conversations with models and the tools they
+made, laser-job checks, command receipts, downloaded speech models, a record of what connected
+agents did and the browser planes' own profile. Receipts support review of interrupted operations
+and eligible Undo. These records can contain filenames, folder paths, file metadata and, when you
+enable content indexing or actions, extracted document text.
 
 When something fails, Viewer writes a local diagnostic log (error messages and stack traces, which
 can include file paths) and macOS crash dumps on your Mac. They are never sent anywhere. Help → Show
-Diagnostic Log reveals the log so you can choose to attach it to a support request.
+Diagnostic Log reveals the log, and Help → Show Crash Reports opens the folder of crash reports, so
+you can choose to attach either to a support request.
 
 **Help → Copy Report…** makes a report on your Mac with no personal file names or message text by
 default: version/build, edition and license status, macOS, available hardware details, display
@@ -27,11 +30,11 @@ count/scales, language/region and bounded failure times, kinds, known classes, a
 codes and recorded code locations inside Viewer, without function names. The Mac App Store edition
 uses the same default without user, host or volume lookups. **Include message text** is optional and
 off by default; excerpts can contain private text, Viewer removes what it recognizes, and you must
-read them before sharing. In the Store edition those excerpts require account, Home, computer/host
-and mounted-volume checks, including `id`, `scutil`, the Home realpath and `/Volumes`; a refused
-check is named and excerpts are omitted. Viewer sends neither version to its developer. **Copy**
-puts the displayed text on the general clipboard, which other apps can read and macOS may carry to
-your other devices through Universal Clipboard.
+read them before sharing. In both editions those excerpts require account, Home, computer/host and
+mounted-volume checks, including `id`, `scutil`, the Home realpath and `/Volumes`; a refused check
+is named and excerpts are omitted. Viewer sends neither version to its developer. **Copy** puts the
+displayed text on the general clipboard, which other apps can read and macOS may carry to your other
+devices through Universal Clipboard.
 
 The Mac App Store edition uses macOS folder/file authorization. Permissions chosen in a native
 picker are saved privately and can survive relaunch. Clipboard and drag permissions last until Quit
@@ -50,11 +53,11 @@ authorization that macOS requires.
 ## Update checks
 
 The direct-download edition checks for a newer version once a day when it opens, and when you choose
-Viewer → Check for Updates. It downloads a small signed file describing the latest release. The
-update server receives ordinary connection information, such as your IP address; no filenames, file
-contents or settings are sent. Turn the daily check off in Settings → Privacy. Choosing Download
-opens the installer address in your browser. The Mac App Store edition makes no update checks of its
-own.
+Viewer → Check for Updates…. It downloads a small file describing the latest release, and its
+signature, from GitHub (github.com/plurid/viewer), which hosts the releases. GitHub receives
+ordinary connection information, such as your IP address; no filenames, file contents or settings
+are sent. Turn the daily check off in Settings → Privacy. Choosing Download opens the installer
+address in your browser. The Mac App Store edition makes no update checks of its own.
 
 ## Trial and license key
 
@@ -69,17 +72,24 @@ App Store edition and a build without license configuration keep no license reco
 
 ## Optional model providers
 
-Model actions are optional. They run only when you invoke an action and explicitly authorize the
-provider, endpoint and data level before transmission. The request includes your instructions and
-the data allowed for that recipe: filenames and extensions, or additional document metadata and
-excerpts/extracted text. Viewer bounds the transmitted evidence; approving extracted text does not
+Model actions are optional. They run when you invoke an action, and only after you explicitly
+authorize the provider, endpoint and data level before transmission. The request includes your
+instructions and the data level you allowed for that provider: names and metadata; document
+excerpts; full document text; or text and pictures (photos and rendered drawing pages, at most 16
+pictures in a request). Viewer bounds the transmitted evidence; approving extracted text does not
 mean every byte of an original file is uploaded.
 
+Two settings widen this, and both are off until you turn them on. **Let the model suggest actions**
+in Settings → Browsing sends a folder's name and up to 8 file names for each of up to 12 kinds of
+file to the model you use for Ask Viewer, once for a folder you stay in, without your asking each
+time. A separate approval in Settings → Models lets an action that a connected agent starts send the
+data level you approved for that provider.
+
 Requests go directly from your Mac to the configured endpoint. Supported presets include OpenAI,
-Anthropic, z.ai, DeepSeek, Qwen, Gemini and OpenRouter; you can also configure an endpoint yourself.
-A local endpoint receives requests too. Your provider account, API key and endpoint determine which
-organization receives the request and how that organization treats it. Consult that provider's
-privacy and retention terms before allowing personal or confidential data.
+Anthropic, z.ai, DeepSeek, Qwen, Gemini, OpenRouter and Meta; you can also configure an endpoint
+yourself. A local endpoint receives requests too. Your provider account, API key and endpoint
+determine which organization receives the request and how that organization treats it. Consult that
+provider's privacy and retention terms before allowing personal or confidential data.
 
 Viewer saves your approval in a private permission document, separately from editable configuration.
 Editing JSONC or using Viewer’s agent API cannot grant this model-data permission. Changing the
@@ -90,6 +100,24 @@ contact that provider to request deletion or exercise rights concerning its proc
 API keys are stored in a separate encrypted local credential document using macOS-backed encryption.
 They are not included in normal JSONC configuration exports. Providers may also receive ordinary
 network metadata, such as your IP address, when you connect or make a request.
+
+## Dictation
+
+Dictation is optional and is in the direct-download edition. Viewer records from the microphone only
+while you dictate, for at most 60 seconds, after macOS lets Viewer use the microphone. Local
+transcription runs on your Mac with a Whisper model; installing one downloads it from Hugging Face
+(huggingface.co), which receives ordinary connection information. Hosted transcription sends the
+recording, the model name and the language, and no file names or contents, to the speech provider
+you added and allowed in Settings → Speech: Meta, OpenAI, Deepgram or a compatible endpoint you
+enter. The approval is for one endpoint and model; changing either, or the key, withdraws it. A
+connection check sends no audio.
+
+## 3D reconstruction with fal.ai
+
+Generating a 3D model from a photo is optional and uses your own fal key, entered in Settings →
+Models. Viewer asks before each generation and only then sends the reviewed photo and its object
+mask to fal.ai, and later downloads the generated model from fal. It is a paid generation on your
+fal account, under fal's terms.
 
 ## Local agents, commands and terminal applications
 
@@ -115,6 +143,10 @@ server and browser views have different lifetimes, described in the user guides.
 If you contact source@plurid.com, support receives only the information you choose to send.
 Screenshots, logs and exported configuration can contain personal paths or document names; redact
 information you do not want to share. Viewer does not automatically send these reports.
+
+Help → Getting Started, Keyboard Shortcuts and Report an Issue… open pages on github.com in your
+browser, and Help → Viewer Website opens plurid.com. Those sites receive ordinary browser connection
+information.
 
 Apple handles Mac App Store downloads, transactions and any diagnostics you choose to share with
 Apple under Apple's own terms. A direct download may be notarized by Apple as part of distribution;

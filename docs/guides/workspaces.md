@@ -40,7 +40,7 @@ then keep their size when the window changes; **⌘0** frames them all again.
 | Go to the parent plane               | **⌥⌘↑** (**Back to parent plane**)                |
 | Close a plane                        | **⌥⌘W**, or **×** in its header                   |
 | Undo a move, resize or close         | **⌥⌘Z**; **⌥⇧⌘Z** redoes it                       |
-| Hide the window's chrome for a while | **⌘⇧F** (**Focus Mode**); press it again to leave |
+| Hide the window's chrome for a while | **⇧⌘F** (**Focus Mode**); press it again to leave |
 
 In the spatial view, click inside a plane to scroll it and type into it. Click the background or
 press **Escape** to move around the space again. Drag a plane by its header. **Shift**, **⌘** or

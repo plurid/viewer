@@ -10,7 +10,7 @@ outputs, errors, recovery paths and **Undo**. Jobs run one at a time, in order. 
 
 The title-bar button appears when work lasts at least one second, when a conflict or unread failure
 needs attention, or while the panel is open. Fast successful operations keep the title bar quiet.
-**Settings → Space → Title bar icons → File Operations** controls this button; the command remains
+**Settings → Space → Title bar icons → File operations** controls this button; the command remains
 available when the button is hidden.
 
 ## Commands
@@ -56,13 +56,13 @@ A drag carries at most 10,000 items. A folder cannot be dropped into itself.
 
 ## Collisions
 
-When the destination name is taken, the job waits in **File operations** with "_Name_ already
+When the destination name is taken, the job waits in **File Operations** with "_Name_ already
 exists." and these choices:
 
 | Choice                          | Result                                                                                               |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | **Skip**                        | Leaves the existing item; the item is done and leaves nothing to recover                             |
-| **Keep both**                   | Uses a free name: `Name copy.ext`, then `Name copy 2.ext`                                            |
+| **Keep Both**                   | Uses a free name: `Name copy.ext`, then `Name copy 2.ext`                                            |
 | **Replace**                     | After **Replace existing item?**, sends the existing item to the Trash once its replacement is ready |
 | **Use for remaining conflicts** | Applies the choice to every later collision in the job                                               |
 
@@ -162,9 +162,9 @@ rename fails. This short race also applies to restoration and is accepted on the
 that support exclusive rename keep their atomic no-replacement behavior.
 
 This applies to copies, pastes, moves, renames, Undo from Trash, replacement recovery, stage cleanup
-and Trash Restore. Direct and Store builds retain native file coordination and move notifications.
-Trash availability is separate: the rules below still apply when a volume has no Trash. See the
-[publication decision](../adr/0017-publication-without-exclusive-rename.md).
+and Put Back from the Trash. Direct and Store builds retain native file coordination and move
+notifications. Trash availability is separate: the rules below still apply when a volume has no
+Trash. See the [publication decision](../adr/0017-publication-without-exclusive-rename.md).
 
 ## Protected folders
 
@@ -280,7 +280,7 @@ An agent's removal follows the policy in [AGENTS.md](../../AGENTS.md):
 
 Restart never replays a job. An interrupted job shows as failed with **Interrupted operation.
 Completed items were kept.**, its **Recovery paths** (source, destination and temporary copy) and
-**Copy recovery paths**. Its Undo stays available for the items it finished. After a power failure,
+**Copy Recovery Paths**. Its Undo stays available for the items it finished. After a power failure,
 the last items of a copy can show as interrupted although their copies are complete; the copies are
 kept. If operation receipts cannot be saved, Viewer stops every further file change and fails the
 queued jobs with their recovery paths.

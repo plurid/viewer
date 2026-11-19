@@ -93,23 +93,23 @@ reports the same text.
 
 The checks run in the page right after each capture.
 
-| Check                  | Flags                                                                                                                                                                                                   |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Label wraps            | A one-line control whose text takes more than one line: buttons, menu items, tabs, chips, segmented controls, toolbar and footer items, dialog titles. A toolbar or footer whose items sit on two rows. |
-| Clipped                | Text or a control cut by its container's edge with no ellipsis. Text wholly outside its container is hidden on purpose and not counted.                                                                 |
-| Past the window        | An element, dialog, menu or the plane in view that runs past the window's edge.                                                                                                                         |
-| Scrolls sideways       | A container that scrolls sideways although it is not listed as a horizontal scroller.                                                                                                                   |
-| Dialog scrolls         | A horizontal scroll bar inside a dialog.                                                                                                                                                                |
-| Menu covers its button | An open menu or popover over the control that opened it.                                                                                                                                                |
-| Search on a short list | An open menu of 8 or fewer choices with a search field; such a list moves by type-ahead.                                                                                                                |
-| Full home path         | Visible text or a field showing the home folder as a full path instead of `~`.                                                                                                                          |
-| Em dash                | An em dash in visible text.                                                                                                                                                                             |
-| Broken value           | `undefined`, `NaN` or `[object Object]` in visible text.                                                                                                                                                |
-| One with a plural      | A count of one with a plural noun, such as "1 files".                                                                                                                                                   |
-| Name loses extension   | A file name cell cut at its end, so its extension does not show, or a file name field that opens a long name at its start.                                                                              |
-| Layout shift           | The title bar, a toolbar, a footer or list columns that move or resize when a scene changes the selection, or an element a scene clicks that moves.                                                     |
-| Wrong size or place    | A box, gap or text a scene measures against DESIGN.md or a checklist: a footer's height, a menu's gap from its button, a field that stops short of its row.                                             |
-| Wording                | A retry button that does not read Try Again, or a raw code such as `ENOENT` or `mkdir` in visible text.                                                                                                 |
+| Check                    | Flags                                                                                                                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Label wraps              | A one-line control whose text takes more than one line: buttons, menu items, tabs, chips, segmented controls, toolbar and footer items, dialog titles. A toolbar or footer whose items sit on two rows. |
+| Clipped                  | Text or a control cut by its container's edge with no ellipsis. Text wholly outside its container is hidden on purpose and not counted.                                                                 |
+| Past the window          | An element, dialog, menu or the plane in view that runs past the window's edge.                                                                                                                         |
+| Scrolls sideways         | A container that scrolls sideways although it is not listed as a horizontal scroller.                                                                                                                   |
+| Dialog scrolls sideways  | A horizontal scroll bar inside a dialog.                                                                                                                                                                |
+| Menu covers its button   | An open menu or popover over the control that opened it.                                                                                                                                                |
+| Search on a short list   | An open menu of 8 or fewer choices with a search field; such a list moves by type-ahead.                                                                                                                |
+| Full home path           | Visible text or a field showing the home folder as a full path instead of `~`.                                                                                                                          |
+| Em dash                  | An em dash in visible text.                                                                                                                                                                             |
+| Broken value             | `undefined`, `NaN` or `[object Object]` in visible text.                                                                                                                                                |
+| One with a plural        | A count of one with a plural noun, such as "1 files".                                                                                                                                                   |
+| Name loses its extension | A file name cell cut at its end, so its extension does not show, or a file name field that opens a long name at its start.                                                                              |
+| Layout shift             | The title bar, a toolbar, a footer or list columns that move or resize when a scene changes the selection, or an element a scene clicks that moves.                                                     |
+| Wrong size or place      | A box, gap or text a scene measures against DESIGN.md or a checklist: a footer's height, a menu's gap from its button, a field that stops short of its row.                                             |
+| Wording                  | A retry button that does not read Try Again, or a raw code such as `ENOENT` or `mkdir` in visible text.                                                                                                 |
 
 Text inside a file's own content, such as a PDF page, an editor or a terminal, is left out. Planes
 the camera leaves partly outside the window are framing, not layout, and are left out of the window
@@ -134,7 +134,8 @@ A change to the interface adds or updates the scenes that show it.
    - `steps(page, variant)`: the actions that reach the state. Run commands by their palette label
      with `page.palette`, select files with `page.select(page.path(...))`, press keys with
      `page.key`, and wait on what the page shows with `page.waitFor`. Wrap a selection change in
-     `page.layoutShift` to check that nothing moves.
+     `page.layoutShift` to check that nothing moves. `page.settings(category)` opens Settings at a
+     section and captures that window from then on.
    - `variants`: the four standard ones by default; `across('name', ['short', 'long'])` adds a
      scene's own choice, read from `variant.data`.
    - `covers`: the command ids, dialog components, Settings sections and preview kinds it shows, for
@@ -187,6 +188,10 @@ runtime only:
   not the macOS ones (`src/desktop/bridge.ts`);
 - the window lists its registered commands to review runs for exact coverage, read only
   (`src/renderer/App.tsx`).
+
+The same runtime never shows a window or a native question (`backgroundTest` in `src/main.ts`): a
+failed save or Quit step answers Keep Open, a main-process failure quits, error boxes go to the log
+and the launch update check does not run. A scene cannot capture those dialogs.
 
 In every runtime, the app marks the plane in view (`data-plane-in-view` on its pane marker) and
 every file name with `data-file-name`; the checks read both. Builds without these hooks still run:

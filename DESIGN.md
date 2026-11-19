@@ -767,7 +767,7 @@ send a message or run a command.
 task name, repository, workspace, branch mode, optional local base and new worktree folder. Align
 full-width fields and the workspace choice within the task dialog; bound its height to the viewport
 and scroll fields while the header and footer stay reachable. Show validation inline. Yield the
-modal for native confirmation, preserve cancelled parameters and offer retained-worktree recovery
+modal for native confirmation, preserve canceled parameters and offer retained-worktree recovery
 after partial failure instead of blind retry.
 
 **The Task Creation Review Rule.** Keep repository, worktree destination, workspace name/identity,

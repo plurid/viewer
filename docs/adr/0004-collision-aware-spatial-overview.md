@@ -72,6 +72,6 @@ next animation frame without editing preferences, after the engine's root click 
 navigation. Light dismissal restores the connected opener only if focus is on the body or inside the
 map; focus taken by a clicked control stays there. Escape returns focus to the opener, while
 choosing a plane retains navigation focus. Pending requests belong to their workspace epoch, can be
-cancelled with Escape before the map mounts and are cancelled when an applied engine configuration
+canceled with Escape before the map mounts and are cancelled when an applied engine configuration
 produces no map. Docking or closing the last plane also closes Overview. Closing the last plane puts
 keyboard focus on the empty workspace surface.

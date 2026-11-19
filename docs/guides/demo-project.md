@@ -8,7 +8,7 @@ the controls. This walkthrough runs locally without a model account or API key.
 
 1. [Install Viewer](install.md), then download
    [**Viewer-Demo.zip**](https://github.com/plurid/viewer/releases/latest/download/Viewer-Demo.zip).
-2. Extract the archive. In Viewer, press **⌘⇧O** and open its **Viewer Demo** folder.
+2. Extract the archive. In Viewer, press **⇧⌘O** and open its **Viewer Demo** folder.
 3. Press **⌘K**, choose **Chat About Files**, then choose **More → Open Canvas…** in the Chat
    toolbar.
 4. Select **Front** inside **Viewer Demo**. Viewer opens **Six-slot station · Front** with its saved

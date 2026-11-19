@@ -10,7 +10,7 @@ development with [CONTRIBUTING.md](CONTRIBUTING.md).
 | --------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Domain          | Serializable types, validation and pure decisions                    | `src/domain/contracts.ts`, feature directories under `src/domain/`                    |
 | Desktop         | Filesystem and process authority, native access, persistence and IPC | `src/desktop/bridge.ts`, `src/desktop/ipc/`, desktop feature services                 |
-| Preload         | The narrow renderer-to-desktop API                                   | `src/preload.ts`                                                                      |
+| Preload         | The narrow renderer-to-desktop API                                   | `src/preload.ts`; `src/report-preload.ts` for the report window                       |
 | Renderer        | User commands, sessions and presentation                             | `src/renderer/commands/`, `src/renderer/workspace/`, feature views                    |
 | Native helpers  | Platform-specific file, preview and process integration              | Native helper sources under `tools/`, `src/desktop/native/`, `tools/build-helpers.ts` |
 | Tests and tools | Reproducible fixtures, qualification and packaging                   | `tests/`, `tools/`                                                                    |
@@ -110,7 +110,9 @@ same approval (`desktop/models/segmentation.ts`); its outlines do not verify dim
 
 An **explorer session** owns selection, cursor, range anchor, scroll and column trail. **Folder
 presentation** is shared by path and owns view/sort/column choices. Navigation and operation
-selection remain independent of camera input.
+selection remain independent of camera input. The Columns preview's width is its plane's own
+(`FolderPane.previewWidth`, `renderer/explorer/PreviewColumn.tsx`): saved with the workspace, never
+with a folder or a project.
 
 A **preview resource** is an authorized lease on a source or derived rendition. The desktop resource
 owner checks versions, bounds work and releases dependent resources on cancellation or revocation.
@@ -124,6 +126,12 @@ completed matching data. Desktop extraction and in-flight deduplication remain d
 3D models outlive a view in `renderer/previews/model/cache.ts`: CPU geometry only, keyed by path and
 file version, bounded per window, forgotten on revocation; each preview builds and disposes its own
 GPU geometry.
+
+**Network sharing** belongs to the person alone. `desktop/files/network-sharing.ts` reads macOS File
+Sharing state through fixed system tools, each stopped after about two seconds;
+`networkSharingAvailable` is macOS outside the Store build.
+`desktop/ipc/network-sharing-handlers.ts` refuses agents and requires folder access for each path it
+inspects. `domain/files/network-sharing.ts` holds the snapshot types.
 
 ## Documents and runtimes
 
@@ -152,8 +160,11 @@ configures the same documents. `renderer/canvases/ToolLibrary.tsx` presents them
 The runtime bundles generic Three.js modules, with no robotics solver or checker. The existing
 robotics implementation is packaged by `tools/plugins/robotics` into an explicitly imported canvas
 and code asset. Its source and retained experiment adapters stay outside the app's runtime
-dependency graph. The agent can extend that working plugin without starting from an empty canvas.
-See [generated tool ownership](docs/adr/0015-generated-tool-host.md).
+dependency graph. Those adapters are `domain/robotics` (re-exports of the plugin's `core/`),
+`desktop/robotics`, `desktop/canvases/robot.ts`, `robot-check.ts`, `placement-check.ts` and the
+robot and placement panels in `renderer/canvases`; only tests and `tools/robotics` import them. The
+agent can extend that working plugin without starting from an empty canvas. See
+[generated tool ownership](docs/adr/0015-generated-tool-host.md).
 
 Different worktrees have different working files and indices. Two views of one checkout share those
 files and staging. A view ID is never checkout identity. Cold restoration does not replay terminal
@@ -232,6 +243,10 @@ approvals. [Window-owned dialogs](docs/adr/0012-window-owned-dialogs.md) records
 | `PathLabel`, `PathHome`         | `renderer/ui/PathLabel.tsx`; `domain/files/path-label.ts` fits a path, home as `~`               |
 | `FormField`, `FileNameField`    | `renderer/ui/`; `form-fields.css` lays out output forms, labels above fields                     |
 | `DestinationField`              | `renderer/ui/DestinationField.tsx`: a folder's name, its path label and Choose…                  |
+| `FileName`                      | `renderer/ui/FileName.tsx`: a name loses its middle and keeps its extension                      |
+| `NumberField`                   | `renderer/ui/NumberField.tsx`: a text field with no spin arrows                                  |
+| `ChoiceButton`, `MenuButton`    | `renderer/ui/ChoiceMenu.tsx`, with `SegmentedControl`; the renderer has no native `<select>`     |
+| `useListKeys`                   | `renderer/ui/useListKeys.ts`: Finder's keys for a list in a dialog or a panel                    |
 | `Panel`, `PanelSection`         | `renderer/ui/Panel.tsx`; what holds a panel places it, such as `SpaceOverlay`'s grid             |
 | `Popover`, `useAnchoredLayer`   | `renderer/ui/Popover.tsx`; `ChoiceMenu` and `ContextMenu` place their layers with the hook       |
 | Type, spacing and shadow tokens | `renderer/styles/base.css` `:root`, checked against DESIGN.md by `tests/design-tokens.test.ts`   |
@@ -251,6 +266,12 @@ A new profile's **first-run tips** are `ui.firstRunHint` (`domain/preferences/fi
 the desktop settings service starts them, for a configuration with nothing before it;
 `renderer/explorer/FolderInsights.tsx` shows them, and the palette and Quick Preview record their
 steps through `renderer/state/preferences.ts`.
+
+**Shortcuts** belong to `domain/preferences/shortcuts.ts`. Settings saves only the keys a person
+changed. `resolvedShortcut` gives the key in effect: a shipped key the person gave to something else
+is left to theirs (`shippedKeyHolder`). The desktop refuses to save two bindings on one key
+(`shortcutClash` in `desktop/preferences/settings-schema.ts`). `desktop/windows/application-menu.ts`
+and `renderer/explorer/input.ts` read the same resolution.
 
 ## Persistence and decisions
 
@@ -275,9 +296,10 @@ server and keeps the private key outside the repository. Release and issuance ch
 or invalid license configuration. See the
 [offline license decision](docs/adr/0016-offline-license-keys.md).
 
-`CURRENT_STATE_VERSION` and migration functions in domain/persistence code are authoritative for
-saved-state versions. Durable save barriers coordinate document and window shutdown; invalid files
-and migration inputs are preserved for recovery.
+`CURRENT_STATE_VERSION` in `domain/contracts.ts` and the migrations in
+`desktop/persistence/storage.ts` are authoritative for saved-state versions. Durable save barriers
+coordinate document and window shutdown; invalid files and migration inputs are preserved for
+recovery.
 
 Read the [architecture](docs/development/architecture.md),
 [configuration](docs/reference/configuration.md) and [ADRs](docs/adr/README.md) before changing

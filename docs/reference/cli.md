@@ -73,11 +73,11 @@ the same local connection as MCP clients. They create no window.
 5. Set it in your shell: `export VIEWER_AGENT_TOKEN=…`.
 
 The CLI reads no other credential. Without the variable it exits with code `4`. If the app's
-connection is missing it fails with **Viewer's agent connection is unavailable. Open Viewer and
-approve agent access in Settings → Agents.** With Viewer closed it fails with code `3` and says
-which Viewer to open, such as **Viewer is not running. Open Viewer (/Applications/Viewer.app), then
-start the agent again.**; with agent access off, it says to turn it on. A custom profile set with
-`VIEWER_DATA_DIRECTORY` (absolute path) must be the same for the app and the CLI.
+connection is missing it fails with **Can’t connect to Viewer. Open Viewer and allow agent access in
+Settings → Agents.** With Viewer closed it fails with code `3` and says which Viewer to open, such
+as **Viewer is not running. Open Viewer (/Applications/Viewer.app), then start the agent again.**;
+with agent access off, it says to turn it on. A custom profile set with `VIEWER_DATA_DIRECTORY`
+(absolute path) must be the same for the app and the CLI.
 
 | Capability   | Settings label              | Allows                                                                |
 | ------------ | --------------------------- | --------------------------------------------------------------------- |
@@ -89,7 +89,9 @@ start the agent again.**; with agent access off, it says to turn it on. A custom
 A named client's navigation applies at once, except opening a `viewer.project.jsonc` or a
 `.viewer-tour.jsonc` tour, which waits for review. Every other change waits for review in Viewer.
 Native folder access and model data permission stay separate. [Agents](agents.md#connect-an-agent)
-covers access in full.
+covers access in full. `read`, `table`, `search --content`, `relations --content`, `git diff`,
+`speech import` and the `workflow` commands also need a named client: the shared connection's token
+is refused.
 
 ## Commands
 
@@ -99,37 +101,37 @@ terminal's folder. A command's capability is checked again by the app on every c
 
 ### Discover and navigate
 
-| Command                                  | Needs        | Does                                                                         |
-| ---------------------------------------- | ------------ | ---------------------------------------------------------------------------- |
-| `status`                                 | a token      | Checks the connection.                                                       |
-| `tools list`                             | a token      | Lists every service tool and its input schema.                               |
-| `tools call NAME [--args JSON]`          | the tool's   | Calls a tool with a JSON object; `--args` defaults to `{}`.                  |
-| `workspace list`                         | `metadata`   | Lists workspaces visible within your folders.                                |
-| `workspace switch NAME`, `--id ID`       | `navigation` | Switches to a workspace by exact unique name or by ID; give one, not both.   |
-| `workspace create`, `workspace rename`   | `propose`    | Opens the new-workspace or rename form after review.                         |
-| `plane list [--workspaceID ID]`          | `metadata`   | Lists granted planes; the active workspace by default.                       |
-| `plane open PATH [--placement P]`        | `navigation` | Opens a path; `P` is `current`, `root` (default) or `linked`.                |
-| `plane focus PANE_ID`                    | `navigation` | Focuses a plane from `plane list`.                                           |
-| `preview PATH`                           | `navigation` | Opens a linked preview.                                                      |
-| `layout horizontal`, `vertical`, `frame` | `propose`    | Proposes arranging planes horizontally, vertically, or framing all.          |
-| `command list`                           | `metadata`   | Lists the commands available for the folder and selection focused in Viewer. |
-| `command explain COMMAND_ID`             | `metadata`   | Explains a command and its review.                                           |
-| `command run COMMAND_ID`                 | `propose`    | Proposes the command for review.                                             |
+| Command                                                | Needs        | Does                                                                         |
+| ------------------------------------------------------ | ------------ | ---------------------------------------------------------------------------- |
+| `status`                                               | a token      | Checks the connection.                                                       |
+| `tools list`                                           | a token      | Lists every service tool and its input schema.                               |
+| `tools call NAME [--args JSON]`                        | the tool's   | Calls a tool with a JSON object; `--args` defaults to `{}`.                  |
+| `workspace list`                                       | `metadata`   | Lists workspaces visible within your folders.                                |
+| `workspace switch NAME`, `--id ID`                     | `navigation` | Switches to a workspace by exact unique name or by ID; give one, not both.   |
+| `workspace create`, `workspace rename`                 | `propose`    | Opens the new-workspace or rename form after review.                         |
+| `plane list [--workspaceID ID]`                        | `metadata`   | Lists granted planes; the active workspace by default.                       |
+| `plane open PATH [--placement P]`                      | `navigation` | Opens a path; `P` is `current`, `root` (default) or `linked`.                |
+| `plane focus PANE_ID`                                  | `navigation` | Focuses a plane from `plane list`.                                           |
+| `preview PATH`                                         | `navigation` | Opens a linked preview.                                                      |
+| `layout horizontal`, `layout vertical`, `layout frame` | `propose`    | Proposes arranging planes horizontally, vertically, or framing all.          |
+| `command list`                                         | `metadata`   | Lists the commands available for the folder and selection focused in Viewer. |
+| `command explain COMMAND_ID`                           | `metadata`   | Explains a command and its review.                                           |
+| `command run COMMAND_ID`                               | `propose`    | Proposes the command for review.                                             |
 
 ### Read files
 
-| Command                                              | Needs                   | Does                                                                        |
-| ---------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------- |
-| `search QUERY [--root DIR] [--content] [--offset N]` | `metadata`              | Searches an indexed granted folder by name. `--root` defaults to `.`.       |
-| `search … --content`                                 | `content`, named client | Also matches indexed document text and returns match evidence.              |
-| `inspect PATH`                                       | `metadata`              | Reads metadata.                                                             |
-| `read PATH`                                          | `content`               | Reads extracted passages with source versions.                              |
-| `table PATH [--sheet NAME] [--offset N] [--limit N]` | `content`               | Reads CSV, TSV or XLSX rows: stored values and formula text, no evaluation. |
-| `relations PATH [--content]`                         | `metadata`              | Reads operation provenance; `--content` also scans reference syntax.        |
-| `git status [DIR]`                                   | `metadata`              | Reads repository status; `DIR` defaults to `.`.                             |
-| `git diff [DIR] [--base REF]`                        | `metadata`, `content`   | Reads a tracked-file patch against `REF` (default `HEAD`).                  |
-| `config show`                                        | `metadata`              | Reads effective configuration without credentials or grants.                |
-| `config validate PATCHES`                            | `metadata`              | Validates a JSON array of patches without applying them.                    |
+| Command                                              | Needs                                                 | Does                                                                        |
+| ---------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------- |
+| `search QUERY [--root DIR] [--content] [--offset N]` | `metadata`                                            | Searches an indexed granted folder by name. `--root` defaults to `.`.       |
+| `search … --content`                                 | `content`, named client                               | Also matches indexed document text and returns match evidence.              |
+| `inspect PATH`                                       | `metadata`                                            | Reads metadata.                                                             |
+| `read PATH`                                          | `content`                                             | Reads extracted passages with source versions.                              |
+| `table PATH [--sheet NAME] [--offset N] [--limit N]` | `content`                                             | Reads CSV, TSV or XLSX rows: stored values and formula text, no evaluation. |
+| `relations PATH [--content]`                         | `metadata`; `--content` needs `content`, named client | Reads operation provenance; `--content` also scans reference syntax.        |
+| `git status [DIR]`                                   | `metadata`                                            | Reads repository status; `DIR` defaults to `.`.                             |
+| `git diff [DIR] [--base REF]`                        | `metadata`, `content`                                 | Reads a tracked-file patch against `REF` (default `HEAD`).                  |
+| `config show`                                        | `metadata`                                            | Reads effective configuration without credentials or grants.                |
+| `config validate PATCHES`                            | `metadata`                                            | Validates a JSON array of patches without applying them.                    |
 
 `search` returns `entries`, `more`, `indexed` and `running` (indexing still in progress); with
 `--content` also `evidence`. Query syntax is in [search](search.md). `--offset` is 0 to 100,000.
@@ -139,25 +141,25 @@ fails with a request to read a smaller window.
 
 ### Propose changes and run work
 
-| Command                                                          | Needs                   | Does                                                                                    |
-| ---------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------- |
-| `export PATH… --destination DIR --name NAME --plan JSON`         | `propose`, `content`    | Prepares an image, PDF or media export (1 to 16 sources) for review.                    |
-| `action list`                                                    | `metadata`              | Lists configured recipe actions and the data they read.                                 |
-| `action run RECIPE_ID PATH… [--instructions TEXT] [--recursive]` | `propose`               | Prepares a recipe; `content` too when the recipe reads contents.                        |
-| `action status ID`, `action cancel ID`                           | your own task           | Reads or cancels a recipe task you started.                                             |
-| `review status ID`, `review cancel ID`                           | your own proposal       | Reads or cancels your proposal; canceling keeps its evidence and output.                |
-| `config propose PATCHES`                                         | `propose`               | Submits configuration patches for review.                                               |
-| `task list [--workspace ID_OR_NAME]`                             | `metadata`              | Lists task areas whose checkouts are in your folders.                                   |
-| `task create NAME --branch B --path DIR …`                       | `propose`, `navigation` | Proposes a branch, worktree and task area. See below.                                   |
-| `workflow read FILE`                                             | `metadata`              | Validates a saved workflow without running it.                                          |
-| `workflow run FILE [--bindings JSON]`                            | `metadata`              | Runs inspection steps and prepares file-change steps for review.                        |
-| `workflow list`, `workflow status ID`                            | your own runs           | Lists or reads workflow runs this client started.                                       |
-| `workflow resume ID`, `workflow cancel ID`                       | your own run            | Resumes after its reviews, or cancels it keeping its evidence.                          |
-| `ask PROMPT`                                                     | `metadata`              | Asks the **Use for Ask Viewer** model for a command proposal (up to 12,000 characters). |
-| `speech models`, `speech status`                                 | `metadata`              | Lists pinned speech models and installation state; records nothing.                     |
-| `speech install MODEL`, `speech use MODEL`                       | `propose`               | Proposes downloading or selecting a model.                                              |
-| `speech import MODEL PATH`                                       | `propose`, `content`    | Proposes importing a local file that matches a pinned checksum.                         |
-| `completion bash\|zsh\|fish`                                     | nothing                 | Prints a completion script to stdout; edits no profile.                                 |
+| Command                                                          | Needs                                                        | Does                                                                                        |
+| ---------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `export PATH… --destination DIR --name NAME --plan JSON`         | `propose`, `content`                                         | Prepares an image, PDF or media export (1 to 16 sources) for review.                        |
+| `action list`                                                    | `metadata`                                                   | Lists configured recipe actions and the data they read.                                     |
+| `action run RECIPE_ID PATH… [--instructions TEXT] [--recursive]` | `propose`                                                    | Prepares a recipe; `content` too when the recipe reads contents.                            |
+| `action status ID`, `action cancel ID`                           | your own task                                                | Reads or cancels a recipe task you started.                                                 |
+| `review status ID`, `review cancel ID`                           | your own proposal                                            | Reads or cancels your proposal; canceling keeps its evidence and output.                    |
+| `config propose PATCHES`                                         | `propose`                                                    | Submits configuration patches for review.                                                   |
+| `task list [--workspace ID_OR_NAME]`                             | `metadata`                                                   | Lists task areas whose checkouts are in your folders.                                       |
+| `task create NAME --branch B --path DIR …`                       | `propose`, `navigation`                                      | Proposes a branch, worktree and task area. See below.                                       |
+| `workflow read FILE`                                             | `metadata`, `content`                                        | Validates a saved workflow without running it.                                              |
+| `workflow run FILE [--bindings JSON]`                            | `metadata`, `content`, `propose`                             | Runs inspection steps and prepares file-change steps for review.                            |
+| `workflow list`, `workflow status ID`                            | `metadata`, `content`, `propose`; your own runs              | Lists or reads workflow runs this client started.                                           |
+| `workflow resume ID`, `workflow cancel ID`                       | your own run; `metadata`, and to resume `content`, `propose` | Resumes after its reviews, or cancels it keeping its evidence.                              |
+| `ask PROMPT`                                                     | `metadata`, `propose`                                        | Asks the **Default for Ask Viewer** model for a command proposal (up to 12,000 characters). |
+| `speech models`, `speech status`                                 | `metadata`                                                   | Lists pinned speech models and installation state; records nothing.                         |
+| `speech install MODEL`, `speech use MODEL`                       | `propose`                                                    | Proposes downloading or selecting a model.                                                  |
+| `speech import MODEL PATH`                                       | `propose`, `content`                                         | Proposes importing a local file that matches a pinned checksum.                             |
+| `completion bash\|zsh\|fish`                                     | nothing                                                      | Prints a completion script to stdout; edits no profile.                                     |
 
 After review in Viewer, the commands that propose a command (`command run`, `workspace create`,
 `workspace rename`, `layout`), `config propose`, `task create` and the speech commands also need a
@@ -166,8 +168,12 @@ native confirmation; declining it returns the proposal to review and runs nothin
 Configuration patches are `[{ "path": "…", "keys": […], "value": … }]`: up to 100 patches, `path` up
 to 200 characters, `keys` optional (up to 10). The [configuration](configuration.md) reference lists
 the paths. `ask` sends only permitted names and the command context; its answer is a proposal and is
-never run. Workflow bindings are a JSON object of folder names to absolute existing paths; shell
-expansion does not apply inside JSON. Workflow steps are described in [automation](automation.md).
+never run. `ask` reaches the model only while **Allow agent-started actions to send the same data**
+is on for that model; see [Add a model](agents.md#add-a-model). Workflow bindings are a JSON object
+of folder names to absolute existing paths; shell expansion does not apply inside JSON. Workflow
+steps are described in [automation](automation.md). An export's `--plan` is the `plan` argument of
+`propose_transform`: `viewer tools list` prints its schema, and [Agents](agents.md#propose-changes)
+names the plan kinds.
 
 Service tools without their own command, such as `get_context`, `inspect_file`,
 `read_drawing_geometry`, `propose_selection`, `read_terminal` and `report_session`, are reachable
@@ -254,22 +260,23 @@ viewer speech use whisper-tiny --json
 
 All three are multilingual and pinned by revision and SHA-256. `speech models` prints each digest.
 
-| Rule      | Value                                                                                                |
-| --------- | ---------------------------------------------------------------------------------------------------- |
-| Review    | Install, import and use need review in Viewer and a native confirmation.                             |
-| Download  | HTTPS from `huggingface.co` and `cdn-lfs.huggingface.co` only; 20 minutes; size and digest verified. |
-| Storage   | Free space of the model's size plus 1 MiB.                                                           |
-| Reuse     | A verified installed model is reused, not downloaded again.                                          |
-| Selection | `speech use` selects an installed model. Installing does not select it.                              |
-| Attempts  | At most eight retained attempts. Failed, canceled and interrupted files stay, unselected.            |
-| Restart   | Quitting does not resume a download or record audio.                                                 |
+| Rule      | Value                                                                                                           |
+| --------- | --------------------------------------------------------------------------------------------------------------- |
+| Review    | Install, import and use need review in Viewer and a native confirmation.                                        |
+| Download  | HTTPS from `huggingface.co`, `cdn-lfs.huggingface.co` and `*.hf.co` only; 20 minutes; size and digest verified. |
+| Storage   | Free space of the model's size plus 1 MiB.                                                                      |
+| Reuse     | A verified installed model is reused, not downloaded again.                                                     |
+| Selection | `speech use` selects an installed model. Installing does not select it.                                         |
+| Attempts  | At most eight retained attempts. Failed, canceled and interrupted files stay, unselected.                       |
+| Restart   | Quitting does not resume a download or record audio.                                                            |
 
 The CLI manages weights only. It cannot record, grant microphone access, set hosted keys or send
 audio. [Speech](speech.md) covers dictation.
 
 ## Global options
 
-Global options can come before or after the command.
+Global options can come before or after the command. An option takes its value as the next argument
+or after `=`: `--timeout 500` or `--timeout=500`.
 
 | Option            | Behavior                                                                  |
 | ----------------- | ------------------------------------------------------------------------- |

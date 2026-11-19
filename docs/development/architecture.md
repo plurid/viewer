@@ -4,9 +4,9 @@ Paths on this page are relative to `packages/viewer-electron/app`.
 
 ## Dependency direction
 
-Domain modules own serializable contracts, schemas and pure decisions. They have no Electron or
-React dependencies. Desktop services own authority and I/O. Preload exposes a fixed typed API. The
-sandboxed renderer owns presentation and user intent.
+Domain modules own serializable contracts, schemas and pure decisions. They have no Node, Electron
+or React dependencies. Desktop services own authority and I/O. Preload exposes a fixed typed API.
+The sandboxed renderer owns presentation and user intent.
 
 ```mermaid
 flowchart LR
@@ -35,8 +35,9 @@ owner-bound capability, not a raw filesystem or process channel.
 | Runtimes and diagnostics | Shared contracts                     | Terminals, browsers, servers, Journal          | Feature views and recovery                        |
 
 Shared UI primitives live at the UI root; business dialogs belong to their feature. Architecture
-tests enforce layer boundaries. Shared catalogs remain in domain code rather than repeated
-renderer/desktop unions.
+tests enforce layer boundaries and refuse runtime import cycles; a lazy `import()` or a type-only
+import does not count. Shared catalogs remain in domain code rather than repeated renderer/desktop
+unions.
 
 ## UI primitives
 
@@ -52,6 +53,13 @@ the [domain map](../../CONTEXT.md#interface) their owners. Use one before stylin
 - `Panel` and `PanelSection` for a panel beside the work. Its holder places it and sets its width;
   the panel never uses a fixed position.
 - `Popover` for an anchored layer, and `useAnchoredLayer` for a menu with its own markup.
+- `FormField`, `FileNameField` and `DestinationField` for an output form: the label above, the field
+  filling its row.
+- `FileName` for a file name: too long for its room, it loses its middle and keeps its extension.
+- `NumberField` for a number: a text field with no spin arrows, applied on Return or blur.
+- `ChoiceButton`, `MenuButton` and `SegmentedControl` in `ChoiceMenu.tsx` for a choice. The renderer
+  has no native `<select>`; `tests/no-native-select.test.ts` refuses one.
+- `useListKeys` for a list in a dialog or a panel: arrows, type-ahead and Return as Finder's.
 
 Size type with the `--text-*` tokens and space with `--gap-*`, both in `styles/base.css`.
 `tests/design-tokens.test.ts` checks them against DESIGN.md and keeps a budget of off-scale spacing
@@ -106,8 +114,12 @@ Each boundary has one typed definition that both sides use.
 - A worker's requests form a method map (`WorkerMethods` in `desktop/workers/utility-client.ts`).
   The client's `call` checks the arguments and types the reply; the worker narrows its
   `WorkerRequest` by `method`. The file-services map is `desktop/workers/index-protocol.ts`.
-- `desktop/agents/tool-catalog.ts` holds each agent tool's capability and zod input. The broker
-  parses with it and `tools/list` advertises its JSON Schema, so the two cannot drift.
+- `desktop/agents/tool-catalog.ts` holds the capability and zod input of each of the broker's own
+  tools. The broker parses with it and `tools/list` advertises its JSON Schema, so the two cannot
+  drift. The service tools in `desktop/agents/service-catalog.ts` advertise hand-written JSON
+  Schema, and `service-tools.ts` parses their arguments with its own zod: change both together. The
+  service tools in `desktop/agents/service-catalog.ts` still carry a JSON Schema written by hand
+  beside their zod parser in `service-tools.ts`.
 - Every window and page starts from `isolatedContent` in `desktop/windows/web-content-policy.ts`:
   sandboxed, context-isolated, without Node.
 

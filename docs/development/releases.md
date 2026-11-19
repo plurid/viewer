@@ -27,10 +27,10 @@ development.
 The manifest is the version's single source. Direct bundles stamp `0.1.0-0` into
 `CFBundleShortVersionString`; feed `version` carries the same alpha version. The machine build stays
 separate in `CFBundleVersion` and feed `build`: the commit count for direct builds, or
-`VIEWER_MAS_BUILD` for the Store. Never rewrite published history. About shows `0.1.0-0 (584)`; a
-development run shows `0.1.0-0`, development, and receives no update offers. Tags use `v<version>`,
-and installers use `Viewer-<version>-arm64.dmg`. Help links use the version tag, or `master` in
-development.
+`VIEWER_MAS_BUILD` for the Store. Never rewrite published history. About shows the version and the
+build in brackets, such as `0.1.0-0 (584)`; a development run shows `0.1.0-0`, development, and
+receives no update offers. Tags use `v<version>`, and installers use `Viewer-<version>-arm64.dmg`.
+Help links use the version tag, or `master` in development.
 
 Apple's Store requires increasing three-integer versions. Its bundle short version drops the alpha
 ender: `0.1.0-0` becomes `1.0.0`, `0.1.0-N` becomes `1.0.N`, and `0.1.1-0` becomes `1.1.0`. The
@@ -270,7 +270,10 @@ and bundled resource identities while retaining download quarantine.
 Use the resulting installed binary as `VIEWER_TEST_BINARY` for packaged startup, Office, media and
 PDF checks. Exercise helpers through the installed application after its normal first launch; a
 standalone helper invocation before that launch is a separate Gatekeeper diagnostic. Static package
-verification does not establish that a conversion or export succeeds.
+verification does not establish that a conversion or export succeeds. Then run
+`pnpm review --binary <installed binary>` and look at the sheet, as
+[Look at every changed screen](testing.md#look-at-every-changed-screen) asks before a build reaches
+anyone.
 
 ### What the bundle leaves out
 
@@ -308,6 +311,12 @@ functional tests. Track each architecture and OS separately.
 Read their documented diagnostics before invoking a mutating or distribution step. Generated
 evidence distinguishes passed, failed, skipped and pending gates; do not turn an older candidate's
 pass into a current release claim.
+
+`pnpm qualify` takes `--mas`, `--no-build` and `--soak-minutes=<n>` (120 by default, 0 to 1,440) and
+needs an Apple Silicon Mac. It writes `report.json` and one log per check under
+`packages/viewer-electron/app/out/qualification/<time>/`. The report always says
+`releaseReady: false` and lists the gates a person must still pass, so the command never exits with
+0: 1 means a check failed, 2 means none did.
 
 The [platform reference](../reference/platforms.md) is the user-facing status. [Testing](testing.md)
 describes routine checks and fixture preservation.

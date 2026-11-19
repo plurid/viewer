@@ -3,8 +3,8 @@
 Use this guide to look inside a file without leaving its folder: each kind of file's controls,
 saving email attachments, reading any file's bytes, and picking up where you left off.
 
-**Find it:** select a file and press **Space**, or choose **File → Quick Preview** · **Open linked
-plane** keeps it open · **⌘K** → **Show as Hex** for its bytes
+**Find it:** select a file and press **Space**, or choose **File → Quick Preview** · **Open Linked
+Plane** keeps it open · **⌘K** → **Show as Hex** for its bytes
 
 ## Look, then keep it open
 
@@ -58,7 +58,7 @@ keeping their extensions. Hover the filename for the full name and file details.
 | 3D models and drawings                    | Orbit, zoom, show dimensions and measure                                          |
 | Audio and video                           | Play, pause and seek; choose a subtitle file named like it, or **Subtitles off**  |
 | iWork, Krita, OpenRaster, Sketch, XPS     | Zoom the preview image the document saved                                         |
-| Certificates and keys                     | Read each certificate and its chain; a private key shows only its type            |
+| Certificates and keys                     | Read each certificate and its chain; a private key shows only its type and size   |
 | Internet shortcuts                        | See the address and its host; **Open in Browser** or **Open in Mail App**         |
 | Torrent                                   | Read its files, trackers and info-hash                                            |
 | Provisioning profile                      | Read its app ID, team, expiry, devices and entitlements                           |

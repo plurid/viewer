@@ -1,8 +1,9 @@
 # The paid build
 
 Viewer is to be sold: a free trial, then a license key bought once. This page records the rules that
-were chosen, the reasons, and the questions still open. Once the feature ships, the guides and the
-reference describe how it behaves; this page keeps the reasoning.
+were chosen, the reasons, and the questions still open. The feature is built and stays off until the
+publisher sets the signing key and purchase page. The [license guide](../guides/license.md) and
+[license reference](../reference/license.md) describe how it behaves; this page keeps the reasoning.
 
 ## The rules
 
@@ -52,7 +53,7 @@ Viewer's data folder and verified again at every launch; there is no "paid" swit
 - A record that cannot be read starts a new trial, and the unreadable file is kept, so a key inside
   it is never lost. Someone who edits the record gets what they asked for; the person who never
   touches it is never punished for a damaged file.
-- A saved key that a build cannot verify is kept too. Only **Remove license key** clears a key.
+- A saved key that a build cannot verify is kept too. Only **Remove License Key** clears a key.
 
 ## What stays out of the first version
 

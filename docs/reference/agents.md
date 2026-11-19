@@ -37,18 +37,18 @@ refused. Every path argument must be inside the client's folders.
 
 ### Read files and checkouts
 
-| Tool                    | Needs                                                         | What it does                                                                                                                                                                                         |
-| ----------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read_metadata`         | `metadata`                                                    | One file's entry: name, kind, size, dates and identity                                                                                                                                               |
-| `search_files`          | `metadata`; `content: true` needs `content`, named            | Searches an indexed granted folder (`root`) with the [search syntax](search.md); `query` up to 1,000 characters, `offset` for the next page. Matching passages come back only for `content: true`    |
-| `get_relationships`     | `metadata`; `content: true` needs `content`, named            | Operation provenance between granted files and, with `content: true`, local references in the file. Private notes and reported links are left out                                                    |
-| `inspect_file`          | `content`, named                                              | Source-versioned facts and original evidence; `ocr: true` runs OCR                                                                                                                                   |
-| `read_content`          | `content`, named                                              | Bounded extracted passages with the source version and reader coverage                                                                                                                               |
-| `query_table`           | `content`, named                                              | A row window of a CSV, TSV or XLSX file: `offset` 0 to 100,000, `limit` 1 to 200 (default 100), `sheet` for XLSX (default: the first visible sheet). Stored values and formula text; no formula runs |
-| `read_drawing_geometry` | `content`, named                                              | DXF entity bounds, lengths, areas and radii: `offset` 0 to 50,000, `limit` 1 to 100 (default 50), optional `layer` and `points`. Units are declared, never guessed                                   |
-| `git_status`            | `metadata`                                                    | Git status of the checkout that contains `path`                                                                                                                                                      |
-| `git_diff`              | `content`, named                                              | A bounded tracked-file diff against `base`, a branch or commit (default `HEAD`)                                                                                                                      |
-| `read_terminal`         | `terminal-read` and a [terminal read grant](#terminal-output) | A terminal's folder and the last 128,000 characters it showed. `id` is the terminal plane's ID from `list_planes`                                                                                    |
+| Tool                    | Needs                                                         | What it does                                                                                                                                                                                                                    |
+| ----------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read_metadata`         | `metadata`                                                    | One file's entry: name, kind, size, dates and identity                                                                                                                                                                          |
+| `search_files`          | `metadata`; `content: true` needs `content`, named            | Searches an indexed granted folder (`root`) with the [search syntax](search.md); `query` up to 1,000 characters, `offset` for the next page. Matching passages come back only for `content: true`                               |
+| `get_relationships`     | `metadata`; `content: true` needs `content`, named            | Operation provenance between granted files and, with `content: true`, local references in the file. Private notes and reported links are left out                                                                               |
+| `inspect_file`          | `content`, named                                              | Source-versioned facts and original evidence; `ocr: true` runs OCR                                                                                                                                                              |
+| `read_content`          | `content`, named                                              | Bounded extracted passages with the source version and reader coverage                                                                                                                                                          |
+| `query_table`           | `content`, named                                              | A row window of a CSV, TSV or XLSX file (also XLSM, XLTX and XLTM): `offset` 0 to 100,000, `limit` 1 to 200 (default 100), `sheet` for XLSX (default: the first visible sheet). Stored values and formula text; no formula runs |
+| `read_drawing_geometry` | `content`, named                                              | DXF entity bounds, lengths, areas and radii: `offset` 0 to 50,000, `limit` 1 to 100 (default 50), optional `layer` and `points`. Units are declared, never guessed                                                              |
+| `git_status`            | `metadata`                                                    | Git status of the checkout that contains `path`                                                                                                                                                                                 |
+| `git_diff`              | `content`, named                                              | A bounded tracked-file diff against `base`, a branch or commit (default `HEAD`)                                                                                                                                                 |
+| `read_terminal`         | `terminal-read` and a [terminal read grant](#terminal-output) | A terminal's folder and the last 128,000 characters it showed. `id` is the terminal plane's ID from `list_planes`                                                                                                               |
 
 When `search_files` omits `content`, it searches document text if the client holds `content`, and
 returns no passages.
@@ -131,7 +131,7 @@ A proposal's `status` is `review`, `running`, `completed`, `failed`, `rejected` 
 None of them records, opens the microphone or installs a program. [Speech](speech.md) has the
 catalog.
 
-### Report a session
+### Session reports
 
 | Tool             | Needs      | What it does                                                                         |
 | ---------------- | ---------- | ------------------------------------------------------------------------------------ |
@@ -218,15 +218,15 @@ the token private: anyone holding it acts as that client.
 
 ### Capabilities
 
-| Capability       | Named client label          | Shared connection label                                | Allows                                                                          |
-| ---------------- | --------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `metadata`       | **Metadata and discovery**  | **Names, sizes, dates and available tools**            | Discovery, names, sizes, dates, configuration reads, session reports            |
-| `content`        | **Read file contents**      | **Search document text and run actions that read it**  | Named: every content tool. Shared: document-text search and content recipes     |
-| `navigation`     | **Navigate without review** | **Propose opening folders and files, for your review** | Opening, selecting, focusing and switching; at once for a named client          |
-| `propose`        | **Propose changes**         | **Propose commands and changes, for your review**      | Commands, configuration, exports, recipes, tasks and speech setup, all reviewed |
-| `terminal-read`  | **Read terminal output**    | **Read terminal output, where granted**                | `read_terminal`, with a terminal read grant                                     |
-| `execute`        | Not offered                 | Not offered                                            | Nothing                                                                         |
-| `terminal-write` | Not offered                 | Not offered                                            | Nothing                                                                         |
+| Capability       | Named client label          | Shared connection label                                | Allows                                                                               |
+| ---------------- | --------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `metadata`       | **Metadata and discovery**  | **Names, sizes, dates and available tools**            | Discovery, names, sizes, dates, configuration reads, session reports                 |
+| `content`        | **Read file contents**      | **Search document text and run actions that read it**  | Named: every content tool. Shared: document-text search, content recipes and exports |
+| `navigation`     | **Navigate without review** | **Propose opening folders and files, for your review** | Opening, selecting, focusing and switching; at once for a named client               |
+| `propose`        | **Propose changes**         | **Propose commands and changes, for your review**      | Commands, configuration, exports, recipes, tasks and speech setup, all reviewed      |
+| `terminal-read`  | **Read terminal output**    | **Read terminal output, where granted**                | `read_terminal`, with a terminal read grant                                          |
+| `execute`        | Not offered                 | Not offered                                            | Nothing                                                                              |
+| `terminal-write` | Not offered                 | Not offered                                            | Nothing                                                                              |
 
 When agents are turned on and the shared connection has no capabilities yet, it gets `metadata`,
 `navigation` and `propose`.
@@ -318,9 +318,9 @@ fails the proposal; it never retargets a new selection.
 - **Empty or browse the Trash, or use file Undo.** Those stay in the person's interface.
 - **Run Git actions.** Staging, committing, pulling and pushing are the person's.
 - **Paste.** The clipboard is outside the captured selection; use `copy-to` or `move-to`.
-- **Save nestings, DXF corrections or mail attachments.** `propose_transform` refuses them: nestings
-  are saved from the Layout plane, corrections from a reviewed fabrication check, attachments from
-  the message preview.
+- **Save nestings, DXF corrections, handoffs or mail attachments.** `propose_transform` refuses
+  them: nestings are saved from the Layout plane, corrections from a reviewed fabrication check,
+  handoffs are exported from a fabrication check, attachments are saved from the message preview.
 - **Read Viewer's private data.** Credentials, grants, recovery files and saved transcripts are
   outside every file tool.
 - **Grant itself access.** Editing config.jsonc, imported configuration, custom-action aliases and
@@ -346,8 +346,9 @@ is refused, including commands added later.
 | Custom actions    | `custom.<id>` for a built-in command, a recipe, or a sequence of built-in command IDs without arguments and without Trash                                                                                                                                |
 
 `parent-plane` and `view-open-plane` are refused; use `propose_focus_plane`. A custom action changed
-after review fails with
-`The action changed after it was reviewed. Ask the agent for a new proposal.`
+while its proposal waited fails at approval with
+`Action configuration changed. Ask the agent for a new proposal.` One changed after approval fails
+with `The action changed after it was reviewed. Ask the agent for a new proposal.`
 
 ### Configuration an agent may change
 
@@ -367,7 +368,7 @@ key that contains dots, such as a folder path:
 
 | Limit                               | Value                                                              |
 | ----------------------------------- | ------------------------------------------------------------------ |
-| One request                         | 65,536 bytes on one line                                           |
+| One request                         | 65,536 bytes on one line, `paths` and `sources` lists included     |
 | Result size                         | **Maximum returned content**: 1 to 8 MiB, default 4; shared: 4 MiB |
 | One reply                           | 17 MiB (17,825,792 bytes) on one line                              |
 | Named clients                       | 100, revoked ones included                                         |
@@ -379,6 +380,7 @@ key that contains dots, such as a folder path:
 | Pending task proposals              | 100; a prepared task expires after 5 minutes                       |
 | Task areas per workspace            | 50                                                                 |
 | Path                                | 32,768 characters                                                  |
+| Captured selection                  | 2,000 items; with more selected, `list_commands` is empty          |
 | Concurrent Git reads                | 8                                                                  |
 | Activity                            | The last 1,000 calls are kept; **Activity** shows 50               |
 
@@ -421,29 +423,34 @@ ended without quitting reads as not running once its process is gone.
 
 Calls fail with these:
 
-| Message                                                                                                 | Meaning                                                                                     |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `Agent access is disabled or its token is invalid.`                                                     | Access is off, or the token was replaced or revoked                                         |
-| `This file is outside the agent’s authorized folders.`                                                  | Outside the folders, missing or denied                                                      |
-| `This agent client has no … capability.`                                                                | Turn the capability on under **Permissions**                                                |
-| `The shared connection has no … capability. Allow it in Settings → Agents.`                             | Turn it on under **What the connection may do**                                             |
-| `Use a named client with content permission.`                                                           | A content tool called through the shared connection                                         |
-| `Focus a granted files plane in Viewer first.` or `Open a workspace in Viewer first.`                   | The person's active plane is not in the folders                                             |
-| `Command is unavailable in the captured context.`                                                       | The ID is not in the current `list_commands`                                                |
-| `Agents cannot propose “…”. Ask the person to run it themselves.`                                       | The command is not on the agent list                                                        |
-| `Selection changed. Ask the agent for a new proposal.`                                                  | A file changed identity before the proposal ran                                             |
-| `The source changed. Read it again.`                                                                    | The file changed while it was read                                                          |
-| `Agent permissions changed while this request was running. Try again.`                                  | Access, folders or capabilities changed during the call                                     |
-| `This client already runs as many requests as it may. Wait for one to finish.`                          | Too many calls at once                                                                      |
-| `Review or stop a task before starting another.`                                                        | The client's recipe tasks fill its budget                                                   |
-| `The read_content result is 5.3 MiB, over this client’s read budget of 4 MiB. …`                        | Ask for less, as the message says; see below                                                |
-| `The reply is … bytes, over the 17,825,792 one reply to an agent may take. …`                           | A reply too long for the relay. A result within its budget never is                         |
-| `Review pending proposals before submitting another.`                                                   | 100 proposals are waiting                                                                   |
-| `Proposal belongs to another actor.`                                                                    | The ID is another client's                                                                  |
-| `Allow agents to send this data to the provider in Settings → Models before an agent runs this action.` | The model's agent permission is off                                                         |
-| `Viewer request timed out.`                                                                             | No reply within 120 seconds                                                                 |
-| `Viewer disconnected. Reconnect to the running app.`                                                    | Viewer quit, or access was turned off                                                       |
-| `Viewer sent a reply over 17,825,792 bytes, more than this agent connection carries. …`                 | Another version of Viewer sent a reply the relay does not accept, and the connection closed |
+| Message                                                                                                 | Meaning                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Agent access is disabled or its token is invalid.`                                                     | Access is off, or the token was replaced or revoked                                                                                                                                   |
+| `This file is outside the agent’s authorized folders.`                                                  | Outside the folders, missing or denied. Also when the person's focused plane or selection is outside them, for any command, navigation, export, `ask_in_words` or `run_workflow` call |
+| `This agent client has no … capability.`                                                                | Turn the capability on under **Permissions**                                                                                                                                          |
+| `The shared connection has no … capability. Allow it in Settings → Agents.`                             | Turn it on under **What the connection may do**                                                                                                                                       |
+| `Use a named client with content permission.`                                                           | A content tool called through the shared connection                                                                                                                                   |
+| `Focus a granted files plane in Viewer first.` or `Open a workspace in Viewer first.`                   | No workspace window is open and ready in Viewer                                                                                                                                       |
+| `Command is unavailable in the captured context.`                                                       | The ID is not in the current `list_commands`                                                                                                                                          |
+| `Agents cannot propose “…”. Ask the person to run it themselves.`                                       | The command is not on the agent list                                                                                                                                                  |
+| `Selection changed. Ask the agent for a new proposal.`                                                  | A file changed identity before the proposal ran                                                                                                                                       |
+| `The source changed. Read it again.`                                                                    | The file changed while it was read                                                                                                                                                    |
+| `Agent permissions changed while this request was running. Try again.`                                  | Access, folders or capabilities changed during the call                                                                                                                               |
+| `This client already runs as many requests as it may. Wait for one to finish.`                          | Too many calls at once                                                                                                                                                                |
+| `Review or stop a task before starting another.`                                                        | The client's recipe tasks fill its budget                                                                                                                                             |
+| `The read_content result is 5.3 MiB, over this client’s read budget of 4 MiB. …`                        | Ask for less, as the message says; see below                                                                                                                                          |
+| `The reply is … bytes, over the 17,825,792 one reply to an agent may take. …`                           | A reply too long for the relay. A result within its budget never is                                                                                                                   |
+| `Review pending proposals before submitting another.`                                                   | 100 proposals are waiting                                                                                                                                                             |
+| `Proposal belongs to another actor.`                                                                    | The ID is another client's                                                                                                                                                            |
+| `Allow agents to send this data to the provider in Settings → Models before an agent runs this action.` | The model's agent permission is off                                                                                                                                                   |
+| `Viewer request timed out.`                                                                             | No reply within 120 seconds                                                                                                                                                           |
+| `Viewer disconnected. Reconnect to the running app.`                                                    | Viewer quit, or access was turned off                                                                                                                                                 |
+| `Viewer sent a reply over 17,825,792 bytes, more than this agent connection carries. …`                 | Another version of Viewer sent a reply the relay does not accept, and the connection closed                                                                                           |
+| `Too many pending requests.`                                                                            | 100 replies are already waiting in this `--mcp` process                                                                                                                               |
+| `Terminal output needs a separate read grant in Settings → Agents.`                                     | `read_terminal` without a terminal read grant for that folder                                                                                                                         |
+| `Git is disabled in Settings.`                                                                          | **Show Git status** is off, or this is the Mac App Store build                                                                                                                        |
+| `Git inspection has reached its concurrent request limit. Retry after another request finishes.`        | 8 Git reads are already running                                                                                                                                                       |
+| `Branch task creation is available in the direct build only.`                                           | `propose_task_create` in the Mac App Store build                                                                                                                                      |
 
 A result over its budget names its size and the budget, then what to ask for instead: fewer rows
 (`limit`, `offset`) for `query_table`, fewer entities or no points for `read_drawing_geometry`, the
@@ -496,16 +503,16 @@ client blocks new reports and keeps the saved ones.
 Models are added in **Settings → Models**; [Add a model](../guides/automate.md#add-a-model) has the
 steps.
 
-| Label                                                 | What it does                                                                                             |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **Add Model**, then **Set Up Model**                  | Adds a provider: OpenAI, Anthropic, z.ai, DeepSeek, Qwen, Gemini, OpenRouter, Meta or **Local endpoint** |
-| **Default for Ask Viewer**                            | The model that answers requests in words and reads spoken requests into plans                            |
-| **Data access**                                       | What the provider may receive                                                                            |
-| **Allow Selected Data**                               | Approves the chosen level                                                                                |
-| **Revoke Access**                                     | Withdraws it                                                                                             |
-| **Allow agent-started actions to send the same data** | Lets `ask_in_words`, agent recipes and agent workflows use the model                                     |
-| **Reasoning effort**                                  | How long the model reasons before it answers; shown only for a provider that takes it, such as Meta      |
-| **Outlines with SAM**                                 | The SAM model a local server also answers, such as `sam-3.1`; shown only for **Local endpoint**          |
+| Label                                                 | What it does                                                                                                                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Add Model**, then **Set Up Model**                  | Adds a provider: OpenAI, Anthropic, z.ai, DeepSeek, Qwen, Gemini, OpenRouter, Meta or **Local endpoint**                                                     |
+| **Default for Ask Viewer**                            | The model that answers requests in words and reads spoken requests into plans                                                                                |
+| **Data access**                                       | What the provider may receive                                                                                                                                |
+| **Allow Selected Data**                               | Approves the chosen level, after a system dialog (**Allow**)                                                                                                 |
+| **Revoke Access**                                     | Withdraws it                                                                                                                                                 |
+| **Allow agent-started actions to send the same data** | Lets `ask_in_words`, agent recipes and agent workflows use the model, after a system dialog (**Allow**). Choosing **Allow Selected Data** again turns it off |
+| **Reasoning effort**                                  | How long the model reasons before it answers; shown only for a provider that takes it, such as Meta                                                          |
+| **Outlines with SAM**                                 | The SAM model a local server also answers, such as `sam-3.1`; shown only for **Local endpoint**                                                              |
 
 | Level       | Label in **Data access** | Includes                                                          |
 | ----------- | ------------------------ | ----------------------------------------------------------------- |
@@ -514,8 +521,8 @@ steps.
 | `full-text` | **Full document text**   | Names, metadata and extracted document text                       |
 | `images`    | **Text and pictures**    | Names, metadata, document text, photos and rendered drawing pages |
 
-Each choice shows its full scope. Selecting a level changes the pending choice; **Allow selected
-data** grants it. The current allowed scope remains visible separately.
+Each choice shows its full scope. Selecting a level changes the pending choice; **Allow Selected
+Data** grants it. The current allowed scope remains visible separately.
 
 Each level includes the ones above it. Pictures come last: an approval of `full-text` never sends a
 photo or a drawing page. Pictures go only to providers that use the Chat Completions API, each one
@@ -560,17 +567,17 @@ A spoken request ([the steps](../guides/speech.md#ask-viewer-by-voice)) becomes 
 where the person spoke. Its transcript is data, as a document is: it can only pick commands offered
 there.
 
-| Stage    | What happens                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Reading  | With the **Default for Ask Viewer** model allowed `names`, the model receives the words, up to 2,000 characters, the folder's path, up to 50 selected names and up to 600 commands there: each ID, label, what it acts on, such as "Job 1042", and the command it follows. The answer is held to `spokenAnswerSchema` with a strict `json_schema`. Without that model or its permission, or when it does not answer, Viewer matches the words to command labels and aliases itself, and says so |
-| Checking | Each step is a command offered there, or one that follows an earlier step, such as **Prepare Cut Sheets** after **Check Laser Job…**: at most 6, each once, in order. A step naming a target its command does not act on, such as "Job 1043" where Job 1042 is shown, or a part of the request no command does, makes the plan wait for the person's press                                                                                                                                      |
-| Running  | Steps run one after another on the folder and selection captured when the recording began, each once the one before is done: a check once it is graded                                                                                                                                                                                                                                                                                                                                          |
+| Stage    | What happens                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reading  | With the **Default for Ask Viewer** model allowed `names`, the model receives the words, up to 2,000 characters, the folder's path, up to 50 selected names and up to 600 commands there: each ID, label, what it acts on, such as "Job 1042", and the command it follows. The answer must match `spokenAnswerSchema`, sent as a strict `json_schema` to a provider that takes one. Without that model or its permission, or when it does not answer, Viewer matches the words to command labels and aliases itself, and says so |
+| Checking | Each step is a command offered there, or one that follows an earlier step, such as **Prepare Cut Sheets** after **Check Laser Job…**: at most 6, each once, in order. A step naming a target its command does not act on, such as "Job 1043" where Job 1042 is shown, or a part of the request no command does, makes the plan wait for the person's press                                                                                                                                                                       |
+| Running  | Steps run one after another on the folder and selection captured when the recording began, each once the one before is done: a check once it is graded                                                                                                                                                                                                                                                                                                                                                                           |
 
 | Runs                  | Commands                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | At once               | `check-laser-job`, `check-cut-sheets`, `check-tour`, `quick-preview`, `native-quick-look`, `info`, `inspect-file`, `related-files`, `calculate-size`, `select-all`, `invert-selection`, `refresh`, `hidden`, `back`, `forward`, `parent`, `linked`, `another-plane`, `frame-plane`, `frame-all`, `dock`, `arrange-horizontal`, `arrange-vertical`, `toggle-sidebar`, `plane-sidebar`, `focus-mode`, `wrap-file-names`, and `view-…`, `sort.…`, `group.…` and `column.…` |
 | On the person's press | Every other command offered there, such as `check-corrections`, `check-handoff`, `rename` and `trash`, and any command added later                                                                                                                                                                                                                                                                                                                                      |
-| Never                 | What a model may not put in a line: terminals, other apps, Git actions, emptying the Trash, file Undo, pasting, and custom actions that run programs                                                                                                                                                                                                                                                                                                                    |
+| Never                 | What a model may not put in a line: workspace definitions and their commands, network sharing, terminals, other apps, Git actions, emptying the Trash, file Undo, pasting, and custom actions that run programs                                                                                                                                                                                                                                                         |
 
 A plan that cannot run says why, and nothing runs:
 

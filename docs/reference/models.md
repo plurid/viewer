@@ -34,7 +34,7 @@ instructions are read.
 | **Rotation**                            | **Free** tumbles in any direction without poles or stops; **Turntable** rotates around a fixed up axis           |
 | View cube                               | Click a face, edge or corner to turn to that view; drag it to rotate; **Home view** turns to the starting view   |
 | **Measure**                             | Click two surface points to read their **Distance**; **Clear** removes it                                        |
-| **Wireframe**                           | Draws the model's edges only                                                                                     |
+| **Wireframe**                           | Draws every triangle as lines, without surfaces; **Show wireframe** in **…** with Essential headers              |
 | **Shading**                             | **Surface**: **Original materials**, **Clay** or **Normals**. **Lighting**: **Studio**, **Contrast** or **Soft** |
 |                                         | **Brightness** 40% to 160%, **Show edges**, **Shadows** and **Reset shading**                                    |
 | **Model animation**, **Play animation** | For a model with animations: choose one and play or pause it                                                     |
@@ -42,7 +42,7 @@ instructions are read.
 
 The footer shows the model's size along x, y and z, then its meshes, triangles and vertices. STEP,
 IGES and 3MF sizes are in millimeters. Other formats show model units until you choose an assumed
-unit, which labels the numbers without rescaling them. Collada's own unit is converted to metres.
+unit, which labels the numbers without rescaling them. Collada's own unit is converted to meters.
 Measurement is for inspection; it does not replace the source CAD system.
 
 STEP, STP, IGES, IGS, STL, 3MF and 3DS start with **Free** rotation. glTF, OBJ, FBX, PLY, Collada,
@@ -105,7 +105,7 @@ earlier model until its time or size changes.
 The STEP and IGES converter stays loaded while a 3D preview is open and for 2 minutes after the last
 one closes, so the next file skips its start. A converter whose memory passed 512 MiB unloads as
 soon as it is idle, as does every converter when a model exceeds the decoded geometry or texture
-limit, which also empties the remembered models. Cancelling a conversion, by moving to another file,
+limit, which also empties the remembered models. Canceling a conversion, by moving to another file,
 restarts the converter without compiling it again.
 
 ### Formats read from the file alone
@@ -137,11 +137,13 @@ What the file embeds still loads, such as the images inside a USDZ package or a 
 | ------------------------ | ------------------------------------------------------------------------------------------- |
 | File size                | **3D file limit (MB)** in Settings, `settings.previews.maxModelMB`: 16 to 512; 256 at first |
 | STEP and IGES conversion | 64 MB                                                                                       |
-| Mesh parsing             | 128 MB                                                                                      |
+| Mesh parsing             | 128 MB; 64 MB for OBJ and OFF, which are read as text                                       |
 | Decoded geometry         | 128 MB                                                                                      |
 | Decoded textures         | 128 MB                                                                                      |
 | Models kept to reopen    | 16 per window, 512 MiB of geometry in all                                                   |
 | Geometry                 | 4,000,000 vertices and 2,000,000 triangles, in every format                                 |
+| Mesh parsing time        | 15 seconds for OBJ, STL, PLY and OFF                                                        |
+| STEP and IGES time       | 45 seconds a conversion                                                                     |
 
 ## DXF drawings
 
@@ -157,14 +159,16 @@ Export an ASCII DXF from your CAD app." Native DWG and paper-space layouts are n
 | Block references                                                                                                                           | Expanded up to 16 levels; recursive and missing blocks are noted |
 
 Text in a drawing from AutoCAD 2007 or later is read as UTF-8. An older drawing uses its
-`$DWGCODEPAGE`; an encoding the preview cannot read asks for a UTF-8 ASCII DXF.
+`$DWGCODEPAGE`; an encoding the preview cannot read asks for a UTF-8 ASCII DXF. Text is drawn in a
+substitute font, so its width and formatting can differ from the CAD app's; the drawing says so
+under **Not shown**.
 
 | Control                  | Does                                                                                                                                                              |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Fit drawing**          | Fits the drawing in view; **Home** does the same                                                                                                                  |
 | **Drawing tool**         | **Select** (click geometry), **Distance** (two points), **Angle** (first point, vertex, last point) or **Area** (boundary points; **↩** or double-click finishes) |
 | **Snap**                 | On at first: snaps to endpoints, midpoints, centers and quadrants. Hold **⇧** to measure without it                                                               |
-| **Show drawing grid**    | Shows or hides the grid                                                                                                                                           |
+| **Show drawing grid**    | Shows or hides the grid; **Hide Drawing Grid** in **…** with Essential headers                                                                                    |
 | **Show drawing details** | Opens the panel of units, layers and measurements                                                                                                                 |
 | **Measurement units**    | **From file**, or **Millimeters**, **Centimeters**, **Meters**, **Inches** or **Feet**                                                                            |
 | **Layers**               | Show or hide each layer, with its entity count. Layers hidden or frozen in the drawing start hidden                                                               |
@@ -180,6 +184,7 @@ drawing units: choosing a unit labels them without rescaling the drawing.
 | Preview vertices | 1,000,000                            |
 | Block expansion  | 100,000 entities; an array of 10,000 |
 | Measurements     | 100                                  |
+| Time             | 20 seconds                           |
 
 A spline is drawn as nesting reads it: from its control points and knots, in chords within 1/10,000
 of its size, or through its fit points when it has no control points. Its length and area are

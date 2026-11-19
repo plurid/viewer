@@ -46,7 +46,7 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 - **Workspace definition**: the recipe in `workspaces.jsonc`, derived live from a VS Code Project
   Manager project, or found from folders you use. It names a root and planes. Command terminals
   offer **Run** and **Shell only**, plus **Run all** for the waiting commands. _In Viewer:_ **Edit
-  workspace definitions** and **Settings → Configuration**. _Learn:_
+  Workspace Definitions** and **Settings → Configuration**. _Learn:_
   [Workspace definitions](configuration.md#workspace-definitions)
 - **Definition key**: the stable path-shaped identifier derived from a `>`-separated project name,
   such as `sample/tools/sample-cli`. _In Viewer:_ the detail below a defined workspace's name.
@@ -75,7 +75,7 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 - **Linked plane**: a plane opened from another, such as a file opened from its folder. It is that
   plane's child: a line joins them, **Back to parent plane** (**⌥⌘↑**) returns to the parent, and
   opening the same file again in that branch shows the plane it already has. _In Viewer:_ **Open
-  linked plane**, **Related planes** in the header, **View linked plane** beside a file's name.
+  Linked Plane**, **Related planes** in the header, **View linked plane** beside a file's name.
   _Learn:_ [Keep your work together](../guides/workspaces.md)
 - **Root plane**: a plane with no parent, the start of its own branch of linked planes. A file
   opened again in another root gets a plane of its own there. _In Viewer:_ **New Files Plane**
@@ -113,8 +113,8 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 - **Layout of planes**: where the planes sit and how large they are. **Size & Position** sets one
   plane's width, height and alignment; a layout template keeps an arrangement of plane kinds to
   apply to other folders. A **Layout** plane is something else: it lays out photos and PDFs on
-  pages. _In Viewer:_ **View → Size & Position**, **Layout** in a plane's header, **Save layout as
-  template…**. _Learn:_ [Keep your work together](../guides/workspaces.md)
+  pages. _In Viewer:_ **View → Size & Position**, **Layout** in a plane's header, **Save Layout as
+  Template…**. _Learn:_ [Keep your work together](../guides/workspaces.md)
 
 ## Looking at files
 
@@ -129,7 +129,7 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   it came from. _In Viewer:_ **Open Linked Plane**. _Learn:_
   [Your first five minutes](../guides/getting-started.md)
 - **Columns preview**: in Columns view (**⌘3**), the selected file's preview sits beside the folder
-  trail, so you browse and read at once. _In Viewer:_ **Columns view**. _Learn:_
+  trail, so you browse and read at once. _In Viewer:_ **Columns View**. _Learn:_
   [Your first five minutes](../guides/getting-started.md)
 - **Lens**: a set of named groups for a folder's own items, made without moving a file. Groups can
   nest, follow rules and become regions on the Map view. A writable folder keeps its lenses in
@@ -152,7 +152,7 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   [Open the workspace a folder belongs to](../guides/workspaces.md#open-the-workspace-a-folder-belongs-to)
 - **File overview**: a plane that searches the filename index for what may need a look across your
   indexed locations, such as old installers, files over 1 GB and old downloads. It reads only the
-  index. _In Viewer:_ **File overview** in **⌘K**. _Learn:_ [Explore a folder](../guides/explore.md)
+  index. _In Viewer:_ **File Overview** in **⌘K**. _Learn:_ [Explore a folder](../guides/explore.md)
 
 ## Changes and recovery
 
@@ -172,7 +172,7 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   workspace, plane or time. It only records: it cannot apply, undo or replay anything. _In Viewer:_
   **Open Journal**, **Journal for Workspace**, **Journal for Plane**. _Learn:_ [Journal](journal.md)
 - **Trash rule**: Viewer never deletes your files permanently. A removal goes to the system Trash,
-  where **Restore** brings it back; on a volume without a Trash it fails and the item stays. Viewer
+  where **Put Back** brings it back; on a volume without a Trash it fails and the item stays. Viewer
   has no command that empties the Trash, and an agent's removal waits for your approval of the exact
   items. _In Viewer:_ **Move to Trash…** (**⌘⌫**), **Trash** in the sidebar. _Learn:_
   [Browse and organize](../guides/files.md) · [File operations](file-operations.md)
@@ -239,7 +239,7 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   folder…** in **Workflows…**. _Learn:_ [Workflows and watch rules](automation.md)
 - **Command language**: lines you type after `:` in **⌘K**, in the style of vim and tmux, such as
   `:set grid!` or `:vs ~/Documents`. Any command id also works as a line. _In Viewer:_ **Command
-  line…**. _Learn:_ [The command language](command-line.md)
+  Line…**. _Learn:_ [The command language](command-line.md)
 - **CLI**: the `viewer` command for your terminal. `viewer .` opens a folder; with a client token
   from **Settings → Agents** it also searches, reads and prepares reviews in the running app. _In
   Viewer:_ **Install Viewer CLI**. _Learn:_ [Viewer CLI](cli.md)

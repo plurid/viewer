@@ -19,7 +19,7 @@ modes are planned in `src/domain/layout/planner.ts`.
 | **Nesting**         | DXF parts on stock sheets; see [Nesting for cutting](nesting.md)                       | DXF drawings                         | 1250 × 2500 mm sheets | DXF             |
 
 The plane shows the modes that suit the selection, the suggested one first. Under the preview it
-ranks up to four other layouts of the current mode, each with its reason.
+shows up to four layouts of the current mode, the one in use among them, each with its reason.
 
 ## Page
 
@@ -90,7 +90,8 @@ ranks up to four other layouts of the current mode, each with its reason.
 | Labels 38.1 × 21.2 mm, 65 per A4   | A4, 5 × 13, at the label maker's positions     |
 | Labels 2.625 × 1 in, 30 per Letter | Letter, 3 × 10, at the label maker's positions |
 
-A label sheet replaces the page choices with "Printed on A4, where the label sheet has its labels."
+A label sheet replaces the page choices with a line that names its paper, such as "Printed on A4,
+where the label sheet has its labels."
 
 ## Save
 

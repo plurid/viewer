@@ -17,6 +17,8 @@ feature owner before introducing another registry, cache, mutation path or persi
 - [Runtime dependencies](dependencies.md)
 - [Sample playground](playground.md)
 - [Review every screen](review.md)
+- [Qualify complete desktop tasks](usability.md)
+- [Review findings](findings.md)
 - [Canvas evaluation and saved-response replay](testing.md#canvas-evaluation-and-replay)
 - [Performance and resource audits](performance.md)
 - [Native and distribution release gates](releases.md)

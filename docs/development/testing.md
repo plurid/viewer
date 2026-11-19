@@ -17,6 +17,11 @@ Types cover main, preload, renderer and tooling. Tests cover pure rules, compone
 desktop services. Passing these does not qualify native pickers, Finder, physical accessibility or a
 distribution package.
 
+Automated runs keep what the tests make: CI, `pnpm direct:release` and `pnpm review` set
+`VIEWER_TEST_PRESERVE=1` and `VIEWER_TEST_NO_REMOVAL=1`. An agent sets both on every `pnpm test`.
+Without them each test moves its folders to the Trash, which an agent may not do unasked
+([AGENTS.md](../../AGENTS.md)).
+
 Use the [desktop task protocol](usability.md) to qualify complete flows with people. Keep automated
 evidence and observed human sessions separate.
 
@@ -82,7 +87,8 @@ Before a build is handed to anyone:
 1. Add or update the [review scenes](review.md#add-a-scene) for every screen the change touches.
 2. Run `pnpm review`, or `pnpm review --area <name>` while you work. It captures each scene in
    hidden native windows, never on the operator's screen, at a narrow and a wide window size, in
-   light and dark appearance, with a short and a very long file name, inside a deeply nested folder.
+   light and dark appearance. A scene can add its own choices, such as a short and a very long file
+   name, and start in a deeply nested folder.
 3. Open the review sheet and look at every capture against its must-be-true lines and
    [DESIGN.md](../../DESIGN.md): no wrapped labels, no layout shift on selection, fields that fill
    their row, paths that show their end, menus clear of their button. Read the automatic findings

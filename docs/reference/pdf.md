@@ -47,9 +47,10 @@ sizes.
 | **Smaller · stronger compression** | Also re-encodes eligible images as JPEG at quality 65      |
 
 **Recompress scanned images** (Balanced and Smaller only) re-encodes compatible 8-bit RGB and
-grayscale JPEG images, existing JPEG scans included, at the preset's quality and at most the **PDF
-maximum image edge**: 256 to 8,192 px, 2,400 by default. Unusual color spaces, masks and other
-encodings stay as they are. Text and vectors are kept; pages are never flattened to pictures.
+grayscale JPEG images, existing JPEG scans included, at the preset's quality and at most the
+**Longest edge (px)** beside it: 256 to 8,192 px, 2,400 by default. Both are under **Quality and
+dimensions**. Unusual color spaces, masks and other encodings stay as they are. Text and vectors are
+kept; pages are never flattened to pictures.
 
 - A copy is saved only when it is smaller; otherwise the row says **Already compact · original
   kept**.
@@ -71,7 +72,7 @@ those choices before exporting.
 Bundled qpdf assembles pages and writes object updates; the bundled image processor re-encodes
 images. Each output comes from a checked plan with fixed arguments, and source versions are checked
 again before the output is published. Outputs are new files with Undo, reported in **File
-operations**.
+Operations**.
 
 **Related:** [Make a quick change](../guides/create.md#rearrange-a-pdf) ·
 [Lay out photos and PDFs](../guides/layout.md) · [Media and Optimize](media.md) ·

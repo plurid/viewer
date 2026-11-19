@@ -7,12 +7,11 @@ Viewer should remain easy for everyday work while gaining depth in the tools peo
 
 A person has to be able to try Viewer, like its first hour and pay for it. The order follows that.
 
-1. **Sell Viewer.** A free trial, then a license key bought once and checked on the Mac, with
-   nothing sent anywhere. After the trial Viewer keeps working and shows a reminder.
+1. **Sell Viewer.** The 30-day trial, the license key checked on the Mac and the reminder after the
+   trial are built. They stay off until the publisher sets the signing key and purchase page.
    [The paid build](paid-build.md) has the rules and what stays out.
-2. **Close the first-hour gaps.** Paste a picture as a file, go to a folder by habit and a report
-   that is safe to share. Then Help that opens without a network, more archive formats and visible
-   tags. [File-manager gaps](file-manager-gaps.md) gives each one's current state.
+2. **Close the first-hour gaps.** Help that opens without a network, more archive formats and
+   visible tags. [File-manager gaps](file-manager-gaps.md) gives each one's current state.
 3. **Run the checks only a person can run.** Use Viewer as the only file manager for two days.
    VoiceOver and keyboard-only passes through the main flows, dictation with a real microphone, one
    request to each hosted provider, and native acceptance on an Intel Mac, which
@@ -106,7 +105,8 @@ is a reference and an optional interoperability candidate, not a required depend
 measured geometry, inferred reconstruction and generated visual assets.
 
 Viewer Workshop connects source documents, models, generated tools and verification around a task.
-Bounded robot controls, target checks and comparison are implemented; the mounting-specific
-geometry, generated fabrication controls and mock service handoff need integration or qualification.
-The [strategy and implementation audit](workshop.md) records those boundaries.
+Bounded robot controls, target checks and comparison are implemented in the optional robotics
+plugin, not in the app; the mounting-specific geometry, generated fabrication controls and mock
+service handoff need integration or qualification. The
+[strategy and implementation audit](workshop.md) records those boundaries.
 [Job 1042](fabrication-workflow.md) remains a separate fabrication workflow.

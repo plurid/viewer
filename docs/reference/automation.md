@@ -43,14 +43,14 @@ importing or editing a file never runs a step.
 }
 ```
 
-| Field      | Value                                                                                                                                                                              |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`  | `1`                                                                                                                                                                                |
-| `id`       | 1 to 100 of `A–Z`, `a–z`, `0–9`, `.`, `_`, `-`                                                                                                                                     |
-| `name`     | 1 to 100 characters                                                                                                                                                                |
-| `bindings` | Up to 100 `{ "name", "label" }`: folders chosen when the run starts; names are unique                                                                                              |
-| `inputs`   | Up to 100 named locations `{ "path", "binding"? }`: a path relative to the workflow file's folder, or to a declared binding; `.` is that folder itself; no `..`, no absolute paths |
-| `steps`    | 1 to 100 steps with unique `id`s                                                                                                                                                   |
+| Field      | Value                                                                                                                                                                                                                  |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`  | `1`                                                                                                                                                                                                                    |
+| `id`       | 1 to 100 of `A–Z`, `a–z`, `0–9`, `.`, `_`, `-`                                                                                                                                                                         |
+| `name`     | 1 to 100 characters                                                                                                                                                                                                    |
+| `bindings` | Up to 100 `{ "name", "label" }`: folders chosen when the run starts; names are unique                                                                                                                                  |
+| `inputs`   | Required, `{}` when there are none. Up to 100 named locations `{ "path", "binding"? }`: a path relative to the workflow file's folder, or to a declared binding; `.` is that folder itself; no `..`, no absolute paths |
+| `steps`    | 1 to 100 steps with unique `id`s                                                                                                                                                                                       |
 
 Every step has an `id` and `needs`, the IDs of steps it depends on (up to 100). A reference names
 the files a step reads or writes:
@@ -61,19 +61,19 @@ the files a step reads or writes:
 | `{ "kind": "input", "name": "…" }` | A declared input                                       |
 | `{ "kind": "step", "id": "…" }`    | The outputs of a completed step; it must be in `needs` |
 
-| Step kind | Fields                                                              | Does                                                              |
-| --------- | ------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `inspect` | `sources` (1 to 100), `content` (false), `ocr` (false)              | Reads metadata, and with `content` the text, of at most 100 files |
-| `compare` | `left`, `right`, `hashes` (false)                                   | Compares exactly one location on each side                        |
-| `copy`    | `sources` (1 to 100), `destination`                                 | Prepares a reviewed copy into one folder                          |
-| `convert` | `sources` (1 to 100), `destination`, `transform`, `name` (optional) | Prepares a reviewed conversion                                    |
-| `recipe`  | `sources` (1 to 100), `recipeID`, `instructions` (optional, 12,000) | Prepares a recipe's review; see [recipes](actions.md#recipes)     |
+| Step kind | Fields                                                              | Does                                                                                                                  |
+| --------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `inspect` | `sources` (1 to 100), `content` (false), `ocr` (false)              | Reads metadata, and with `content` the text, of at most 100 files                                                     |
+| `compare` | `left`, `right`, `hashes` (false)                                   | Compares exactly one location on each side                                                                            |
+| `copy`    | `sources` (1 to 100), `destination`                                 | Prepares a reviewed copy into one folder                                                                              |
+| `convert` | `sources` (1 to 100), `destination`, `transform`, `name` (optional) | Prepares a reviewed conversion; `media`, `pdf-pages` and `layout` need a `name` that ends with the format's extension |
+| `recipe`  | `sources` (1 to 100), `recipeID`, `instructions` (optional, 12,000) | Prepares a recipe's review; see [recipes](actions.md#recipes)                                                         |
 
 `transform.kind` is one of `image`, `media`, `pdf`, `pdf-pages`, `layout`, `nesting`,
-`dxf-correction` or `mail-attachment`, with the fields Viewer's own tools use; see
-[media](media.md), [PDF tools](pdf.md), [layout](layout.md), [nesting](nesting.md) and
-[fabrication](fabrication.md#correction). A workflow cannot prepare a nesting, a correction or a
-saved attachment. There is no field for processor arguments.
+`dxf-correction`, `fabrication-handoff` or `mail-attachment`, with the fields Viewer's own tools
+use; see [media](media.md), [PDF tools](pdf.md), [layout](layout.md), [nesting](nesting.md) and
+[fabrication](fabrication.md#correction). A workflow cannot prepare a nesting, a correction, a
+handoff or a saved attachment. There is no field for processor arguments.
 
 The file is refused when it has duplicate step or binding IDs, a `needs` cycle or a missing step, an
 undeclared input or binding, or a step reference that is not in `needs`.
@@ -82,14 +82,15 @@ undeclared input or binding, or a step reference that is not in `needs`.
 
 **Run Workflow** saves a private run receipt and runs steps in dependency order.
 
-| Step                        | What happens                                                             |
-| --------------------------- | ------------------------------------------------------------------------ |
-| `inspect`, `compare`        | Runs and completes                                                       |
-| `copy`, `convert`, `recipe` | Prepares an ordinary review and pauses the run at **waiting for review** |
+| Step                        | What happens                                                                 |
+| --------------------------- | ---------------------------------------------------------------------------- |
+| `inspect`, `compare`        | Runs and completes                                                           |
+| `copy`, `convert`, `recipe` | Prepares an ordinary review and pauses the run, which shows **Needs review** |
 
-Review and Apply in that review, then choose **Resume Workflow**. A dependent step reads the outputs
-the operation receipt recorded, including any Keep both names. Before each step the run checks that
-its sources are unchanged; a changed source or a changed workflow file stops it.
+Choose **Review copy…**, **Review export…** or **Review recipe…** on the step, apply that review,
+then choose **Resume Workflow**. A dependent step reads the outputs the operation receipt recorded,
+including any Keep both names. Before each step the run checks that its sources are unchanged; a
+changed source or a changed workflow file stops it.
 
 | Run status       | Meaning                                                          |
 | ---------------- | ---------------------------------------------------------------- |
@@ -99,6 +100,9 @@ its sources are unchanged; a changed source or a changed workflow file stops it.
 | `completed`      | Every step finished                                              |
 | `failed`         | A step failed; the run does not continue                         |
 | `cancelled`      | You canceled it                                                  |
+
+The window shows these as **Running**, **Needs review**, **Paused**, **Done**, **Failed** and
+**Canceled**.
 
 A run never replays at launch. A file-changing step that was running when Viewer quit, and has no
 recorded review, fails with
@@ -113,6 +117,7 @@ recorded review, fails with
 | One step's recorded result              | 4,000,000 characters of JSON |
 | One run receipt                         | 8 MiB                        |
 | All run receipts                        | 64 MiB                       |
+| One workflow file                       | 8 MiB                        |
 
 At the limits a run is refused with, for example,
 `The workflow history is full. Export or remove old run receipts before starting another.` or
@@ -122,7 +127,8 @@ At the limits a run is refused with, for example,
 
 **Watch a folder…** in the workflow window turns a workflow into a watch rule. When files in the
 folder are new or changed, the rule starts a run with them as the selection. It prepares reviews; it
-never applies them.
+never applies them. Files already in the folder when you enable the rule are skipped. A rule starts
+no new run while its last one is running, paused or needs review.
 
 | Field                              | Values                                                         |
 | ---------------------------------- | -------------------------------------------------------------- |
@@ -133,8 +139,9 @@ never applies them.
 | **Minimum time between runs**      | 30 seconds to 24 hours                                         |
 
 **Enable Watch Rule** stores an approval for the exact workflow file revision, bindings,
-destinations and rename recipes. **Pause** stops it; **Review and Enable…** approves it again;
-**Remove Rule** deletes it; **Open Run** shows its latest run.
+destinations and rename recipes. **Pause** stops it. A paused rule offers **Review and Enable…**,
+which approves it again, and **Remove Rule**, which deletes it once its last run is finished or
+canceled. **Open Run** shows its latest run.
 
 | A watch workflow must                                                                       |
 | ------------------------------------------------------------------------------------------- |
@@ -156,11 +163,16 @@ A rule pauses itself, with the reason, when its workflow, recipe or destination 
 is revoked, when the folder moves or is unavailable, or when its last run failed or was canceled. A
 rename the rule itself completed does not trigger it again.
 
+When a rule's run needs review, or the rule pauses, the window shows a bar such as **Web exports ·
+Changes ready for review** or **Web exports · Watch rule paused**, with **Review** and **Dismiss**.
+
 ## Related files
 
-**Related Files…** shows how the selected files connect: outputs recorded by operation receipts,
-references found in local files, and notes reported to Viewer. Each relationship shows its source
-and basis. It is evidence, not permission to edit a file or start a program.
+**Related Files…** shows what the first selected file connects to: outputs recorded by operation,
+recipe and workflow receipts, links declared in the file once you tick **Read local references in
+this file**, and notes you add under **Add a relationship note**. Each relationship shows its two
+files and its basis: **Recorded operation**, **Declared link**, **Suggested link** or **User note**.
+It is evidence, not permission to edit a file or start a program.
 
 Portable workflow files never contain run receipts, credentials or approvals.
 

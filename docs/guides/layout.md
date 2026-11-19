@@ -29,7 +29,8 @@ landscape, no cropping". Choose one to use it.
    paper size such as A4, a print size such as 10 × 15 cm, or a screen size such as 1080 × 1350 px.
 5. Set the **Margin**, the **Gap** and the **Background**. **Transparent** leaves a PNG clear around
    the photos.
-6. Choose **JPEG**, **PNG** or **PDF**, check the **Name** and choose **Save**.
+6. Under **Save as**, choose **PDF**, **PNG** or **JPEG**, check the **Name** and choose the button
+   that names the format, such as **Save JPEG**.
 
 **Featured** gives one photo most of the page; **Large photo** chooses which.
 
@@ -43,8 +44,8 @@ landscape, no cropping". Choose one to use it.
 
 ## Print several pages on one sheet
 
-1. Select a PDF and choose **Lay Out…**. A5 and A6 pages open on **N-up**, as many to an A4 sheet as
-   print at nine tenths of their size or more.
+1. Select a PDF, choose **Lay Out…**, then **N-up** if the plane opens on another mode. A5 and A6
+   pages open on **N-up**, as many to an A4 sheet as print at nine tenths of their size or more.
 2. Choose **Pages per sheet**: 2, 4, 6, 8, 9 or 16. Viewer turns the sheet, and the pages when it
    must, so they print as large as they can.
 3. Under **Order**, choose **Across** or **Down**.
@@ -85,12 +86,12 @@ Letter.
 1. Select a large PDF page, such as an A1 plan, or a photo, and choose **Lay Out…**, then
    **Poster**.
 2. Choose the **Poster size**: **Scale**, a percentage of the page's own size, or A3 to A0.
-3. Set the **Overlap** that neighbouring sheets share. The summary shows how many sheets the poster
+3. Set the **Overlap** that neighboring sheets share. The summary shows how many sheets the poster
    takes and how they are arranged.
 4. Choose **Save PDF** and print it at 100%.
 5. Each sheet is labeled in its corner: a row letter and a column number, A1 at the top left. Trim
    each sheet after the first at the solid marks, then glue it over the dashed overlap of its
-   neighbour.
+   neighbor.
 
 ## Nest parts for cutting
 
@@ -111,7 +112,7 @@ Letter.
 5. Under **Sheets**, choose **mm** or **in**: every length in the panel, the report and the parts
    list reads in it, and Viewer keeps the choice. The formats you nest on are listed with their **In
    stock** count and **Price each**; **×** removes one. **Add format** offers the usual sheets, such
-   as 1250 × 2500 mm or 48 × 96 in (4' × 8'), and **Custom size…** for your own.
+   as 1500 × 3000 mm or 60 × 120 in (5' × 10'), and **Custom size…** for your own.
 6. Set the **Edge margin**, the **Spacing** between parts and the **Direction**: **Compact block**
    gathers the parts in one corner and keeps the largest offcut whole, **Along the length** lays
    rows down the sheet's long side, and **Along the width** fills across it first.
@@ -123,13 +124,13 @@ Letter.
    that fit no sheet, and how many sheets more turning would save. The offcut reads under the
    figures, such as "Offcut 1250 × 2180 mm, reusable". **Fit**, **2×**, **4×** and **8×** zoom the
    sheets.
-9. Click a part on a sheet to see what it is: every copy of it lights up, and **Selected part**
-   gives its file, size, quantity, holes and the sheets it is on. Double-click it, or press
+9. Click a part on a sheet to see what it is: every copy of it lights up, and a card above the
+   sheets gives its file, size, quantity, holes and the sheets it is on. Double-click it, or press
    **Enter**, to open its drawing. With a sheet focused, **←** and **→** step through its parts;
    **Esc** or a click on empty sheet lets go. Nothing moves.
 10. When the headline says **Checked**, choose **Save Nesting**. A folder such as "Nesting of 3
     parts" appears beside the first drawing, holding `Sheet 1.dxf` for each sheet, `Report.pdf` and
-    `Parts.csv`. **Open folder** shows it.
+    `Parts.csv`. **Open Folder** shows it.
 
 **Stop** keeps the best layout so far; **Search Longer** looks again for longer. With no format
 chosen, the plane reads "Choose a sheet format to nest on." until you add one. The
@@ -144,7 +145,7 @@ then measure every DXF part itself and say where the job disagrees with itself: 
 it, use the [sample job](../../examples/laser-job/README.md).
 
 1. Select the job's folder, or its files with at least one DXF part, press **⌘K** and choose **Check
-   laser job…**. The command appears only where there are parts to cut, and says what the check
+   Laser Job…**. The command appears only where there are parts to cut, and says what the check
    compares there, such as "Compare Job 1042’s request email and 1 drawing with its 5 DXF parts".
    Elsewhere **⌘K** lists it grayed out with why, such as "fabrication holds Job 1042 and
    Evaluation: select one to check it." Parts kept in a folder inside the job, such as `DXF/`, are
@@ -154,9 +155,9 @@ it, use the [sample job](../../examples/laser-job/README.md).
    - Without a request or a drawing, the check reads the parts' names and measurements, and any
      photos.
    - A DWG part is left out: save it as DXF from the CAD app first, as Viewer measures DXF only.
-2. Under **Model**, choose the model in **Model to check with**: Meta's Muse Spark, Gemini,
-   OpenRouter or another that takes pictures. The check sends pictures, so a model allowed only text
-   asks first: choose **Allow pictures for Meta** and confirm.
+2. Under **Model**, choose the model to check with: Meta's Muse Spark, Gemini, OpenRouter or another
+   that takes pictures. The check sends pictures, so a model allowed only text asks first: choose
+   **Allow pictures for Meta** and confirm.
 3. Choose the button that counts the files, such as **Check 7 Files**. The panel says what is being
    read and for how long, such as "Muse Spark is reading the request, 2 drawing pages and 1 photo ·
    34 s", then "SAM 3.1 is outlining 3 features". **Cancel** stops it. The model has 240 seconds to
@@ -177,9 +178,10 @@ it, use the [sample job](../../examples/laser-job/README.md).
    positions. Other planes keep their positions.
    - **Source verified** means the cited passage and its value were checked against the file.
      **Human confirmed** records a value you reviewed and entered yourself.
-   - For an unverified requirement, expand its source review, open the source, choose **Confirm from
-     source…** and enter the value with its unit. A scanned or ambiguous source needs this review. A
-     model's number alone cannot authorize a correction or enter cut sheets.
+   - For an unverified requirement, expand its source review, choose **Open Source**, then **Confirm
+     from Source…**. Enter the number in the unit the field names, such as **Value (mm)**, and
+     choose **Confirm Value**. A scanned or ambiguous source needs this review. A model's number
+     alone cannot authorize a correction or enter cut sheets.
 6. For a confirmed pitch, read the proposed correction and choose **Save g6-PL60-B2-2buc
    (corrected).dxf**. The copy is saved beside the original, measured again, and the panel says
    "Saved: pitch 48.00 mm → 50.00 mm, measured again." Nothing is changed until you choose it.
@@ -204,11 +206,11 @@ it, use the [sample job](../../examples/laser-job/README.md).
      requirement in the check first.
 
 The check opens as a pinned plane. Its title bar offers **Collapse pinned plane**, **Place plane in
-space** and **Close Plane**. **Pin Plane** in the command palette pins a placed check or note again.
+space** and **Close plane**. **Pin Plane** in the command palette pins a placed check or note again.
 Pinning, placement and stacks participate in arrangement Undo and survive workspace restoration.
 
 Closing the plane keeps its check on this device and does not cancel a running check. Choose **Check
-laser job…** on the job again to reopen its saved findings, corrections and handoff without another
+Laser Job…** on the job again to reopen its saved findings, corrections and handoff without another
 model request. A run interrupted by an app restart waits for **Run Again**. If a file changed since,
 the check names it, such as "g6-PL60-B2-2buc.dxf changed since the check at 22:14", dims the
 findings as from before, and **Run Again** checks the job as it is now.
@@ -227,6 +229,8 @@ sends, how it reconciles quantities and grades findings, the name rules, and the
 
 - The plane uses photos, PDFs and DXF parts. It names any file it leaves out and why: a file over
   256 MB, or a PDF locked with a password.
+- A signed PDF opens in the plane but cannot be laid out: saving stops with "Signed PDFs are kept
+  unchanged. Use an unsigned copy instead."
 - **Save** writes a new file in the folder of the first file you selected and leaves the originals
   as they were. If the name is taken, Viewer chooses a free one. **File operations** in the title
   bar shows its progress and offers Undo.

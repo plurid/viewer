@@ -7,6 +7,11 @@ survive closing a view, restarting the application, updating it and moving to an
 This document defines the capabilities and acceptance criteria for that work. Current behavior is
 documented in the guides and references; an unchecked requirement here is not a shipped capability.
 
+Built since this page was written: the personal backup with import review and relinking
+([Personal backups](../reference/configuration.md#personal-backups)), the system-following and
+always-visible scrollbar choices, pinned tools for each kind of plane, and **What Can I Do Here?**.
+Their sections below stay as the acceptance for that work.
+
 ## Durable personal state
 
 Provide a portable backup of workspaces, notes, checklists, unsaved text, reading positions, media
@@ -81,7 +86,7 @@ Measure first usable content, input feedback, warm reopening and cancellation se
 unchanged document data reusable within bounded caches, after fresh source authorization. Culling a
 view releases mounted resources without discarding the person's reading or editing position.
 
-Heavy indexing, decoding and transformation work stays bounded and cancellable. A cancelled result
+Heavy indexing, decoding and transformation work stays bounded and cancellable. A canceled result
 cannot replace a later request. Closing a workspace releases its listeners, resource leases and
 temporary process ownership. Cold restoration never replays execution.
 

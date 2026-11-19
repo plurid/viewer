@@ -8,11 +8,11 @@ Git review and Git actions.
 A task area is a named context in one workspace: a checkout or folder, plus references to the tools
 used for that work. References outlive the planes that show them.
 
-| Command                   | Does                                                                                                  |
-| ------------------------- | ----------------------------------------------------------------------------------------------------- |
-| **New Task Area…**        | Opens **Tasks** → **New Task…**: a name and a **Task checkout folder** chosen from open files planes. |
-| **New Task from Branch…** | Creates a worktree and a task together, then opens its tools. See [worktrees](#worktrees).            |
-| **Tasks…**                | Lists **Task Areas**, and **Command History** for [receipts](terminals.md#command-receipts).          |
+| Command                   | Does                                                                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **New Task Area…**        | Opens **Tasks** → **New Task…**: a **Task name** and a **Checkout folder** chosen from open files planes, then **Create Task Area**. |
+| **New Task from Branch…** | Creates a worktree and a task together, then opens its tools. See [worktrees](#worktrees).                                           |
+| **Tasks…**                | Lists **Task Areas**, and **Command History** for [receipts](terminals.md#command-receipts).                                         |
 
 The task plane shows the editable name, the checkout path, the branch and commit (or **Folder
 task**) and when they were checked. Any folder can anchor a task, Git or not.
@@ -20,7 +20,7 @@ task**) and when they were checked. Any folder can anchor a task, Git or not.
 | Control                      | Does                                                                                                                                               |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Refresh Checkout**         | Reads the checkout's branch and commit again.                                                                                                      |
-| **Arrange Open Tools**       | Tiles the task's open planes.                                                                                                                      |
+| **Arrange Open Tools**       | Tiles the task's open planes, up to 30.                                                                                                            |
 | **Run Command…**             | Runs a shell line in the checkout; its receipt joins the task.                                                                                     |
 | **Attach Open Plane…**       | Adds an open plane: folder, preview, note, checklist, chat, terminal, Git changes, diff, browser, server or receipt.                               |
 | **Attach Conversation…**     | Adds a Viewer chat or an [agent session report](agents.md#report-a-session).                                                                       |
@@ -39,8 +39,10 @@ not mark a task done.
 
 The command line's `task-new` and an **Ask Viewer** answer open **Create Branch Task**, a form
 prefilled with the same parameters as [`viewer task create`](cli.md#create-a-task-from-a-branch).
-Nothing is created until you confirm. This route uses your own folder access, not agent grants. From
-a terminal, `viewer task create` proposes the same setup for review.
+Nothing is created until you confirm in a system dialog. This route uses your own folder access, not
+agent grants. Like the CLI, it runs no hooks or filters, leaves the terminal stopped and keeps the
+[checkout limits](cli.md#create-a-task-from-a-branch); a larger repository needs **New Task from
+Branch…**. From a terminal, `viewer task create` proposes the same setup for review.
 
 ## Notes and checklists
 
@@ -88,10 +90,11 @@ view. Separate worktrees have their own working files and index; views of one ch
 | Occupied branch                     | Offers **Show Worktree** (or **Use Checkout for Task**) for the existing checkout. |
 
 **Create and Open** runs `git worktree add` with the repository's own hooks and filters, for up to 2
-minutes. The repository needs an initial commit and at most 512 local branches. Creation never
-switches, stashes, resets, prunes or removes another checkout, and leaves your changes and staging
-where they are. A list expires after five minutes; refresh it. Closing a worktree's plane leaves the
-worktree on disk. A replaced checkout cannot take over a saved task.
+minutes. The repository needs an initial commit, at most 512 local branches and at most 256
+registered checkouts. Creation never switches, stashes, resets, prunes or removes another checkout,
+and leaves your changes and staging where they are. A list expires after five minutes; refresh it.
+Closing a worktree's plane leaves the worktree on disk. A replaced checkout cannot take over a saved
+task.
 
 ## Git review
 
@@ -103,14 +106,14 @@ or a folder whose listing shows `.git`. Right-click one folder to review its rep
 **Suggested** row names the branch and its changes, such as `main · 3 changes`. A task's Git changes
 plane waits for **Load Git changes**.
 
-| Control                                          | Does                                                                                                          |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| **Unstaged**, **Staged**, **Against base**       | What to review. **Against base** compares with the merge base of a local branch and includes working changes. |
-| **Review base**                                  | The local branch for **Against base**; defaults to `main` or `master`.                                        |
-| **Refresh**                                      | Reads the changes again.                                                                                      |
-| **Previous changed file**, **Next changed file** | Moves between files; also **⌥↑** and **⌥↓**.                                                                  |
-| **Open Diff**                                    | Opens the whole file as a diff plane.                                                                         |
-| **Stage Hunk N**, **Unstage Hunk N**             | Stages or unstages one hunk in **Unstaged** or **Staged**.                                                    |
+| Control                                          | Does                                                                                                                                 |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Unstaged**, **Staged**, **Against base**       | What to review. **Against base** compares with the merge base of a local branch and includes working changes.                        |
+| **Review base**                                  | The local branch for **Against base**; defaults to `main` or `master`.                                                               |
+| **Refresh**                                      | Reads the changes again.                                                                                                             |
+| **Previous changed file**, **Next changed file** | Moves between files; also **⌥↑** and **⌥↓**.                                                                                         |
+| **Open Diff**                                    | Opens the whole file as a diff plane.                                                                                                |
+| **Stage Hunk N**, **Unstage Hunk N**             | Stages or unstages one hunk in **Unstaged** or **Staged**. **Stage All Hunks** or **Unstage All Hunks** does every hunk of the file. |
 
 | Limit                       | Value                                                                |
 | --------------------------- | -------------------------------------------------------------------- |
@@ -121,7 +124,8 @@ plane waits for **Load Git changes**.
 | Open reviews                | 16                                                                   |
 
 A review is tied to the index it read. If `HEAD`, the index or the file changes, staging is refused
-until you refresh. Git review is in the direct build only.
+until you refresh. A review also expires after five minutes; refresh it. Git review, worktrees, Git
+actions and branch tasks are in the direct build only.
 
 ## Git actions
 

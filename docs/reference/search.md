@@ -7,7 +7,7 @@ search covers.
 
 | Place                    | Opens with                                                              | Scope and controls                                                                                                                                                                           |
 | ------------------------ | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Find file**            | **⌘F** (**Find File…**); in an editor or terminal ⌘F finds text instead | **Search scope**: **This Folder**, **Subfolders** or **Indexed Locations**. **Document text** searches indexed text. **Open Results** opens a search plane; **Save Search…** saves the query |
+| **Find File**            | **⌘F** (**Find File…**); in an editor or terminal ⌘F finds text instead | **Search scope**: **This Folder**, **Subfolders** or **Indexed Locations**. **Document text** searches indexed text. **Open Results** opens a search plane; **Save Search…** saves the query |
 | Folder filter row        | **Search This Folder…**, or the plane toolbar's search button           | Filters the files plane as you type. **Subfolders** searches below it. **Search contents** opens a search plane with document text on                                                        |
 | Search plane             | **Open Results**, **Search contents**, `:find` or a saved search        | Editable query, **Document text** checkbox, coverage summary, 150 results a page with **Previous** and **Next**                                                                              |
 | Command line             | `:filter`, `:find`, `:select`, `:deselect`                              | See [the command language](command-line.md)                                                                                                                                                  |
@@ -64,7 +64,7 @@ Names and paths are compared with case and accents folded: `cafe` finds `Café`.
 
 Keys share two of these extensions. A `pub` or `key` file is left out when it is named as OpenSSH
 names keys (`id_ed25519.pub`, `ssh_host_rsa_key.pub`) or, where its size is known, when it is under
-16 KB. EMF and WMF files are pictures: `kind:image` finds them.
+16 KiB (16,384 bytes). EMF and WMF files are pictures: `kind:image` finds them.
 
 ### Sizes
 
@@ -193,7 +193,7 @@ shows 150 results a page; **Next** reads more known matches.
 | **Add All Indexed Matches to Basket** | Up to 10,000 matches, after indexing has finished; changed files are refused |
 | **Save as Smart Folder**              | A collection that follows the index                                          |
 
-**Save Search…** in **Find file** stores the name, query, scope and **Document text** choice. A
+**Save Search…** in **Find File** stores the name, query, scope and **Document text** choice. A
 saved query is as long as any query, up to 1,000 characters. Its name starts as the query, cut at a
 word to 100 characters. You can keep 100 saved searches. Each saved search is a command in ⌘K under
 **Saved searches**; choosing it opens a search plane.
@@ -224,7 +224,7 @@ one says **No matching files**.
 
 ## Fuzzy matching in ⌘K
 
-The command palette and **Find file** rank near-misses after exact, prefix and subsequence matches,
+The command palette and **Find File** rank near-misses after exact, prefix and subsequence matches,
 in labels, aliases and file names. Each word of 3 to 5 letters may be one edit away, a longer word
 two, and a swap of adjacent letters counts as one edit: `git iint` finds **Run Command…**, whose
 aliases include `git init`. Words keep their order. This only ranks suggestions: it never rewrites

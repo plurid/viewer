@@ -8,12 +8,13 @@ yet, follow [Install and update Viewer](install.md).
 key.
 
 The first time Viewer opens, a card above the folder's files names three things to try: **Space**,
-**⌘K** and dragging a plane by its title. **Space** and **⌘K** each leave the card once used, and
-once both have, the card goes for good. Its **×** closes it for good too.
+**⌘K** and dragging a plane by its title. **Space** and **⌘K** each leave the card once used. With
+both used, the card comes back when a second plane is open, to name **⌘0**, and goes for good once
+**⌘0** is used. Its **×** closes it for good too.
 
 ## 1. Open a folder
 
-1. Press **⌘⇧O**, or choose **File → Open Folder…**, and pick a folder. The sidebar also opens Home,
+1. Press **⇧⌘O**, or choose **File → Open Folder…**, and pick a folder. The sidebar also opens Home,
    Desktop, Documents, Downloads, Pictures, Applications and the Trash.
 2. Double-click a folder to enter it. **⌘↑** goes to the parent folder; **⌘[** and **⌘]** go back
    and forward.

@@ -63,8 +63,8 @@ folder; on a Map with a selection they move the selected items instead.
 | **Back to parent plane**                    | **⌥⌘↑**              | `parent-plane`                          |
 | **Close Plane**                             | **⌥⌘W**              | `close-plane`                           |
 | **Undo Arrangement** / **Redo Arrangement** | **⌥⌘Z** / **⌥⇧⌘Z**   | `undo-arrangement` / `redo-arrangement` |
-| **Go to view 1** to **9**                   | **⌥⌘1** to **⌥⌘9**   | `bookmark.1` to `bookmark.9`            |
-| **Save view as 1** to **9**                 | **⌃⌥⌘1** to **⌃⌥⌘9** | `bookmark.save.1` to `bookmark.save.9`  |
+| **Go to View 1** to **9**                   | **⌥⌘1** to **⌥⌘9**   | `bookmark.1` to `bookmark.9`            |
+| **Save View as 1** to **9**                 | **⌃⌥⌘1** to **⌃⌥⌘9** | `bookmark.save.1` to `bookmark.save.9`  |
 
 ## Text
 
@@ -187,7 +187,7 @@ prefix does not work inside terminals or text fields by default.
 | **q**                                   | **Record Macro** / **Stop Recording Macro**                                     | `record-macro`                                        |
 | **t**                                   | **New Scratch Plane**                                                           | `new-scratch-plane`                                   |
 | **s**                                   | **Show Window Navigation** / **Hide Window Navigation**                         | `toggle-sidebar`                                      |
-| **1** to **9**                          | **Go to view 1** to **9**                                                       | `bookmark.1` to `bookmark.9`                          |
+| **1** to **9**                          | **Go to View 1** to **9**                                                       | `bookmark.1` to `bookmark.9`                          |
 | **b** then **s**                        | **Save View…**                                                                  | `bookmark-save`                                       |
 | **b** then **m**                        | **Views…**                                                                      | `bookmark-manage`                                     |
 | **b** then **t**                        | **Tour the Views** / **Stop Tour**                                              | `tour`                                                |
@@ -215,10 +215,10 @@ that many times, up to 99.
 
 | Key in `resize` | Command                     | ID                  |
 | --------------- | --------------------------- | ------------------- |
-| **h** or **←**  | **Grow tile left**          | `tile-resize-left`  |
-| **l** or **→**  | **Grow tile right**         | `tile-resize-right` |
-| **k** or **↑**  | **Grow tile up**            | `tile-resize-up`    |
-| **j** or **↓**  | **Grow tile down**          | `tile-resize-down`  |
+| **h** or **←**  | **Grow Tile Left**          | `tile-resize-left`  |
+| **l** or **→**  | **Grow Tile Right**         | `tile-resize-right` |
+| **k** or **↑**  | **Grow Tile Up**            | `tile-resize-up`    |
+| **j** or **↓**  | **Grow Tile Down**          | `tile-resize-down`  |
 | **Space**       | **Next Tiling Layout**      | `tile-next-layout`  |
 | **=**           | **Tile the Planes in View** | `tile-visible`      |
 
