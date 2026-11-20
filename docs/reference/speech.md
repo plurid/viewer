@@ -104,35 +104,6 @@ error bodies. Checks are canceled on owner closure, key/model/endpoint changes o
 credential reads cannot trigger a request. Results last only for the current session and clear on
 provider or key edits. Audio permission remains separate.
 
-### A live run
-
-`tools/speech/transcribe-live.ts` sends one WAV recording to Meta's Muse Voice Transcribe exactly as
-hosted speech in the app does. With `--plan`, Muse Spark then reads the transcript into a plan for a
-job folder shown as Job 1042, through the app's own prompt and checks, beside Viewer's own matching.
-It writes nothing.
-
-1. Record a request, or have macOS speak one:
-   `say --file-format=WAVE --data-format=LEI16@16000 -o request.wav "Check this job and prepare the cut sheets"`.
-   Any 16-bit PCM WAV at 16 kHz or more works; `afconvert -f WAVE -d LEI16@16000 -c 1` converts
-   another recording.
-2. Set `META_API_KEY` in the environment. The run reads the key from there only and holds it in
-   memory: it never prints, writes or logs it.
-3. From the repository root, run
-   `node --import tsx packages/viewer-electron/app/tools/speech/transcribe-live.ts request.wav --plan`.
-   It prints the transcript, the model, the audio's length and the time the call took, then each
-   plan.
-
-| Option              | Effect                                                                        |
-| ------------------- | ----------------------------------------------------------------------------- |
-| `--language en`     | The language, as **Language** in **Settings → Speech**; detected unless given |
-| `--model <id>`      | Another transcription model; `muse-voice-transcribe-1.0` unless given         |
-| `--plan`            | Also plans the transcript with Muse Spark, at the `names` level               |
-| `--plan-model <id>` | Another Muse Spark model; `muse-spark-1.3` unless given                       |
-| `--text "<words>"`  | Plans these words with Muse Spark, without audio                              |
-
-A run with a recording makes one transcription call. `--plan` or `--text` adds one Muse Spark call,
-and `--text` alone makes no transcription call.
-
 ## Data and permissions
 
 Only a trusted top-level Viewer or Settings window with an active person-started session can request

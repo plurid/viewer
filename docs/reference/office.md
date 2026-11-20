@@ -16,8 +16,9 @@ Open a file with **Space** or as a linked plane. Everything runs on your Mac; ma
 | `.ppt`, `.pptx`, `.pptm`, `.pps`, `.ppsx`, `.pot`, `.potx`, `.potm`, `.odp`, `.otp`, `.fodp` | **Layout**, one page per slide       |
 | `.odg`, `.fodg`, `.pub`, `.emf`, `.wmf`                                                      | **Layout**, as drawing pages         |
 
-- **Reading** and **Sheet** need the file's own extension; a file shown with **Show as** gets
-  **Layout** only.
+- A `.docx` or `.xlsx` file shown with **Show as** gets **Reading** or **Sheet** as well as layout;
+  macro and template variants (`.docm`, `.dotx`, `.dotm`, `.xlsm`, `.xltx`, `.xltm`) need their own
+  extension for **Reading** or **Sheet** and otherwise get layout only.
 - A packaged OpenDocument file (`.odt`, `.ods`, `.odp`, `.odg`, `.ott`, `.ots`, `.otp`) shows the
   picture of its first page it carries while the layout renders.
 - A `.pub` file that holds a public key shows as a key or as text, not as a layout.

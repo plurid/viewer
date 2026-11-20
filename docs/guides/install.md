@@ -64,7 +64,7 @@ Updating or reinstalling with the same data folder keeps the trial dates and sav
 If a license record cannot be read, Viewer keeps it beside the new record under an
 `.unreadable-<time>-<id>` name before starting a fresh trial. If it cannot preserve the original, it
 keeps the existing copy and saves nothing over it. A key this build cannot verify also stays saved;
-enter a valid replacement in **Settings → License** or choose **Remove license key** to clear it.
+enter a valid replacement in **Settings → License** or choose **Remove License Key** to clear it.
 
 ## Update Viewer
 

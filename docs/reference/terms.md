@@ -171,10 +171,11 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 - **Journal**: a bounded, private history of what Viewer did, filtered by source, severity,
   workspace, plane or time. It only records: it cannot apply, undo or replay anything. _In Viewer:_
   **Open Journal**, **Journal for Workspace**, **Journal for Plane**. _Learn:_ [Journal](journal.md)
-- **Trash rule**: Viewer never deletes your files permanently. A removal goes to the system Trash,
-  where **Put Back** brings it back; on a volume without a Trash it fails and the item stays. Viewer
-  has no command that empties the Trash, and an agent's removal waits for your approval of the exact
-  items. _In Viewer:_ **Move to Trash…** (**⌘⌫**), **Trash** in the sidebar. _Learn:_
+- **Trash rule**: A removal goes to the system Trash, where **Put Back** brings it back; on a volume
+  without a Trash it fails and the item stays. Viewer never deletes a file for good unless you
+  choose **Empty Trash…** yourself in the Trash window, after a confirmation; agents and commands
+  cannot empty it, and an agent's removal waits for your approval of the exact items. _In Viewer:_
+  **Move to Trash…** (**⌘⌫**), **Trash** in the sidebar. _Learn:_
   [Browse and organize](../guides/files.md) · [File operations](file-operations.md)
 - **Checkpoint**: a copy of files' contents and mode that Viewer keeps before it applies a reviewed
   batch change, when you ask for one. It leaves out Finder tags and ACLs, and all checkpoints share

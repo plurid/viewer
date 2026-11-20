@@ -55,8 +55,9 @@ and what always waits for the person's review. Use
 [Features and where to find them](reference/capabilities.md) for command ids,
 [the words Viewer uses](reference/terms.md) for terms, and
 [file operations](reference/file-operations.md) for how copies, moves, the Trash and Undo behave.
-Viewer never deletes a file permanently, and an agent's removals go to the Trash only after the
-person approves them.
+Viewer never deletes a file permanently unless the person chooses **Empty Trash…** in the Trash
+window and confirms it; agents can never reach **Empty Trash…**, and an agent's removals go to the
+Trash only after the person approves them.
 
 **Changing Viewer's code.** Read [AGENTS.md](../AGENTS.md) first, then
 [contributing](../CONTRIBUTING.md), the [domain map](../CONTEXT.md), the

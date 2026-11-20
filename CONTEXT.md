@@ -63,6 +63,16 @@ outside session state, backups and agent discovery. `desktop/ipc/definition-hand
 human and window ownership before close, reset, save and reopen. `renderer/state/definitions.ts`
 owns the persisted renderer transitions; Manage is `ui/workspace/WorkspacesDialog.tsx`.
 
+**Folder history** keeps up to 500 visited folders (`maximumFolderVisits` in
+`domain/files/folder-visits.ts`, persisted on `SavedState.visits` in
+`desktop/persistence/storage.ts`) beside the 50-item `recents` list.
+`domain/files/folder-checks.ts`, `folder-visit-changes.ts` and `folder-history-remaps.ts` bound
+candidate checks, visit deltas and concurrent rename remaps. `desktop/files/folder-history.ts`
+prepares history and runs `BackgroundFolderHistory` outside the window startup barrier;
+`desktop/windows/folder-history-checks.ts` shares two worker lanes and per-volume timeout quarantine
+across windows. `renderer/state/folder-visits.ts` (`FolderVisitSync`) synchronizes unsaved visits,
+remaps and eight-second **Undo Clear Recent Folders** across windows.
+
 `domain/workspaces/found` owns root rules, candidate evidence, keys and plain found definitions.
 `domain/workspaces/ownership.ts` indexes owning roots and workspace shares. The desktop
 `workspaces/found-workspaces.ts` schedules bounded probes through FolderFacts and keeps the private
@@ -282,6 +292,15 @@ presentation have separate precedence.
 **Update checks** belong to `desktop/updates`: one feed (`domain/updates/feed.ts`), read only after
 its Ed25519 signature matches the key in `desktop/release.ts`. A check never downloads or installs;
 Download opens the https disk image in the browser. The Store edition never checks.
+
+**Diagnostic reports** (**Help → Copy Report…**) belong to `domain/diagnostics` and
+`desktop/diagnostics/report.ts` (`diagnosticReport`, `reportLimits`). The default report projects
+bounded environment facts and up to 20 recent failures from `Logs/diagnostics.log` with no message
+text or personal file names; optional excerpts pass through `domain/diagnostics/report-redaction.ts`
+after local account, Home, host and `/Volumes` checks in both editions.
+`desktop/windows/report-window.ts` and `src/report-preload.ts` present the report in an isolated
+window whose preload exposes only revision-bound option, display-acknowledgment, copy and close
+events, never a log reader.
 
 **License keys and trials** belong to `domain/license` and `desktop/license`. The domain owns the
 payload, status and 30-day clock arithmetic; the desktop verifies exact-byte Ed25519 signatures and

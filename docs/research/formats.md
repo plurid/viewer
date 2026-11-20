@@ -294,7 +294,7 @@ is and show it at the right shape.
 | Frame-packed stereo | Side-by-side and over-under films in MP4, MKV or WebM, full or half size | One eye at its true shape, with **Left**, **Right**, **Both** and **Anaglyph** views | Depth on a stereo display or headset        |
 | Multiview stereo    | Apple spatial video: MV-HEVC in MOV, from iPhone and Vision Pro          | The same views, from a prepared copy holding both eyes                               | Export a side-by-side MP4                   |
 | 180° and 360° video | Equirectangular VR180 and 360 clips, one eye or two                      | A look-around view: drag to turn, scroll to zoom                                     | Stereo look-around on a headset             |
-| Blu-ray 3D          | H.264 MVC in `.m2ts`, `.ssif` or MKV                                     | The base view, labelled as one eye of a 3D film                                      | The second eye needs a decoder FFmpeg lacks |
+| Blu-ray 3D          | H.264 MVC in `.m2ts`, `.ssif` or MKV                                     | The base view, labeled as one eye of a 3D film                                       | The second eye needs a decoder FFmpeg lacks |
 
 Read the layout from the file first: the stereo and projection side data FFprobe reports, and the
 view layers of MV-HEVC. A name such as `SBS`, `LR`, `OU`, `TAB`, `180` or `360` only suggests a
@@ -314,7 +314,7 @@ lists. No sample file has been decoded yet:
 - FFprobe already runs for each video to read its rotation; the same call can return the stereo and
   projection data. A look-around view can use the Three.js that model previews bundle.
 
-Accept a kind only with labelled real samples: each opens in the right view without a manual choice,
+Accept a kind only with labeled real samples: each opens in the right view without a manual choice,
 seeking and sound stay in step, a half-size file keeps its true shape, and a spatial video either
 shows both eyes or says which one it shows. Spatial photos (HEIC pairs and MPO) can reuse the same
 views afterwards.
@@ -513,7 +513,7 @@ writes an empty PDF (tried 2026-11-15).
 | Step                           | What the person gets                                                                                        | Needs                                    |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | Recognize and describe (built) | The kind from its first bytes; title, creator, page count, page size and language level; the source as text | Nothing new                              |
-| Embedded EPS preview (built)   | The TIFF or EPSI picture an EPS carries, labelled as its embedded preview                                   | Nothing new                              |
+| Embedded EPS preview (built)   | The TIFF or EPSI picture an EPS carries, labeled as its embedded preview                                    | Nothing new                              |
 | Illustrator files (built)      | An `.ai` file that is PDF inside, the default since Illustrator 9, opens in the PDF preview                 | Nothing new                              |
 | Rendered pages (built)         | Every page, through a PDF copy that the PDF preview shows                                                   | Ghostscript installed on the Mac         |
 | Rendered pages for everyone    | The same without installing anything                                                                        | An interpreter in the app; see licensing |
@@ -528,10 +528,10 @@ the person installed needs no decision. Shipping one inside a paid Viewer is the
 This page knows of no permissively licensed interpreter complete enough to ship; search before
 deciding.
 
-**Acceptance.** Keep labelled samples: Level 2 and Level 3 documents, an EPS with a TIFF preview,
-one with an EPSI preview and one with none, a multi-page document, an `.ai` file with and without
-PDF compatibility, a file that never finishes and a file that tries to read another file.
-Ghostscript 10.07.1 turned a one-page sample into a valid PDF on 2026-11-15.
+**Acceptance.** Keep labeled samples: Level 2 and Level 3 documents, an EPS with a TIFF preview, one
+with an EPSI preview and one with none, a multi-page document, an `.ai` file with and without PDF
+compatibility, a file that never finishes and a file that tries to read another file. Ghostscript
+10.07.1 turned a one-page sample into a valid PDF on 2026-11-15.
 
 ## Data, business, development and inspectable packages
 

@@ -154,11 +154,11 @@ the original is only read and no document copy is written. EPS pages are cropped
 `-dEPSCrop` only when their non-deferred bounding-box comments state dimensions from 1 to 14,400
 points on both axes. Missing, deferred, empty, inverted, oversized or sub-point boxes render a full
 page instead, with an explanation in the preview. HiRes boxes obey the same limits. An unexpected
-discovery failure is recorded in diagnostics and shown as **Ghostscript could not be checked**; only
-an absent program gets the installation message. Safe mode, batch/no-prompt flags and a minimal
-environment are fixed. The process group runs at background priority and is stopped together on
-cancellation or a limit. An exited wrapper or a descendant holding a pipe cannot retain the render
-slot.
+discovery failure is recorded in diagnostics and shown as **Viewer couldn't check for
+Ghostscript.**; only an absent program gets the installation message. Safe mode, batch/no-prompt
+flags and a minimal environment are fixed. The process group runs at background priority and is
+stopped together on cancellation or a limit. An exited wrapper or a descendant holding a pipe cannot
+retain the render slot.
 
 Input is capped at 256 MiB. **32 MiB bounds the PDF result on standard output**, not scratch space.
 The private scratch stage is monitored every 50 ms with a 64 MiB total-size limit; a burst can

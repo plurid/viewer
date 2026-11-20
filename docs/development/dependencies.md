@@ -39,11 +39,11 @@ After a change, run types, lint, affected regressions and the full tests. Packag
 the relevant real workflow: a source test cannot establish that its native dependency was bundled or
 that the exported file renders correctly.
 
-The renderer applies narrowly guarded build adaptations for Three.js texture ownership and Plurid's
-camera-selector cache. The camera adaptation bounds both argument and result caches and applies
-during development prebundling as well as production builds. Tests use the installed dependency
-source and reject drift when its selector changes. The installed package files stay intact; review
-these adaptations when upgrading either dependency.
+The renderer applies a narrowly guarded build adaptation (`tools/three-renderer.ts`) for Three.js
+texture ownership while keeping the installed package files intact. Separately,
+`tests/plurid-camera.test.ts` (`tools/plurid-camera.ts`) reads the installed `@plurid/plurid-react`
+bundle directly to verify that its camera-selector cache stays bounded and fails if the selector
+shape drifts; review both when upgrading Three.js or Plurid.
 
 ## Validate the package
 

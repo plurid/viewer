@@ -486,8 +486,9 @@ each proposal waits for your review.
 | The local error log and crash reports                               |                              |                                                                                                                       | **Help → Show Diagnostic Log**, **Help → Show Crash Reports**                           | [Troubleshoot](../guides/troubleshooting.md)                       |
 | Quit only on a second **⌘Q**                                        | **⌘Q** twice                 | **Turn Off: Warn before quitting with ⌘Q** `setting.settings.quit.warnShortcut` opens Settings                        | **Viewer → Quit Viewer** quits at once                                                  | [Shortcuts](shortcuts.md)                                          |
 
-Viewer has no command that empties the Trash or deletes a file for good. On a volume without a
-Trash, **Move to Trash** fails and the item stays where it is.
+Viewer never deletes a file for good unless you choose **Empty Trash…** yourself in the Trash
+window, after a confirmation; no **⌘K** command, CLI command or agent tool can empty it. On a volume
+without a Trash, **Move to Trash** fails and the item stays where it is.
 
 ## Settings and updates
 

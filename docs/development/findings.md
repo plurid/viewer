@@ -1,82 +1,41 @@
 # Review findings
 
-Open problems found by a review of the code and documents at commit `c89e21f1`. Each item names its
-first place in the code (paths relative to `packages/viewer-electron/app`). An item leaves this page
-in the change that fixes it.
+Open problems found by a review of the code and documents (commits `c89e21f1` and `f0dbe549`). Each
+item names its first place in the code, relative to `packages/viewer-electron/app`. An item leaves
+this page in the change that fixes it.
 
 How to read an item:
 
-- **S2** a person meets a wrong result or a blocked task in a common feature. **S3** a rare state, a
-  rough edge or a page that disagrees with the code.
-- Each item was found by one reviewer reading the code and has not yet been checked by a second one
-  or by a test, unless it says "checked". Confirm it before you fix it.
+- **S1** data, safety or the person's authority at risk on a common path. **S2** a wrong result or a
+  blocked task people will meet. **S3** a rare state, a rough edge, or a page that disagrees with
+  the code.
+- **Confirmed** means a second reviewer reproduced it with a test or traced it end to end. Every
+  other item was found by one reviewer reading the code: confirm it before you fix it.
 - Findings about security, an agent acting beyond its grant, or losing files are kept out of this
   page until they are fixed.
+
+Open here: 313 (S1 0, S2 99, S3 214); 98 confirmed.
 
 ## Decisions for the owner
 
 - **Empty Trash.** The Trash window has **Empty Trash…**, which erases for good after a native
-  confirmation (`tools/trash-ui.h`), while `README.md`, `docs/reference/file-operations.md`,
-  `capabilities.md` and `terms.md` say Viewer never empties the Trash and nothing is deleted for
-  good. Either the pages describe the command or the command goes.
-
-## Agents, actions and automation
-
-- **S2** A request that timed out for the agent still runs in Viewer, with those queued behind it.
-  `src/desktop/agents/mcp-client.ts:159-166`
-- **S2** report_session refuses every new session once 100 exist, and none can be removed.
-  `src/desktop/agents/sessions.ts:83-84`
-- **S2** Tools fail with 'outside the authorized folders' when the person views another folder.
-  `src/desktop/agents/agent-broker.ts:412-421`
-- **S3** A command run from an empty workspace keeps no receipt; Open Receipt fails.
-  `src/desktop/actions/receipts.ts:61`
-- **S3** A prepared review cannot be discarded; recovered tasks stay pending; 100 block actions.
-  `src/renderer/actions/ActionHub.tsx:667`
-- **S3** A request near or over 65,536 bytes drops the connection or gets a reply with id null.
-  `src/desktop/agents/mcp-client.ts:143-147`
-- **S3** A run stopped by a withdrawn approval is marked failed with no reason shown.
-  `src/desktop/automation/workflows.ts:324`
-- **S3** agents.md omits the metadata capability that seven service tools also require.
-  `src/desktop/agents/tool-catalog.ts:292-296`
-- **S3** Command output shows replacement characters where a chunk splits a character.
-  `src/desktop/actions/executions.ts:296`
-- **S3** Create… in a folder that has a workflow fails with a 'changed on disk' message.
-  `src/renderer/ui/automation/Workflows.tsx:207`
-- **S3** Dead-end errors and gaps in the tool set: no way to list own proposals or tasks.
-  `src/desktop/agents/agent-broker.ts:1153-1156`
-- **S3** Every agent tool call waits for the whole activity file to be rewritten and synced.
-  `src/desktop/agents/agent-broker.ts:617-624`
-- **S3** Generating the shared configuration disconnects every named client as well.
-  `src/desktop/agents/agent-broker.ts:282-290`
-- **S3** Neither the review nor the system dialog says which agent client asked.
-  `src/renderer/actions/AgentReview.tsx:59`
-- **S3** Quit never finishes when a command left a detached process holding its output.
-  `src/desktop/actions/executions.ts:299`
-- **S3** Rename as book on a few hundred PDFs fails: Application metadata exceeds its limit.
-  `src/desktop/actions/planner.ts:475`
-- **S3** The shared connection has no recipe task budget and can fill all 100 plans.
-  `src/desktop/agents/agent-broker.ts:1108-1118`
-- **S3** The system dialog for a large Trash request cuts its path list without saying so.
-  `src/desktop/native/native-confirmation.ts:21-37`
-- **S3** Watch rule can never be enabled or removed after its last run's history is removed.
-  `src/desktop/automation/watch-rules.ts:361`
-- **S3** Watch rule interval: reference says 30 seconds to 24 hours, interface offers three.
-  `src/renderer/ui/automation/WatchRules.tsx:267`
-- **S3** Watch rule runs one second after the first change, on files still being written.
-  `src/desktop/automation/watch-rules.ts:351`
+  confirmation (`tools/trash-ui.h`). Decision: keep it as a command only the person can choose; the
+  pages that say Viewer never empties the Trash are to say so.
+- **What an agent may read from the configuration.** Decision: configuration reads show only paths
+  inside the agent's granted folders.
 
 ## Files, operations and the Trash
 
 - **S2** Copy Event ID never copies: the ID is sent as a path and the request is refused.
-  `src/renderer/journal/JournalPlane.tsx:404`
+  `src/renderer/journal/JournalPlane.tsx:404` Confirmed.
 - **S2** Copy then Paste in the same folder fails: “Source and destination are the same.”.
-  `src/desktop/operations/destinations.ts:31`
+  `src/desktop/operations/destinations.ts:31` Confirmed.
 - **S2** Copying a locked file, a read-only folder or a Home folder such as Documents always fails.
-  `src/desktop/operations/file-transfer.ts:279`
+  `src/desktop/operations/file-transfer.ts:279` Confirmed.
 - **S2** Direct build: Allow Folder Access… cannot open a folder that macOS refused.
-  `src/renderer/ui/permissions/FolderAccessButton.tsx:18-31`
+  `src/renderer/ui/permissions/FolderAccessButton.tsx:18-31` Confirmed.
 - **S2** Document-text search with two or more words shows no passage unless the words are adjacent.
-  `src/domain/files/inspection.ts:215`
+  `src/domain/files/inspection.ts:215` Confirmed.
 - **S3** A batch rename that swaps or shifts names leaves lens groups and Map places on the wrong
   files. `src/domain/files/lenses.ts:294`
 - **S3** A checkpoint cut short by a crash leaves its partial copy in private data for good.
@@ -133,8 +92,6 @@ How to read an item:
   order. `src/domain/files/entries.ts:11`
 - **S3** No test in the suite renders the Trash window or presses Copy Event ID.
   `tests/trash-presentation.test.ts:1`
-- **S3** Permissions rows mislabel an unplugged disk, a saved file and a panel choice.
-  `src/renderer/ui/permissions/FilePermissions.tsx:82-90`
 - **S3** Put Back and Apply Changes wait in silence behind any running job or unanswered name
   prompt. `src/desktop/ipc/access-handlers.ts:102`
 - **S3** Put Back forgets where an item came from once 100 later jobs have finished.
@@ -154,14 +111,498 @@ How to read an item:
 - **S3** Undo of a large job rewrites the whole remaining Undo list after every step.
   `src/desktop/operations/operation-journal.ts:483-488`
 
-## Found while checking the documents
+## Windows, saved state and the app shell
+
+- **S2** A preference conflict wedges flushPreferences at a stale revision, blocking close and Quit.
+  `src/renderer/state/preferences.ts:54-65` Confirmed.
+- **S2** Any preview or canvas iframe navigation cancels active speech, branch tasks and SSH.
+  `src/desktop/bridge.ts:1753,1755,1762` Confirmed.
+- **S2** Backup relinking updates Layout sources but leaves quantities and thicknesses unmapped.
+  `src/desktop/persistence/backup-state.ts:116-117` Confirmed.
+- **S2** Creating a backup leaves space.layout set, closing later planes or failing on relaunch.
+  `src/renderer/persistence/BackupDialog.tsx:59-64` Confirmed.
+- **S2** Files queued in openIn between bootstrap and commandsPublish never open.
+  `src/desktop/bridge.ts:1825-1830` Confirmed.
+- **S2** One rejected edit in Settings wedges SettingsEditQueue forever, blocking edits and Quit.
+  `src/renderer/settings/persistence/edit-queue.ts:25-46` Confirmed.
+- **S2** Restoring a backup with an agent session plane breaks it and blocks all future backups.
+  `src/desktop/persistence/backup-state.ts:60-72` Confirmed.
+- **S2** Settings never receives session-keys events, so Keep and Discard leave stale bindings on
+  screen. `src/desktop/ipc/schemas.ts:992-1004` Confirmed.
+- **S2** Undoing Clear Recent Folders within 400 ms still sends clear: true and wipes desktop
+  history. `src/renderer/state/places.ts:78-92` Confirmed.
+- **S3** A peer workspace broadcast overwrites unsaved local favorites and command-line history.
+  `src/renderer/state/workspaces.ts:163-237`
+- **S3** Backup restore writes all documents before validating config, stranding copies on failure.
+  `src/desktop/persistence/backup.ts:470-478`
+- **S3** Closing an inactive defined workspace drops the active workspace's profile and Quick
+  Preview. `src/renderer/state/definitions.ts:212,228-246`
+- **S3** Closing or quitting traps Viewer in a Retry loop when saved state is newer or unmovable.
+  `src/desktop/persistence/storage.ts:471-498`
+- **S3** FolderHistoryChecks can spawn workers after close and reuse an errored thread slot.
+  `src/desktop/windows/folder-history-checks.ts:98-132`
+- **S3** Invalid CLI launch flags exit 0 with no error when Viewer is already running.
+  `src/main.ts:241-255`
+- **S3** launchWorker pipes worker stdout without reading it, risking worker deadlock.
+  `src/desktop/workers/utility-client.ts:58-66`
+- **S3** ModelPermissions and Updates overwrite unreadable or newer-version files without backup.
+  `src/desktop/models/model-permissions.ts:67-76`
+- **S3** Names of 92-100 characters fail to save for profiles, layouts and themes via slugID.
+  `src/domain/ids.ts:15-26`
+- **S3** Non-atomic backup writes leave corrupt files that block later backups; check index races.
+  `src/desktop/persistence/backup.ts:322-331`
+- **S3** One failed DocumentStore save poisons all later load() calls for the rest of the session.
+  `src/desktop/persistence/document-store.ts:16-17`
+- **S3** Personal backup export default filename uses the UTC date instead of the local date.
+  `src/desktop/bridge.ts:1386`
+- **S3** Quitting or closing Settings before it mounts hangs 10s and flags it unresponsive.
+  `src/desktop/bridge.ts:1867-1874`
+- **S3** Resetting a folder view then changing one field within 80 ms wipes the new field on flush.
+  `src/renderer/state/presentation.ts:102-108`
+- **S3** Reverting a failed global hotkey back to the active shortcut leaves the error shown.
+  `src/desktop/windows/hotkey-window.ts:89-115`
+- **S3** Storage.save checks UTF-16 length while load checks UTF-8 bytes, quarantining valid state.
+  `src/desktop/persistence/storage.ts:538`
+- **S3** View menu shows "Hide" for default-hidden chrome when no workspace window is open.
+  `src/desktop/windows/application-menu.ts:28-43,255-284`
+
+## Agents, actions and automation
+
+- **S2** A request that timed out for the agent still runs in Viewer, with those queued behind it.
+  `src/desktop/agents/mcp-client.ts:159-166` Confirmed.
+- **S2** report_session refuses every new session once 100 exist, and none can be removed.
+  `src/desktop/agents/sessions.ts:83-84` Confirmed.
+- **S3** A command run from an empty workspace keeps no receipt; Open Receipt fails.
+  `src/desktop/actions/receipts.ts:61`
+- **S3** A prepared review cannot be discarded; recovered tasks stay pending; 100 block actions.
+  `src/renderer/actions/ActionHub.tsx:667`
+- **S3** A request near or over 65,536 bytes drops the connection or gets a reply with id null.
+  `src/desktop/agents/mcp-client.ts:143-147`
+- **S3** A run stopped by a withdrawn approval is marked failed with no reason shown.
+  `src/desktop/automation/workflows.ts:324`
+- **S3** Command output shows replacement characters where a chunk splits a character.
+  `src/desktop/actions/executions.ts:296`
+- **S3** Create… in a folder that has a workflow fails with a 'changed on disk' message.
+  `src/renderer/ui/automation/Workflows.tsx:207`
+- **S3** Dead-end errors and gaps in the tool set: no way to list own proposals or tasks.
+  `src/desktop/agents/agent-broker.ts:1153-1156`
+- **S3** Every agent tool call waits for the whole activity file to be rewritten and synced.
+  `src/desktop/agents/agent-broker.ts:617-624`
+- **S3** Generating the shared configuration disconnects every named client as well.
+  `src/desktop/agents/agent-broker.ts:282-290`
+- **S3** Neither the review nor the system dialog says which agent client asked.
+  `src/renderer/actions/AgentReview.tsx:59`
+- **S3** Quit never finishes when a command left a detached process holding its output.
+  `src/desktop/actions/executions.ts:299`
+- **S3** Rename as book on a few hundred PDFs fails: Application metadata exceeds its limit.
+  `src/desktop/actions/planner.ts:475`
+- **S3** The shared connection has no recipe task budget and can fill all 100 plans.
+  `src/desktop/agents/agent-broker.ts:1108-1118`
+- **S3** The system dialog for a large Trash request cuts its path list without saying so.
+  `src/desktop/native/native-confirmation.ts:21-37`
+- **S3** Watch rule can never be enabled or removed after its last run's history is removed.
+  `src/desktop/automation/watch-rules.ts:361`
+- **S3** Watch rule interval: reference says 30 seconds to 24 hours, interface offers three.
+  `src/renderer/ui/automation/WatchRules.tsx:267`
+- **S3** Watch rule runs one second after the first change, on files still being written.
+  `src/desktop/automation/watch-rules.ts:351`
+
+## Models, chat and speech
+
+- **S2** A Chat validation error poisons Chats.flush() and blocks closing, quitting and backups.
+  `src/desktop/chat/service.ts:128` Confirmed.
+- **S2** Meta chat turns bypass the 256 KiB request limit and duplicate canvas data in steps.
+  `src/desktop/chat/service.ts:546` Confirmed.
+- **S2** Settings hides connected microphones and marks saved ones not connected outside capture.
+  `src/main.ts:962-970` Confirmed.
+- **S2** Store build exposes dictation and 488 MB setup without audio-input entitlement.
+  `src/desktop/bridge.ts:1012-1072` Confirmed.
+- **S3** A failed save in Chats.respond catch leaves a conversation permanently stuck running.
+  `src/desktop/chat/service.ts:600`
+- **S3** Ask Viewer by Voice steals Ctrl+Shift+Space from a person's own reassigned binding.
+  `src/renderer/speech/SpeechControls.tsx:13-15,26-34,53`
+- **S3** Failed hosted key or provider write leaves the provider blocked from checks and consent.
+  `src/desktop/speech/providers.ts:92-121`
+- **S3** Pressing the dictate shortcut opens SpokenRequest behind an open modal DictationDialog.
+  `src/renderer/speech/SpeechControls.tsx:28`
+- **S3** Re-importing or re-downloading a broken local speech model never restores dictation.
+  `src/desktop/speech/models.ts:346-359`
+- **S3** SpeechRuntime.status swallows its own non-macOS error, contradicting platforms.md.
+  `src/desktop/speech/runtime.ts:63-83`
+- **S3** Timed-out hosted check resets inline status to Not checked yet and hides error off-screen.
+  `src/desktop/speech/providers.ts:230-234,255-258`
+- **S3** Unplugged saved microphone shows an empty error alert when dictation fails.
+  `src/renderer/speech/capture.ts:20-26`
+
+## CLI, updates, license and the build
+
+- **S2** CLI exits with code 1 instead of 3 on disconnect and 1 instead of 124 on 120 s timeout.
+  `src/desktop/cli/client.ts:40` Confirmed.
+- **S2** Compiled binary assets/viewer-image-preview is tracked in Git and rewritten by builds.
+  `tools/build-helpers.ts:47-61` Confirmed.
+- **S2** forge.config.ts omits continueOnError: false, so pnpm package and make succeed unsigned.
+  `forge.config.ts:42-60` Confirmed.
+- **S2** processors.ts and speech-runtime.ts reuse old binaries after sharp, libvips or C++ edits.
+  `tools/processors.ts:124-137` Confirmed.
+- **S2** Store build ships speech runtime and mic plist text while policy says direct-only.
+  `forge.config.ts:75` Confirmed.
+- **S3** DiagnosticLog rotates by UTF-16 characters against a UTF-8 byte limit and rewrites on every
+  entry. `src/desktop/diagnostics/diagnostics.ts:62`
+- **S3** eslint.config.mjs omits src/report-preload.ts from Electron 45 sandboxed preload rules.
+  `eslint.config.mjs:109-134`
+- **S3** Overlapping Check for Updates and launch check open two update dialogs.
+  `src/desktop/updates/updates.ts:187`
+- **S3** pnpm make and forge osxNotarize permanently delete prior ZIPs and notarization archives.
+  `package.json:56`
+- **S3** redactCredentials erases the rest of a log entry after an empty credential value.
+  `src/domain/diagnostics/secrets.ts:89`
+- **S3** tools/build-preserving.ts packs @napi-rs inside app.asar and writes stale mic text.
+  `tools/build-preserving.ts:226`
+- **S3** VIEWER_BUILD_ARCH=x64 packs x64 helpers into an arm64 app and skips Trash for it.
+  `package.json:55-56`
+
+## Settings and keys
+
+- **S2** Exported recipes cannot be re-imported because Import Recipes appends duplicate IDs.
+  `src/renderer/ui/settings/RecipeSettings.tsx:191-226` Confirmed.
+- **S2** KeyCapture records Shift+punctuation as the shifted symbol, bypassing conflict checks.
+  `src/renderer/ui/settings/KeyCapture.tsx:5-21` Confirmed.
+- **S2** Multi-key root bindings and non-canonical leader keys pass validation but never run.
+  `src/renderer/keys/sequences.ts:170,179` Confirmed.
+- **S2** Reset a section for Search indexes / or keeps a custom root instead of resetting to Home.
+  `src/renderer/ui/settings/AutomationSettings.tsx:725-731` Confirmed.
+- **S2** Shortcut hints and Speech Settings still show shipped keys yielded under Own Keys.
+  `src/renderer/keys/hints.ts:9-13` Confirmed.
+- **S3** Go to Folder alternate Cmd+Shift+G never yields under Own Keys or when turned Off.
+  `src/domain/preferences/shortcuts.ts:70,404-408`
+- **S3** normalizePreferences truncates ui.list.order to 6 columns, dropping the 7th column.
+  `src/domain/preferences/ui.ts:222`
+- **S3** Reset All Shortcuts, Prefix Keys, Remove Mode and Reset Navigation act without asking.
+  `src/renderer/ui/settings/ShortcutSettings.tsx:91`
+- **S3** Session Keep and Discard in Settings report errors to the unrendered workspace store.
+  `src/renderer/ui/settings/KeymapSettings.tsx:30-66`
+- **S3** validate_config and propose_config succeed while config.jsonc is broken, then Apply fails.
+  `src/desktop/preferences/settings.ts:375-407`
+
+## Commands and the palette
+
+- **S2** :set termlinespace=<value> always fails validation because :set sends a string.
+  `src/domain/command-line/set.ts:105-119` Confirmed.
+- **S2** In a preview plane, Copy Path (⌥⌘C and ⌘K), Inspect File and Suggested do not work.
+  `src/renderer/commands/copy-path.ts:4-10` Confirmed.
+- **S2** Plane toolbar appears twice in Settings search and neither row applies Essential or Full.
+  `src/renderer/commands/window-commands/settings.ts:110-124` Confirmed.
+- **S2** Typing %/ or %:h/ in the command line without an active plane path crashes the window.
+  `src/renderer/command-line/complete.ts:144-147` Confirmed.
+- **S3** Custom action folders in ⌘K hide the Recent heading and copy the first child's shortcut.
+  `src/renderer/commands/folders.ts:24-36`
+- **S3** Found workspace roots in ⌘K and Change Workspace skip PathLabel and cut the folder name.
+  `src/renderer/commands/window-commands/catalog.ts:76-87`
+- **S3** Open non-file planes in ⌘K ignore paneTitle and show raw folder names instead.
+  `src/renderer/commands/window-commands/catalog.ts:107-132`
+- **S3** Smart palette Go to row shows raw home path and passes command text through FileName.
+  `src/renderer/commands/CommandPalette.tsx:597-635`
+
+## Browsing and search
+
+- **S2** CollectionExplorer selection is O(N^2) and Check Files Again stats 10,000 items serially.
+  `src/renderer/explorer/CollectionExplorer.tsx:135-140` Confirmed.
+- **S2** Editing a search plane query keeps invisible prior selections active for file actions.
+  `src/renderer/explorer/SearchExplorer.tsx:45-47` Confirmed.
+- **S2** Incomplete query with Subfolders on pops error notice and claims 1 item not readable.
+  `src/renderer/explorer/useSearch.ts:17-18` Confirmed.
+- **S2** Live scan mismatches small keys and folder symlinks and hides Spotlight tag errors.
+  `src/desktop/search/search.ts:160-180` Confirmed.
+- **S2** One unreadable entry (such as ~/.Trash) stops deleted files leaving the search index.
+  `src/desktop/search/index-core.ts:723-753` Confirmed.
+- **S2** search_files drops scanLimited and root coverage so agents misread partial results.
+  `src/desktop/agents/agent-broker.ts:1091-1100` Confirmed.
+- **S2** z jump suggestions stay empty and checking forever if an unknown rank precedes ten known.
+  `src/renderer/explorer/useFolderSuggestions.ts:53-62` Confirmed.
+- **S3** aria-activedescendant points to nonexistent IDs in Grid, Gallery, and Map views.
+  `src/renderer/explorer/FolderExplorer.tsx:577`
+- **S3** CollectionExplorer double-click ignores nativeOpening and blank space fails to clear.
+  `src/renderer/explorer/CollectionExplorer.tsx:202`
+- **S3** First-run tips ignore the Own Keys rule and show stolen default shortcuts.
+  `src/renderer/explorer/FolderInsights.tsx:101-108`
+- **S3** MapView retains a stale creating promise if unmounted before the new lens arrives.
+  `src/renderer/explorer/map/MapView.tsx:63`
+- **S3** Select by Pattern globs use backtracking JS RegExp with no length cap, bypassing RE2.
+  `src/domain/search/query.ts:527-550`
+
+## Workspaces and the space
+
+- **S2** Choosing a non-folder plane from Overview or minimap drops keyboard focus.
+  `src/renderer/workspace/WorkspaceSurface.tsx:488-495` Confirmed.
+- **S2** Creating a project fails on external collections and binds terminal parents.
+  `src/renderer/workspace/projects.tsx:160-198` Confirmed.
+- **S2** Editing or opening evidence in a project or tour file runs it instead of opening it.
+  `src/renderer/workspace/controller.ts:772-785` Confirmed.
+- **S2** Hidden or plain definition hides a second definition sharing the same root from offers.
+  `src/domain/workspaces/ownership.ts:12-41` Confirmed.
+- **S2** Missing terminal subfolder reports “This terminal changed in the definition.”.
+  `src/desktop/workspaces/definition-commands.ts:105-112` Confirmed.
+- **S2** Saving a project arrangement with any non-portable plane open silently drops it.
+  `src/renderer/workspace/projects.tsx:500-515` Confirmed.
+- **S2** Started deferred terminals revert to Start Terminal after culling or workspace switch.
+  `src/renderer/workspace/WorkspaceSurface.tsx:330-358` Confirmed.
+- **S3** Agent open-path on a project or tour file reports success before reading it.
+  `src/renderer/workspace/agent-navigation.ts:80-89`
+- **S3** Explicit collision with an opened found key breaks fresh opens on unreadable memory.
+  `src/desktop/workspaces/defined-workspaces.ts:221-251`
+- **S3** Long file or tour names in TourStops footer buttons overflow the 380 px panel.
+  `src/renderer/workspace/tours/TourStops.tsx:71-78`
+- **S3** Manage Defined tab and DefinitionDialog match links by key alone, ignoring found source.
+  `src/renderer/ui/workspace/WorkspacesDialog.tsx:530`
+- **S3** Manage Workspaces Defined search input does not fill its row and ignores Enter.
+  `src/renderer/ui/workspace/WorkspacesDialog.tsx:502-526`
+- **S3** Minimap and Overview label non-file planes by folder name and root / as folder.
+  `src/renderer/workspace/WorkspaceSurface.tsx:477-487`
+- **S3** Rekeying a found key named like Object.prototype breaks all definition commands.
+  `src/desktop/workspaces/defined-workspaces.ts:227`
+- **S3** ViewsDialog Escape closes the whole dialog during rename and row buttons omit view names.
+  `src/renderer/ui/workspace/ViewsDialog.tsx:30-72`
+
+## Canvases
+
+- **S2** Disabling a tool does not stop a running model turn and allows later model writes.
+  `src/desktop/bridge.ts:2631-2643` Confirmed.
+- **S2** Invalid canvas action definitions and outputs hide validation details from the agent.
+  `src/renderer/canvases/CanvasPlane.tsx:171-176` Confirmed.
+- **S2** Stopping a canvas while an action runs leaves the canvas body permanently inert.
+  `src/renderer/canvases/CanvasPlane.tsx:41` Confirmed.
+- **S3** Mounting scripts still match the old Open saved file button label.
+  `tools/mounting/qualify.ts:174`
+- **S3** One unreadable file in reconstruction-jobs blocks listing and resuming paid jobs.
+  `src/desktop/canvases/reconstruction.ts:183-200`
+- **S3** Photo to 3D shows raw states including UK cancelled and blank empty choice buttons.
+  `src/renderer/canvases/ReconstructionPanel.tsx:108-126`
+
+## Git and task areas
+
+- **S2** Comparing SVG, TIFF or ICO files fails with "Images too large to compare".
+  `src/renderer/diff/useComparisonSession.ts:122` Confirmed.
+- **S2** Create Worktree and New Task from Branch clip their footer off-screen with no scroll.
+  `src/renderer/git/worktrees/worktrees.css:6` Confirmed.
+- **S2** New Task from Branch auto-starts terminal and Git changes instead of waiting.
+  `src/renderer/tasks/controller.ts:134` Confirmed.
+- **S2** New Task from Branch hides creationProblem, flashes list view and creates untitled tasks.
+  `src/renderer/git/worktrees/WorktreesDialog.tsx:51` Confirmed.
+- **S2** Repo-wide Git actions fail when folder selection changes or exceeds 1,000 paths.
+  `src/desktop/comparison/git-actions.ts:453` Confirmed.
+- **S3** Find Duplicates prints "0 items couldn't be read" on scan cap and leaks stale results.
+  `src/renderer/ui/comparison/Duplicates.tsx:140`
+- **S3** Git Changes "Against base" fails completely when any file has a merge conflict.
+  `src/desktop/comparison/review.ts:324`
+- **S3** Git hunk review blocks text files whose path or blob hash contains 120000 or 160000.
+  `src/desktop/comparison/review.ts:433`
+- **S3** Task overview, worktree dialogs and Git commands show raw paths instead of PathLabel.
+  `src/renderer/tasks/TaskPlane.tsx:333`
+
+## Terminals, servers and remote planes
+
+- **S2** Linked browser plane misses stopped-server banner and Start Server fails after restart.
+  `src/renderer/browser/BrowserPlane.tsx:46-49` Confirmed.
+- **S2** Makefile targets below blank comment lines are omitted from declared commands.
+  `src/domain/terminals/declared-commands.ts:166-176` Confirmed.
+- **S2** Ninth browser plane replaces limit error with closed error and breaks Try Again.
+  `src/renderer/browser/BrowserPlane.tsx:51-54` Confirmed.
+- **S2** Open in tmux drops default profile environment and fails if unused shell is missing.
+  `src/desktop/terminals/terminal-launch.ts:116-120` Confirmed.
+- **S3** AskpassRelay caches failed socket setup forever and drops server error listener.
+  `src/desktop/remote/askpass.ts:88-115`
+- **S3** Browser plane never reattaches CDP debugger after renderer crash or hung reload.
+  `src/desktop/browser/browser-planes.ts:252-261`
+- **S3** Definition command approval mounts blank terminal instead of waiting state.
+  `src/renderer/terminals/definition-command-session.ts:285-337`
+- **S3** Failed terminal start caches rejection and quiesce cancel marks dead session started.
+  `src/renderer/terminals/TerminalPlane.tsx:71-92`
+- **S3** Missing custom terminal app path throws raw ENOENT instead of Settings guidance.
+  `src/desktop/terminals/terminal-launch.ts:188-198`
+
+## Layout and fabrication
+
+- **S2** Closing Nesting while reading DXFs leaks desktop resource grants and worker errors hang.
+  `src/renderer/layout/nesting/useNestingFiles.ts:40-77` Confirmed.
+- **S2** Contact sheet candidate cards drop the active column count and offer 11 to 14 columns.
+  `src/domain/layout/candidates.ts:79-102` Confirmed.
+- **S2** Failed or canceled correction or handoff hides its Save or Export button permanently.
+  `src/renderer/fabrication/CheckPanel.tsx:60-66` Confirmed.
+- **S2** Nesting number inputs lost their 76 px width in the NumberField sweep and overflow rows.
+  `src/renderer/layout/nesting/nesting.css:36-38` Confirmed.
+- **S2** One quantity or thickness finding on a drawing hides other parts' mismatches on it.
+  `src/domain/fabrication/reconcile.ts:102-107` Confirmed.
+- **S2** Prepare Cut Sheets dead-ends parts lacking quantity, thickness or whole-set counts.
+  `src/desktop/fabrication/service.ts:243-248` Confirmed.
+- **S2** Run Again on an unchanged check keeps the old handoff ID and hides Export Handoff.
+  `src/desktop/fabrication/service.ts:836-844` Confirmed.
+- **S2** Search Longer extra time persists across edits, thickness tabs and Search changes.
+  `src/renderer/layout/nesting/useNestSearch.ts:31-32,85-86,100-103` Confirmed.
+- **S2** Unfittable DXF parts still enable Save Nesting, poison handoffs and break headline.
+  `src/renderer/layout/nesting/NestingPanel.tsx:117-129` Confirmed.
+- **S3** Agents cannot open Layout/Nesting planes; propose_transform hides layout, lists nesting.
+  `src/renderer/layout/commands.ts:16-61`
+- **S3** Agents cannot read saved fabrication checks or run deterministic DXF measurements.
+  `src/desktop/agents/service-catalog.ts:12-95`
+- **S3** Filtering PDF text runs calls quoteOn per run, re-squashing page text up to 3,000 times.
+  `src/desktop/fabrication/service.ts:1058-1060`
+- **S3** Halves and Thirds collages with a large gap emit negative frames that fail Save.
+  `src/domain/layout/collage.ts:355-413`
+- **S3** Layout Output name bypasses FileNameField and Output Form Rule, saving bare '.pdf'.
+  `src/renderer/layout/LayoutPlane.tsx:206-223,377,495-506`
+- **S3** LayoutPlane splits pane.sources on newline, breaking filenames that contain a newline.
+  `src/renderer/layout/LayoutPlane.tsx:103,110`
+- **S3** Nesting Thickness, Speed in inches, Price and total pieces accept values Save rejects.
+  `src/renderer/layout/nesting/NestingSettings.tsx:218-225`
+- **S3** Report.pdf breaks Save Nesting past 2,500 parts on a sheet or 2,000,000 drawn points.
+  `src/domain/layout/nesting/report.ts:339-376`
+- **S3** Requirement review breaks Escape handling, disclosure reuse and primary button rule.
+  `src/renderer/fabrication/CheckPanel.tsx:189-195`
+- **S3** Run Again on a stale check plane pops up a duplicate floating check panel.
+  `src/renderer/fabrication/check.ts:470-486`
+- **S3** Sheet formats table puts role='cell' directly on inputs, hiding their textbox role.
+  `src/renderer/layout/nesting/NestingSettings.tsx:201-225`
+- **S3** verifyNest checks one point per part, missing multi-outline and open-path overlaps.
+  `src/domain/layout/nesting/verify.ts:74-109`
+- **S3** Zero-piece quantity renders '0 sets × NaN pieces = 0 pieces' and fails handoff nesting.
+  `src/domain/fabrication/part-values.ts:15-20`
+
+## Media, transforms and PDF tools
+
+- **S2** Add Audio… with Cut set to Fast leaves the media draft invalid for every later edit.
+  `src/desktop/transforms/media-documents.ts:188-196` Confirmed.
+- **S2** Adding an audio-only segment in Edit Media leaves Format on MP4 and fails export.
+  `src/renderer/media/MediaPlane.tsx:260-267` Confirmed.
+- **S2** Agents cannot read media duration or codecs, so media propose_transform must guess.
+  `src/desktop/agents/tool-catalog.ts:59-71` Confirmed.
+- **S2** Image Tools hides export errors and prints raw job status like 'cancelled'.
+  `src/renderer/media/ImageToolsDialog.tsx:222` Confirmed.
+- **S2** Optimize Limit image dimensions rejects every value over 10,000 px as over 100 MP.
+  `src/domain/operations/optimization.ts:67` Confirmed.
+- **S3** Edit Media lets Export each segment and Export current frame run together, misnaming PNG.
+  `src/renderer/media/MediaPlane.tsx:768-799`
+- **S3** Files saved by Optimize are written with mode 0600, unlike every other export (0644).
+  `src/desktop/transforms/optimization-reviews.ts:400`
+- **S3** Optimize disclosures are neither grouped nor closed on Escape, breaking One Disclosure.
+  `src/renderer/media/OptimizeDialog.tsx:214-218`
+- **S3** Optimize Lossless strips DateTimeOriginal from JPEGs while Balanced and Smaller keep it.
+  `src/desktop/transforms/jpeg-metadata.ts:25-65`
+- **S3** Optimize results table CSS targets wrong columns after adding the Select column.
+  `src/renderer/media/optimization.css:201-215`
+- **S3** PDF Tools Add PDFs… after a failed load leaves the preview stuck on No PDF pages loaded.
+  `src/renderer/pdf-tools/PDFToolsDialog.tsx:152-166`
+- **S3** PDFPagePreview never clears its 15 s slow-load error if the PDF finishes loading later.
+  `src/renderer/pdf-tools/PDFPagePreview.tsx:35-37`
+
+## Previews
+
+- **S2** Audio with embedded cover art takes 720p video path instead of audioCopy.
+  `src/desktop/previews/video-rendition.ts:104` Confirmed.
+- **S2** Binary plist DAG references expand exponentially, freezing Viewer on a 300-byte file.
+  `src/domain/previews/data/plist.ts:59-118` Confirmed.
+- **S2** CompressedPreview portals a second toolbar into the plane header beside its inner view.
+  `src/renderer/previews/modules/CompressedPreview.tsx:96-102` Confirmed.
+- **S2** DXF POINT entities report length 0 and approximate true in UI and agent geometry.
+  `src/domain/previews/drawings/dxf/geometry.ts:421` Confirmed.
+- **S2** In Quick Preview, Cmd+E on a folder or failed file edits the previous text file.
+  `src/renderer/previews/QuickPreview.tsx:51-57` Confirmed.
+- **S2** MediaPreview shows Edit Media button for symlinks and formats the command hides.
+  `src/renderer/previews/modules/MediaPreview.tsx:336` Confirmed.
+- **S2** Multi-page XLSX range copy silently blanks merged cells from earlier pages.
+  `src/desktop/previews/office.ts:220-267` Confirmed.
+- **S2** Opening .xlsm, .xltx or .xltm fails immediately; .docm/.dotx/.dotm drop embedded images.
+  `src/desktop/previews/formats.ts:92-94` Confirmed.
+- **S2** Opening an archive entry hides its name from both toolbar and footer.
+  `src/renderer/previews/modules/ArchivePreview.tsx:87-89` Confirmed.
+- **S2** PDF arrow, Space and Page Up/Down keys do not turn pages after clicking a PDF plane.
+  `src/renderer/previews/modules/PDFPreview.tsx:449-472,634` Confirmed.
+- **S2** read_drawing_geometry returns TEXT and MTEXT rows without their parsed text.
+  `src/domain/previews/drawings/geometry.ts:15` Needs a decision.
+- **S2** Revoking any folder or ejecting a disk closes every open conversation canvas.
+  `src/desktop/previews/web/service.ts:270` Confirmed.
+- **S2** Symlinks whose name differs from their target fail to load over viewer-resource://.
+  `src/desktop/previews/resources.ts:221-222,250-256` Confirmed.
+- **S2** Unknown binary archive entries offer broken disk actions and Git diffs open disk file.
+  `src/renderer/previews/UnknownFile.tsx:179,232-252` Confirmed.
+- **S3** Agents lack bounded read tools for SQLite and archives despite safe desktop readers.
+  `src/desktop/agents/tool-catalog.ts:106-118`
+- **S3** Audio compatibility copies display 720p video copy and video error messages.
+  `src/renderer/previews/modules/MediaPreview.tsx:322`
+- **S3** Canceling PostScript rendering hides Ghostscript scratch Trash failures.
+  `src/desktop/previews/postscript-renderer.ts:174-175`
+- **S3** DXF grid loop freezes renderer permanently when zoomed in on large coordinates.
+  `src/renderer/previews/dxf/canvas.ts:372`
+- **S3** EditorFind ignores Escape on its buttons and flashes "Invalid pattern" on initial open.
+  `src/renderer/previews/editor/EditorFind.tsx:48,81-93,109-129,151-189`
+- **S3** Failed local server start leaks an orphaned server record and locks the pane folder.
+  `src/desktop/previews/web/service.ts:334-344,375-384`
+- **S3** HTMLPreview Reload and ParsedDocument toolbars break Preview Bar overflow and focus.
+  `src/renderer/previews/web/HTMLPreview.tsx:108-149`
+- **S3** Mailbox list mounts up to 10,000 unvirtualized rows and scans DOM on every arrow key.
+  `src/renderer/previews/modules/MailPreview.tsx:296-300,351-371`
+- **S3** Missing model texture with literal percent throws URIError and hides warning.
+  `src/renderer/previews/modules/ModelPreview.tsx:505`
+- **S3** Office files with a backslash in their macOS name fail Layout preview and Save PDF Copy.
+  `src/desktop/previews/office-job.ts:32-38`
+- **S3** Print PDF… stays enabled for Show as and archive PDFs, then fails on click.
+  `src/renderer/previews/modules/PDFPreview.tsx:314-317,385-390,569-576`
+- **S3** TextPreview leaves read-only preview commands active in ⌘K while editing a file.
+  `src/renderer/previews/modules/TextPreview.tsx:239-287`
+- **S3** WebArchive shows CSS/font main resource as broken image and raw HTML entities in title.
+  `src/domain/previews/documents/web-archive.ts:96-99,151-159`
+- **S3** Word document Reading timeout releases PreviewHost's lease, breaking Show as Hex.
+  `src/renderer/previews/useOfficeDocument.ts:43-49`
+
+## Interface controls and styles
+
+- **S2** NumberField turns comma-grouped integers like 1,920 into 2.
+  `src/renderer/ui/NumberField.tsx:9-17` Confirmed.
+- **S2** Pressing outside a button menu still runs controls that act on pointerdown.
+  `src/renderer/ui/Popover.tsx:267-278` Confirmed.
+- **S2** Refocusing NameDialog after editing resets the cursor using the initial text.
+  `src/renderer/ui/primitives.tsx:307-337` Confirmed.
+- **S2** Searchable menus omit combobox role before typing, hiding items from VoiceOver.
+  `src/renderer/ui/ContextMenuResults.tsx:306-315` Confirmed.
+- **S3** File Operations count badge renders square due to undefined --radius-menu.
+  `src/renderer/styles/base.css:660-673`
+- **S3** FileNameField counts UTF-16 units instead of UTF-8 bytes on APFS.
+  `src/renderer/ui/FileNameField.tsx:18-30`
+- **S3** Keyboard focus strips primary accent fill and danger ink in most dialogs.
+  `src/renderer/styles/base.css:160-164`
+- **S3** NumberField inside FormField stretches full width instead of staying compact.
+  `src/renderer/ui/form-fields.css:23-33`
+- **S3** Text CopyButton hides failure reasons from sighted users, especially in Settings.
+  `src/renderer/ui/primitives.tsx:391-394`
+- **S3** useListKeys fails to cycle repeated letters within 1 s and misses NFD names.
+  `src/renderer/ui/useListKeys.ts:8-15`
+
+## Developer tools
+
+- **S2** Accepting a variant-filtered or errored review run drops baselines or saves broken shots.
+  `tools/review/baseline.ts:89-105` Confirmed.
+- **S2** name-extension check misses FileName drops because visually-hidden holds the full name.
+  `tools/review/checks.ts:572-595` Confirmed.
+- **S2** Trash review scene and palette Trash command fail because viewer://trash hits stat.
+  `tools/review/scenes/files.ts:24` Confirmed.
+- **S2** Two checklist scenes always fail on stale selectors for FileNameField and ChoiceMenu.
+  `tools/review/scenes/checklists.ts:309-313` Confirmed.
+- **S2** Uncaptured review scenes show No problems found and count as covered in coverage.
+  `tools/review/coverage.ts:177-180` Confirmed.
+- **S3** Architecture import check allows desktop to import renderer and skips preload files.
+  `tools/architecture/imports.ts:69-89`
+- **S3** boxOf mixes scaled coordinates with unscaled dimensions in expectGap and outlines.
+  `tools/review/page.ts:81-101`
+- **S3** Review sheet blocks keyboard zoom, hides mark state and leaves empty headings on filter.
+  `tools/review/sheet-script.ts:189-220`
+- **S3** Wildcard covers.commands entries never match runtime command IDs in coverage.
+  `tools/review/coverage.ts:189-193`
+
+## Documents and the pages that describe the code
 
 - **S2** Page and code disagree: the turn that creates a canvas gets two minutes, not eight.
-  `src/desktop/chat/service.ts:488`
-- **S2** Privacy policy says model requests run only when you invoke an action; two settings send
-  without one. `docs/release/privacy-policy.md:72`
+  `src/desktop/chat/service.ts:488` Confirmed.
 - **S2** Settings → Privacy says only a model receives data; recordings and photos also leave the
-  Mac. `src/renderer/ui/settings/PrivacyInformation.tsx:4`
+  Mac. `src/renderer/ui/settings/PrivacyInformation.tsx:4` Confirmed.
 - **S3** $$ stays two dollar signs in a named line that has no $1 to $9 or $*.
   `src/domain/command-line/lex.ts:146-150`
 - **S3** A 70 MB OBJ is read whole twice, then refused with a message naming a 128 MB limit.
@@ -183,8 +624,6 @@ How to read an item:
   `src/desktop/transforms/transforms.ts:417`
 - **S3** Contact sheet on a screen size is saved at paper resolution, not at its pixels.
   `src/domain/layout/planner.ts:335`
-- **S3** CONTEXT.md names no owner for folder history, the report window or diagnostics.
-  `src/desktop/files/folder-history.ts`
 - **S3** DESIGN.md gives two minimum window sizes; the window's own minimum is 780 × 560.
   `DESIGN.md:509`
 - **S3** DESIGN.md states seven rules twice in different words. `DESIGN.md:324`
@@ -198,13 +637,10 @@ How to read an item:
   `src/renderer/media/MediaPlane.tsx:257`
 - **S3** Four decisions of the last three days have no ADR; two had no record outside code.
   `src/domain/preferences/shortcuts.ts:355-372`
-- **S3** git_diff advertises a base of at most 200 characters; the service accepts 300.
-  `src/desktop/agents/service-catalog.ts:8`
 - **S3** Go to Folder… cannot open ./ or ../ paths, which the guide lists and ⌘K opens.
   `src/renderer/explorer/GoToFolderDialog.tsx:54`
 - **S3** Interface keeps UK spellings the lint list misses: Aluminium, neighbour, neighbouring.
   `src/domain/layout/nesting/plan.ts:169`
-- **S3** More UK spellings on these pages than the confirmed list holds. `DESIGN.md:453`
 - **S3** Page and code disagree: a custom workflow stopped by a workspace or plane change has no
   step prefix. `src/renderer/commands/programs.ts:359-366`
 - **S3** Page and code disagree: a duplicated tool is called separate, yet it shows Apply to
@@ -231,8 +667,6 @@ How to read an item:
   says 10 mm. `src/domain/layout/suggest.ts:75`
 - **S3** Page and code disagree: Tab takes the first completion, not the highlighted one.
   `src/renderer/command-line/LineFinder.tsx:295-301`
-- **S3** Page and code disagree: testing.md tells readers to run three robot scenarios on the
-  candidate. `docs/development/testing.md:195-228`
 - **S3** Page and code disagree: the Journal shows “cancelled” where the page says “canceled”.
   `src/domain/journal/events.ts:165`
 - **S3** Page and code disagree: the message of a file-changing step cut off by Quit.
@@ -257,8 +691,6 @@ How to read an item:
 - **S3** Some ⌘K command labels stayed in sentence case after the change to Title Case.
   `src/renderer/previews/modules/ModelPreview.tsx:783`
 - **S3** Speech Setup Rule asks for MiB; Settings → Speech shows decimal MB. `DESIGN.md:734`
-- **S3** speech.md, a reader's reference, carries a developer harness walkthrough.
-  `docs/reference/speech.md:106`
 - **S3** Store build offers New Task from Branch…, which can only fail there.
   `src/renderer/commands/programs.ts:81-89`
 - **S3** The guide comments Viewer writes into config.jsonc are stale in six places.

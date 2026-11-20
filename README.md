@@ -123,7 +123,8 @@ Coding agents on your Mac can connect to Viewer, and each change they propose wa
 
 ## Safe with your files
 
-- **Nothing is deleted for good.** Removals go to the Trash, and Undo checks that a file is still
+- **Removals go to the Trash.** Viewer never deletes a file for good unless you choose **Empty
+  Trash…** yourself in the Trash window, after a confirmation, and Undo checks that a file is still
   the one it changed.
 - **Originals stay.** Conversions, layouts and exports make new files.
 - **Copies are instant on APFS.** On the same disk, Viewer clones a file without copying its bytes;

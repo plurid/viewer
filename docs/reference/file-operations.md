@@ -261,8 +261,11 @@ Original locations come from Viewer's own receipts, matched by identity; an item
 need **Put Back To…**. **Date added** is the system's directory date, not a deletion time. Reading
 the macOS Trash can require Full Disk Access, which is separate from folder access.
 
-Viewer never empties the Trash: empty it in Finder. There is no command, API or agent tool that
-empties it.
+Viewer never deletes a file for good unless you choose **Empty Trash…** yourself at the bottom of
+the Trash window and confirm **Empty Trash** in the system dialog. **Empty Trash…** is available
+when every Trash location is readable and the top-level list fits within 4,000 items (up to 100,000
+items or 64 folder levels in all), and stops if the Trash changes before or during erasure. No
+**⌘K** command, CLI command or agent tool can empty the Trash.
 
 ## Agent removals
 

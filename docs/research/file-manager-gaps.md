@@ -48,10 +48,11 @@ The same comparison suggested these, and Viewer has them. Do not add a second ve
 - Renaming many files: **Batch rename…**.
 - Tabs and split view: planes, paired folders that can follow each other, and workspaces.
 - **New Folder with Selection…**, **Duplicate**, **Make Alias** and **Put Back** from the Trash.
+- Emptying the Trash: Viewer never deletes a file for good unless you choose **Empty Trash…**
+  yourself in the Trash window, after a confirmation; agents cannot reach it.
 
 ## Not planned
 
-- **Emptying the Trash.** Viewer never deletes for good. Finder empties the Trash.
 - **Replacing the open and save panels of other apps.** macOS does not let an app take them over.
 - **A system monitor, wallpaper theming, a login screen, quick settings and calendar sync.** They
   belong to a desktop shell, not to a file app.

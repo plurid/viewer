@@ -36,14 +36,15 @@ is named and excerpts are omitted. Viewer sends neither version to its developer
 displayed text on the general clipboard, which other apps can read and macOS may carry to your other
 devices through Universal Clipboard.
 
-The Mac App Store edition uses macOS folder/file authorization. Permissions chosen in a native
-picker are saved privately and can survive relaunch. Clipboard and drag permissions last until Quit
-or revocation. Settings → Permissions lets you inspect and revoke these capabilities. Revocation
-stops affected work and clears related indexes and preview caches. Viewer does not restore revoked
-access by rereading an unchanged clipboard or drag selection. Selecting the items again in a new
-native copy/drag or granting them through the picker can authorize access again. A separately
-authorized parent folder can still provide access. The direct-download edition uses your ordinary
-macOS filesystem permissions.
+The Mac App Store edition uses macOS folder/file authorization. Folder and open-file permissions
+chosen in a native picker are saved privately and can survive relaunch; a file chosen for a single
+export or import, like clipboard and drag permissions, lasts until Quit or revocation. Settings →
+Permissions lets you inspect and revoke these capabilities. Revocation stops affected work and
+clears related indexes and preview caches. Viewer does not restore revoked access by rereading an
+unchanged clipboard or drag selection. Selecting the items again in a new native copy/drag or
+granting them through the picker can authorize access again. A separately authorized parent folder
+can still provide access. The direct-download edition uses your ordinary macOS filesystem
+permissions.
 
 Removing Viewer does not delete your original files. Application records can remain in macOS
 application storage after uninstalling. Do not delete these records while Viewer is running; back up

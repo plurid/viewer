@@ -198,6 +198,12 @@ the comparison conversation; browser access does not grant agent access. The rep
 exact drawing hash, material, thickness, quantity and fictional totals. A changed drawing requires a
 new quote. The server has no external messaging or ordering route. Its temporary files are kept.
 
+The three robot scenarios below (`tests/native/robotics.ts`, `tests/native/robot-targets.ts` and
+`tests/native/robot-comparison.ts`) belong to the retained experiment; see
+[Retained station experiment](#retained-station-experiment). Their fixtures import `viewer/robotics`
+and request `robot-report`, neither of which the current host serves, so run them only against that
+experiment's build, not the current candidate.
+
 `tests/native/robotics.ts` loads the pinned SO-101 follower and all visual meshes through canvas
 snapshots and assets. It checks articulated motion, hard-limit reporting, exact joint source review,
 base translation, cold restart and portable export/import. Its HTML is an explicitly labeled local
@@ -205,8 +211,8 @@ test fixture. It makes no model request and is not evidence of generated control
 collision checking or the completed film.
 
 Download the checksummed corpus to a new retained folder, then run the scenario with
-`VIEWER_ROBOT_CORPUS` pointing to it, `VIEWER_TEST_BINARY` to the candidate, and both preservation
-variables above. Commands run from the repository root:
+`VIEWER_ROBOT_CORPUS` pointing to it, `VIEWER_TEST_BINARY` to that experiment's build, and both
+preservation variables above. Commands run from the repository root:
 
 ```sh
 pnpm exec node --import tsx packages/viewer-electron/app/tools/robotics/fetch-so101.ts /tmp/viewer-so101-corpus
@@ -400,6 +406,35 @@ It checks discovery, default selection, structured output, Ask Viewer, an unavai
 and revocation. The native Allow decision belongs to the operator. Test grants are revoked at the
 end; the original configuration, encrypted credentials and sharing permissions must remain
 unchanged.
+
+### Live speech run
+
+`tools/speech/transcribe-live.ts` sends one WAV recording to Meta's Muse Voice Transcribe exactly as
+hosted speech in the app does. With `--plan`, Muse Spark then reads the transcript into a plan for a
+job folder shown as Job 1042, through the app's own prompt and checks, beside Viewer's own matching.
+It writes nothing.
+
+1. Record a request, or have macOS speak one:
+   `say --file-format=WAVE --data-format=LEI16@16000 -o request.wav "Check this job and prepare the cut sheets"`.
+   Any 16-bit PCM WAV at 16 kHz or more works; `afconvert -f WAVE -d LEI16@16000 -c 1` converts
+   another recording.
+2. Set `META_API_KEY` in the environment. The run reads the key from there only and holds it in
+   memory: it never prints, writes or logs it.
+3. From the repository root, run
+   `node --import tsx packages/viewer-electron/app/tools/speech/transcribe-live.ts request.wav --plan`.
+   It prints the transcript, the model, the audio's length and the time the call took, then each
+   plan.
+
+| Option              | Effect                                                                        |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `--language en`     | The language, as **Language** in **Settings → Speech**; detected unless given |
+| `--model <id>`      | Another transcription model; `muse-voice-transcribe-1.0` unless given         |
+| `--plan`            | Also plans the transcript with Muse Spark, at the `names` level               |
+| `--plan-model <id>` | Another Muse Spark model; `muse-spark-1.3` unless given                       |
+| `--text "<words>"`  | Plans these words with Muse Spark, without audio                              |
+
+A run with a recording makes one transcription call. `--plan` or `--text` adds one Muse Spark call,
+and `--text` alone makes no transcription call.
 
 ## Canvas evaluation and replay
 

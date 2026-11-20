@@ -44,7 +44,7 @@ one workspace. See [spatial development](spatial-development.md) and the
 The selected task uses the real SO-101 definition with assigned station geometry: a 600 × 400 mm
 bench, two trays and six tool targets at Z 80 mm. The targets have X 440/520 mm and Y 100/160/220
 mm. Four candidate mounting points are Existing (40,180), Central (200,180), Front (220,40) and Rear
-(300,320), in millimetres with zero rotation. The tool is the gripper-frame origin. Endpoint
+(300,320), in millimeters with zero rotation. The tool is the gripper-frame origin. Endpoint
 tolerance is 1 mm.
 
 The retained offline experiment produced passing candidates for 3/6 targets at Existing and 6/6 at
@@ -84,7 +84,7 @@ pinned SO-ARM100 parts list identifies those clamps. The base STEP is
 [`STEP/SO101/Base_SO101.step`](https://github.com/TheRobotStudio/SO-ARM100/blob/a758567c3978dfeefe282ede0500085a48fe8f78/STEP/SO101/Base_SO101.step).
 Its source-frame envelope measures 110.925 × 72 × 87 mm; this is an envelope, not a bolt pattern.
 The STEP's axes differ from the assembled URDF frame. The demo starts with a 160 × 140 × 6 mm
-aluminium plate and four 6.5 mm holes on a 120 × 100 mm pitch, then changes its width to 180 mm.
+aluminum plate and four 6.5 mm holes on a 120 × 100 mm pitch, then changes its width to 180 mm.
 These are assigned scenario inputs, not dimensions measured from the robot. Physical fit and
 fabrication are outside the fictional job; they require no confirmation before filming.
 

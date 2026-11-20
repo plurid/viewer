@@ -229,12 +229,17 @@ filter and how to save a search.
 ## Trash and Put Back
 
 **⌘⌫** (**Move to Trash…**) moves the selection to the operating system's Trash. Viewer never
-deletes a file for good. Closing a plane only closes its view; it never deletes files.
+deletes a file for good unless you choose **Empty Trash…** yourself in the Trash window, after a
+confirmation. Closing a plane only closes its view; it never deletes files.
 
 To get a file back, choose **Trash** in the sidebar, select the item and choose **Put Back**. Choose
 **Put Back To…** when Viewer does not know where the file came from, which is the case for files
 trashed by other apps. Browsing the Trash needs Full Disk Access for Viewer in **System Settings →
 Privacy & Security**.
+
+To erase what the Trash holds, choose **Empty Trash…** at the bottom of the Trash window. macOS asks
+first, with the number of items; after **Empty Trash** they cannot be recovered. Agents, commands
+and the CLI cannot do this.
 
 ## Share a folder with a Windows PC
 

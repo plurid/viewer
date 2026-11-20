@@ -98,8 +98,9 @@ uses actual file reads with in-memory SQLite. Treat its timings as local synthet
 application-wide latency or network-volume guarantees. All fixtures and the result remain.
 
 `tools/index-benchmark.ts` measures synthetic SQLite metadata queries independently of filesystem
-crawling and content extraction. Keep those costs separate from mounted-provider latency and
-first-open parsing.
+crawling and content extraction; run it with `VIEWER_TEST_PRESERVE=1` and
+`VIEWER_TEST_NO_REMOVAL=1`, as above, so its temporary folder is kept. Keep those costs separate
+from mounted-provider latency and first-open parsing.
 
 `tests/native/preview-latency.ts` times Quick Preview from the Space key to the first frame with
 content, in the page itself, for a small EPUB, DOCX, XLSX, PDF, DjVu, JPEG and Markdown file, and

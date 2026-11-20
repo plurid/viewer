@@ -47,7 +47,7 @@ refused. Every path argument must be inside the client's folders.
 | `query_table`           | `content`, named                                              | A row window of a CSV, TSV or XLSX file (also XLSM, XLTX and XLTM): `offset` 0 to 100,000, `limit` 1 to 200 (default 100), `sheet` for XLSX (default: the first visible sheet). Stored values and formula text; no formula runs |
 | `read_drawing_geometry` | `content`, named                                              | DXF entity bounds, lengths, areas and radii: `offset` 0 to 50,000, `limit` 1 to 100 (default 50), optional `layer` and `points`. Units are declared, never guessed                                                              |
 | `git_status`            | `metadata`                                                    | Git status of the checkout that contains `path`                                                                                                                                                                                 |
-| `git_diff`              | `content`, named                                              | A bounded tracked-file diff against `base`, a branch or commit (default `HEAD`)                                                                                                                                                 |
+| `git_diff`              | `metadata`, `content`, named                                  | A bounded tracked-file diff against `base`, a branch or commit (default `HEAD`)                                                                                                                                                 |
 | `read_terminal`         | `terminal-read` and a [terminal read grant](#terminal-output) | A terminal's folder and the last 128,000 characters it showed. `id` is the terminal plane's ID from `list_planes`                                                                                                               |
 
 When `search_files` omits `content`, it searches document text if the client holds `content`, and
@@ -80,7 +80,7 @@ opens many planes. The shared connection's navigation always waits.
 | `propose_config`      | `propose`                                             | Proposes up to 100 configuration patches; see [configuration an agent may change](#configuration-an-agent-may-change)                                                  |
 | `propose_transform`   | `propose`, `content`                                  | Proposes an image, PDF, PDF pages, media or layout export: `sources` (1 to 16), `destination` folder, output `name` and a typed `plan`. Creates a new file             |
 | `run_action`          | `propose`; `content` for a recipe that reads contents | Starts a recipe (`recipeID`) on up to 2,000 `sources`, with optional `instructions` (up to 12,000 characters) and `recursive`. Returns `applyRequiresUserReview: true` |
-| `ask_in_words`        | `propose`                                             | Asks the person's model to turn a `prompt` (up to 12,000 characters) into a checked command proposal; nothing runs                                                     |
+| `ask_in_words`        | `metadata`, `propose`                                 | Asks the person's model to turn a `prompt` (up to 12,000 characters) into a checked command proposal; nothing runs                                                     |
 | `propose_task_create` | `propose`, `navigation`                               | Proposes a worktree and task area: `name`, `repo`, destination `path`, `branch`, optional `base` or `existing`, and `workspace`. The terminal stays stopped            |
 
 `propose_task_create` is available in the direct build only, and a prepared task expires after 5
@@ -95,14 +95,14 @@ agent-started actions to send the same data** for it ([Add a model](#add-a-model
 
 ### Run workflows
 
-| Tool              | Needs                       | What it does                                                                                                                            |
-| ----------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `read_workflow`   | `content`, named            | Reads and validates a granted workflow `file` without running it                                                                        |
-| `run_workflow`    | `content`, `propose`, named | Runs a workflow `file` for the focused granted folder, with optional `bindings` (name to absolute path). Mutation steps prepare reviews |
-| `list_workflows`  | `content`, named            | The client's own workflow runs that its current folders still cover                                                                     |
-| `get_workflow`    | `content`, `propose`, named | Reads one of the client's runs by `id`                                                                                                  |
-| `resume_workflow` | `content`, `propose`, named | Resumes one of the client's runs                                                                                                        |
-| `cancel_workflow` | `metadata`                  | Cancels one of the client's runs                                                                                                        |
+| Tool              | Needs                                   | What it does                                                                                                                            |
+| ----------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `read_workflow`   | `metadata`, `content`, named            | Reads and validates a granted workflow `file` without running it                                                                        |
+| `run_workflow`    | `metadata`, `content`, `propose`, named | Runs a workflow `file` for the focused granted folder, with optional `bindings` (name to absolute path). Mutation steps prepare reviews |
+| `list_workflows`  | `metadata`, `content`, named            | The client's own workflow runs that its current folders still cover                                                                     |
+| `get_workflow`    | `metadata`, `content`, `propose`, named | Reads one of the client's runs by `id`                                                                                                  |
+| `resume_workflow` | `metadata`, `content`, `propose`, named | Resumes one of the client's runs                                                                                                        |
+| `cancel_workflow` | `metadata`                              | Cancels one of the client's runs                                                                                                        |
 
 The workflow format is in [workflows and watch rules](automation.md).
 

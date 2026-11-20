@@ -340,8 +340,10 @@ discovery.
   workspace's name and common folder. An existing entry must use **Save to Definition**.
 
 Manage's **Open** tab offers **Close** for defined workspaces and **Delete** for ad-hoc workspaces.
-The **Defined** tab shows **Remembers**, **Rich**, **Curated**, **Hidden** and **Folder missing**
-badges. Its problem disclosure shows diagnostics without covering the list.
+The **Defined** tab shows **Found**, remembered-plane counts (such as **Remembers 2 planes**), what
+a multi-plane or custom definition opens (such as **Opens 3 planes** or **Has its own look**),
+**Asks before saving**, **Hidden** and **Folder missing** badges. Its problem disclosure shows
+diagnostics without covering the list.
 
 If a valid catalog no longer contains a standalone definition’s key, its row says the definition was
 removed. **Delete** and **Save as Definition…** become available. Project Manager and override links
