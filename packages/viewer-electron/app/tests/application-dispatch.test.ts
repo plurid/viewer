@@ -269,6 +269,36 @@ describe('native application menu dispatch', () => {
     expect(host.workspaceCommand).not.toHaveBeenCalled();
   });
 
+  it('passes the focused workspace window to workspaceCommand without targeting peers', async () => {
+    const workspace = menuWindow();
+    const host = {
+      ...menuHost(),
+      isWorkspaceWindow: vi.fn((candidate: ReturnType<typeof menuWindow>) => candidate === workspace),
+    };
+    host.focusedWindow.mockReturnValue(workspace);
+    await dispatchApplicationCommand('trash', host);
+    expect(host.workspaceCommand).toHaveBeenCalledExactlyOnceWith('trash', workspace);
+  });
+
+  it('routes Edit commands to a focused native page window and drops workspace commands', async () => {
+    const workspace = menuWindow();
+    const settings = menuWindow();
+    const page = menuWindow();
+    const host = {
+      ...menuHost(),
+      isWorkspaceWindow: vi.fn((candidate: ReturnType<typeof menuWindow>) => candidate === workspace),
+    };
+    host.settingsWindow.mockReturnValue(settings);
+    host.focusedWindow.mockReturnValue(page);
+    await dispatchApplicationCommand('copy', host);
+    await dispatchApplicationCommand('undo-file', host);
+    await dispatchApplicationCommand('trash', host);
+    await dispatchApplicationCommand('duplicate', host);
+    expect(page.webContents.copy).toHaveBeenCalledOnce();
+    expect(page.webContents.undo).toHaveBeenCalledOnce();
+    expect(host.workspaceCommand).not.toHaveBeenCalled();
+  });
+
   it('propagates application creation failure instead of falling back to a renderer command', async () => {
     const host = menuHost();
     host.newWindow.mockRejectedValue(new Error('Window unavailable'));

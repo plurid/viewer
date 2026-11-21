@@ -1,6 +1,9 @@
 import { EventEmitter } from 'node:events';
 import { expect, it, vi } from 'vitest';
 import type { ViewerAPI } from '../src/domain/contracts';
+import { failedFlush } from '../src/domain/persistence/flush';
+import { createWindowHandlers } from '../src/desktop/ipc/window-handlers';
+import { WindowFlushRequests } from '../src/desktop/windows/flush-requests';
 import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
 import { schemas, settingsEvents, methodWindows } from '../src/desktop/ipc/schemas';
 import { sampleDefinition } from './workspace-definition-fixtures';
@@ -187,4 +190,36 @@ it('tags IPC requests with the active viewerDispatch ID and omits it once cleare
   expect(ipc.invoke).toHaveBeenLastCalledWith('viewer:request', 'declaredCommands', [
     '/projects/sample',
   ]);
+});
+
+it('forwards failed flushed() results through preload so save barriers reject instead of closing', async () => {
+  await import('../src/preload');
+  const flushes = new WindowFlushRequests();
+  const handlers = createWindowHandlers({
+    host: { openSettings: vi.fn(async () => {}) },
+    shellCommand: {
+      status: vi.fn(async () => ({ installed: false, path: '', target: '', executable: false })),
+      install: vi.fn(async () => ({ installed: true, path: '', target: '', executable: true })),
+      uninstall: vi.fn(async () => ({ installed: false, path: '', target: '', executable: false })),
+    },
+    sessions: { owner: vi.fn(), claim: vi.fn(() => true) },
+    flushes,
+    window: vi.fn(),
+    isSettings: vi.fn(() => false),
+    assignWorkspace: vi.fn(),
+    createWorkspace: vi.fn(() => 'ws-1'),
+  });
+  ipc.invoke.mockImplementationOnce(async (_channel: string, method: string, args: unknown[]) => {
+    expect(method).toBe('flushed');
+    handlers.flushed(schemas.flushed.parse(args), 7);
+    return { ok: true };
+  });
+  let token = '';
+  const barrier = flushes.request(7, 'flush', (issued) => {
+    token = issued;
+  });
+  const failed = failedFlush(new Error('Disk full'));
+  await bridge.api!.flushed(token, failed);
+  expect(ipc.invoke).toHaveBeenLastCalledWith('viewer:request', 'flushed', [token, failed]);
+  await expect(barrier).rejects.toThrow('Disk full');
 });

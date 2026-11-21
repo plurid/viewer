@@ -14,7 +14,7 @@ How to read an item:
 - Findings about security, an agent acting beyond its grant, or losing files are kept out of this
   page until they are fixed.
 
-Open here: 313 (S1 0, S2 99, S3 214); 98 confirmed.
+Open here: 255 (S1 0, S2 81, S3 174); 81 confirmed.
 
 ## Decisions for the owner
 
@@ -28,18 +28,12 @@ Open here: 313 (S1 0, S2 99, S3 214); 98 confirmed.
 
 - **S2** Copy Event ID never copies: the ID is sent as a path and the request is refused.
   `src/renderer/journal/JournalPlane.tsx:404` Confirmed.
-- **S2** Copy then Paste in the same folder fails: “Source and destination are the same.”.
-  `src/desktop/operations/destinations.ts:31` Confirmed.
-- **S2** Copying a locked file, a read-only folder or a Home folder such as Documents always fails.
-  `src/desktop/operations/file-transfer.ts:279` Confirmed.
 - **S2** Direct build: Allow Folder Access… cannot open a folder that macOS refused.
   `src/renderer/ui/permissions/FolderAccessButton.tsx:18-31` Confirmed.
 - **S2** Document-text search with two or more words shows no passage unless the words are adjacent.
   `src/domain/files/inspection.ts:215` Confirmed.
 - **S3** A batch rename that swaps or shifts names leaves lens groups and Map places on the wrong
   files. `src/domain/files/lenses.ts:294`
-- **S3** A checkpoint cut short by a crash leaves its partial copy in private data for good.
-  `src/desktop/operations/checkpoints.ts:220-232`
 - **S3** A checkpoint whose removal failed is described as 'This copy was not finished'.
   `src/renderer/ui/operations/Checkpoints.tsx:44`
 - **S3** A closed or reloaded window leaves its folder watches running until Viewer quits.
@@ -48,26 +42,18 @@ Open here: 313 (S1 0, S2 99, S3 214); 98 confirmed.
   `src/domain/files/folder-checks.ts:59`
 - **S3** A plane keeps a folder's old rows after Finder ejects its disk or another app renames it.
   `src/desktop/files/directory-watch.ts:48-54`
-- **S3** A save, Undo or Clear Finished fails while New Folder waits at its name prompt.
-  `src/desktop/operations/operations.ts:1416`
 - **S3** A second click on Skip or Keep Both answers the next file's name prompt unseen.
   `src/renderer/operations/OperationsPanel.tsx:161`
 - **S3** After Clear Finished, Command-Z undoes the oldest file operation, not the latest.
   `src/renderer/state/jobs.ts:84`
 - **S3** After Move History to Trash…, Command-Z fails every time and blocks Undo of earlier jobs.
   `src/desktop/journal/handlers.ts:90`
-- **S3** An interrupted job loses its Undo at the second launch and gains an error at every launch.
-  `src/desktop/operations/operations.ts:281`
-- **S3** An Undo refused while it runs turns its job into a failed, interrupted one at relaunch.
-  `src/desktop/operations/operations.ts:979`
 - **S3** Backspace while a Trash folder loads jumps to the top of the Trash, not to the parent.
   `src/renderer/ui/trash/Trash.tsx:454`
 - **S3** Cancelling a change review leaves its plan pending; large reviews are then refused for
   good. `src/renderer/ui/operations/OperationReview.tsx:31`
 - **S3** Columns view shows only "Can't open this folder" for a folder whose path holds a backslash.
   `src/domain/files/paths.ts:27`
-- **S3** Compress to ZIP fails with “Unsafe archive path.” for a name with a slash or colon.
-  `src/desktop/operations/archive-jobs.ts:33`
 - **S3** Copying a locked item fails: its staged copy inherits the lock and cannot be published.
   `tools/macos-files.mm:295`
 - **S3** Eject and Revoke wait for a running duplicate or compare hash to finish its file.
@@ -80,8 +66,6 @@ Open here: 313 (S1 0, S2 99, S3 214); 98 confirmed.
   `src/desktop/bridge.ts:2541`
 - **S3** Journal search drops each typed space, so a two-word search cannot be typed.
   `src/renderer/journal/JournalPlane.tsx:128`
-- **S3** Keep both and Duplicate split a folder's or dotted name at its last dot: “v1 copy.2”.
-  `src/desktop/operations/file-transfer.ts:152`
 - **S3** Last hour is stored as a fixed start time and the control then reads Time range….
   `src/renderer/journal/JournalPlane.tsx:171`
 - **S3** Lens name rules and member matching fold case by the system language, so img* misses IMG
@@ -94,12 +78,8 @@ Open here: 313 (S1 0, S2 99, S3 214); 98 confirmed.
   `tests/trash-presentation.test.ts:1`
 - **S3** Put Back and Apply Changes wait in silence behind any running job or unanswered name
   prompt. `src/desktop/ipc/access-handlers.ts:102`
-- **S3** Put Back forgets where an item came from once 100 later jobs have finished.
-  `src/desktop/operations/operations.ts:384-397`
 - **S3** Put Back still answers 'N items restored.' and its errors still say Restore.
   `src/renderer/ui/trash/Trash.tsx:193`
-- **S3** Put Back waits without a word while any job sits at its collision prompt.
-  `src/desktop/ipc/access-handlers.ts:102-104`
 - **S3** Save Export… after the system panel's Replace shows 'EEXIST: file already exists'.
   `src/desktop/journal/handlers.ts:71`
 - **S3** Schema text reaches the person: over 1,000 Trash items, or an emptied name in a review.
@@ -108,8 +88,6 @@ Open here: 313 (S1 0, S2 99, S3 214); 98 confirmed.
   in two runs. `src/domain/files/entries.ts:119`
 - **S3** Store: a looping link cannot be trashed, and trying releases the folder's permission.
   `src/desktop/files/file-access.ts:232-245`
-- **S3** Undo of a large job rewrites the whole remaining Undo list after every step.
-  `src/desktop/operations/operation-journal.ts:483-488`
 
 ## Windows, saved state and the app shell
 
@@ -165,47 +143,6 @@ Open here: 313 (S1 0, S2 99, S3 214); 98 confirmed.
   `src/desktop/persistence/storage.ts:538`
 - **S3** View menu shows "Hide" for default-hidden chrome when no workspace window is open.
   `src/desktop/windows/application-menu.ts:28-43,255-284`
-
-## Agents, actions and automation
-
-- **S2** A request that timed out for the agent still runs in Viewer, with those queued behind it.
-  `src/desktop/agents/mcp-client.ts:159-166` Confirmed.
-- **S2** report_session refuses every new session once 100 exist, and none can be removed.
-  `src/desktop/agents/sessions.ts:83-84` Confirmed.
-- **S3** A command run from an empty workspace keeps no receipt; Open Receipt fails.
-  `src/desktop/actions/receipts.ts:61`
-- **S3** A prepared review cannot be discarded; recovered tasks stay pending; 100 block actions.
-  `src/renderer/actions/ActionHub.tsx:667`
-- **S3** A request near or over 65,536 bytes drops the connection or gets a reply with id null.
-  `src/desktop/agents/mcp-client.ts:143-147`
-- **S3** A run stopped by a withdrawn approval is marked failed with no reason shown.
-  `src/desktop/automation/workflows.ts:324`
-- **S3** Command output shows replacement characters where a chunk splits a character.
-  `src/desktop/actions/executions.ts:296`
-- **S3** Create… in a folder that has a workflow fails with a 'changed on disk' message.
-  `src/renderer/ui/automation/Workflows.tsx:207`
-- **S3** Dead-end errors and gaps in the tool set: no way to list own proposals or tasks.
-  `src/desktop/agents/agent-broker.ts:1153-1156`
-- **S3** Every agent tool call waits for the whole activity file to be rewritten and synced.
-  `src/desktop/agents/agent-broker.ts:617-624`
-- **S3** Generating the shared configuration disconnects every named client as well.
-  `src/desktop/agents/agent-broker.ts:282-290`
-- **S3** Neither the review nor the system dialog says which agent client asked.
-  `src/renderer/actions/AgentReview.tsx:59`
-- **S3** Quit never finishes when a command left a detached process holding its output.
-  `src/desktop/actions/executions.ts:299`
-- **S3** Rename as book on a few hundred PDFs fails: Application metadata exceeds its limit.
-  `src/desktop/actions/planner.ts:475`
-- **S3** The shared connection has no recipe task budget and can fill all 100 plans.
-  `src/desktop/agents/agent-broker.ts:1108-1118`
-- **S3** The system dialog for a large Trash request cuts its path list without saying so.
-  `src/desktop/native/native-confirmation.ts:21-37`
-- **S3** Watch rule can never be enabled or removed after its last run's history is removed.
-  `src/desktop/automation/watch-rules.ts:361`
-- **S3** Watch rule interval: reference says 30 seconds to 24 hours, interface offers three.
-  `src/renderer/ui/automation/WatchRules.tsx:267`
-- **S3** Watch rule runs one second after the first change, on files still being written.
-  `src/desktop/automation/watch-rules.ts:351`
 
 ## Models, chat and speech
 
@@ -493,65 +430,6 @@ Open here: 313 (S1 0, S2 99, S3 214); 98 confirmed.
   `src/renderer/pdf-tools/PDFToolsDialog.tsx:152-166`
 - **S3** PDFPagePreview never clears its 15 s slow-load error if the PDF finishes loading later.
   `src/renderer/pdf-tools/PDFPagePreview.tsx:35-37`
-
-## Previews
-
-- **S2** Audio with embedded cover art takes 720p video path instead of audioCopy.
-  `src/desktop/previews/video-rendition.ts:104` Confirmed.
-- **S2** Binary plist DAG references expand exponentially, freezing Viewer on a 300-byte file.
-  `src/domain/previews/data/plist.ts:59-118` Confirmed.
-- **S2** CompressedPreview portals a second toolbar into the plane header beside its inner view.
-  `src/renderer/previews/modules/CompressedPreview.tsx:96-102` Confirmed.
-- **S2** DXF POINT entities report length 0 and approximate true in UI and agent geometry.
-  `src/domain/previews/drawings/dxf/geometry.ts:421` Confirmed.
-- **S2** In Quick Preview, Cmd+E on a folder or failed file edits the previous text file.
-  `src/renderer/previews/QuickPreview.tsx:51-57` Confirmed.
-- **S2** MediaPreview shows Edit Media button for symlinks and formats the command hides.
-  `src/renderer/previews/modules/MediaPreview.tsx:336` Confirmed.
-- **S2** Multi-page XLSX range copy silently blanks merged cells from earlier pages.
-  `src/desktop/previews/office.ts:220-267` Confirmed.
-- **S2** Opening .xlsm, .xltx or .xltm fails immediately; .docm/.dotx/.dotm drop embedded images.
-  `src/desktop/previews/formats.ts:92-94` Confirmed.
-- **S2** Opening an archive entry hides its name from both toolbar and footer.
-  `src/renderer/previews/modules/ArchivePreview.tsx:87-89` Confirmed.
-- **S2** PDF arrow, Space and Page Up/Down keys do not turn pages after clicking a PDF plane.
-  `src/renderer/previews/modules/PDFPreview.tsx:449-472,634` Confirmed.
-- **S2** read_drawing_geometry returns TEXT and MTEXT rows without their parsed text.
-  `src/domain/previews/drawings/geometry.ts:15` Needs a decision.
-- **S2** Revoking any folder or ejecting a disk closes every open conversation canvas.
-  `src/desktop/previews/web/service.ts:270` Confirmed.
-- **S2** Symlinks whose name differs from their target fail to load over viewer-resource://.
-  `src/desktop/previews/resources.ts:221-222,250-256` Confirmed.
-- **S2** Unknown binary archive entries offer broken disk actions and Git diffs open disk file.
-  `src/renderer/previews/UnknownFile.tsx:179,232-252` Confirmed.
-- **S3** Agents lack bounded read tools for SQLite and archives despite safe desktop readers.
-  `src/desktop/agents/tool-catalog.ts:106-118`
-- **S3** Audio compatibility copies display 720p video copy and video error messages.
-  `src/renderer/previews/modules/MediaPreview.tsx:322`
-- **S3** Canceling PostScript rendering hides Ghostscript scratch Trash failures.
-  `src/desktop/previews/postscript-renderer.ts:174-175`
-- **S3** DXF grid loop freezes renderer permanently when zoomed in on large coordinates.
-  `src/renderer/previews/dxf/canvas.ts:372`
-- **S3** EditorFind ignores Escape on its buttons and flashes "Invalid pattern" on initial open.
-  `src/renderer/previews/editor/EditorFind.tsx:48,81-93,109-129,151-189`
-- **S3** Failed local server start leaks an orphaned server record and locks the pane folder.
-  `src/desktop/previews/web/service.ts:334-344,375-384`
-- **S3** HTMLPreview Reload and ParsedDocument toolbars break Preview Bar overflow and focus.
-  `src/renderer/previews/web/HTMLPreview.tsx:108-149`
-- **S3** Mailbox list mounts up to 10,000 unvirtualized rows and scans DOM on every arrow key.
-  `src/renderer/previews/modules/MailPreview.tsx:296-300,351-371`
-- **S3** Missing model texture with literal percent throws URIError and hides warning.
-  `src/renderer/previews/modules/ModelPreview.tsx:505`
-- **S3** Office files with a backslash in their macOS name fail Layout preview and Save PDF Copy.
-  `src/desktop/previews/office-job.ts:32-38`
-- **S3** Print PDF… stays enabled for Show as and archive PDFs, then fails on click.
-  `src/renderer/previews/modules/PDFPreview.tsx:314-317,385-390,569-576`
-- **S3** TextPreview leaves read-only preview commands active in ⌘K while editing a file.
-  `src/renderer/previews/modules/TextPreview.tsx:239-287`
-- **S3** WebArchive shows CSS/font main resource as broken image and raw HTML entities in title.
-  `src/domain/previews/documents/web-archive.ts:96-99,151-159`
-- **S3** Word document Reading timeout releases PreviewHost's lease, breaking Show as Hex.
-  `src/renderer/previews/useOfficeDocument.ts:43-49`
 
 ## Interface controls and styles
 

@@ -439,7 +439,8 @@ function menu(): void {
       focusedWindow: () => BrowserWindow.getFocusedWindow(),
       settingsWindow: () => settingsWindow,
       reportWindow: () => reports.window,
-      workspaceCommand: (id) => desktop?.emit({ type: 'command', command: id }),
+      isWorkspaceWindow: (candidate) => viewerWindows.has(candidate),
+      workspaceCommand: (id, target) => desktop?.sendCommand(id, target),
     }).catch(reportApplicationCommandFailure);
   };
   installApplicationMenu(

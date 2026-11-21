@@ -196,6 +196,12 @@ export class Chats {
     return actual;
   }
 
+  private async authorizeTarget(principal: Principal, target: CapturedTarget): Promise<void> {
+    if (target.paneID !== 'none' && target.rootID !== 'none')
+      await this.authorize(principal, target.directory);
+    for (const file of target.selection) await this.authorize(principal, file.path);
+  }
+
   async authorizeProposal(proposal: AgentProposal): Promise<void> {
     const principal = this.principals.get((proposal.clientID ?? '').slice(5));
     if (!principal || !this.ports.valid(principal.owner, principal.target))
@@ -203,7 +209,12 @@ export class Chats {
     if (proposal.kind === 'terminal-write' || proposal.removal)
       throw new Error('Chat cannot execute terminal input or remove files.');
     if (proposal.commandID) this.commandAllowed(principal, proposal.commandID);
-    for (const file of proposal.target?.selection ?? []) await this.authorize(principal, file.path);
+    if (proposal.kind === 'command' && !proposal.target)
+      throw new Error('The conversation origin changed. Request a new proposal.');
+    if (proposal.target && proposal.kind !== 'configuration')
+      await this.authorizeTarget(principal, proposal.target);
+    else
+      for (const file of proposal.target?.selection ?? []) await this.authorize(principal, file.path);
   }
 
   private commandAllowed(principal: Principal, id: string): void {
@@ -748,6 +759,7 @@ export class Chats {
       let proposal: { id: string };
       if (step.kind === 'command') {
         this.commandAllowed(principal, step.commandID ?? '');
+        await this.authorizeTarget(principal, principal.target);
         proposal = await this.ports.command(
           step.commandID!,
           principal.target,

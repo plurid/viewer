@@ -221,7 +221,8 @@ const api: ViewerAPI = {
   save: (state, visitSave) => invoke('save', state, visitSave),
   folderHistory: () => invoke('folderHistory'),
   folderCheck: (path) => invoke('folderCheck', path),
-  flushed: (token) => invoke('flushed', token),
+  flushed: (token, result) =>
+    result === undefined ? invoke('flushed', token) : invoke('flushed', token, result),
   clipboardWrite: (files, cut) => invoke('clipboardWrite', files, cut),
   clipboardWriteText: (text) => invoke('clipboardWriteText', text),
   copyPaths: (files) => invoke('copyPaths', files),

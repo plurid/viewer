@@ -23,7 +23,8 @@ export async function dispatchApplicationCommand<Window extends MenuWindow>(
     focusedWindow(): Window | null;
     settingsWindow(): Window | null;
     reportWindow?(): Window | undefined;
-    workspaceCommand(command: string): void;
+    isWorkspaceWindow?(window: Window): boolean;
+    workspaceCommand(command: string, target?: Window): void;
   },
 ): Promise<void> {
   // Application actions cannot depend on a renderer or a focused native window.
@@ -33,12 +34,18 @@ export async function dispatchApplicationCommand<Window extends MenuWindow>(
   if (command === 'check-for-updates') return host.checkForUpdates();
   if (command === 'acknowledgements') return host.acknowledgements();
   const focused = host.focusedWindow();
-  if (focused && (focused === host.settingsWindow() || focused === host.reportWindow?.())) {
+  const nonWorkspace =
+    focused &&
+    (host.isWorkspaceWindow
+      ? !host.isWorkspaceWindow(focused)
+      : focused === host.settingsWindow() || focused === host.reportWindow?.());
+  if (nonWorkspace) {
     const action = settingsEdits[command];
     if (action) focused.webContents[action]();
     return;
   }
-  host.workspaceCommand(command);
+  if (focused) host.workspaceCommand(command, focused);
+  else host.workspaceCommand(command);
 }
 
 /** Allocate a fresh workspace, never reusing another window's active workspace or profile. */

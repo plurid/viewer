@@ -19,7 +19,9 @@ import type { ChatDocument, ChatReply, ChatStep } from '../src/domain/models/cha
 import { chatStepSchema } from '../src/domain/models/chat';
 import { canvasLimits } from '../src/domain/canvases/document';
 import { canvasModelMessages } from '../src/desktop/chat/model-context';
+import type { AgentProposal } from '../src/domain/agents/requests';
 import type { CapturedTarget } from '../src/domain/automation/actions';
+import { entry } from '../src/desktop/files/filesystem';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const provider: ModelProvider = {
@@ -869,5 +871,124 @@ describe('read-only Chat', () => {
         2,
       ),
     ).rejects.toThrow('another window');
+  });
+
+  it('rejects command proposals targeting a directory outside attached conversation scopes', async () => {
+    const notesFile = path.join(root, 'context', 'notes.txt');
+    const sensitiveDir = path.join(root, 'sensitive');
+    const sensitiveFile = path.join(sensitiveDir, 'secret.txt');
+    await mkdir(sensitiveDir);
+    await writeFile(sensitiveFile, 'Sensitive');
+
+    // Single-file scope does not grant folder commands on its parent directory.
+    const fileOnly = document(
+      await chat.request({ kind: 'create', paths: [notesFile] }, 1, origin),
+    );
+    command.mockResolvedValue({ id: '10a21b40-72b2-46d4-85ad-d76cfba84d7a' });
+    generate
+      .mockResolvedValueOnce(step('command', { commandID: 'hidden', text: 'Toggle hidden' }))
+      .mockResolvedValueOnce(step('reply', { text: 'Proposed.' }));
+    await send(fileOnly.id);
+    const fileOnlyResult = await settled(fileOnly.id);
+    expect(fileOnlyResult.status).toBe('failed');
+    expect(fileOnlyResult.error).toContain('outside the attached conversation context');
+    expect(command).not.toHaveBeenCalled();
+
+    const fileOnlyProposal: AgentProposal = {
+      id: '10a21b40-72b2-46d4-85ad-d76cfba84d7a',
+      clientID: 'chat:' + fileOnly.id,
+      kind: 'command',
+      title: 'Toggle hidden',
+      commandID: 'hidden',
+      target: structuredClone(origin.target),
+      detail: 'Run Toggle hidden for the captured selection.',
+      status: 'review',
+    };
+    await expect(chat.authorizeProposal(fileOnlyProposal)).rejects.toThrow(
+      'outside the attached conversation context',
+    );
+
+    // Reopening a folder-scoped conversation from an unrelated directory refuses commands there.
+    const folderScoped = await create();
+    await chat.close();
+    chat = new Chats(path.join(root, 'private'), ports);
+    const sensitiveOrigin = {
+      ...origin,
+      target: {
+        ...origin.target,
+        paneID: 'p-other',
+        directory: sensitiveDir,
+        selection: [],
+      },
+    };
+    await chat.request({ kind: 'open', id: folderScoped.id }, 1, sensitiveOrigin);
+    generate.mockReset();
+    generate
+      .mockResolvedValueOnce(step('command', { commandID: 'hidden', text: 'Toggle hidden' }))
+      .mockResolvedValueOnce(step('reply', { text: 'Proposed.' }));
+    await send(folderScoped.id);
+    const reopenedResult = await settled(folderScoped.id);
+    expect(reopenedResult.status).toBe('failed');
+    expect(reopenedResult.error).toContain('outside the attached conversation context');
+    expect(command).not.toHaveBeenCalled();
+
+    const reopenedProposal: AgentProposal = {
+      id: '20a21b40-72b2-46d4-85ad-d76cfba84d7a',
+      clientID: 'chat:' + folderScoped.id,
+      kind: 'command',
+      title: 'Toggle hidden',
+      commandID: 'hidden',
+      target: structuredClone(sensitiveOrigin.target),
+      detail: 'Run Toggle hidden for the captured selection.',
+      status: 'review',
+    };
+    await expect(chat.authorizeProposal(reopenedProposal)).rejects.toThrow(
+      'outside the attached conversation context',
+    );
+
+    // An attached directory still allows commands, while an unattached selection item is refused.
+    await chat.close();
+    chat = new Chats(path.join(root, 'private'), ports);
+    const unattachedSelectionOrigin = {
+      ...origin,
+      target: {
+        ...origin.target,
+        selection: [await entry(sensitiveFile)],
+      },
+    };
+    await chat.request({ kind: 'open', id: folderScoped.id }, 1, unattachedSelectionOrigin);
+    generate.mockReset();
+    generate
+      .mockResolvedValueOnce(step('command', { commandID: 'hidden', text: 'Toggle hidden' }))
+      .mockResolvedValueOnce(step('reply', { text: 'Proposed.' }));
+    await send(folderScoped.id);
+    const badSelectionResult = await settled(folderScoped.id);
+    expect(badSelectionResult.status).toBe('failed');
+    expect(badSelectionResult.error).toContain('outside the attached conversation context');
+    expect(command).not.toHaveBeenCalled();
+
+    await chat.close();
+    chat = new Chats(path.join(root, 'private'), ports);
+    await chat.request({ kind: 'open', id: folderScoped.id }, 1, origin);
+    generate.mockReset();
+    generate
+      .mockResolvedValueOnce(step('command', { commandID: 'hidden', text: 'Toggle hidden' }))
+      .mockResolvedValueOnce(step('reply', { text: 'Proposed.' }));
+    await send(folderScoped.id);
+    const allowedResult = await settled(folderScoped.id);
+    expect(allowedResult.status).toBe('idle');
+    expect(command).toHaveBeenCalledOnce();
+    await expect(
+      chat.authorizeProposal({
+        id: '30a21b40-72b2-46d4-85ad-d76cfba84d7a',
+        clientID: 'chat:' + folderScoped.id,
+        kind: 'command',
+        title: 'Toggle hidden',
+        commandID: 'hidden',
+        target: structuredClone(origin.target),
+        detail: 'Run Toggle hidden for the captured selection.',
+        status: 'review',
+      }),
+    ).resolves.toBeUndefined();
   });
 });

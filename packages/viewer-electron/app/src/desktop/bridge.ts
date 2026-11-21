@@ -1580,12 +1580,17 @@ export class Desktop {
       throw error;
     }
   }
-  private async chooseFolder(senderID: number, defaultPath?: string): Promise<string | null> {
+  private async chooseFolder(
+    senderID: number,
+    defaultPath?: string,
+    native = false,
+  ): Promise<string | null> {
     const folder = await chooseRemembered(
       this.fileAccess,
       this.requireWindow(senderID),
       { properties: ['openDirectory'], defaultPath },
       true,
+      native,
     );
     if (!folder) return null;
     await this.fileAccess.require([folder]);
@@ -1678,7 +1683,7 @@ export class Desktop {
         return;
       await access.approve(change, review);
     } else {
-      const root = await this.chooseFolder(senderID);
+      const root = await this.chooseFolder(senderID, undefined, true);
       if (!root) return;
       await this.agents.checkFolders([root]);
       const change = { add: [root] };
@@ -1854,6 +1859,14 @@ export class Desktop {
   windowForWorkspace(id: string): BrowserWindow | undefined {
     const owner = this.workspaceSessions.owner(id);
     return owner === undefined ? undefined : this.windows.get(owner)?.window;
+  }
+  /** Sends a menu command only to the focused workspace window, falling back only when no window has focus. */
+  sendCommand(command: string, target?: BrowserWindow): void {
+    const candidate = target ?? this.window;
+    if (!candidate || candidate.isDestroyed()) return;
+    const record = this.windows.get(candidate.webContents.id);
+    if (!record || record.role !== 'viewer') return;
+    sendEvent(record.window.webContents, { type: 'command', command });
   }
   /** Sends an event to every window that takes it, except the window `except`. */
   emit(event: DesktopEvent, except?: number): void {

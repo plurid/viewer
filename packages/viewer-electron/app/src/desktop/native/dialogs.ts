@@ -8,8 +8,12 @@ import type { FileAccess } from '../files/file-access';
 import { windowDialogs } from './window-dialogs';
 
 /** OS panels remain the source of sandbox bookmarks and an explicit escape hatch. */
-export async function openDialog(window: BrowserWindow | undefined, options: OpenDialogOptions) {
-  const owner = !options.securityScopedBookmarks && windowDialogs(window);
+export async function openDialog(
+  window: BrowserWindow | undefined,
+  options: OpenDialogOptions,
+  native = false,
+) {
+  const owner = !native && !options.securityScopedBookmarks && windowDialogs(window);
   if (owner) {
     const result = await owner.open(options);
     if (result) return result;
@@ -40,11 +44,16 @@ export async function chooseRemembered(
   window: BrowserWindow,
   options: OpenOptions,
   directory: boolean,
+  native = false,
 ): Promise<string | undefined> {
-  const result = await openDialog(window, {
-    ...options,
-    securityScopedBookmarks: access.scoped,
-  });
+  const result = await openDialog(
+    window,
+    {
+      ...options,
+      securityScopedBookmarks: access.scoped,
+    },
+    native,
+  );
   const chosen = result.filePaths[0];
   if (result.canceled || !chosen) return;
   await access.remember(chosen, directory, result.bookmarks?.[0]);
