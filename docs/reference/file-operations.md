@@ -263,12 +263,12 @@ original location when known, **Put Back** or **Put Back To…**. A folder lists
 | Link in the destination | Refused; choose the actual folder                  |
 
 Original locations come from Viewer's private Trash-origins store (`trash-origins-v1.json`, up to
-5,000 items and 8 MiB, mode `0600`, keeping unreadable or newer-version files aside) and operation
-receipts, matched by identity, so **Put Back** stays available after the 100-job history rolls over;
-an item Finder trashed may need **Put Back To…**. Removable volumes without POSIX ownership (such as
-FAT and exFAT) also support Trash listing, **Put Back** and **Empty Trash…**. **Date added** is the
-system's directory date, not a deletion time. Reading the macOS Trash can require Full Disk Access,
-which is separate from folder access.
+5,000 items and 8 MiB, mode `0600`, moving an unreadable file aside and leaving a newer-version file
+untouched) and operation receipts, matched by identity, so **Put Back** stays available after the
+100-job history rolls over; an item Finder trashed may need **Put Back To…**. Removable volumes
+without POSIX ownership (such as FAT and exFAT) also support Trash listing, **Put Back** and **Empty
+Trash…**. **Date added** is the system's directory date, not a deletion time. Reading the macOS
+Trash can require Full Disk Access, which is separate from folder access.
 
 Viewer never deletes a file for good unless you choose **Empty Trash…** yourself at the bottom of
 the Trash window and confirm **Empty Trash** in the system dialog. **Empty Trash…** is available

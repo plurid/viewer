@@ -164,11 +164,12 @@ take a key, such as `plane-toolbar.full` and `plane-toolbar.essential` for the p
 buttons. The menu shows the keys given to `new-terminal-plane`, `setting.ui.space.toolbar`,
 `setting.ui.space.minimap`, `setting.ui.space.viewcube` and `setting.ui.space.grid`.
 
-Menu commands act only in the focused workspace window, never in unfocused windows. When a
-non-workspace window (such as Settings, the diagnostic report window or a separate page window) is
-focused, **Edit** commands (**Undo**, **Redo**, **Cut**, **Copy**, **Paste**, **Select All**) act in
-that window and workspace commands do nothing. When no workspace window is focused, **View** menu
-Show/Hide labels reflect your default visibility preferences.
+Menu commands act in the focused workspace window and never in another open window; only when no
+Viewer window has focus do they act in the last workspace window. When a non-workspace window (such
+as Settings, the diagnostic report window or a separate page window) is focused, **Edit** commands
+(**Undo**, **Redo**, **Cut**, **Copy**, **Paste**, **Select All**) act in that window and workspace
+commands do nothing. While a workspace window is open behind it, the **View** menu Show/Hide labels
+follow that workspace window; with no workspace window open, they follow the built-in defaults.
 
 ## Prefix keys
 

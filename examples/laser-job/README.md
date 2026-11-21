@@ -13,10 +13,10 @@ job checked in the [demonstration](https://plurid.com/viewer/).
    and pictures**, then **Allow selected data**, and confirm with **Allow**. Another model that
    takes pictures works too.
 3. Press **⌘⇧O** and open the **Job 1042** folder inside `examples/laser-job`.
-4. Press **⌘K**, choose **Check laser job…**, then **Check 7 files**. Muse Spark reads the request,
+4. Press **⌘K**, choose **Check Laser Job…**, then **Check 7 Files**. Muse Spark reads the request,
    the drawing pages and Viewer's measurement of every part, and SAM 3.1 outlines each feature a
    finding names. The model has up to 240 seconds to answer.
-5. Read the finding for the base plate. **Review evidence** opens the drawing, the DXF and the
+5. Read the finding for the base plate. **Review Evidence** opens the drawing, the DXF and the
    request side by side.
 
 ## Confirmed or Unverified
@@ -28,13 +28,13 @@ pitch finding depends on what Muse Spark quotes from the drawing:
   g6-PL60-B2-2buc (corrected).dxf**, a copy beside the original, measured again at 50.00 mm.
 - **Unverified** when the quote does not pin the requirement down, such as a bare "50". Viewer shows
   its measurement and the passage and offers no correction. To review it yourself, expand the
-  requirement's source review, choose **Confirm from source…** and enter 50 mm. The finding is then
+  requirement's source review, choose **Confirm from Source…** and enter 50 mm. The finding is then
   Confirmed and the correction is offered.
 
 Of three checks of this job recorded for the film, Viewer confirmed the finding once and left it
-Unverified twice. **Run again** asks for another reading.
+Unverified twice. **Run Again** asks for another reading.
 
-After the check, **Play the tour** walks through each finding, and **Prepare cut sheets** nests the
+After the check, **Play the Tour** walks through each finding, and **Prepare Cut Sheets** nests the
 parts by thickness, with cut length, time and cost.
 
 ## What is sent

@@ -14,7 +14,7 @@ How to read an item:
 - Findings about security, an agent acting beyond its grant, or losing files are kept out of this
   page until they are fixed.
 
-Open here: 211 (S1 0, S2 68, S3 143); 68 confirmed.
+Open here: 205 (S1 0, S2 67, S3 138); 67 confirmed.
 
 ## Decisions the owner made
 
@@ -58,8 +58,6 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
   good. `src/renderer/ui/operations/OperationReview.tsx:31`
 - **S3** File Operations and Journal pages name controls and lists the interface does not have.
   `src/renderer/operations/OperationsPanel.tsx:69`
-- **S3** Journal export's default file name carries the UTC date, not the person's date.
-  `src/desktop/bridge.ts:2541`
 - **S3** Journal search drops each typed space, so a two-word search cannot be typed.
   `src/renderer/journal/JournalPlane.tsx:128`
 - **S3** Last hour is stored as a fixed start time and the control then reads Time range….
@@ -106,8 +104,6 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
   `forge.config.ts:42-60` Confirmed.
 - **S2** processors.ts and speech-runtime.ts reuse old binaries after sharp, libvips or C++ edits.
   `tools/processors.ts:124-137` Confirmed.
-- **S2** Store build ships speech runtime and mic plist text while policy says direct-only.
-  `forge.config.ts:75` Confirmed.
 - **S3** DiagnosticLog rotates by UTF-16 characters against a UTF-8 byte limit and rewrites on every
   entry. `src/desktop/diagnostics/diagnostics.ts:62`
 - **S3** eslint.config.mjs omits src/report-preload.ts from Electron 45 sandboxed preload rules.
@@ -160,6 +156,8 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
   `src/renderer/commands/folders.ts:24-36`
 - **S3** Found workspace roots in ⌘K and Change Workspace skip PathLabel and cut the folder name.
   `src/renderer/commands/window-commands/catalog.ts:76-87`
+- **S3** Model approval dialogs label their buttons in sentence case while Viewer's own review uses
+  Title Case. `src/desktop/native/native-confirmation.ts:102-105`
 - **S3** Open non-file planes in ⌘K ignore paneTitle and show raw folder names instead.
   `src/renderer/commands/window-commands/catalog.ts:107-132`
 - **S3** Smart palette Go to row shows raw home path and passes command text through FileName.
@@ -416,10 +414,6 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
   `src/domain/models/chat.ts:19`
 - **S3** A non-ASCII command or commit message under 16,000 characters is refused past 16,000 bytes.
   `src/desktop/actions/executions.ts:100-103`
-- **S3** A request just under 65,536 bytes, or several large ones at once, disconnects the agent.
-  `src/desktop/agents/mcp-client.ts:144`
-- **S3** A slow call is reported as "Viewer request timed out." while Viewer goes on with it.
-  `src/desktop/agents/mcp-client.ts:160-164`
 - **S3** ADRs 0009 to 0012 have no status line at all. `docs/adr/0009-window-owned-speech.md:1-3`
 - **S3** AGENTS.md names two exceptions; removal.ts removes without the Trash in five named cases.
   `src/desktop/operations/removal.ts:120`
@@ -450,14 +444,10 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
   Original. `src/desktop/chat/service.ts:312`
 - **S3** Page and code disagree: a GLB with unsupported compression is said to be refused; nothing
   checks it. `src/desktop/canvases/glb.ts:38`
-- **S3** Page and code disagree: a new shared configuration also disconnects named clients.
-  `src/desktop/agents/agent-broker.ts:282-290`
 - **S3** Page and code disagree: a refused model line is still shown, and Tab opens it to run.
   `src/renderer/command-line/PromptFinder.tsx:159-178`
 - **S3** Page and code disagree: a session folder given as a link is accepted.
   `src/desktop/agents/sessions.ts:47-50`
-- **S3** Page and code disagree: a watch rule's interval range against the form's three choices.
-  `src/renderer/ui/automation/WatchRules.tsx:262-276`
 - **S3** Page and code disagree: empty Executable falls back to /bin/sh for Run Command, /bin/zsh
   elsewhere. `src/desktop/actions/executions.ts:159`
 - **S3** Page and code disagree: full command-record message; nothing clears the 1,000 records.
@@ -487,8 +477,6 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
 - **S3** Robot Check Rule governs panels the shipped app never mounts. `DESIGN.md:431`
 - **S3** Rules disagree: DESIGN.md keeps a Robot Check Rule for a report the app no longer has.
   `DESIGN.md:431`
-- **S3** Sample job page linked from the guide keeps its labels in the old letter case.
-  `examples/laser-job/README.md:16`
 - **S3** Smoke script expects 'approve agent access', a message Viewer no longer prints.
   `tests/electron-smoke.ts:5259`
 - **S3** Some ⌘K command labels stayed in sentence case after the change to Title Case.

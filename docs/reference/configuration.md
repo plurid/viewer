@@ -431,8 +431,9 @@ holds them: a `workspace.open` there is dropped when configuration is read.
 | Trash original locations     | `trash-origins-v1.json`     | 5,000 items; 8 MiB    | Kept                                  | Never                    |
 
 `trash-origins-v1.json` (version `1`, mode `0600`) records original locations for items Viewer moves
-to the Trash so **Put Back** stays available past the 100-job history; an unreadable or
-newer-version file is kept aside. See [Trash and Put Back](file-operations.md#trash-and-put-back).
+to the Trash so **Put Back** stays available past the 100-job history; an unreadable file is moved
+aside and a newer-version file is left untouched. See
+[Trash and Put Back](file-operations.md#trash-and-put-back).
 
 The private `found-workspaces-v1.json` has version `1`, mode 0600 and a 1 MB limit. Search keeps 200
 ordinary findings, plus retained roots. Entries linked open or opened or remembered within 90 days

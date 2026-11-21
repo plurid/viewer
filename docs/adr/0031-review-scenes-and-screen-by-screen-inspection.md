@@ -18,8 +18,8 @@ Every interface change adds or updates the review scenes covering its screens un
 (`VIEWER_RENDER_TEST=1`, `VIEWER_BACKGROUND_TEST=1`, isolated `VIEWER_DATA_DIRECTORY`;
 `backgroundTest` in `src/main.ts`, `qaRuntime` in `src/desktop/bridge.ts`), captures each scene in
 narrow and wide sizes across light and dark appearance (plus scene-specific choices such as long
-file names), runs automatic layout and wording checks (`tools/review/checks.ts`,
-`tools/review/sheet-script.ts`) and writes an HTML review sheet (`tools/review/report.ts`) under
+file names), runs automatic layout and wording checks (`tools/review/checks.ts`) and writes an
+interactive HTML review sheet (`tools/review/report.ts` with `tools/review/sheet-script.ts`) under
 `out/review/<run>/index.html`.
 
 Before any build is handed to the owner, the person or coordinating agent looks at every changed

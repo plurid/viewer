@@ -6,7 +6,7 @@ Status: accepted. Date: 2026-11-21.
 
 Viewer moves removed files and folders to the operating system Trash and never permanently deletes
 items during file operations, replacements or agent work. During the November 2026 review, the owner
-decided to keep **Empty Trash** in Viewer's Trash window while ensuring no automated path can ever
+decided to keep **Empty Trash…** in Viewer's Trash window while ensuring no automated path can ever
 reach it.
 
 ## Decision

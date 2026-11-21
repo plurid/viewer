@@ -14,10 +14,11 @@ decided that dictation is offered in both the direct download and the Mac App St
 alongside `com.apple.security.network.client` in the Store main entitlements (`main.plist`), and
 `forge.config.ts` keeps `NSMicrophoneUsageDescription` in `Info.plist` for both channels.
 
-`forge.config.ts` bundles the `viewer-speech` resource folder (`viewer-speech-recognizer` and
-`libwhisper.dylib`) on macOS in both editions. Store builds sign helper binaries with
-`inherit.plist` (`com.apple.security.app-sandbox` and `com.apple.security.inherit`) through
-`tools/mas.ts`. `SpeechRuntime` (`src/desktop/speech/runtime.ts`) and `verifySpeechPackage`
+`forge.config.ts` bundles the `viewer-speech-v1-darwin-<arch>` resource folder
+(`viewer-speech-recognizer` and `libwhisper.dylib`) on macOS in both editions. Store builds sign
+helper binaries with `inherit.plist` (`com.apple.security.app-sandbox` and
+`com.apple.security.inherit`) through `tools/mas.ts`. `SpeechRuntime`
+(`src/desktop/speech/runtime.ts`) and `verifySpeechPackage`
 (`src/desktop/speech/signed-resources.ts`) verify either the pinned manifest checksums or the sealed
 `.app` code signature before running local transcription. Model downloads and hosted speech use the
 Store network-client entitlement, and imported local models use security-scoped folder access.

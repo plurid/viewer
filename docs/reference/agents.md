@@ -290,16 +290,16 @@ revoked client, then create this one.** When all 100 are active, it asks you to 
 
 ## What the person reviews
 
-| Request                               | Review in Viewer                                         | Then a system dialog         |
-| ------------------------------------- | -------------------------------------------------------- | ---------------------------- |
-| `propose_command`                     | **Run Action**, or **Move to Trash** for a removal       | **Run** or **Move to Trash** |
-| `propose_config`                      | **Apply Changes**                                        | **Change**                   |
-| `propose_task_create`                 | **Create task**                                          | **Create task**              |
-| `propose_speech_*`                    | **Download Model**, **Import Model** or **Choose Model** | The same label               |
-| `propose_transform`                   | **Export**                                               | None                         |
-| `run_action`, workflow mutation steps | **Action Tasks**: **Apply _n_ Changes**                  | None                         |
-| Navigation, shared connection         | The proposal's title, such as **Open path**              | None                         |
-| Navigation, named client              | None, except opening `viewer.project.jsonc` or a tour    | None                         |
+| Request                               | Review in Viewer                                         | Then a system dialog                                     |
+| ------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+| `propose_command`                     | **Run Action**, or **Move to Trash** for a removal       | **Run** or **Move to Trash**                             |
+| `propose_config`                      | **Apply Changes**                                        | **Change**                                               |
+| `propose_task_create`                 | **Create task**                                          | **Create task**                                          |
+| `propose_speech_*`                    | **Download Model**, **Import Model** or **Choose Model** | **Download model**, **Import model** or **Choose model** |
+| `propose_transform`                   | **Export**                                               | None                                                     |
+| `run_action`, workflow mutation steps | **Action Tasks**: **Apply _n_ Changes**                  | None                                                     |
+| Navigation, shared connection         | The proposal's title, such as **Open path**              | None                                                     |
+| Navigation, named client              | None, except opening `viewer.project.jsonc` or a tour    | None                                                     |
 
 The review names the requesting client (or **Chat**, or **Shared agent connection**), and the system
 dialog names the same requester. Every review dialog opens with keyboard focus on **Reject**,

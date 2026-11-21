@@ -260,8 +260,9 @@ human-readable projection; it cannot authorize or replay an event. An external s
 
 Trash original locations are persisted independently of the 100-job history by
 `desktop/operations/trash-origins.ts` in the private mode-`0600` store `trash-origins-v1.json`
-(version 1, up to 5,000 items and 8 MiB, keeping unreadable or newer-version files aside), wired
-into `desktop/operations/operations.ts` and `desktop/operations/trash.ts` for **Put Back**.
+(version 1, up to 5,000 items and 8 MiB, moving an unreadable file aside and leaving a newer-version
+file untouched), wired into `desktop/operations/operations.ts` and `desktop/operations/trash.ts` for
+**Put Back**.
 
 ## Interface
 
