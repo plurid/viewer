@@ -9,9 +9,11 @@ Reports** · **Help → Report an Issue…** · the **File operations** button i
 
 ## A folder shows nothing, or the Trash is empty
 
-- In the App Store edition, choose **Allow Folder Access…** and pick the folder.
-- If macOS asked about a folder and you chose **Don't Allow**, turn Viewer on for it in **System
-  Settings → Privacy & Security → Files & Folders**.
+- Choose **Allow Folder Access…** and pick the folder in the native macOS folder panel.
+- If macOS still refuses the folder after you choose it (for example if you chose **Don't Allow**),
+  **Open Privacy Settings…** appears beside **Allow Folder Access…** with a one-line reason. Choose
+  it to open **System Settings → Privacy & Security → Files & Folders** (or **Full Disk Access** for
+  the Trash and protected system folders) and turn Viewer on.
 - To browse the Trash, give Viewer Full Disk Access in **System Settings → Privacy & Security → Full
   Disk Access**, then quit and reopen Viewer. This is a separate permission from folder access.
 
@@ -23,8 +25,11 @@ original file.
 
 ## A preview is slow or fails
 
-- Choose **Try again** in the preview.
-- For an Office file, try the **Reading** view, or **Sheet** for a workbook.
+- Choose **Try Again** in the preview.
+- For an Office file, try the **Reading** view, or **Sheet** for a workbook; those controls stay
+  reachable even if content extraction fails.
+- For a PostScript file, if moving Ghostscript scratch to the Trash fails, Viewer reports that
+  failure even after **Cancel Rendering**.
 - Very large, encrypted, damaged or unsupported files can be beyond a preview's limits. Choose
   **Open With…** to use another app, or **Show as Hex** to see its bytes.
 
@@ -97,12 +102,12 @@ the browser plane. Servers stay stopped after Viewer restarts until you start th
 ## Viewer does not quit
 
 Viewer quits once your work is safe. It first finishes a backup being written, saves every window
-and closes its browser planes.
+(including open editors, notes, drafts, lenses and settings) and closes its browser planes.
 
 - With file operations still running, Viewer asks what to do: **Wait for them**, **Cancel them and
   quit** or **Keep Viewer open**.
-- If a step fails, Viewer stays open and says which: choose **Retry**, or **Keep Open** and quit
-  later.
+- If a window fails to save or does not answer in time, Viewer reports the failure instead of
+  closing silently and stays open so you can choose **Retry**, or **Keep Open** and quit later.
 - **⌘Q** asks for a second press. Choose **Quit Viewer** in the menu to quit at once, or turn off
   **Settings → Browsing → Warn before quitting with ⌘Q**.
 

@@ -43,8 +43,9 @@ view.
   and eligible Undo.
 - Configure terminal profiles and your own contextual commands. Optional local agent access works
   through reviewed capabilities.
-- Connect an optional model provider for reviewed rename, organization and summary actions. Choose
-  the endpoint and explicitly approve the data before it is sent.
+- Connect an optional model provider for reviewed rename, organization and summary actions, or
+  optional local or hosted dictation. Choose the endpoint and explicitly approve the data or
+  recordings before anything is sent.
 - Edit a commented JSONC configuration through Settings or your preferred editor.
 
 Viewer's core browsing and local previews do not require a Viewer account. Model actions require
@@ -54,16 +55,24 @@ manufacturing validation.
 
 ## Review notes draft
 
-Viewer is a sandboxed file manager. On first use, an ungranted folder shows **Allow folder
-access…**; choose a generated folder to authorize it. The app deliberately denies arbitrary
-filesystem paths without a native grant. Settings → Permissions manages saved and session
-permissions.
+Viewer is a sandboxed file manager. On first use, an ungranted folder shows **Allow Folder
+Access…**; choose a generated folder to authorize it. If macOS still refuses the folder after
+choosing it, **Open Privacy Settings…** appears beside it with the reason and opens **System
+Settings → Privacy & Security → Files & Folders** or **Full Disk Access**. The app deliberately
+denies arbitrary filesystem paths without a native grant. Settings → Permissions manages saved and
+session permissions.
 
-Core browsing, supported previews and local recipe actions work without a cloud account. To test
-optional cloud actions, configure a compatible provider in Models and explicitly authorize its
-endpoint and data level. Filenames require approval too. The review environment should not transmit
-private review files. Configuration edits and agent requests cannot grant model-data consent;
-changing the endpoint or clearing the key invalidates consent.
+Core browsing, supported previews, optional local dictation and local recipe actions work without a
+cloud account. Dictation requests microphone access (`com.apple.security.device.audio-input` and
+`NSMicrophoneUsageDescription`) only when the person starts recording; local transcription runs in a
+sandbox-inheriting helper (`viewer-speech-recognizer`) using a checksum-verified Whisper model saved
+in the app container or imported through a security-scoped file picker. Hosted dictation is optional
+and requires an API key and explicit endpoint/model audio consent in **Settings → Speech**. Attach
+signed Store-build dictation qualification evidence before submission. To test optional cloud
+actions, configure a compatible provider in Models and explicitly authorize its endpoint and data
+level. Filenames require approval too. The review environment should not transmit private review
+files. Configuration edits and agent requests cannot grant model-data consent; changing the endpoint
+or clearing the key invalidates consent.
 
 File mutations show progress and conflict choices. Action proposals open for review before applying.
 Undo is offered only when receipts and output identity make it eligible. Interrupted work is kept
@@ -95,11 +104,13 @@ paths, tokens, paid-provider credentials and unrelated applications.
 
 ## App Privacy review worksheet
 
-Ordinary browsing/indexing/previews keep data on the Mac. Model calls transmit user instructions and
-approved filename/metadata/excerpt/text/picture evidence directly to the configured provider, with
-ordinary connection/account metadata. External commands, terminal apps and user-connected agents may
-have independent data flows. Support reports are sent manually. Apple distribution/diagnostics are
-separate services.
+Ordinary browsing/indexing/previews keep data on the Mac. Optional local dictation downloads a
+pinned Whisper model from Hugging Face only when requested; optional hosted dictation transmits mono
+WAV recordings directly to the user-configured speech provider only after explicit consent. Model
+calls transmit user instructions and approved filename/metadata/excerpt/text/picture evidence
+directly to the configured provider, with ordinary connection/account metadata. External commands,
+terminal apps and user-connected agents may have independent data flows. Support reports are sent
+manually. Apple distribution/diagnostics are separate services.
 
 Resolve the final answers with the publisher and each enabled third-party flow. A lack of analytics
 does not establish “Data Not Collected.” Review whether optional processing, retention, account

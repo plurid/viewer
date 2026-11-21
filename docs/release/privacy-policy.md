@@ -13,11 +13,12 @@ upload of your files or diagnostic reports.
 
 Viewer reads the files and folders you open or authorize. Its local records include workspace
 layouts, navigation history, configuration, search indexes, preview caches, action proposals,
-operation receipts, notes and checklists, unsaved text, conversations with models and the tools they
-made, laser-job checks, command receipts, downloaded speech models, a record of what connected
-agents did and the browser planes' own profile. Receipts support review of interrupted operations
-and eligible Undo. These records can contain filenames, folder paths, file metadata and, when you
-enable content indexing or actions, extracted document text.
+operation receipts, Trash original locations (`trash-origins-v1.json`), notes and checklists,
+unsaved text, conversations with models and the tools they made, laser-job checks, command receipts,
+downloaded speech models, a record of what connected agents did and the browser planes' own profile.
+Receipts support review of interrupted operations and eligible Undo. These records can contain
+filenames, folder paths, file metadata and, when you enable content indexing or actions, extracted
+document text.
 
 When something fails, Viewer writes a local diagnostic log (error messages and stack traces, which
 can include file paths) and macOS crash dumps on your Mac. They are never sent anywhere. Help → Show
@@ -104,14 +105,16 @@ network metadata, such as your IP address, when you connect or make a request.
 
 ## Dictation
 
-Dictation is optional and is in the direct-download edition. Viewer records from the microphone only
-while you dictate, for at most 60 seconds, after macOS lets Viewer use the microphone. Local
-transcription runs on your Mac with a Whisper model; installing one downloads it from Hugging Face
-(huggingface.co), which receives ordinary connection information. Hosted transcription sends the
-recording, the model name and the language, and no file names or contents, to the speech provider
-you added and allowed in Settings → Speech: Meta, OpenAI, Deepgram or a compatible endpoint you
-enter. The approval is for one endpoint and model; changing either, or the key, withdraws it. A
-connection check sends no audio.
+Dictation is optional and is available in both the direct-download and Mac App Store editions.
+Viewer records from the microphone only while you dictate, for at most 60 seconds, after macOS lets
+Viewer use the microphone. Once microphone access is granted, Settings → Speech can list connected
+microphone names without recording. Local transcription runs on your Mac with a Whisper model
+(inside a sandbox-inheriting helper in the Mac App Store edition); installing one downloads it from
+Hugging Face (huggingface.co), which receives ordinary connection information, or you can import a
+verified local model file. Hosted transcription sends the recording, the model name and the
+language, and no file names or contents, to the speech provider you added and allowed in Settings →
+Speech: Meta, OpenAI, Deepgram or a compatible endpoint you enter. The approval is for one endpoint
+and model; changing either, or the key, withdraws it. A connection check sends no audio.
 
 ## 3D reconstruction with fal.ai
 

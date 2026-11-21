@@ -514,6 +514,10 @@ review names every selected path and folder contents; Reject/Cancel and the affi
 remain reachable while long scope scrolls. Cancel receives initial focus in private-note Trash
 review. Agent removal cannot inherit a hidden manual preference or saved execution grant.
 
+Dialogs that approve work an agent or model requested (`AgentReview`, `OperationReview`, `ActionHub`
+review) open with keyboard focus on **Reject**, **Cancel** or **Discard** and reset focus there when
+advancing to the next queued proposal, so stray Return or Space presses never approve changes.
+
 Trash is a scoped folder-style dialog: one root title, Back/breadcrumbs only inside folders,
 sortable accessible headers and virtual selection. Keep its count, centered Empty Trash action and
 right-aligned Refresh/Done reachable. Known origins are selectable detail; unknown origin/date stays

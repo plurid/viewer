@@ -11,15 +11,12 @@ These records explain decisions that still shape the application. Feature usage 
 - [Bounded human Journal](0006-bounded-human-journal.md)
 - [Views, runtimes and typed transformations](0007-spatial-workbench-resources.md)
 - [Scoped terminal CLI](0008-scoped-terminal-cli.md)
-
 - [Window-owned speech](0009-window-owned-speech.md)
 - [Spoken requests](0010-spoken-requests.md)
 - [Conversation canvases and independent input state](0011-conversation-canvases.md)
 - [Window-owned ordinary dialogs](0012-window-owned-dialogs.md)
 - [Robot model snapshots and motion (superseded)](0013-robot-model-snapshots.md)
-
 - [Robot target checks (superseded)](0014-robot-target-checks.md)
-
 - [Generated tools own application logic](0015-generated-tool-host.md)
 - [Offline license keys for direct builds](0016-offline-license-keys.md)
 - [Publication without exclusive rename](0017-publication-without-exclusive-rename.md)
@@ -29,3 +26,11 @@ These records explain decisions that still shape the application. Feature usage 
 - [Found workspaces](0021-found-workspaces.md)
 - [Declared commands are typed lines](0022-declared-commands-are-typed-lines.md)
 - [Remote planes over the system's OpenSSH (proposed)](0023-remote-planes-over-system-openssh.md)
+- [Empty Trash is the person's own command](0024-empty-trash-is-person-only.md)
+- [Scoped agent configuration and Cancel-first approval dialogs](0025-scoped-agent-configuration-and-cancel-first-approvals.md)
+- [Desktop-issued per-request agent dispatch IDs](0026-desktop-issued-agent-dispatch-ids.md)
+- [Read-only agent readers for SQLite, archives and DXF text](0027-read-only-agent-readers-for-sqlite-archives-and-dxf-text.md)
+- [Private store for Trash original locations](0028-private-store-for-trash-original-locations.md)
+- [Dictation in both editions](0029-dictation-in-both-editions.md)
+- [Shipped shortcuts yield to the person's own keys and new-item keys](0030-shipped-shortcuts-yield-and-new-item-keys.md)
+- [Review scenes and screen-by-screen inspection before handover](0031-review-scenes-and-screen-by-screen-inspection.md)

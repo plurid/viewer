@@ -164,10 +164,11 @@ rule skipped.
 ## Document text
 
 With **Document text** on, the words at the top level of the query match a file's name or its
-indexed text; `name:` still matches the name only, and every other filter still applies to the file.
-Select a match to see its passage (**Page**, **Chapter**, **Line** or **Passage**) and open the
-document there. Changing the query or scope hides old results and passages until the new answer
-arrives.
+indexed text (including non-adjacent multi-word queries and `OR` queries, preferring passages that
+contain every query word); `name:` still matches the name only, and every other filter still applies
+to the file. Select a match to see its passage (**Page**, **Chapter**, **Line** or **Passage**) and
+open the document there. Changing the query or scope hides old results and passages until the new
+answer arrives.
 
 | Read for document text                                                                  | Limit                                    |
 | --------------------------------------------------------------------------------------- | ---------------------------------------- |

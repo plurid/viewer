@@ -12,6 +12,7 @@ instructions or a list of shipped features. Current behavior is in the [guides](
 - [Spatial development and review](spatial-development.md)
 - [File workflows: interfaces, batch work, delivery profiles and reusable tools](actions.md)
 - [File-manager gaps: everyday features to add](file-manager-gaps.md)
+- [Remote planes over OpenSSH and WebDAV](remote-planes.md)
 - [Sharing and plurid.link](sharing.md)
 - [Task-built interfaces, robot showcase and implementation audit](workshop.md)
 - [Job 1042 fabrication audit and implementation plan](fabrication-workflow.md)

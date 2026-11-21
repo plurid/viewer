@@ -39,14 +39,19 @@ network share for the first time. Viewer indexes your Home folder for search in 
 these questions can appear soon after the first launch.
 
 1. Choose **Allow** for each folder you want to browse, preview and search in Viewer.
-2. To change an answer later, open **System Settings → Privacy & Security → Files & Folders**, find
-   **Viewer** and turn each folder on or off.
-3. To browse the Trash, add Viewer to **System Settings → Privacy & Security → Full Disk Access**,
+2. When a folder cannot be read, Viewer shows **Allow Folder Access…**, which opens the native macOS
+   folder panel. If macOS still refuses the folder after you choose it (for example after choosing
+   **Don't Allow**, or for the Trash and other protected folders), **Open Privacy Settings…**
+   appears beside it with the reason and opens **System Settings → Privacy & Security → Files &
+   Folders** or **Full Disk Access**.
+3. To change an answer later on your own, open **System Settings → Privacy & Security → Files &
+   Folders**, find **Viewer** and turn each folder on or off.
+4. To browse the Trash, add Viewer to **System Settings → Privacy & Security → Full Disk Access**,
    then quit and reopen Viewer.
 
-In the App Store edition, a folder Viewer may not read yet shows **Allow Folder Access…**. Choose it
-and pick the folder. **Settings → Permissions** lists the folders you allowed, and **Revoke** takes
-one back.
+In the App Store edition, **Allow Folder Access…** saves a security-scoped folder bookmark when you
+pick the folder. **Settings → Permissions** lists the folders you allowed, and **Revoke** takes one
+back.
 
 Viewer asks for the microphone only when you start dictation, and for your local network only when a
 model endpoint you added is on it.

@@ -9,17 +9,17 @@ separately owns the model used by Ask Viewer and chat.
 
 ## Settings
 
-| Setting                               | Values                                                                                                    |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **Transcribe with**                   | **Local Whisper** (at first) or **Hosted provider**                                                       |
-| **Local speech model**                | **Download and Use**, **Import Weights…**, **Use Model**, **Cancel Download**                             |
-| **Hosted provider**                   | **Use provider**, **Add Speech Provider**, **Edit Provider**, **Remove Provider**                         |
-| API key                               | **Save Key**, **Clear Key**                                                                               |
-| **Connection and model**              | **Check connection and model**                                                                            |
-| **Audio access**                      | **Allow Recordings…** or **Revoke Audio Access**                                                          |
-| **Language**                          | **Detect language** (at first), or one of the languages below                                             |
-| **Microphone**                        | **System default** (at first), or a named input; a missing one shows **Saved microphone · not connected** |
-| **Test Microphone and Transcription** | Records a test whose transcript is not saved                                                              |
+| Setting                               | Values                                                                                                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Transcribe with**                   | **Local Whisper** (at first) or **Hosted provider**                                                                                                    |
+| **Local speech model**                | **Download and Use**, **Import Weights…**, **Use Model**, **Cancel Download**                                                                          |
+| **Hosted provider**                   | **Use provider**, **Add Speech Provider**, **Edit Provider**, **Remove Provider**                                                                      |
+| API key                               | **Save Key**, **Clear Key**                                                                                                                            |
+| **Connection and model**              | **Check connection and model**                                                                                                                         |
+| **Audio access**                      | **Allow Recordings…** or **Revoke Audio Access**                                                                                                       |
+| **Language**                          | **Detect language** (at first), or one of the languages below                                                                                          |
+| **Microphone**                        | **System default** (at first), or a named input (listed once macOS grants microphone access); a missing one shows **Saved microphone · not connected** |
+| **Test Microphone and Transcription** | Records a test whose transcript is not saved                                                                                                           |
 
 Languages: English, Romanian, German, French, Spanish, Italian, Portuguese, Dutch, Polish,
 Ukrainian, Russian, Chinese, Japanese, Korean, Arabic, Hindi, Turkish, Greek and Hungarian.
@@ -28,16 +28,25 @@ Hold the **Ask Viewer by Voice…** shortcut, **⌃⇧Space** at first, in the w
 voice, and release it to transcribe. The microphone in the title bar, shown once **Settings → Space
 → Title bar icons → Microphone** is on, and **Ask Viewer by Voice…** start a recording that
 **Finish** ends (**Finish and Transcribe** with a hosted provider), or the microphone chosen again.
-**Settings → Shortcuts** changes the shortcut. A missing selected microphone never switches silently
-to another device. [Ask Viewer by voice](agents.md#ask-viewer-by-voice) gives exactly what a spoken
-request sends to a model and what it may run.
+**Settings → Shortcuts** changes the shortcut: reassigning **⌃⇧Space** to another command yields it
+to that binding, and the dictate shortcut is ignored while a modal dialog is open. A missing
+selected microphone never switches silently to another device, and capture failures report plain
+guidance. [Ask Viewer by voice](agents.md#ask-viewer-by-voice) gives exactly what a spoken request
+sends to a model and what it may run.
 
 ## Local recognition
 
-The direct macOS build bundles whisper.cpp 1.9.5 and a Viewer inference helper. Local speech runs on
-every macOS version Viewer supports and requires a verified model. Missing or invalid runtime
-resources report recognition unavailable. Browsing and typed commands remain available. Windows,
-Linux and Store speech acceptance remain unqualified.
+Both the direct and Mac App Store macOS builds bundle whisper.cpp 1.9.5 (`libwhisper.dylib`) and the
+Viewer inference helper (`viewer-speech-recognizer`). The Store build includes the microphone
+entitlement (`com.apple.security.device.audio-input`), microphone usage description
+(`NSMicrophoneUsageDescription`), sandbox-inheriting helper signing, container storage and
+security-scoped model import; Store dictation is implemented and unit-tested, while signed
+Store-build qualification is pending. Local speech runs on every macOS version Viewer supports and
+requires a verified model. If a previously selected local model file is missing on disk, Settings
+treats it as not installed, enables download and disables the test button. Missing or invalid
+runtime resources report recognition unavailable. Browsing and typed commands remain available.
+Windows and Linux remain unqualified and report
+`"Local speech has not been bundled for this platform."`
 
 | Model                       | Download bytes | In Settings                                                               |
 | --------------------------- | -------------: | ------------------------------------------------------------------------- |
@@ -99,16 +108,19 @@ catalog for recorded-audio support. An unlisted custom Deepgram model or an endp
 discovery remains unverified. A successful catalog check does not establish transcription support,
 quality, quota or billing status and never grants audio access.
 
-Checks have a 15-second deadline and a 2 MB response limit. They reject redirects and omit provider
-error bodies. Checks are canceled on owner closure, key/model/endpoint changes or revocation; late
-credential reads cannot trigger a request. Results last only for the current session and clear on
-provider or key edits. Audio permission remains separate.
+Checks have a 15-second deadline and a 2 MB response limit; a timeout records an inline
+connection-error check result, while explicit cancellation aborts without storing one. Checks reject
+redirects and omit provider error bodies. Checks are canceled on owner closure, key/model/endpoint
+changes or revocation; late credential reads cannot trigger a request. Results last only for the
+current session and clear on provider or key edits. Audio permission remains separate.
 
 ## Data and permissions
 
-Only a trusted top-level Viewer or Settings window with an active person-started session can request
-audio. Browser planes, document frames, camera requests and unsolicited media requests remain
-denied. macOS microphone consent is still required.
+Only a trusted top-level Viewer or Settings window with an active person-started session can capture
+audio. Once macOS grants microphone access, **Settings → Speech** may also enumerate connected
+microphone names (preserving known names across redacted checks) while keeping capture denied until
+you start a recording. Browser planes, document frames, camera requests and unsolicited media
+requests remain denied. macOS microphone consent is still required.
 
 Recordings and intermediate transcripts stay in memory in Viewer. Hosted recognition sends the
 completed recording to the explicitly permitted endpoint. The speech service persists model
@@ -119,10 +131,10 @@ draft, and Ask Viewer remains editable until submitted.
 
 Speech credentials are encrypted in private storage, separate from chat keys and configuration
 exports. Audio consent lives outside editable configuration and binds the provider ID, protocol,
-endpoint and model. Changing the model or endpoint revokes it, and a new endpoint needs its own key.
-Microphone consent, chat data access, configuration imports and agent grants cannot grant audio
-transmission. Keys are never returned in speech status. Restart restores choices and consent without
-recording or uploading.
+endpoint and model. Changing the model or endpoint revokes it, revoking consent saves before any
+credential change, and a new endpoint needs its own key. Microphone consent, chat data access,
+configuration imports and agent grants cannot grant audio transmission. Keys are never returned in
+speech status. Restart restores choices and consent without recording or uploading.
 
 A spoken request runs at once only commands that change no file, and only on the folder and
 selection captured when the recording began; every other step waits for the person's press. The

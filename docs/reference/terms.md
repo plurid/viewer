@@ -171,11 +171,12 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 - **Journal**: a bounded, private history of what Viewer did, filtered by source, severity,
   workspace, plane or time. It only records: it cannot apply, undo or replay anything. _In Viewer:_
   **Open Journal**, **Journal for Workspace**, **Journal for Plane**. _Learn:_ [Journal](journal.md)
-- **Trash rule**: A removal goes to the system Trash, where **Put Back** brings it back; on a volume
-  without a Trash it fails and the item stays. Viewer never deletes a file for good unless you
-  choose **Empty Trash…** yourself in the Trash window, after a confirmation; agents and commands
-  cannot empty it, and an agent's removal waits for your approval of the exact items. _In Viewer:_
-  **Move to Trash…** (**⌘⌫**), **Trash** in the sidebar. _Learn:_
+- **Trash rule**: A removal goes to the system Trash, where **Put Back** brings it back (using
+  Viewer's private `trash-origins-v1.json` store past the 100-job history); on a volume without a
+  Trash it fails and the item stays. Viewer never deletes a file for good unless you choose **Empty
+  Trash…** yourself in the Trash window, after a confirmation; agents, commands, workflows, custom
+  actions and the CLI cannot empty it, and an agent's removal waits for your approval of the exact
+  items. _In Viewer:_ **Move to Trash…** (**⌘⌫**), **Trash** in the sidebar. _Learn:_
   [Browse and organize](../guides/files.md) · [File operations](file-operations.md)
 - **Checkpoint**: a copy of files' contents and mode that Viewer keeps before it applies a reviewed
   batch change, when you ask for one. It leaves out Finder tags and ACLs, and all checkpoints share
@@ -277,8 +278,10 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 Viewer asks for each on its own. None of them grants another.
 
 - **Folder access**: macOS's permission for Viewer to read a folder such as Documents, an external
-  drive or a share. Full Disk Access, needed to browse the Trash, is a separate grant. _In Viewer:_
-  the macOS dialog, **Allow Folder Access…**, **Settings → Permissions**. _Learn:_
+  drive or a share. Full Disk Access, needed to browse the Trash, is a separate grant. When macOS
+  still refuses a folder chosen through **Allow Folder Access…**, **Open Privacy Settings…** opens
+  the matching Privacy & Security list. _In Viewer:_ the macOS dialog, **Allow Folder Access…**,
+  **Open Privacy Settings…**, **Settings → Permissions**. _Learn:_
   [Install and update Viewer](../guides/install.md)
 - **Model data**: which data level a model may receive, for that model and endpoint. Changing its
   endpoint or clearing its key revokes it, and requests an agent starts need **Allow agent-started

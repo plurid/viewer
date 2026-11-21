@@ -46,16 +46,16 @@ Folder keys are absolute paths. `~`, environment variables and shell expressions
 
 ## Validation and recovery
 
-| Situation                                          | What Viewer does                                                                                                                                                                                                       |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A valid edit on disk                               | Reloads it live; **Recent changes** lists the changed paths                                                                                                                                                            |
-| An invalid edit, or a `version` other than `1`     | Leaves the file on disk, shows the diagnostic and runs on the last valid copy; saving from Settings fails until the file is fixed                                                                                      |
-| Both the file and its last valid copy unreadable   | Runs on the defaults and saves nothing until `config.jsonc` is fixed                                                                                                                                                   |
-| The file removed while Viewer runs                 | Keeps the current settings, offers **Restore config.jsonc** and writes the file again with the next change                                                                                                             |
-| The file missing at launch, its last copy valid    | Restores the file from the last valid copy and says so                                                                                                                                                                 |
-| A setting changed elsewhere since a window read it | Refuses the write: "This setting changed in another window or config.jsonc. Review its current value."                                                                                                                 |
-| **Import Configuration**                           | Validates the whole file first; asks before changing agent access, model providers, program actions, terminal profiles or risky key lines; keeps the file it replaces beside it as `config.jsonc.before-import-<time>` |
-| **Reset a section**                                | Puts back the defaults of **Browsing**, **Folder views**, **File opening**, **Previews**, **Terminals**, **Custom commands**, **Shortcuts**, **Search** or **Action recipes**                                          |
+| Situation                                          | What Viewer does                                                                                                                                                                                                                                                                                                  |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A valid edit on disk                               | Reloads it live; **Recent changes** lists the changed paths                                                                                                                                                                                                                                                       |
+| An invalid edit, or a `version` other than `1`     | Leaves the file on disk, shows the diagnostic and runs on the last valid copy; saving from Settings fails until the file is fixed                                                                                                                                                                                 |
+| Both the file and its last valid copy unreadable   | Runs on the defaults and saves nothing until `config.jsonc` is fixed                                                                                                                                                                                                                                              |
+| The file removed while Viewer runs                 | Keeps the current settings, offers **Restore config.jsonc** and writes the file again with the next change                                                                                                                                                                                                        |
+| The file missing at launch, its last copy valid    | Restores the file from the last valid copy and says so                                                                                                                                                                                                                                                            |
+| A setting changed elsewhere since a window read it | Refuses the write: "This setting changed in another window or config.jsonc. Review its current value." In a multi-field update, conflicted fields revert to the desktop's winning values while unrelated edits still save; validation-rejected edits leave the queue so later valid edits and close saves proceed |
+| **Import Configuration**                           | Validates the whole file first; asks before changing agent access, model providers, program actions, terminal profiles or risky key lines; keeps the file it replaces beside it as `config.jsonc.before-import-<time>`                                                                                            |
+| **Reset a section**                                | Puts back the defaults of **Browsing**, **Folder views**, **File opening**, **Previews**, **Terminals**, **Custom commands**, **Shortcuts**, **Search** or **Action recipes**                                                                                                                                     |
 
 Risky key lines are bindings and sequences that type into a terminal, move files to the Trash,
 rename files or close with `!` and drop unsaved text. A canceled import changes nothing.
@@ -428,6 +428,11 @@ holds them: a `workspace.open` there is dropped when configuration is read.
 | Hidden roots                 | `found-workspaces-v1.json`  | 500                   | Kept; Settings shows them again       | Never                    |
 | Dismissed workspace offers   | `workspace-offers-v1.json`  | 500                   | Found ones cleared; Undo restores     | Never                    |
 | Declared-command run records | `declared-commands-v1.json` | 200                   | Cleared                               | Never                    |
+| Trash original locations     | `trash-origins-v1.json`     | 5,000 items; 8 MiB    | Kept                                  | Never                    |
+
+`trash-origins-v1.json` (version `1`, mode `0600`) records original locations for items Viewer moves
+to the Trash so **Put Back** stays available past the 100-job history; an unreadable or
+newer-version file is kept aside. See [Trash and Put Back](file-operations.md#trash-and-put-back).
 
 The private `found-workspaces-v1.json` has version `1`, mode 0600 and a 1 MB limit. Search keeps 200
 ordinary findings, plus retained roots. Entries linked open or opened or remembered within 90 days
@@ -856,7 +861,9 @@ authority.
 
 **Workspace → Backup and Restore…** reads and writes a `.viewer-backup.json` file in the
 `viewer-personal-backup` format, version `1`. It is readable JSON of at most 64 MiB (67,108,864
-bytes), formatting included. Export creates a new file and never overwrites an existing one.
+bytes), formatting included. Default backup filenames use your local calendar date. Export captures
+the current workspace layout without dirtying a clean project, creates a new file and never
+overwrites an existing one.
 
 | Part        | Contents                                                                                                                                                                                                                                 |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

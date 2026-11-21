@@ -23,35 +23,35 @@ refused. Every path argument must be inside the client's folders.
 
 ### Discover the workspace
 
-| Tool              | Needs      | What it does                                                                                                                                                                                                                           |
-| ----------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_context`     | `metadata` | The active workspace, root, plane and selected sources, keeping only granted paths                                                                                                                                                     |
-| `list_workspaces` | `metadata` | Each workspace with its granted planes (ID, type, path, view mode) and root plane IDs. Planes outside the folders and search planes over all locations are left out                                                                    |
-| `list_planes`     | `metadata` | The granted planes of one workspace; `workspaceID` defaults to the active one. Fails if the workspace is unknown or outside the client's folders                                                                                       |
-| `list_task_areas` | `metadata` | Task names, checkout paths, branches and commits inside the folders, for every workspace or one `workspace` (an ID or an exact unique name)                                                                                            |
-| `list_commands`   | `metadata` | The commands an agent may propose for the captured folder and selection: ID, label, group, aliases and key, with the removal policy                                                                                                    |
-| `explain_command` | `metadata` | One command (`commandID`), its captured target, and a custom action's definition                                                                                                                                                       |
-| `list_actions`    | `metadata` | Action recipes: ID, name, formats, data level and kind                                                                                                                                                                                 |
-| `read_config`     | `metadata` | The effective configuration: `version`, `settings`, `ui` and `revision`. Paths outside the client's folders are hidden or omitted; terminal arguments and environment values, shell scripts and executable arguments read `[redacted]` |
-| `validate_config` | `metadata` | Checks up to 100 patches without applying them, evaluated against the client's scoped configuration                                                                                                                                    |
+| Tool              | Needs      | What it does                                                                                                                                                                                                                                                                                                            |
+| ----------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_context`     | `metadata` | The active workspace, root, plane and selected sources, keeping only granted paths                                                                                                                                                                                                                                      |
+| `list_workspaces` | `metadata` | Each workspace with its granted planes (ID, type, path, view mode) and root plane IDs. Planes outside the folders and search planes over all locations are left out                                                                                                                                                     |
+| `list_planes`     | `metadata` | The granted planes of one workspace; `workspaceID` defaults to the active one. Fails if the workspace is unknown or outside the client's folders                                                                                                                                                                        |
+| `list_task_areas` | `metadata` | Task names, checkout paths, branches and commits inside the folders, for every workspace or one `workspace` (an ID or an exact unique name)                                                                                                                                                                             |
+| `list_commands`   | `metadata` | The commands an agent may propose for the captured folder and selection: ID, label, group, aliases and key, with the removal policy                                                                                                                                                                                     |
+| `explain_command` | `metadata` | One command (`commandID`), its captured target, and a custom action's definition                                                                                                                                                                                                                                        |
+| `list_actions`    | `metadata` | Action recipes: ID, name, formats, data level and kind                                                                                                                                                                                                                                                                  |
+| `read_config`     | `metadata` | The effective configuration: `version`, `settings`, `ui` and `revision`. Paths outside the client's folders are hidden or omitted; terminal arguments and environment values, shell scripts, executable arguments and ungranted path-like executables (in terminal profiles, tmux and custom actions) read `[redacted]` |
+| `validate_config` | `metadata` | Checks up to 100 patches without applying them, evaluated against the client's scoped configuration                                                                                                                                                                                                                     |
 
 ### Read files and checkouts
 
-| Tool                    | Needs                                                         | What it does                                                                                                                                                                                                                    |
-| ----------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read_metadata`         | `metadata`                                                    | One file's entry: name, kind, size, dates and identity                                                                                                                                                                          |
-| `search_files`          | `metadata`; `content: true` needs `content`, named            | Searches an indexed granted folder (`root`) with the [search syntax](search.md); `query` up to 1,000 characters, `offset` for the next page. Matching passages come back only for `content: true`                               |
-| `get_relationships`     | `metadata`; `content: true` needs `content`, named            | Operation provenance between granted files and, with `content: true`, local references in the file. Private notes and reported links are left out                                                                               |
-| `inspect_file`          | `content`, named                                              | Source-versioned facts and original evidence; `ocr: true` runs OCR                                                                                                                                                              |
-| `read_content`          | `content`, named                                              | Bounded extracted passages with the source version and reader coverage                                                                                                                                                          |
-| `query_table`           | `content`, named                                              | A row window of a CSV, TSV or XLSX file (also XLSM, XLTX and XLTM): `offset` 0 to 100,000, `limit` 1 to 200 (default 100), `sheet` for XLSX (default: the first visible sheet). Stored values and formula text; no formula runs |
-| `read_drawing_geometry` | `content`, named                                              | DXF entity bounds, lengths, areas, radii and bounded TEXT/MTEXT strings (untrusted file data): `offset` 0 to 50,000, `limit` 1 to 100 (default 50), optional `layer` and `points`. Units are declared, never guessed            |
-| `read_sqlite`           | `content`, named                                              | Read-only, immutable SQLite inspection: list tables, views and `CREATE` schema (`kind: "tables"`, default), or page rows (`kind: "rows"`, `table`, `offset`, `limit` 1 to 200). Stored SQL never runs                           |
-| `list_archive`          | `content`, named                                              | Lists ZIP and TAR entries without extracting to disk: `offset` 0 to 20,000, `limit` 1 to 500 (default 200)                                                                                                                      |
-| `read_archive_entry`    | `content`, named                                              | Reads bounded UTF-8 text from one ZIP or TAR `entry` (`maxBytes` 1 to 262,144, default 65,536) without extracting; refuses unsafe paths and binary entries                                                                      |
-| `git_status`            | `metadata`                                                    | Git status of the checkout that contains `path`                                                                                                                                                                                 |
-| `git_diff`              | `metadata`, `content`, named                                  | A bounded tracked-file diff against `base`, a branch or commit (default `HEAD`)                                                                                                                                                 |
-| `read_terminal`         | `terminal-read` and a [terminal read grant](#terminal-output) | A terminal's folder and the last 128,000 characters it showed. `id` is the terminal plane's ID from `list_planes`                                                                                                               |
+| Tool                    | Needs                                                         | What it does                                                                                                                                                                                                                                                                                                                   |
+| ----------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `read_metadata`         | `metadata`                                                    | One file's entry: name, kind, size, dates and identity                                                                                                                                                                                                                                                                         |
+| `search_files`          | `metadata`; `content: true` needs `content`, named            | Searches an indexed granted folder (`root`) with the [search syntax](search.md); `query` up to 1,000 characters, `offset` for the next page. Matching passages come back only for `content: true`                                                                                                                              |
+| `get_relationships`     | `metadata`; `content: true` needs `content`, named            | Operation provenance between granted files and, with `content: true`, local references in the file. Private notes and reported links are left out                                                                                                                                                                              |
+| `inspect_file`          | `content`, named                                              | Source-versioned facts and original evidence; `ocr: true` runs OCR                                                                                                                                                                                                                                                             |
+| `read_content`          | `content`, named                                              | Bounded extracted passages with the source version and reader coverage                                                                                                                                                                                                                                                         |
+| `query_table`           | `content`, named                                              | A row window of a CSV, TSV or XLSX file (also XLSM, XLTX and XLTM): `offset` 0 to 100,000, `limit` 1 to 200 (default 100), `sheet` for XLSX (default: the first visible sheet). Stored values and formula text; no formula runs                                                                                                |
+| `read_drawing_geometry` | `content`, named                                              | DXF entity bounds, lengths, areas, radii and bounded TEXT/MTEXT strings (untrusted file data, up to 512 characters per entity, 50 text entities and 16,384 characters per page, with a coverage notice): `offset` 0 to 50,000, `limit` 1 to 100 (default 50), optional `layer` and `points`. Units are declared, never guessed |
+| `read_sqlite`           | `content`, named                                              | Read-only, immutable, file-coordinated SQLite inspection (up to 2 GB): list tables, views and `CREATE` schema (`kind: "tables"`, default), or page rows (`kind: "rows"`, `table` up to 1,024 characters, `offset` 0 to 10,000,000, `limit` 1 to 200, default 100). Returns the file's `version`; stored SQL never runs         |
+| `list_archive`          | `content`, named                                              | Lists ZIP and TAR entries without extracting to disk: `offset` 0 to 20,000, `limit` 1 to 500 (default 200)                                                                                                                                                                                                                     |
+| `read_archive_entry`    | `content`, named                                              | Reads bounded UTF-8 text (untrusted file data) from one ZIP or TAR `entry` (up to 4,096 characters; `maxBytes` 1 to 262,144, default 65,536) without extracting; trims trailing incomplete UTF-8 bytes and refuses unsafe paths, binary entries, invalid UTF-8 and private keys (PEM, OpenSSH, OpenPGP and DER)                |
+| `git_status`            | `metadata`                                                    | Git status of the checkout that contains `path`                                                                                                                                                                                                                                                                                |
+| `git_diff`              | `metadata`, `content`, named                                  | A bounded tracked-file diff against `base`, a branch or commit (default `HEAD`)                                                                                                                                                                                                                                                |
+| `read_terminal`         | `terminal-read` and a [terminal read grant](#terminal-output) | A terminal's folder and the last 128,000 characters it showed. `id` is the terminal plane's ID from `list_planes`                                                                                                                                                                                                              |
 
 When `search_files` omits `content`, it searches document text if the client holds `content`, and
 returns no passages.
@@ -77,14 +77,14 @@ opens many planes. The shared connection's navigation always waits.
 
 ### Propose changes
 
-| Tool                  | Needs                                                 | What it does                                                                                                                                                           |
-| --------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `propose_command`     | `propose`                                             | Proposes a command from `list_commands` for the captured folder and selection                                                                                          |
-| `propose_config`      | `propose`                                             | Proposes up to 100 configuration patches; see [configuration an agent may change](#configuration-an-agent-may-change)                                                  |
-| `propose_transform`   | `propose`, `content`                                  | Proposes an image, PDF, PDF pages, media or layout export: `sources` (1 to 16), `destination` folder, output `name` and a typed `plan`. Creates a new file             |
-| `run_action`          | `propose`; `content` for a recipe that reads contents | Starts a recipe (`recipeID`) on up to 2,000 `sources`, with optional `instructions` (up to 12,000 characters) and `recursive`. Returns `applyRequiresUserReview: true` |
-| `ask_in_words`        | `metadata`, `propose`                                 | Asks the person's model to turn a `prompt` (up to 12,000 characters) into a checked command proposal; nothing runs                                                     |
-| `propose_task_create` | `propose`, `navigation`                               | Proposes a worktree and task area: `name`, `repo`, destination `path`, `branch`, optional `base` or `existing`, and `workspace`. The terminal stays stopped            |
+| Tool                  | Needs                                                 | What it does                                                                                                                                                                                                                      |
+| --------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `propose_command`     | `propose`                                             | Proposes a command from `list_commands` for the captured folder and selection                                                                                                                                                     |
+| `propose_config`      | `propose`                                             | Proposes up to 100 configuration patches, previewed against the client's scoped configuration and checked against the real configuration at approval; see [configuration an agent may change](#configuration-an-agent-may-change) |
+| `propose_transform`   | `propose`, `content`                                  | Proposes an image, PDF, PDF pages, media or layout export: `sources` (1 to 16), `destination` folder, output `name` and a typed `plan`. Creates a new file                                                                        |
+| `run_action`          | `propose`; `content` for a recipe that reads contents | Starts a recipe (`recipeID`) on up to 2,000 `sources`, with optional `instructions` (up to 12,000 characters) and `recursive`. Returns `applyRequiresUserReview: true`                                                            |
+| `ask_in_words`        | `metadata`, `propose`                                 | Asks the person's model to turn a `prompt` (up to 12,000 characters) into a checked command proposal; nothing runs                                                                                                                |
+| `propose_task_create` | `propose`, `navigation`                               | Proposes a worktree and task area: `name`, `repo`, destination `path`, `branch`, optional `base` or `existing`, and `workspace`. The terminal stays stopped                                                                       |
 
 `propose_task_create` is available in the direct build only, and a prepared task expires after 5
 minutes.
@@ -166,7 +166,8 @@ Viewer keeps up to 100 named clients, revoked ones included. To make room,
 2. Turn on **Allow local agent clients**. A system dialog, **Allow local agent clients to use
    Viewer?**, lists the shared connection's folders and capabilities. Choose **Allow**.
 3. Under **Agent clients**, in **New client**, enter a **Name**.
-4. Use **Choose Folder…** to add each folder the agent may use.
+4. Use **Choose Folder…** to add each folder the agent may use. Adding an agent folder always opens
+   the native macOS folder panel.
 5. Turn on the capabilities it needs. A new client starts with **Metadata and discovery** only.
 6. Set **Maximum returned content (MiB)**, 1 to 8, and **Tasks at a time**, then choose **Create
    Client**.
@@ -186,8 +187,8 @@ To change a client later, choose **Permissions**, edit, then **Save Permissions*
 4. Choose **Generate MCP Configuration**, then **Copy**, and paste it into the agent client.
 
 **Generate MCP Configuration** is available once access is on and a folder is authorized. Each use
-makes a new token: it disconnects every earlier holder, stops the connection's work and revokes its
-terminal read grants.
+makes a new token: it disconnects streams using the shared token (named clients stay connected),
+stops the shared connection's work and revokes its terminal read grants.
 
 ### The client configuration
 
@@ -220,6 +221,8 @@ the token private: anyone holding it acts as that client.
 - Viewer's own data folder cannot be an agent folder.
 - A path outside the folders, missing or denied gets the same answer, so an agent cannot probe the
   disk.
+- A named client's folder stays bound to its real path when saved; if it is later replaced by a
+  symbolic link, requests there are refused until you save the client's folders again in Settings.
 
 ### Capabilities
 
@@ -298,15 +301,26 @@ revoked client, then create this one.** When all 100 are active, it asks you to 
 | Navigation, shared connection         | The proposal's title, such as **Open path**              | None                         |
 | Navigation, named client              | None, except opening `viewer.project.jsonc` or a tour    | None                         |
 
+The review names the requesting client (or **Chat**, or **Shared agent connection**), and the system
+dialog names the same requester. Every review dialog opens with keyboard focus on **Reject**,
+**Cancel** or **Discard** and resets focus there when moving to the next queued proposal, so
+pressing Return or Space by mistake never approves a request.
+
 The review ends with what approving does for that request and that target, and whether a system
 dialog follows. For example, a command on two selected items reads **After Run Action, a system
 dialog asks once more. Then “Rename” runs on the 2 selected items.**, and an export reads **Export
 saves Photo.png as a new file in /work/Exports. The sources and existing files are kept. No system
 dialog follows: this review is the approval.** An export only adds a file, so no dialog follows it.
+Large Trash confirmations keep whole lines within 6,000 characters, followed by the count of
+remaining items and the closing note.
 
 **Reject** or closing the review rejects the proposal. Before anything runs, Viewer checks again
 that the folder, selection, file identities and action definition are what was reviewed. A change
 fails the proposal; it never retargets a new selection.
+
+When an agent command or navigation runs in a window, the desktop issues a per-request dispatch ID
+and a deadline. Your own actions in that window stay separate and are never counted as the agent's,
+and an agent request cannot elevate to a person's action, including across multi-step sequences.
 
 ## What an agent cannot do
 
@@ -320,7 +334,9 @@ fails the proposal; it never retargets a new selection.
   `/sbin`, `/etc`, `/tmp`, `/var`) are refused. So is a folder holding more than 10,000 items.
 - **Use a volume without a Trash.** A removal there fails and nothing is deleted. An agent's copy or
   move that would replace an item there fails too.
-- **Empty or browse the Trash, or use file Undo.** Those stay in the person's interface.
+- **Empty or browse the Trash, or use file Undo.** Only the person can choose **Empty Trash…** in
+  the Trash window, after a native confirmation; no agent tool, CLI verb, workflow or custom action
+  reaches it.
 - **Run Git actions.** Staging, committing, pulling and pushing are the person's.
 - **Paste.** The clipboard is outside the captured selection; use `copy-to` or `move-to`.
 - **Save nestings, DXF corrections, handoffs or mail attachments.** `propose_transform` refuses
@@ -371,23 +387,23 @@ key that contains dots, such as a folder path:
 
 ### Limits
 
-| Limit                               | Value                                                              |
-| ----------------------------------- | ------------------------------------------------------------------ |
-| One request                         | 65,536 bytes on one line, `paths` and `sources` lists included     |
-| Result size                         | **Maximum returned content**: 1 to 8 MiB, default 4; shared: 4 MiB |
-| One reply                           | 17 MiB (17,825,792 bytes) on one line                              |
-| Named clients                       | 100, revoked ones included                                         |
-| Concurrent requests per client      | **Tasks at a time**: 1 to 20, default 4; shared: 20                |
-| Order                               | One connection's requests are answered one at a time, in order     |
-| Waiting replies per `--mcp` process | 100                                                                |
-| Time per request                    | 120 seconds                                                        |
-| Proposals waiting for review        | 100 across all clients                                             |
-| Pending task proposals              | 100; a prepared task expires after 5 minutes                       |
-| Task areas per workspace            | 50                                                                 |
-| Path                                | 32,768 characters                                                  |
-| Captured selection                  | 2,000 items; with more selected, `list_commands` is empty          |
-| Concurrent Git reads                | 8                                                                  |
-| Activity                            | The last 1,000 calls are kept; **Activity** shows 50               |
+| Limit                               | Value                                                                                   |
+| ----------------------------------- | --------------------------------------------------------------------------------------- |
+| One request                         | 65,536 bytes on one line, `paths` and `sources` lists included                          |
+| Result size                         | **Maximum returned content**: 1 to 8 MiB, default 4; shared: 4 MiB                      |
+| One reply                           | 17 MiB (17,825,792 bytes) on one line                                                   |
+| Named clients                       | 100, revoked ones included                                                              |
+| Concurrent requests per client      | **Tasks at a time**: 1 to 20, default 4; shared: 20 (applies to `run_action` tasks too) |
+| Order                               | One connection's requests are answered one at a time, in order                          |
+| Waiting replies per `--mcp` process | 100                                                                                     |
+| Time per request                    | 120 seconds; timeout cancels in-flight reads and skips queued proposals                 |
+| Proposals waiting for review        | 100 across all clients                                                                  |
+| Pending task proposals              | 100; a prepared task expires after 5 minutes                                            |
+| Task areas per workspace            | 50                                                                                      |
+| Path                                | 32,768 characters                                                                       |
+| Captured selection                  | 2,000 items; with more selected, `list_commands` is empty                               |
+| Concurrent Git reads                | 8                                                                                       |
+| Activity                            | The last 1,000 calls are kept; **Activity** shows 50                                    |
 
 A result reaches the agent as JSON text inside a JSON string, where each quote and backslash is
 escaped once more, so a reply can take twice the result's size: 17 MiB holds any result within 8
@@ -407,7 +423,8 @@ The `--mcp` process speaks newline-delimited JSON-RPC 2.0 on standard input and 
 | Anything else     | Error `Unsupported MCP method.`                                                                                                         |
 
 Tool failures come back as JSON-RPC errors, not as results. Code `-32700` is invalid JSON, `-32600`
-an invalid request or one over 65,536 bytes, and `-32603` everything else, with Viewer's message.
+an invalid request or one over 65,536 bytes (preserving the request `id` when present), and `-32603`
+everything else, with Viewer's message.
 
 ### Errors
 
@@ -428,35 +445,36 @@ ended without quitting reads as not running once its process is gone.
 
 Calls fail with these:
 
-| Message                                                                                                          | Meaning                                                                                                                                                                               |
-| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Agent access is disabled or its token is invalid.`                                                              | Access is off, or the token was replaced or revoked                                                                                                                                   |
-| `This file is outside the agent’s authorized folders.`                                                           | Outside the folders, missing or denied. Also when the person's focused plane or selection is outside them, for any command, navigation, export, `ask_in_words` or `run_workflow` call |
-| `This agent client has no … capability.`                                                                         | Turn the capability on under **Permissions**                                                                                                                                          |
-| `The shared connection has no … capability. Allow it in Settings → Agents.`                                      | Turn it on under **What the connection may do**                                                                                                                                       |
-| `Use a named client with content permission.`                                                                    | A content tool called through the shared connection                                                                                                                                   |
-| `Focus a granted files plane in Viewer first.` or `Open a workspace in Viewer first.`                            | No workspace window is open and ready in Viewer                                                                                                                                       |
-| `Workspace not found or outside the agent’s authorized folders. Call list_workspaces to see visible workspaces.` | `list_planes` asked for a workspace ID that does not exist or has no granted planes                                                                                                   |
-| `Command is unavailable in the captured context.`                                                                | The ID is not in the current `list_commands`                                                                                                                                          |
-| `Agents cannot propose “…”. Ask the person to run it themselves.`                                                | The command is not on the agent list                                                                                                                                                  |
-| `Selection changed. Ask the agent for a new proposal.`                                                           | A file changed identity before the proposal ran                                                                                                                                       |
-| `The source changed. Read it again.`                                                                             | The file changed while it was read                                                                                                                                                    |
-| `Agent permissions changed while this request was running. Try again.`                                           | Access, folders or capabilities changed during the call                                                                                                                               |
-| `This client already runs as many requests as it may. Wait for one to finish.`                                   | Too many calls at once                                                                                                                                                                |
-| `Review or stop a task before starting another.`                                                                 | The client's recipe tasks fill its budget                                                                                                                                             |
-| `The read_content result is 5.3 MiB, over this client’s read budget of 4 MiB. …`                                 | Ask for less, as the message says; see below                                                                                                                                          |
-| `The reply is … bytes, over the 17,825,792 one reply to an agent may take. …`                                    | A reply too long for the relay. A result within its budget never is                                                                                                                   |
-| `Review pending proposals before submitting another.`                                                            | 100 proposals are waiting                                                                                                                                                             |
-| `Proposal belongs to another actor.`                                                                             | The ID is another client's                                                                                                                                                            |
-| `Allow agents to send this data to the provider in Settings → Models before an agent runs this action.`          | The model's agent permission is off                                                                                                                                                   |
-| `Viewer request timed out.`                                                                                      | No reply within 120 seconds                                                                                                                                                           |
-| `Viewer disconnected. Reconnect to the running app.`                                                             | Viewer quit, or access was turned off                                                                                                                                                 |
-| `Viewer sent a reply over 17,825,792 bytes, more than this agent connection carries. …`                          | Another version of Viewer sent a reply the relay does not accept, and the connection closed                                                                                           |
-| `Too many pending requests.`                                                                                     | 100 replies are already waiting in this `--mcp` process                                                                                                                               |
-| `Terminal output needs a separate read grant in Settings → Agents.`                                              | `read_terminal` without a terminal read grant for that folder                                                                                                                         |
-| `Git is disabled in Settings.`                                                                                   | **Show Git status** is off, or this is the Mac App Store build                                                                                                                        |
-| `Git inspection has reached its concurrent request limit. Retry after another request finishes.`                 | 8 Git reads are already running                                                                                                                                                       |
-| `Branch task creation is available in the direct build only.`                                                    | `propose_task_create` in the Mac App Store build                                                                                                                                      |
+| Message                                                                                                          | Meaning                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Agent access is disabled or its token is invalid.`                                                              | Access is off, or the token was replaced or revoked                                                                                                                                                                                                                                                                       |
+| `This file is outside the agent’s authorized folders.`                                                           | Outside the folders, missing or denied. Also when the person's focused plane or selection is outside them, for any command, navigation, export, `ask_in_words` or `run_workflow` call. Adds `A granted folder moved behind a link; save the client’s folders again in Settings.` when a named client's root became a link |
+| `Unknown agent tool. Call tools/list to see available tools.`                                                    | The tool name is not in Viewer's catalog                                                                                                                                                                                                                                                                                  |
+| `This agent client has no … capability.`                                                                         | Turn the capability on under **Permissions**                                                                                                                                                                                                                                                                              |
+| `The shared connection has no … capability. Allow it in Settings → Agents.`                                      | Turn it on under **What the connection may do**                                                                                                                                                                                                                                                                           |
+| `Use a named client with content permission.`                                                                    | A content tool called through the shared connection                                                                                                                                                                                                                                                                       |
+| `Focus a granted files plane in Viewer first.` or `Open a workspace in Viewer first.`                            | No workspace window is open and ready in Viewer                                                                                                                                                                                                                                                                           |
+| `Workspace not found or outside the agent’s authorized folders. Call list_workspaces to see visible workspaces.` | `list_planes` asked for a workspace ID that does not exist or has no granted planes                                                                                                                                                                                                                                       |
+| `Command is unavailable in the captured context.`                                                                | The ID is not in the current `list_commands`                                                                                                                                                                                                                                                                              |
+| `Agents cannot propose “…”. Ask the person to run it themselves.`                                                | The command is not on the agent list                                                                                                                                                                                                                                                                                      |
+| `Selection changed. Ask the agent for a new proposal.`                                                           | A file changed identity before the proposal ran                                                                                                                                                                                                                                                                           |
+| `The source changed. Read it again.`                                                                             | The file changed while it was read                                                                                                                                                                                                                                                                                        |
+| `Agent permissions changed while this request was running. Try again.`                                           | Access, folders or capabilities changed during the call                                                                                                                                                                                                                                                                   |
+| `This client already runs as many requests as it may. Wait for one to finish.`                                   | Too many calls at once                                                                                                                                                                                                                                                                                                    |
+| `Review or stop a task before starting another.`                                                                 | The client's recipe tasks fill its budget                                                                                                                                                                                                                                                                                 |
+| `The read_content result is 5.3 MiB, over this client’s read budget of 4 MiB. …`                                 | Ask for less, as the message says; see below                                                                                                                                                                                                                                                                              |
+| `The reply is … bytes, over the 17,825,792 one reply to an agent may take. …`                                    | A reply too long for the relay. A result within its budget never is                                                                                                                                                                                                                                                       |
+| `Review pending proposals before submitting another.`                                                            | 100 proposals are waiting                                                                                                                                                                                                                                                                                                 |
+| `Proposal belongs to another actor.`                                                                             | The ID is another client's                                                                                                                                                                                                                                                                                                |
+| `Allow agents to send this data to the provider in Settings → Models before an agent runs this action.`          | The model's agent permission is off                                                                                                                                                                                                                                                                                       |
+| `Viewer request timed out.`                                                                                      | No reply within 120 seconds                                                                                                                                                                                                                                                                                               |
+| `Viewer disconnected. Reconnect to the running app.`                                                             | Viewer quit, or access was turned off                                                                                                                                                                                                                                                                                     |
+| `Viewer sent a reply over 17,825,792 bytes, more than this agent connection carries. …`                          | Another version of Viewer sent a reply the relay does not accept, and the connection closed                                                                                                                                                                                                                               |
+| `Too many pending requests.`                                                                                     | 100 replies are already waiting in this `--mcp` process                                                                                                                                                                                                                                                                   |
+| `Terminal output needs a separate read grant in Settings → Agents.`                                              | `read_terminal` without a terminal read grant for that folder                                                                                                                                                                                                                                                             |
+| `Git is disabled in Settings.`                                                                                   | **Show Git status** is off, or this is the Mac App Store build                                                                                                                                                                                                                                                            |
+| `Git inspection has reached its concurrent request limit. Retry after another request finishes.`                 | 8 Git reads are already running                                                                                                                                                                                                                                                                                           |
+| `Branch task creation is available in the direct build only.`                                                    | `propose_task_create` in the Mac App Store build                                                                                                                                                                                                                                                                          |
 
 A result over its budget names its size and the budget, then what to ask for instead: fewer rows
 (`limit`, `offset`) for `query_table`, fewer entities or no points for `read_drawing_geometry`, the
@@ -500,9 +518,10 @@ folder. It does not start an agent, open a plane or grant access.
 | `links`     | `kind` `file` or `git-diff`, a granted absolute `path`, optional `line`                                                             |
 
 A report is at most 48 KB. An entry ID cannot be rewritten; new IDs are appended. Viewer keeps up to
-100 sessions, 500 entries each and 8 MiB in all. Links open the checkout as it is now, not a saved
-patch. Report only text the person may read: no credentials and no hidden reasoning. Revoking a
-client blocks new reports and keeps the saved ones.
+100 sessions, 500 entries each and 8 MiB in all; at 100 sessions, a new report evicts the least
+recently updated `done` or `failed` session and refuses when all 100 are `working` or `waiting`.
+Links open the checkout as it is now, not a saved patch. Report only text the person may read: no
+credentials and no hidden reasoning. Revoking a client blocks new reports and keeps the saved ones.
 
 ## Add a model
 
@@ -564,8 +583,12 @@ Meta's endpoint stays `https://api.meta.ai/v1`.
 
 A named cloud provider uses its own endpoint; Qwen accepts its regional and workspace endpoints.
 **Local endpoint** accepts HTTPS, or HTTP to `localhost`, `127.0.0.1` or `[::1]`. Changing the
-endpoint or clearing the key revokes data access and stops running requests. The model's data
-permission, an agent's capabilities and macOS folder access are three separate approvals.
+endpoint or clearing the key revokes data access and stops running requests; removing a provider
+clears its stored key too. A provider's agent-data approval and endpoint key binding recheck the
+current data level, key and revision before taking effect, so a concurrent change cannot be approved
+silently. In a Chat plane, model command proposals stay limited to the conversation's attached
+folder scopes. The model's data permission, an agent's capabilities and macOS folder access are
+three separate approvals.
 
 ### Ask Viewer by voice
 

@@ -28,7 +28,7 @@ and platform limits still apply.
 | Notebooks               | `.ipynb`                                                                                                                                                               | Markdown and code cells with their saved outputs; nothing runs.                                                                                                                                                                                                          |
 | Web documents           | `.html`, `.htm`, `.xhtml`                                                                                                                                              | Sandboxed rendered preview and editable source.                                                                                                                                                                                                                          |
 | Saved web pages         | `.webarchive`                                                                                                                                                          | Safari's saved page with the stylesheets, images and fonts it holds, without scripts. Nothing loads from the network.                                                                                                                                                    |
-| Structured data         | `.json`, `.jsonc`, `.json5`, `.yaml`, `.yml`, `.xml`, `.plist`                                                                                                         | Searchable expandable tree and source, with bounded parsing and copy controls. Binary property lists are decoded, read-only.                                                                                                                                             |
+| Structured data         | `.json`, `.jsonc`, `.json5`, `.yaml`, `.yml`, `.xml`, `.plist`                                                                                                         | Searchable expandable tree and source, with bounded parsing and copy controls. Binary property lists are decoded read-only, up to 8 MB, 200,000 visited objects and 64 levels of nesting.                                                                                |
 | Map data                | `.geojson`, `.topojson`, `.gpx`, `.kml`                                                                                                                                | The same tree, read as JSON or XML.                                                                                                                                                                                                                                      |
 | Delimited data          | `.csv`, `.tsv`                                                                                                                                                         | Table preview with filtering.                                                                                                                                                                                                                                            |
 | SQLite                  | `.sqlite`, `.sqlite3`, `.db3`, `.db`                                                                                                                                   | Tables, columns and paged rows, read-only.                                                                                                                                                                                                                               |
@@ -170,10 +170,11 @@ probing has a separate 3-second limit. Neither child inherits `GS_OPTIONS`.
 A normal render leaves an empty stage, disposed through Viewer's existing rule for its own empty
 stage directories. The resulting PDF stays in the preview cache. Stopped or failed rendering can
 leave Ghostscript scratch; only that leftover is moved to Trash, named **Viewer Ghostscript
-scratch** with a unique suffix. A failed Trash operation keeps the scratch and reports failure. If
-Viewer crashes during a render, the detached interpreter can continue until it finishes or the
-person stops it; the time and scratch monitor no longer runs, and its stage can remain. The Store
-edition and agent routes cannot start this conversion. Viewer bundles no Ghostscript.
+scratch** with a unique suffix. A failed Trash operation keeps the scratch and reports failure, even
+after you choose **Cancel Rendering**. If Viewer crashes during a render, the detached interpreter
+can continue until it finishes or the person stops it; the time and scratch monitor no longer runs,
+and its stage can remain. The Store edition and agent routes cannot start this conversion. Viewer
+bundles no Ghostscript.
 
 **FictionBook.** An `.fb2` book, up to 32 MB, is read as XML without a DTD or entity declarations; a
 book that has one does not open. The encoding its declaration names, such as Windows-1251, is used.
@@ -224,8 +225,9 @@ size or page count:
 
 A picture is at most 32 MB and 64 million pixels, and must be the PNG or JPEG its name says. A part
 read for a size or count is at most 1 MB. Double-click opens the document in its own app. A `.key`
-file written as text, such as a private key, keeps the preview it had, and double-click opens it in
-Viewer: Viewer reads its first bytes and sends only a ZIP to Keynote.
+file holding a private key (PEM or DER) keeps the key preview and never offers **Show as Hex**, and
+double-click opens it in Viewer: Viewer reads its first bytes and sends only a confirmed Keynote ZIP
+archive to Keynote (which keeps **Show as Hex**).
 
 ## Certificates, keys, shortcuts, torrents and profiles
 
@@ -287,7 +289,9 @@ TrueType, OpenType, WOFF and WOFF2 fonts; binary property lists.
 
 - Images show as a rendered still of at most 4096 pixels on the long side, so an animated GIF or
   WebP shows its first frame.
-- A PDF shown this way cannot be printed until it is renamed to end in `.pdf`.
+- A PDF shown this way, or opened inside an archive, hides **Print PDF…** until it is a `.pdf` file
+  on disk. An unrecognized file opened inside an archive also hides **Quick Look in macOS**, **Open
+  in Default App** and **Ask**.
 - A gzip file shows as an archive only when its name says `.tar`.
 
 EPUB books; Safari web archives; Word, Excel and PowerPoint (docx, xlsx, pptx, and their macro and
@@ -359,8 +363,10 @@ Recognized conventional filenames include:
 Vue/Svelte files are source previews, not running components. JSON, JSONC, JSON5, YAML, YML, XML,
 property lists and map data offer a shared searchable tree with Expand All, Collapse All, copy
 path/value and retained expansion state. Alias references remain explicit; bounded parsing prevents
-recursive expansion. Invalid or oversized structures retain Source with a visible explanation. JSONL
-remains source text. Other readable files may use the bounded generic text fallback.
+recursive expansion. Invalid or oversized structures retain Source with a visible explanation, and
+truncated structured files hide the **Tree** / **Source** switch. Read-only preview commands are
+disabled while editing text. JSONL remains source text. Other readable files may use the bounded
+generic text fallback.
 
 XML Tree preserves qualified element/attribute names, repeated children and mixed text order. UTF-8
 and BOM-marked UTF-16 sources are supported. DTDs, custom entity declarations and external

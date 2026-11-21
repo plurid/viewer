@@ -67,15 +67,17 @@ files and unsupported content may need another application.
 
 ## Reading and saved cells
 
-DOCX Reading follows body paragraphs, headings, simple tables and supported embedded PNG/JPEG
-images. It omits full pagination, floating placement, headers, footnotes and some table/drawing
-features. Unsupported images have placeholders.
+Word **Reading** (`.docx`, `.docm`, `.dotx`, `.dotm`) follows body paragraphs, headings, simple
+tables and supported embedded PNG/JPEG images. It omits full pagination, floating placement,
+headers, footnotes and some table/drawing features. Unsupported images have placeholders. The view
+switch stays reachable even if content extraction fails.
 
-XLSX Sheet shows original row/column addresses and saved values. Select a cell to inspect its value,
-format and saved formula. **More → Show Stored Values** switches from supported number/date formats
-to raw values; **More → Show Formatted Values** switches back. Missing cached values are identified.
-The reader does not evaluate formulas or follow external data. Calc may recalculate supported
-formulas in Print Layout, so the two views can show different values.
+Excel **Sheet** (`.xlsx`, `.xlsm`, `.xltx`, `.xltm`) shows original row/column addresses and saved
+values. Select a cell to inspect its value, format and saved formula. **More → Show Stored Values**
+switches from supported number/date formats to raw values; **More → Show Formatted Values** switches
+back. Missing cached values are identified. The reader does not evaluate formulas or follow external
+data. Calc may recalculate supported formulas in Print Layout, so the two views can show different
+values.
 
 Focus the grid and use arrow keys to inspect cells; Tab leaves the grid instead of visiting every
 cell. Page Up/Down moves by the visible page and loads another bounded page when needed. Home/End
@@ -105,9 +107,9 @@ evaluated or copied in place of values; formulas without cached values copy as e
 
 Selections use source coordinates. A display filter does not remove intervening source rows from the
 copied rectangle. Known merged cells expand the selection to their full range. A selection can span
-pages: copying fetches additional bounded pages without moving the visible page. Incomplete
-extraction rejects the copy. If a merge discovered on a later page extends beyond the selection,
-select its entire range before copying.
+pages: copying fetches additional bounded pages without moving the visible page and keeps merged
+cell values anchored on earlier pages. Incomplete extraction rejects the copy. If a merge discovered
+on a later page extends beyond the selection, select its entire range before copying.
 
 Copy is limited to 10,000 cells, 1 MiB of UTF-8 text and a 15-second timeout. Use **Cancel copy**
 while a copy is pending. Status or failure appears below the detail row; copying never changes the

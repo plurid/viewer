@@ -135,11 +135,13 @@ changes for your review.
    without review**, **Propose changes** or **Read terminal output**.
 4. Choose **Create Client**, then **Copy**, and paste the configuration into your agent.
 
-An agent can never run shell commands or type into a terminal. Every change it proposes waits for
-your review, and an item it removes goes to the Trash only after you approve it. **Permissions**
-changes a client later, **Stop Tasks** stops its work and **Revoke** disconnects it; **Remove** then
-clears a revoked client from the list. Read [agents and permissions](../reference/agents.md) before
-connecting one, and use [Journal](../reference/journal.md) to see what it did.
+An agent can never run shell commands, empty the Trash or type into a terminal. Every change it
+proposes names the requesting client, waits for your review (with keyboard focus starting on
+**Reject** or **Discard**), and an item it removes goes to the Trash only after you approve it.
+**Permissions** changes a client later, **Stop Tasks** stops its work and **Revoke** disconnects it;
+**Remove** then clears a revoked client from the list. Read
+[agents and permissions](../reference/agents.md) before connecting one, and use
+[Journal](../reference/journal.md) to see what it did.
 
 Folder access, agent access and model data access are
 [three separate approvals](../reference/terms.md#three-separate-permissions); none of them grants

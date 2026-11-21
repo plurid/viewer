@@ -86,7 +86,7 @@ Measure first usable content, input feedback, warm reopening and cancellation se
 unchanged document data reusable within bounded caches, after fresh source authorization. Culling a
 view releases mounted resources without discarding the person's reading or editing position.
 
-Heavy indexing, decoding and transformation work stays bounded and cancellable. A canceled result
+Heavy indexing, decoding and transformation work stays bounded and cancelable. A canceled result
 cannot replace a later request. Closing a workspace releases its listeners, resource leases and
 temporary process ownership. Cold restoration never replays execution.
 
@@ -96,7 +96,7 @@ measurement limits; functional offscreen checks are not claims about physical di
 
 ## Discoverable capabilities
 
-Offer a contextual “What can I do here?” view listing applicable actions, keyboard shortcuts and
+Offer a contextual **What Can I Do Here?** view listing applicable actions, keyboard shortcuts and
 supported gestures from their existing definitions. Include plain-language descriptions and a clear
 explanation of actions requiring a selection or different context. Let people execute or pin an
 action without learning a command language.
@@ -121,10 +121,15 @@ person complete a task. Keep run-specific recordings, timings and failures with 
 
 ## Delivery order
 
-1. Establish keyboard, focus, scrollbar and visible-control behavior and its regression coverage.
-2. Add durable backup, import and source relinking, with compatibility fixtures.
-3. Add configurable contextual toolbars and contextual capability discovery.
-4. Qualify warm reopening, responsiveness and resource lifetimes against the task set.
+1. **Built (human accessibility pass open):** keyboard, focus, scrollbar choices and visible-control
+   behavior with regression coverage and [review scenes](../development/review.md).
+2. **Built:** durable personal backup, import review and source relinking
+   ([Personal backups](../reference/configuration.md#personal-backups)), with compatibility
+   fixtures.
+3. **Built:** pinned contextual toolbars per plane kind and **What Can I Do Here?** discovery.
+4. **Open:** qualify warm reopening, responsiveness and resource lifetimes against the task set
+   ([Usability protocol](../development/usability.md),
+   [Performance audits](../development/performance.md)).
 
 Each stage uses existing owners, shared types and scoped desktop authority. Update the canonical
 user instructions with the finished behavior. Preserve generated fixtures and original work

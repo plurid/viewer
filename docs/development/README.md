@@ -1,34 +1,47 @@
 # Develop Viewer
 
 The maintained desktop app is `packages/viewer-electron/app`. Commands below run from the repository
-root.
+root. Domain rules, desktop authority and renderer presentation are separate layers; extend an
+existing feature owner before introducing another registry, cache, mutation path or persistence
+format.
 
-1. [Build and run](builds.md).
-2. Read [architecture](architecture.md) and the [domain map](../../CONTEXT.md).
-3. Run [affected tests](testing.md).
+## Build and structure
 
-## Find the right owner
+- [Build and run](builds.md): install prerequisites, build native helpers, package locally and
+  preserve earlier build outputs.
+- [Architecture and boundaries](architecture.md): layer rules, IPC contracts, typed boundaries and
+  shared interface controls.
+- [Adding a preview](previews.md): add a file preview module and wire its format detection and
+  resource limits.
+- [Runtime dependencies](dependencies.md): bundled processors, native helpers, WebAssembly runtimes
+  and third-party packages.
 
-Domain rules, desktop authority and renderer presentation are separate layers. Extend an existing
-feature owner before introducing another registry, cache, mutation path or persistence format.
+## Testing, review and quality
 
-- [Architecture and boundaries](architecture.md)
-- [Adding a preview](previews.md)
-- [Runtime dependencies](dependencies.md)
-- [Sample playground](playground.md)
-- [Review every screen](review.md)
-- [Qualify complete desktop tasks](usability.md)
-- [Review findings](findings.md)
-- [Canvas evaluation and saved-response replay](testing.md#canvas-evaluation-and-replay)
-- [Performance and resource audits](performance.md)
-- [Native and distribution release gates](releases.md)
-- [Architecture decisions](../adr/README.md)
+- [Testing and qualification](testing.md): source checks, unit tests, hidden-window native
+  scenarios, canvas evaluation and saved-response replay.
+- [Review every screen](review.md): run `pnpm review` to capture review sheets across appearances
+  and sizes, and add new scenes.
+- [Review findings](findings.md): open problems found by the whole-repository review, grouped by
+  area and severity.
+- [Sample playground](playground.md): generate and inspect the isolated sample workspace used for
+  manual runs and recordings.
+- [Qualify complete desktop tasks](usability.md): end-to-end human usability protocol covering
+  keyboard, pointer and accessibility flows.
+- [Performance and resource audits](performance.md): measure startup, warm reopen, memory, idle
+  energy and long-session resource behavior.
+
+## Release and decisions
+
+- [Native and distribution release gates](releases.md): direct-build signing, notarization, signed
+  update feeds, Mac App Store builds and `pnpm qualify`.
+- [Architecture decisions](../adr/README.md): durable design and ownership records.
+- [Domain map](../../CONTEXT.md): feature ownership across `src/domain`, `src/desktop` and
+  `src/renderer`.
 
 ## Document the behavior
 
-Use [CONTRIBUTING.md](../../CONTRIBUTING.md) for code and documentation practice. User guides
-explain tasks; references own exact behavior. Research is explicitly proposed. Routine qualification
-output belongs in retained generated evidence.
-
-The [documentation media guide](../media/README.md) explains real-app recordings and public sample
-provenance. `pnpm docs:check` validates the documentation graph.
+Follow [CONTRIBUTING.md](../../CONTRIBUTING.md) for code and documentation rules. User guides
+explain tasks; references own exact behavior; [research](../research/README.md) holds proposals. The
+[documentation media guide](../media/README.md) explains real-app recordings and public sample
+provenance. Run `pnpm docs:check` to validate formatting, links and wording rules.

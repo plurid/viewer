@@ -11,9 +11,10 @@ Model requests include the current canvas and its evidence. Historical tool snap
 identical large values in that current context through `$viewerContext` JSON Pointers. Different
 historical values, action results and check failures remain present. This projection does not alter
 the saved transcript or frozen quote context. Meta receives each current-turn result once, paired
-with its native tool call. One request, with the current canvas, its state, defaults, sources and
-the conversation, holds at most 256 KiB of JSON, and one turn reads at most 1 MiB of tool results.
-Past either, the turn fails and says so.
+with its native tool call, deduplicated through `$viewerContext` and counted toward the 256 KiB
+request limit. One request, with the current canvas, its state, defaults, sources and the
+conversation, holds at most 256 KiB of JSON, and one turn reads at most 1 MiB of tool results. Past
+either, the turn fails and says so.
 
 ## Tool ownership and management
 
@@ -106,7 +107,9 @@ There are at most 16 actions per frame and 24 scalar inputs per action. Inputs a
 1,000 characters, finite numbers or booleans. Optional enum, minimum, maximum and description fields
 constrain them. Action IDs start with a letter and contain at most 80 letters, digits, dots,
 underscores or hyphens. Labels are at most 120 characters. Results must be JSON within 32,000 UTF-8
-bytes. Patches share the 128,000-byte canvas-state limit and cannot change an existing value's type.
+bytes. Patches share the 128,000-byte canvas-state limit, require keys of 1 to 200 characters,
+refuse reserved keys (`__proto__`, `constructor`, `prototype`) and cannot change an existing value's
+type. Revoking a folder or ejecting a volume keeps open conversation canvases alive.
 
 One action runs per canvas, with a 30-second deadline. Its activity row names the actor and action.
 **Take over** cancels pending work and stops the associated model turn. **Stop** removes the frame.

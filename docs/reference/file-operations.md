@@ -52,19 +52,21 @@ Redo. Agents cannot paste from the clipboard.
 | **Option** held  | Copies                                             |
 | **Command** held | Moves, also to another volume                      |
 
-A drag carries at most 10,000 items. A folder cannot be dropped into itself.
+A drag carries at most 10,000 items. A folder cannot be dropped into itself. A plain or move drag
+dropped back onto its own parent folder does nothing; hold **Option** to copy it there and keep
+both.
 
 ## Collisions
 
 When the destination name is taken, the job waits in **File Operations** with "_Name_ already
 exists." and these choices:
 
-| Choice                          | Result                                                                                               |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Skip**                        | Leaves the existing item; the item is done and leaves nothing to recover                             |
-| **Keep Both**                   | Uses a free name: `Name copy.ext`, then `Name copy 2.ext`                                            |
-| **Replace**                     | After **Replace existing item?**, sends the existing item to the Trash once its replacement is ready |
-| **Use for remaining conflicts** | Applies the choice to every later collision in the job                                               |
+| Choice                          | Result                                                                                                                                 |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Skip**                        | Leaves the existing item; the item is done and leaves nothing to recover                                                               |
+| **Keep Both**                   | Uses a free name: `Name copy.ext`, then `Name copy 2.ext`; dotted folder names and non-extension dots stay whole (`Project v1.2 copy`) |
+| **Replace**                     | After **Replace existing item?**, sends the existing item to the Trash once its replacement is ready                                   |
+| **Use for remaining conflicts** | Applies the choice to every later collision in the job                                                                                 |
 
 - Nothing merges: **Replace** replaces the whole existing item.
 - **Replace** is not offered when the existing item contains the source, or when a new folder or
@@ -89,8 +91,9 @@ exists." and these choices:
 A pasted picture is written and synced in a private stage, then published exclusively under its
 final name, so a failed or canceled write leaves no partial picture there.
 
-- A folder is cloned or copied file by file. A copy keeps the original's dates, permissions, ACLs
-  and extended attributes.
+- A folder is cloned or copied file by file. A copy keeps the original's dates, permissions, locks,
+  ACLs and extended attributes (including read-only `0555`, locked or deny-delete ACL items, with
+  Undo proof).
 - A file that changes while it is copied fails its item, and the original is left untouched.
 - A move that finds a source changed after copying keeps both the copy and the original.
 - Links are copied as links. Devices and sockets are refused.
@@ -173,7 +176,7 @@ rules: the disk root, your Home folder, its Applications, Desktop, Documents, Do
 Movies, Music, Pictures and Public folders, the root of any mounted volume, and `/Applications`,
 `/Library`, `/System`, `/Users`, `/Volumes`, `/bin`, `/etc`, `/opt`, `/private`, `/sbin`, `/tmp`,
 `/usr` and `/var`. Matching uses the folder's identity, so another spelling or a link to it is
-protected too. Items inside them are not.
+protected too. Items inside them, and folders under a linked folder on another volume, are not.
 
 ## Save text
 
@@ -220,7 +223,9 @@ Viewer never deletes an item in place of moving it to the Trash.
   than 10,000 items. Move it to the Trash to remove it." When nothing else can be undone, it reads
   "Undo is not offered: …" and adds that the originals are unchanged.
 - Undo refuses when the original location is taken, so a known conflict never produces a partial
-  Undo.
+  Undo. If an Undo step fails while running, the completed job stays undoable across restarts.
+- Text saves, Undo, **Clear Finished** and unrelated **Put Back** operations can proceed while
+  another job waits at a collision prompt.
 - **Redo** starts the job again as a new job with every usual check, only in the session that undid
   it. A text save or pasted picture has no Redo.
 - **Undo File Operation** also undoes a lens edit when that was the latest change. Arrangement Undo
@@ -258,16 +263,18 @@ original location when known, **Put Back** or **Put Back To…**. A folder lists
 | Link in the destination | Refused; choose the actual folder                  |
 
 Original locations come from Viewer's private Trash-origins store (`trash-origins-v1.json`, up to
-5,000 items, mode `0600`) and operation receipts, matched by identity, so **Put Back** stays
-available after the 100-job history rolls over; an item Finder trashed may need **Put Back To…**.
-**Date added** is the system's directory date, not a deletion time. Reading the macOS Trash can
-require Full Disk Access, which is separate from folder access.
+5,000 items and 8 MiB, mode `0600`, keeping unreadable or newer-version files aside) and operation
+receipts, matched by identity, so **Put Back** stays available after the 100-job history rolls over;
+an item Finder trashed may need **Put Back To…**. Removable volumes without POSIX ownership (such as
+FAT and exFAT) also support Trash listing, **Put Back** and **Empty Trash…**. **Date added** is the
+system's directory date, not a deletion time. Reading the macOS Trash can require Full Disk Access,
+which is separate from folder access.
 
 Viewer never deletes a file for good unless you choose **Empty Trash…** yourself at the bottom of
 the Trash window and confirm **Empty Trash** in the system dialog. **Empty Trash…** is available
 when every Trash location is readable and the top-level list fits within 4,000 items (up to 100,000
 items or 64 folder levels in all), and stops if the Trash changes before or during erasure. No
-**⌘K** command, CLI command or agent tool can empty the Trash.
+**⌘K** command, CLI command, workflow, custom action or agent tool can empty the Trash.
 
 ## Agent removals
 
@@ -285,10 +292,12 @@ An agent's removal follows the policy in [AGENTS.md](../../AGENTS.md):
 
 Restart never replays a job. An interrupted job shows as failed with **Interrupted operation.
 Completed items were kept.**, its **Recovery paths** (source, destination and temporary copy) and
-**Copy Recovery Paths**. Its Undo stays available for the items it finished. After a power failure,
-the last items of a copy can show as interrupted although their copies are complete; the copies are
-kept. If operation receipts cannot be saved, Viewer stops every further file change and fails the
-queued jobs with their recovery paths.
+**Copy Recovery Paths**. Its Undo and dismissal stay available across restarts for the items it
+finished. After a power failure, the last items of a copy can show as interrupted although their
+copies are complete; the copies are kept. An orphaned checkpoint folder left behind by a crash
+appears in **Content Checkpoints…** as a failed **Incomplete checkpoint**, counts toward the
+checkpoint budget and can be removed there. If operation receipts cannot be saved, Viewer stops
+every further file change and fails the queued jobs with their recovery paths.
 
 All sizes use decimal units, as Finder shows them: 1 KB is 1,000 bytes.
 

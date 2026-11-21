@@ -88,8 +88,8 @@ matches then add to a count (**N new · Show Latest**) without replacing the row
 
 **Export…** prepares the matching events as JSON (`{ "version": 1, "records": [...] }`) and shows
 the exact text with its count and size. It includes the internal workspace, plane and task IDs and
-nothing else beyond the event fields. **Save Export…** writes it to a new file you choose; it never
-overwrites an existing file.
+nothing else beyond the event fields. **Save Export…** suggests a filename using your local calendar
+date and writes it to a new file you choose; it never overwrites an existing file.
 
 | Export limit      | Value                                                        |
 | ----------------- | ------------------------------------------------------------ |

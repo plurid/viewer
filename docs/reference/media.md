@@ -66,10 +66,10 @@ AVIF images. HEIC previews on macOS but is not an image-tool input; use **Conver
 
 ## Audio and video
 
-**Edit Media…** opens a draft for up to 16 sources: MP4, M4V, MOV, M4A, MP3, WAV, FLAC, Ogg, OGA,
-Opus, AIFF, CAF, AVI, MKV, WebM, AAC, MPEG, TS and M2TS files of at most 24 hours. Use the
-filmstrip, waveform, player and **In** and **Out** to mark up to 32 segments, reorder them, add
-sources and add one audio track.
+**Edit Media…** opens a draft for up to 16 regular files (symbolic links and unsupported formats
+hide **Edit Media…**): MP4, M4V, MOV, M4A, MP3, WAV, FLAC, Ogg, OGA, Opus, AIFF, CAF, AVI, MKV,
+WebM, AAC, MPEG, TS and M2TS files of at most 24 hours. Use the filmstrip, waveform, player and
+**In** and **Out** to mark up to 32 segments, reorder them, add sources and add one audio track.
 
 | Choice  | Values                                                                                                 |
 | ------- | ------------------------------------------------------------------------------------------------------ |
@@ -165,10 +165,12 @@ quality; compare before saving.
 ## Playback compatibility
 
 The player first tries Chromium's own decoders. When they cannot play a file, Viewer makes a
-complete local copy with the bundled FFmpeg (**Converting video to play here…**, with **Cancel**),
-and the view says **Playing a 720p copy**. If no copy can be made, **Can't convert this video to
-play here** offers **Open in Default App**, **Open With…**, **Play Audio Only** when the file has
-sound, and **Try Again**.
+complete local copy with the bundled FFmpeg: for video (**Converting video to play here…**, with
+**Cancel**), the view says **Playing a 720p copy**; for audio (including audio files with embedded
+cover art), it says **Converting audio to play here…** and **Playing a compatible copy**. If no copy
+can be made, **Can't convert this video to play here** (or **Can't convert this audio to play
+here**) offers **Open in Default App**, **Open With…**, **Play Audio Only** when a video has sound,
+and **Try Again**.
 
 | Copy  | Format              | Limits                                              |
 | ----- | ------------------- | --------------------------------------------------- |

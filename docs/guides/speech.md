@@ -14,8 +14,10 @@ bar · **⌘K** → **Ask Viewer by Voice…** · **Dictate** in Ask Viewer, a n
    the best multilingual choice; **Whisper Tiny** is faster and smaller but needs more corrections.
    If you already have the GGML file, choose **Import Weights…**.
 
-The recognizer ships with Viewer, so no account, terminal or compiler is needed. The model downloads
-once and works offline from then on.
+The recognizer ships with both the direct and Mac App Store macOS editions (signed Store-build
+qualification is pending), so no account, terminal or compiler is needed. The model downloads once
+and works offline from then on. If a selected model file is missing later, Settings treats it as not
+installed so you can download or import it again.
 
 ## Test the microphone
 
@@ -24,9 +26,9 @@ once and works offline from then on.
    Transcribe**.
 3. Read the transcript, then choose **Done**.
 
-Viewer uses the system microphone. To use another one, pick it under **Recording → Microphone**. If
-short phrases come out in the wrong language, choose the **Language** instead of automatic
-detection.
+Viewer uses the system microphone. Once macOS grants microphone access, **Recording → Microphone**
+lists your connected microphones by name. If short phrases come out in the wrong language, choose
+the **Language** instead of automatic detection.
 
 ## Use a hosted provider instead
 
@@ -86,10 +88,12 @@ another plane while you speak stops the recording.
 | A checklist   | Choose **Dictate**; each phrase becomes an unchecked item                     |
 | Chat          | Choose **Dictate** to add to the draft; **Send** is still yours               |
 
-Change the shortcut in **Settings → Shortcuts**. A request dictated into Ask Viewer goes to the
-**Default for Ask Viewer** model in **Settings → Models**, which only ever proposes a line for you
-to review. For example, ask for a branch task, then fill any missing details in the form it opens.
-See [Start a task from a branch](develop.md#start-a-task-from-a-branch).
+Change the shortcut in **Settings → Shortcuts**; assigning **⌃⇧Space** to another command gives the
+key to that command, and the dictate shortcut does not start while a modal dialog is open. A request
+dictated into Ask Viewer goes to the **Default for Ask Viewer** model in **Settings → Models**,
+which only ever proposes a line for you to review. For example, ask for a branch task, then fill any
+missing details in the form it opens. See
+[Start a task from a branch](develop.md#start-a-task-from-a-branch).
 
 ## Stop or recover
 

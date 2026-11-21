@@ -16,13 +16,29 @@ How to read an item:
 
 Open here: 211 (S1 0, S2 68, S3 143); 68 confirmed.
 
-## Decisions for the owner
+## Decisions the owner made
 
 - **Empty Trash.** The Trash window has **Empty Trash…**, which erases for good after a native
-  confirmation (`tools/trash-ui.h`). Decision: keep it as a command only the person can choose; the
-  pages that say Viewer never empties the Trash are to say so.
+  confirmation (`tools/trash-ui.h`). Decision: keep it as a command only the person can choose;
+  agents can never reach it, and the pages say so. Done.
 - **What an agent may read from the configuration.** Decision: configuration reads show only paths
-  inside the agent's granted folders.
+  inside the agent's granted folders. Done.
+
+## What is being fixed, and in what order
+
+Fixes run in waves. Each item gets a test that fails first, an independent review of the fix, and a
+check of the whole app before the wave is committed. Done: agents and actions, operations and the
+Trash engine, previews, windows and saved state, files and native helpers, models and speech.
+
+1. Settings and commands; the CLI, license, updates and the build; persistence. This wave takes the
+   remaining items that put the person's authority or private names at risk.
+2. A packaged build looked at screen by screen with `pnpm review`, and a polish pass.
+3. Browsing, workspaces and the space; canvases, Git, terminals and remote planes; layout,
+   fabrication and media; the Trash and operations screens; interface controls and developer tools;
+   the improvements from the interface audit.
+4. The remaining documentation items.
+
+See the [roadmap](../research/roadmap.md) for features after these fixes.
 
 ## Files, operations and the Trash
 

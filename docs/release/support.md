@@ -29,10 +29,13 @@ Store edition and an unconfigured build have no License page. See the
 
 ## Folder access
 
-In the App Store edition, use **Allow Folder Access…** or Settings → Permissions when macOS
-authorization is missing. Selecting a parent folder authorizes its descendants. Canceling the picker
-leaves the current folder in place. A saved location that was moved, removed or became unavailable
-may need to be selected again.
+When Viewer cannot read a folder, choose **Allow Folder Access…** (or open Settings → Permissions)
+to pick the folder in the native macOS panel. Selecting a parent folder authorizes its descendants
+in the App Store edition. Canceling the picker leaves the current folder in place. If macOS still
+blocks the folder after you choose it, **Open Privacy Settings…** appears beside **Allow Folder
+Access…** with the reason and opens **System Settings → Privacy & Security → Files & Folders** or
+**Full Disk Access**. A saved location that was moved, removed or became unavailable may need to be
+selected again.
 
 The Volumes dialog can list mounted devices without authorizing browsing their contents. Opening a
 volume can still require the folder picker. Eject stops Viewer work for that volume before asking
@@ -46,10 +49,13 @@ folder to transfer into it; Option requests copying and Command requests moving.
 transfer normally moves; a cross-volume transfer normally copies. Collisions require a choice. Use
 Operations to see progress, errors, interrupted work and eligible Undo.
 
-Undo refuses removal when a copied or created output changed after the operation. Viewer Trash Undo
-uses a private receipt for the generated Trash item; it does not authorize general browsing of the
-Trash. Interrupted operations keep recovery details and never replay changes automatically. Keep any
-reported partial output until you inspect it.
+Undo refuses removal when a copied or created output changed after the operation. Viewer keeps
+original locations for items it moved to the Trash in a private store (`trash-origins-v1.json`) so
+**Put Back** stays available after the 100-job history rolls over; this store does not authorize
+general browsing of the Trash. Viewer never deletes a file for good unless you choose **Empty
+Trash…** yourself in the Trash window and confirm in the system dialog; agents, workflows, custom
+actions and the CLI cannot empty it. Interrupted operations keep recovery details and never replay
+changes automatically. Keep any reported partial output until you inspect it.
 
 ZIP creation and ZIP/TAR/TAR.GZ extraction have visible size and entry limits. Unsupported links,
 special files, unsafe paths and conflicting archive names are rejected. Archive viewing and archive
@@ -78,6 +84,17 @@ Terminal profiles and custom commands are configured in Settings. External termi
 discover Terminal or iTerm; tmux options can use a chosen session and socket. Local agents use a
 private connection token and configured roots; review each requested capability before granting it.
 These executables and external apps have their own permissions.
+
+## Dictation
+
+Dictation is optional and is included in both the direct and Mac App Store editions (signed
+Store-build dictation qualification is pending). Configure **Local Whisper** or a **Hosted
+provider** in **Settings → Speech**. Viewer asks macOS for microphone access only when you start
+dictation; once granted, **Settings → Speech** lists connected microphones by name. Local models run
+offline on your Mac after a one-time download or checksum-verified import. Hosted speech requires
+your own provider key and explicit endpoint/model audio consent (**Allow Recordings…**), which you
+can withdraw at any time with **Revoke Audio Access**. See the [speech guide](../guides/speech.md)
+and [speech reference](../reference/speech.md).
 
 ## Reporting a problem
 

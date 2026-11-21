@@ -115,16 +115,16 @@ not treat an unsuccessful numerical solve as proof of unreachability.
 
 The [canvas reference](../reference/canvases.md) owns the current APIs and limits.
 
-| Capability                   | Owner and current boundary                                                                                                               |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Generate and revise tools    | Chat publishes complete HTML/JavaScript revisions, preserves saved inputs and records provider messages.                                 |
-| Supply context               | The host captures bounded source text, facts and explicitly attached assets. It does not interpret robot models for the plugin.          |
-| Render graphics              | The sandbox provides Three.js and its standard loaders. The plugin supplies application behavior.                                        |
-| Execute actions              | The host runs named plugin handlers, validates the input contract, enforces revision checks and commits the returned state.              |
-| Manage tools                 | The Tool library opens, renames, enables, disables and duplicates saved canvases. Each duplicate has a separate conversation and inputs. |
-| Branch and compare           | Exact quoted context creates a separate investigation. Any domain comparison is authored in the plugin.                                  |
-| Solve and check a robot task | Owned by the reusable robotics plugin. The shipped host has no robot solver, checker or robot-check IPC operation.                       |
-| Image, video and CAD montage | Proposed. Each example needs actual generated code and a visible edit before filming.                                                    |
+| Capability                   | Owner and current boundary                                                                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Generate and revise tools    | Chat publishes complete HTML/JavaScript revisions, preserves saved inputs and records provider messages.                                     |
+| Supply context               | The host captures bounded source text, facts and explicitly attached assets. It does not interpret robot models for the plugin.              |
+| Render graphics              | The sandbox provides Three.js and its standard loaders. The plugin supplies application behavior.                                            |
+| Execute actions              | The host runs named plugin handlers, validates the input contract, enforces revision checks and commits the returned state.                  |
+| Manage tools                 | The **Tool Library** opens, renames, enables, disables and duplicates saved canvases. Each duplicate has a separate conversation and inputs. |
+| Branch and compare           | Exact quoted context creates a separate investigation. Any domain comparison is authored in the plugin.                                      |
+| Solve and check a robot task | Owned by the reusable robotics plugin. The shipped host has no robot solver, checker or robot-check IPC operation.                           |
+| Image, video and CAD montage | Proposed. Each example needs actual generated code and a visible edit before filming.                                                        |
 
 The earlier station and two-target recordings are retained experiment evidence. Their tools used
 supplied robotics algorithms; they do not qualify the new ownership boundary. Native scripts that

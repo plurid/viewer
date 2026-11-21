@@ -43,17 +43,18 @@ platform; its real-engine macOS smoke passes, and Windows and Linux runs are pen
 
 ## Direct and App Store builds
 
-| Feature                                                    | Direct build                                     | App Store build                                                        |
-| ---------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
-| Folder access                                              | Folder grants and macOS privacy prompts          | Security-scoped bookmarks                                              |
-| Git review, worktrees, Git actions and branch tasks        | Yes                                              | No                                                                     |
-| Spotlight name search                                      | Yes                                              | No: the sandbox has no `mdfind`                                        |
-| Local network sharing marks, Get Info and setup guidance   | Yes, on macOS                                    | No: system share-point tools are outside this edition's sandbox policy |
-| The `viewer` shell command                                 | Yes                                              | No                                                                     |
-| **Open With** from Finder (document types)                 | Yes                                              | No: the sandbox would receive only the opened file                     |
-| **Viewer → Check for Updates…** and the signed update feed | Yes                                              | No: the App Store updates it                                           |
-| 30-day trial and pay-once offline key                      | When both publisher configuration fields are set | No UI or license record                                                |
-| File and terminal workers                                  | Processes                                        | Threads                                                                |
+| Feature                                                    | Direct build                                                                                 | App Store build                                                                              |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Folder access                                              | Native folder panel, macOS privacy prompts and **Open Privacy Settings…** when macOS refuses | Security-scoped bookmarks, with **Open Privacy Settings…** if macOS still refuses            |
+| Dictation (local Whisper and hosted speech)                | Yes                                                                                          | Yes: audio-input entitlement and sandboxed helper (signed Store-build qualification pending) |
+| Git review, worktrees, Git actions and branch tasks        | Yes                                                                                          | No                                                                                           |
+| Spotlight name search                                      | Yes                                                                                          | No: the sandbox has no `mdfind`                                                              |
+| Local network sharing marks, Get Info and setup guidance   | Yes, on macOS                                                                                | No: system share-point tools are outside this edition's sandbox policy                       |
+| The `viewer` shell command                                 | Yes                                                                                          | No                                                                                           |
+| **Open With** from Finder (document types)                 | Yes                                                                                          | No: the sandbox would receive only the opened file                                           |
+| **Viewer → Check for Updates…** and the signed update feed | Yes                                                                                          | No: the App Store updates it                                                                 |
+| 30-day trial and pay-once offline key                      | When both publisher configuration fields are set                                             | No UI or license record                                                                      |
+| File and terminal workers                                  | Processes                                                                                    | Threads                                                                                      |
 
 Store folder bookmarks do not grant Full Disk Access, and direct-build access does not establish
 sandbox acceptance.
@@ -92,7 +93,9 @@ features available after the trial. See [license keys and trial state](license.m
 Both macOS editions use exclusive rename where supported. Only `ENOTSUP` or `EOPNOTSUPP` enables
 reservation publication, including on exFAT: Viewer creates an empty reservation exclusively,
 verifies its identity and emptiness, then renames the complete item over it. Existing names and
-final links are refused. Native coordination and the Store move notifications remain in place.
+final links are refused. Native coordination and the Store move notifications remain in place. FAT,
+exFAT and other volumes without POSIX ownership also support Trash listing, **Put Back** and **Empty
+Trash…**.
 
 The reservation check and rename leave a short race with an outside process replacing that
 reservation and losing that entry's content. Supporting volumes retain their atomic guarantee. A

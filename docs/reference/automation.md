@@ -8,8 +8,9 @@ rules, and their limits.
 Choose **File → Workflows…** or **Workflows…** in ⌘K. With one `*.workflow.jsonc` file selected, it
 opens that file. **Open Workflow…** reads a file. **New workflow** picks a template (**Inspect
 files**, **Compare folders**, **Inspect and copy**, **Inspect selection** or **Inspect and copy
-selection**) and **Create…** writes it as `viewer.workflow.jsonc` in the folder you choose. Opening,
-importing or editing a file never runs a step.
+selection**) and **Create…** writes it as `viewer.workflow.jsonc` in the folder you choose (if that
+folder already has a workflow, Viewer says so and points to **Open Workflow…**). Opening, importing
+or editing a file never runs a step.
 
 | Control                    | Effect                                                                     |
 | -------------------------- | -------------------------------------------------------------------------- |
@@ -92,14 +93,14 @@ then choose **Resume Workflow**. A dependent step reads the outputs the operatio
 including any Keep both names. Before each step the run checks that its sources are unchanged; a
 changed source or a changed workflow file stops it.
 
-| Run status       | Meaning                                                          |
-| ---------------- | ---------------------------------------------------------------- |
-| `running`        | A step is running                                                |
-| `waiting-review` | A review waits for you                                           |
-| `paused`         | Viewer quit during a read step; **Resume Workflow** continues it |
-| `completed`      | Every step finished                                              |
-| `failed`         | A step failed; the run does not continue                         |
-| `cancelled`      | You canceled it                                                  |
+| Run status       | Meaning                                                                                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `running`        | A step is running                                                                                                                                   |
+| `waiting-review` | A review waits for you                                                                                                                              |
+| `paused`         | Viewer quit during a read step; **Resume Workflow** continues it                                                                                    |
+| `completed`      | Every step finished                                                                                                                                 |
+| `failed`         | A step failed or a run-level error occurred (such as withdrawn authorization between steps); the error is shown on the run and it does not continue |
+| `cancelled`      | You canceled it                                                                                                                                     |
 
 The window shows these as **Running**, **Needs review**, **Paused**, **Done**, **Failed** and
 **Canceled**.
@@ -112,6 +113,7 @@ recorded review, fails with
 | --------------------------------------- | ---------------------------- |
 | Run receipts kept                       | 100                          |
 | Runs running, waiting or paused at once | 20                           |
+| Folder bindings when starting a run     | 64                           |
 | Sources per run                         | 1 to 2,000                   |
 | Files an `inspect` step reads           | 100                          |
 | One step's recorded result              | 4,000,000 characters of JSON |
@@ -126,9 +128,11 @@ At the limits a run is refused with, for example,
 ## Watch a folder
 
 **Watch a folder…** in the workflow window turns a workflow into a watch rule. When files in the
-folder are new or changed, the rule starts a run with them as the selection. It prepares reviews; it
-never applies them. Files already in the folder when you enable the rule are skipped. A rule starts
-no new run while its last one is running, paused or needs review.
+folder are new or changed, the rule waits until each changed file's size and modified time hold
+steady across two scans, then starts a run with them as the selection. It prepares reviews; it never
+applies them. Files already in the folder when you enable the rule are skipped. A rule starts no new
+run while its last one is running, paused or needs review. Removing a rule's last run history clears
+its reference so the rule can still reconcile, re-enable and be removed.
 
 | Field                              | Values                                                         |
 | ---------------------------------- | -------------------------------------------------------------- |

@@ -36,15 +36,25 @@ deeper guides.
 
 ## Current shape
 
-The maintained application is the Electron desktop app. Current local native qualification is on
-Apple Silicon macOS; portability and platform-specific qualification are tracked in the
-[platform reference](docs/reference/platforms.md).
+The maintained application is the Electron desktop app (0.1.0-0 alpha in source), built for direct
+macOS download and the Mac App Store. The direct build includes an offline 30-day trial and pay-once
+license key check, inactive until configured by the publisher. Current local native qualification is
+on Apple Silicon macOS (macOS 14 or later); Intel macOS, Windows, Linux and signed Store acceptance
+are tracked in the [platform reference](docs/reference/platforms.md).
 
-Core capabilities include folder views and search; document, media and model previews; text editing;
-PDF/image/media transforms; notes and checklists; browser and terminal planes; Git/worktree tasks;
-custom commands; reviewed workflows; optional model recipes and scoped agent integration.
+Core capabilities include folder views, folder insights, habit navigation and name/content search;
+document, Office, PostScript, media, archive, SQLite and 3D/CAD previews; text editing, notes and
+checklists; PDF/image/media transforms, unified Optimize, photo/PDF layouts, DXF nesting and
+fabrication checks; defined and found workspaces, declared commands, personal backups, browser and
+terminal planes, local servers, Git/worktree tasks and a bounded Journal; custom actions, a typed
+command line, a terminal CLI, reviewed workflows and watch rules; optional local and hosted
+dictation (direct and Store macOS builds; signed Store qualification pending), optional model
+recipes, conversation canvases with a Tool Library, optional 3D photo reconstruction and scoped
+agent integration. Viewer moves removed files to the Trash with guarded Undo; only the person's own
+**Empty Trash…** in the Trash window erases anything, and agents cannot reach it.
 
-The [capability reference](docs/reference/capabilities.md) describes current behavior.
+The [capability reference](docs/reference/capabilities.md) describes current behavior. Open problems
+from the repository review live in [review findings](docs/development/findings.md).
 [Research](docs/research/README.md) holds proposed capabilities. A proposal is not an implemented
 feature.
 

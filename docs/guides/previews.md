@@ -41,28 +41,28 @@ At narrow widths, labeled tools can become icons, then move into **…** as spac
 icon for its action name. The footer keeps one line, shortening long filenames in the middle while
 keeping their extensions. Hover the filename for the full name and file details.
 
-| File                                      | What you can do                                                                   |
-| ----------------------------------------- | --------------------------------------------------------------------------------- |
-| PDF                                       | Move through pages, show thumbnails and the outline, search the text              |
-| EPUB, FictionBook                         | Move through chapters, **Find in Book**, follow footnotes and go **Back**         |
-| Word, PowerPoint, OpenDocument, Publisher | Read the paginated **Layout**; Word also has a **Reading** view                   |
-| Excel and OpenDocument spreadsheets       | Switch sheets in **Print Layout**; XLSX also has a **Sheet** grid of saved values |
-| JSON, YAML, XML, property lists, map data | Search the tree, **Expand All**, **Collapse All**, or switch to **Source**        |
-| SQLite database                           | Pick a table, page through its rows, read its definition                          |
-| Notebook                                  | Read cells and their saved outputs                                                |
-| Calendar, contacts                        | Read events by date, or contact cards                                             |
-| Email and mailboxes                       | Read a message, save its attachments; pick a message from a mailbox               |
-| Safari web archive                        | Read the saved page; **Reload** it from the archive                               |
-| Subtitles                                 | Search the cues and see their times                                               |
-| Font                                      | Type your own sample text, choose its size, read its details and characters       |
-| 3D models and drawings                    | Orbit, zoom, show dimensions and measure                                          |
-| Audio and video                           | Play, pause and seek; choose a subtitle file named like it, or **Subtitles off**  |
-| iWork, Krita, OpenRaster, Sketch, XPS     | Zoom the preview image the document saved                                         |
-| Certificates and keys                     | Read each certificate and its chain; a private key shows only its type and size   |
-| Internet shortcuts                        | See the address and its host; **Open in Browser** or **Open in Mail App**         |
-| Torrent                                   | Read its files, trackers and info-hash                                            |
-| Provisioning profile                      | Read its app ID, team, expiry, devices and entitlements                           |
-| Any other file                            | Read its bytes in hex; **Go to offset** jumps to a byte                           |
+| File                                      | What you can do                                                                                                                                                |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PDF                                       | Move through pages (click the plane to turn pages with arrow keys, **Page Up**, **Page Down** and **Space**), show thumbnails and the outline, search the text |
+| EPUB, FictionBook                         | Move through chapters, **Find in Book**, follow footnotes and go **Back**                                                                                      |
+| Word, PowerPoint, OpenDocument, Publisher | Read the paginated **Layout**; Word also has a **Reading** view                                                                                                |
+| Excel and OpenDocument spreadsheets       | Switch sheets in **Print Layout**; XLSX also has a **Sheet** grid of saved values                                                                              |
+| JSON, YAML, XML, property lists, map data | Search the tree, **Expand All**, **Collapse All**, or switch to **Source**                                                                                     |
+| SQLite database                           | Pick a table, page through its rows, read its definition                                                                                                       |
+| Notebook                                  | Read cells and their saved outputs                                                                                                                             |
+| Calendar, contacts                        | Read events by date, or contact cards                                                                                                                          |
+| Email and mailboxes                       | Read a message, save its attachments; pick a message from a mailbox                                                                                            |
+| Safari web archive                        | Read the saved page; **Reload** it from the archive                                                                                                            |
+| Subtitles                                 | Search the cues and see their times                                                                                                                            |
+| Font                                      | Type your own sample text, choose its size, read its details and characters                                                                                    |
+| 3D models and drawings                    | Orbit, zoom, show dimensions and measure                                                                                                                       |
+| Audio and video                           | Play, pause and seek; choose a subtitle file named like it, or **Subtitles off**                                                                               |
+| iWork, Krita, OpenRaster, Sketch, XPS     | Zoom the preview image the document saved                                                                                                                      |
+| Certificates and keys                     | Read each certificate and its chain; a private key shows only its type and size                                                                                |
+| Internet shortcuts                        | See the address and its host; **Open in Browser** or **Open in Mail App**                                                                                      |
+| Torrent                                   | Read its files, trackers and info-hash                                                                                                                         |
+| Provisioning profile                      | Read its app ID, team, expiry, devices and entitlements                                                                                                        |
+| Any other file                            | Read its bytes in hex; **Go to offset** jumps to a byte                                                                                                        |
 
 Video and audio Chromium cannot play, such as WMV, AVI or WMA, play from a copy Viewer makes on your
 Mac; the original is only read. A `.ts` or `.mts` file plays as video when it is a camera or TV
@@ -120,7 +120,9 @@ embedded picture. An Illustrator file with a PDF inside opens directly in the PD
 Store edition the render button is absent.
 
 Normal rendering writes no document copy and leaves no scratch. An interrupted render can leave
-Ghostscript scratch, which Viewer moves to Trash under that name. The original stays in place.
+Ghostscript scratch, which Viewer moves to Trash under that name; if moving that scratch to the
+Trash fails, Viewer reports the failure even after **Cancel Rendering**. The original stays in
+place.
 
 [Supported formats](../reference/formats.md) gives inspection and rendering limits.
 
@@ -212,8 +214,9 @@ The preview keeps showing what it last loaded and offers three ways back:
 
 ## Edit it or open it elsewhere
 
-Press **⌘E** to edit a text file in a plane; **⌘S** saves and **Done** ends editing. For anything
-Viewer does not edit, choose **Open With…** and pick another app. To share an Office or OpenDocument
-file with someone who has neither app, right-click it and choose **Save PDF Copy**: the PDF holds
-every page, and every sheet of a workbook. [Make a quick change](create.md) covers the edits Viewer
-can make itself.
+Press **⌘E** to edit a text file in a plane; **⌘S** saves, **⇧⌘S** (**Save As…**) keeps your unsaved
+edits even from a save-refusal or open-failure view, and **Done** ends editing. For anything Viewer
+does not edit, choose **Open With…** and pick another app. To share an Office or OpenDocument file
+with someone who has neither app, right-click it and choose **Save PDF Copy**: the PDF holds every
+page, and every sheet of a workbook. [Make a quick change](create.md) covers the edits Viewer can
+make itself.

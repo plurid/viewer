@@ -21,6 +21,12 @@ A **file entry** combines a path, metadata and stable identity. File operations 
 source version rather than trusting a previously displayed path. Native file permission belongs to
 desktop services and can be revoked.
 
+Folder access recovery belongs to `domain/files/access.ts` (`folderPrivacyPane`,
+`privacySettingsReason`), `fileAccessPrivacySettings` in `desktop/ipc/access-handlers.ts` and
+`renderer/ui/permissions/FolderAccessButton.tsx`: **Allow Folder Access…** opens the native macOS
+folder panel, and **Open Privacy Settings…** targets Files & Folders or Full Disk Access with a
+one-line reason when macOS still refuses (`EPERM`/`EACCES`), blocked for agents.
+
 The [remote-plane proposal](docs/adr/0023-remote-planes-over-system-openssh.md) defines a **remote
 location** as the raw internal string `viewer-sftp://<connectionID><absolute-path>`. It is not a
 local path or a typed server address. `domain/remote/*` owns pure location, address, identity and
@@ -55,6 +61,10 @@ Content-plane opening and reuse live in `src/renderer/workspace/content-planes.t
 results keep their originating workspace. IPC dispatch lives in feature groups,
 `src/desktop/ipc/*-handlers.ts`, each given only the services it needs. The desktop bridge still
 validates the sender and window role, and owns window records and root quiescence.
+
+Application menu dispatch belongs to `desktop/windows/application-dispatch.ts`: workspace commands
+target only the focused workspace window, while focused non-workspace windows handle Edit shortcuts
+locally and drop workspace commands.
 
 Workspace definitions are resolved by `domain/workspaces/definitions`; `capture.ts` owns portable
 capture and keeps command text desktop-owned. `desktop/workspaces/definitions.ts` owns live source
@@ -206,6 +216,15 @@ service reserves a window-owned session before consent and allows one capture/in
 through stdin and exits after inference; audio is never persisted. See
 [window-owned speech](docs/adr/0009-window-owned-speech.md).
 
+Bounded read-only archive entry text extraction (`readArchiveEntryText` in
+`desktop/previews/archives.ts`, refusing private keys and invalid UTF-8) and file-coordinated SQLite
+reads (`desktop/files/file-services.ts`) run in `desktop/workers/preview-worker.ts` and serve MCP
+`read_sqlite`, `list_archive` and `read_archive_entry` via
+`desktop/agents/{tool-catalog,agent-broker}.ts`. `speechMediaCheckAllowed` in
+`desktop/speech/media-policy.ts` gates granted Settings microphone enumeration while keeping audio
+capture session-only; `tools/mas-configuration.ts` configures Store dictation's
+`com.apple.security.device.audio-input` entitlement and sandbox-inheriting speech helper signing.
+
 Hosted speech metadata and endpoint/model-bound audio consent belong to `desktop/speech/providers`;
 encrypted keys use a separate private namespace. `desktop/speech/transcription` owns wire protocols
 and bounded responses. Local and hosted paths share capture and reviewed insertion.
@@ -228,11 +247,21 @@ retires agent work; per-client withdrawal retires that client's work. Model data
 tracks the request's user/agent origin. Agent Git inspection uses a contained process on macOS and
 never falls back to an uncontained status or diff.
 
+Per-request agent dispatch tracking belongs to `issuedDispatches` in `desktop/bridge.ts`,
+`viewerDispatch` in `src/preload.ts` and `renderer/app/agent-dispatch.ts`: the desktop issues a
+per-request dispatch ID and deadline so concurrent person actions in the same window stay separate
+and an agent dispatch cannot elevate across multi-step sequences.
+
 An **operation receipt** records mutation intent and guarded Undo. An intent is synced to disk
 before the change it covers; a finished item's record waits for the next sync, so after a power
 failure that item reads as interrupted and recovery changes nothing. **Journal** is a bounded
 human-readable projection; it cannot authorize or replay an event. An external session's
 **Reported** state comes from its authenticated adapter, not terminal output or elapsed time.
+
+Trash original locations are persisted independently of the 100-job history by
+`desktop/operations/trash-origins.ts` in the private mode-`0600` store `trash-origins-v1.json`
+(version 1, up to 5,000 items and 8 MiB, keeping unreadable or newer-version files aside), wired
+into `desktop/operations/operations.ts` and `desktop/operations/trash.ts` for **Put Back**.
 
 ## Interface
 

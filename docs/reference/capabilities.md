@@ -487,8 +487,10 @@ each proposal waits for your review.
 | Quit only on a second **⌘Q**                                        | **⌘Q** twice                 | **Turn Off: Warn before quitting with ⌘Q** `setting.settings.quit.warnShortcut` opens Settings                        | **Viewer → Quit Viewer** quits at once                                                  | [Shortcuts](shortcuts.md)                                          |
 
 Viewer never deletes a file for good unless you choose **Empty Trash…** yourself in the Trash
-window, after a confirmation; no **⌘K** command, CLI command or agent tool can empty it. On a volume
-without a Trash, **Move to Trash** fails and the item stays where it is.
+window, after a confirmation; no **⌘K** command, CLI command, workflow, custom action or agent tool
+can empty it. On a volume without a Trash, **Move to Trash** fails and the item stays where it is.
+Closing a window or quitting Viewer waits for pending saves (editors, notes, drafts, lenses and
+settings) and reports any failed save instead of closing silently.
 
 ## Settings and updates
 

@@ -82,11 +82,12 @@ system dialogs. Editor save warnings and ordinary app notices use Viewer's dialo
 | **Gallery** | **⌘4** | One large file at a time while you move through them |
 | **Map**     | **⌘5** | Arranging items in space without moving the files    |
 
-The **View mode** button in the folder's header switches views too. To group items, right-click
-empty space and choose **View → Group by**, then **Group by Kind** or **Group by Date Modified**.
-**⇧⌘.** shows or hides hidden files. Links have kind **Alias**, including links to folders, and
-**Group by Kind** places them in **Aliases** before **Folders**. They still open their targets;
-ordinary name, date and size sorting keep their existing order.
+The **View mode** button in the folder's header switches views too. **Sort by Kind** orders items by
+their displayed kind label. To group items, right-click empty space and choose **View → Group by**,
+then **Group by Kind** or **Group by Date Modified**. **⇧⌘.** shows or hides hidden files. Links
+have kind **Alias**, including links to folders, and **Group by Kind** places them in **Aliases**
+before **Folders**. They still open their targets; ordinary name, date and size sorting keep their
+existing order.
 
 On macOS, a helper built from the current source also hides items carrying the hidden flag, such as
 files a Windows PC marked hidden on an SMB share. This includes system folders hidden in Finder:
@@ -142,6 +143,8 @@ With a picture and no copied files on the clipboard, **Paste Here** (**⌘V**) s
 
 A copy on the same disk is instant: on APFS, Viewer clones the file, so the copy shares the
 original's storage until either one changes. Copies to another disk read and write every byte.
+Copying an item into its own folder keeps both; a plain or move drag dropped back onto the same
+folder does nothing, while holding **Option** copies it there.
 
 When a name already exists at the destination, Viewer asks whether to **Skip**, **Keep Both** or
 **Replace**. The **File operations** button in the title bar shows each operation as a
@@ -232,14 +235,16 @@ filter and how to save a search.
 deletes a file for good unless you choose **Empty Trash…** yourself in the Trash window, after a
 confirmation. Closing a plane only closes its view; it never deletes files.
 
-To get a file back, choose **Trash** in the sidebar, select the item and choose **Put Back**. Choose
-**Put Back To…** when Viewer does not know where the file came from, which is the case for files
-trashed by other apps. Browsing the Trash needs Full Disk Access for Viewer in **System Settings →
-Privacy & Security**.
+To get a file back, choose **Trash** in the sidebar, select the item and choose **Put Back**. Viewer
+keeps original locations for items it moved to the Trash in a private store
+(`trash-origins-v1.json`) so **Put Back** stays available even after older operation history rolls
+over. Choose **Put Back To…** when Viewer does not know where the file came from, which is the case
+for files trashed by other apps. Browsing the Trash needs Full Disk Access for Viewer in **System
+Settings → Privacy & Security**.
 
 To erase what the Trash holds, choose **Empty Trash…** at the bottom of the Trash window. macOS asks
-first, with the number of items; after **Empty Trash** they cannot be recovered. Agents, commands
-and the CLI cannot do this.
+first, with the number of items; after **Empty Trash** they cannot be recovered. Agents, commands,
+workflows, custom actions and the CLI cannot do this.
 
 ## Share a folder with a Windows PC
 

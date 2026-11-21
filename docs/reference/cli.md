@@ -38,7 +38,8 @@ viewer -- search
 | `--`                | Treat every later argument as a literal path.                                                                                           |
 
 Viewer starts if it is not running; otherwise the running app receives the request. Any other
-argument starting with `-` fails with `Unknown Viewer option`.
+argument starting with `-` fails with `Unknown Viewer option`, writes the error to stderr and exits
+with status `1` (including when Viewer is already running).
 
 Workspace queries resolve in this order: exact open ID, unique exact open name, exact definition key
 (then a unique case-insensitive key), unique exact definition display name ignoring case, exact
@@ -101,37 +102,37 @@ terminal's folder. A command's capability is checked again by the app on every c
 
 ### Discover and navigate
 
-| Command                                                | Needs        | Does                                                                         |
-| ------------------------------------------------------ | ------------ | ---------------------------------------------------------------------------- |
-| `status`                                               | a token      | Checks the connection.                                                       |
-| `tools list`                                           | a token      | Lists every service tool and its input schema.                               |
-| `tools call NAME [--args JSON]`                        | the tool's   | Calls a tool with a JSON object; `--args` defaults to `{}`.                  |
-| `workspace list`                                       | `metadata`   | Lists workspaces visible within your folders.                                |
-| `workspace switch NAME`, `--id ID`                     | `navigation` | Switches to a workspace by exact unique name or by ID; give one, not both.   |
-| `workspace create`, `workspace rename`                 | `propose`    | Opens the new-workspace or rename form after review.                         |
-| `plane list [--workspaceID ID]`                        | `metadata`   | Lists granted planes; the active workspace by default.                       |
-| `plane open PATH [--placement P]`                      | `navigation` | Opens a path; `P` is `current`, `root` (default) or `linked`.                |
-| `plane focus PANE_ID`                                  | `navigation` | Focuses a plane from `plane list`.                                           |
-| `preview PATH`                                         | `navigation` | Opens a linked preview.                                                      |
-| `layout horizontal`, `layout vertical`, `layout frame` | `propose`    | Proposes arranging planes horizontally, vertically, or framing all.          |
-| `command list`                                         | `metadata`   | Lists the commands available for the folder and selection focused in Viewer. |
-| `command explain COMMAND_ID`                           | `metadata`   | Explains a command and its review.                                           |
-| `command run COMMAND_ID`                               | `propose`    | Proposes the command for review.                                             |
+| Command                                                | Needs        | Does                                                                                                             |
+| ------------------------------------------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `status`                                               | a token      | Checks the connection.                                                                                           |
+| `tools list`                                           | a token      | Lists every service tool and its input schema.                                                                   |
+| `tools call NAME [--args JSON]`                        | the tool's   | Calls a tool with a JSON object; `--args` defaults to `{}`.                                                      |
+| `workspace list`                                       | `metadata`   | Lists workspaces visible within your folders.                                                                    |
+| `workspace switch NAME`, `--id ID`                     | `navigation` | Switches to a workspace by exact unique name or by ID; give one, not both.                                       |
+| `workspace create`, `workspace rename`                 | `propose`    | Opens the new-workspace or rename form after review.                                                             |
+| `plane list [--workspaceID ID]`                        | `metadata`   | Lists granted planes; the active workspace by default. Fails if the workspace is unknown or outside your folders |
+| `plane open PATH [--placement P]`                      | `navigation` | Opens a path; `P` is `current`, `root` (default) or `linked`.                                                    |
+| `plane focus PANE_ID`                                  | `navigation` | Focuses a plane from `plane list`.                                                                               |
+| `preview PATH`                                         | `navigation` | Opens a linked preview.                                                                                          |
+| `layout horizontal`, `layout vertical`, `layout frame` | `propose`    | Proposes arranging planes horizontally, vertically, or framing all.                                              |
+| `command list`                                         | `metadata`   | Lists the commands available for the folder and selection focused in Viewer.                                     |
+| `command explain COMMAND_ID`                           | `metadata`   | Explains a command and its review.                                                                               |
+| `command run COMMAND_ID`                               | `propose`    | Proposes the command for review.                                                                                 |
 
 ### Read files
 
-| Command                                              | Needs                                                 | Does                                                                        |
-| ---------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------- |
-| `search QUERY [--root DIR] [--content] [--offset N]` | `metadata`                                            | Searches an indexed granted folder by name. `--root` defaults to `.`.       |
-| `search … --content`                                 | `content`, named client                               | Also matches indexed document text and returns match evidence.              |
-| `inspect PATH`                                       | `metadata`                                            | Reads metadata.                                                             |
-| `read PATH`                                          | `content`                                             | Reads extracted passages with source versions.                              |
-| `table PATH [--sheet NAME] [--offset N] [--limit N]` | `content`                                             | Reads CSV, TSV or XLSX rows: stored values and formula text, no evaluation. |
-| `relations PATH [--content]`                         | `metadata`; `--content` needs `content`, named client | Reads operation provenance; `--content` also scans reference syntax.        |
-| `git status [DIR]`                                   | `metadata`                                            | Reads repository status; `DIR` defaults to `.`.                             |
-| `git diff [DIR] [--base REF]`                        | `metadata`, `content`                                 | Reads a tracked-file patch against `REF` (default `HEAD`).                  |
-| `config show`                                        | `metadata`                                            | Reads effective configuration without credentials or grants.                |
-| `config validate PATCHES`                            | `metadata`                                            | Validates a JSON array of patches without applying them.                    |
+| Command                                              | Needs                                                 | Does                                                                                         |
+| ---------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `search QUERY [--root DIR] [--content] [--offset N]` | `metadata`                                            | Searches an indexed granted folder by name. `--root` defaults to `.`.                        |
+| `search … --content`                                 | `content`, named client                               | Also matches indexed document text and returns match evidence.                               |
+| `inspect PATH`                                       | `metadata`                                            | Reads metadata.                                                                              |
+| `read PATH`                                          | `content`                                             | Reads extracted passages with source versions.                                               |
+| `table PATH [--sheet NAME] [--offset N] [--limit N]` | `content`                                             | Reads CSV, TSV or XLSX rows: stored values and formula text, no evaluation.                  |
+| `relations PATH [--content]`                         | `metadata`; `--content` needs `content`, named client | Reads operation provenance; `--content` also scans reference syntax.                         |
+| `git status [DIR]`                                   | `metadata`                                            | Reads repository status; `DIR` defaults to `.`.                                              |
+| `git diff [DIR] [--base REF]`                        | `metadata`, `content`                                 | Reads a tracked-file patch against `REF` (default `HEAD`).                                   |
+| `config show`                                        | `metadata`                                            | Reads effective configuration scoped to your granted folders, without credentials or grants. |
+| `config validate PATCHES`                            | `metadata`                                            | Validates a JSON array of patches against your scoped configuration without applying them.   |
 
 `search` returns `entries`, `more`, `indexed` and `running` (indexing still in progress); with
 `--content` also `evidence`. Query syntax is in [search](search.md). `--offset` is 0 to 100,000.
@@ -176,8 +177,9 @@ steps are described in [automation](automation.md). An export's `--plan` is the 
 names the plan kinds.
 
 Service tools without their own command, such as `get_context`, `inspect_file`,
-`read_drawing_geometry`, `propose_selection`, `read_terminal` and `report_session`, are reachable
-with `tools call`. [Agents](agents.md#what-an-agent-can-do) describes each tool.
+`read_drawing_geometry`, `read_sqlite`, `list_archive`, `read_archive_entry`, `list_proposals`,
+`list_tasks`, `propose_selection`, `read_terminal` and `report_session`, are reachable with
+`tools call`. [Agents](agents.md#what-an-agent-can-do) describes each tool.
 
 ### Git reads
 

@@ -59,7 +59,7 @@ The first delivery priorities are:
 | Image conversion routes        |            107 | Conventional source-extension to destination-format pairs across quick actions, image tools and layout export, including RAW sources.                 |
 | Audio/video conversion routes  |             98 | Audio export, video export and still-frame export for the media tools' declared inputs.                                                               |
 | PDF rasterization routes       |              2 | PDF pages to PNG or JPEG through layout export.                                                                                                       |
-| Office-to-PDF routes           |             35 | The Office family's **Save PDF copy** command, including supported OpenDocument and drawing formats.                                                  |
+| Office-to-PDF routes           |             35 | The Office family's **Save PDF Copy** command, including supported OpenDocument and drawing formats.                                                  |
 | Scoped conversion total        |        **242** | The four conversion rows above, with 89 source labels and 10 destination formats.                                                                     |
 | Unified Optimize               | **5 families** | PDF, JPEG, PNG, WebP and AVIF; six extensions when `jpg` and `jpeg` are counted separately.                                                           |
 
@@ -206,9 +206,10 @@ unknown until this corpus exists.
 
 ### Video-to-audio and media conversion
 
-Video-to-audio already works through **Edit media…** with M4A, WAV or FLAC output. Make **Extract
-audio…** a direct action and expose the same operation in batch conversion. This is an integration
-and breadth improvement, not a new decoder from zero.
+Video-to-audio already works through **Edit Media…** with M4A, WAV or FLAC output, and the **Extract
+audio…** export preset opens **Edit Media…** set up for M4A review. Make audio extraction a direct
+one-step action with stream copy and expose the same operation in batch conversion. This is an
+integration and breadth improvement, not a new decoder from zero.
 
 | Work                         | Proposed result                                                                             | Acceptance boundary                                                                              |
 | ---------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -395,7 +396,7 @@ proposed order, not dates or an assurance that every variant is feasible.
 | SVG/SVGZ, ICO/ICNS, APNG and animated GIF/WebP/AVIF                 | Preview paths exist; image tools reject animation.              | Vector-to-raster/PDF, icon sizes, animation timelines and frame-preserving exports. SVG optimization must preserve appearance and IDs that matter.   | P1/P2    |
 | JPEG XL, JPEG 2000, HDR/EXR and camera RAW                          | JP2/EXR and 21 RAW labels render bounded images.                | JXL investigation, actual camera samples, multipage/high-bit-depth/color handling and labeled tone-mapped output.                                    | P2       |
 | PDF and scanned documents                                           | Viewing, assembly, layout rasterization and optimization exist. | Reviewed OCR to searchable PDF/TXT/Markdown, table extraction and explicit forms/tags/bookmarks preservation rules.                                  | P1       |
-| DOC/DOCX/RTF/ODT, XLS/XLSX/ODS, PPT/PPTX/ODP and supported variants | Layout and PDF export already exist for 35 labels.              | Structured interchange, worksheet CSV/TSV export and clearer fidelity diagnostics; qualify XLSB/PPSM and additional legacy formats separately.       | P1/P2    |
+| DOC/DOCX/RTF/ODT, XLS/XLSX/ODS, PPT/PPTX/ODP and supported variants | Layout and PDF export already exist for 35 labels.              | Structured interchange, worksheet CSV/TSV export and clearer fidelity diagnostics; qualify XLSB/PPSM and additional older formats separately.        | P1/P2    |
 | Pages, Numbers, Keynote, XPS/OXPS                                   | Saved picture only.                                             | Full page/sheet rendering or an explicit external converter, followed by qualified PDF/data export.                                                  | P2       |
 | TXT, Markdown, HTML, RST, JSON/JSONL, YAML, XML, CSV/TSV            | Text, selected structured views and tables.                     | Consistent encoding/newline conversion, data-aware JSON/CSV/TSV export, Markdown/HTML/document export and bounded JSONL tables.                      | P1       |
 | MP4/MOV/MKV/WebM/AVI/MPEG and MP3/M4A/WAV/FLAC/Ogg/Opus             | Playback and selected media tools.                              | Direct audio extraction, more export codecs, stream selection and media optimization.                                                                | P1       |
@@ -404,11 +405,11 @@ proposed order, not dates or an assurance that every variant is feasible.
 | EPUB/FB2/DjVu, DRM-free MOBI/AZW3, CBZ/CBR/CB7/CBT                  | First three have readers; CBZ is generic ZIP browsing.          | Dedicated comic navigation and broader book conversion, preserving reading order, covers and navigation. No DRM bypass.                              | P2       |
 | EML/EMLX/MBOX, MSG/PST/OST                                          | First three have readers.                                       | MSG and mailbox indexing, attachment handling and reviewed export; large stores require incremental work.                                            | P1/P3    |
 | ICS/iCalendar, VCF/vCard, OPML, RSS/Atom                            | Calendar/contact readers; other XML may show as text/tree.      | Event/contact export, timezone/recurrence fidelity, outline/feed views without automatic network fetch.                                              | P2       |
-| TTF/OTF/WOFF/WOFF2, TTC/OTC and legacy fonts                        | First four have specimens and metadata.                         | Collections, variable axes, coverage comparison; conversion/subsetting only with embedding rights and shaping checks.                                | P2       |
+| TTF/OTF/WOFF/WOFF2, TTC/OTC and older fonts                         | First four have specimens and metadata.                         | Collections, variable axes, coverage comparison; conversion/subsetting only with embedding rights and shaping checks.                                | P2       |
 | DMG/ISO and common packages                                         | Generic byte/container inspection where available.              | Bounded read-only contents and metadata without automatic mounting, execution or installation.                                                       | P2/P3    |
 
 OCR reading and searching do not imply an exported searchable PDF. Likewise, rendering Office to an
-internal PDF and the existing **Save PDF copy** are implemented, while editing or round-tripping all
+internal PDF and the existing **Save PDF Copy** are implemented, while editing or round-tripping all
 Office semantics is not. Keep these boundaries visible in the capability catalog.
 
 ## Engineering, construction and manufacturing
@@ -539,7 +540,7 @@ compatibility, a file that never finishes and a file that tries to read another 
 | ------------------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------- |
 | Columnar/table stores: Parquet, Arrow/Feather, ORC, Avro, DuckDB          | CSV/TSV and SQLite readers exist.                    | Paged schemas/tables, typed filtering and intentional CSV/JSONL/Parquet/Arrow export.                                 | P1/P2    |
 | Binary records: CBOR, MessagePack, BSON, Protobuf                         | Text/schema views only where recognized.             | Typed trees and schema-aware records; Protobuf without its schema must disclose incomplete interpretation.            | P2       |
-| Legacy databases: MDB/ACCDB/DBF; SQL/DUMP/BAK                             | Generic text/bytes; SQLite DB is not every database. | Read-only schema/records for qualified engines; never restore or execute a dump merely to preview it.                 | P2/P3    |
+| Older databases: MDB/ACCDB/DBF; SQL/DUMP/BAK                              | Generic text/bytes; SQLite DB is not every database. | Read-only schema/records for qualified engines; never restore or execute a dump merely to preview it.                 | P2/P3    |
 | Web captures: MHTML/MHT, WebArchive, WARC/WARC.GZ                         | WebArchive renders in isolation.                     | Offline packaged pages, resource/URL indexing and intentional export with network access disabled by default.         | P2       |
 | Diagnostics: HAR, Chrome trace JSON, Perfetto traces, PCAP/PCAPNG         | Generic JSON/bytes.                                  | Requests, timelines, flows and selected records with secrets handled explicitly.                                      | P2/P3    |
 | APIs/configuration: OpenAPI, GraphQL, Proto, AVSC, JSON Schema            | Generic source/tree preview.                         | Schema relationships, endpoints and examples without running requests or executable configuration.                    | P2       |

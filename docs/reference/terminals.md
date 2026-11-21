@@ -122,9 +122,9 @@ asks for permission.
 
 ## Command receipts
 
-Each quick command and **Run Command…** run writes a private receipt in Viewer's data. **Tasks…** →
-**Command History** lists the 100 newest that match its search field, and **Open Receipt** opens one
-as a plane.
+Each quick command (including one run from an empty workspace) and **Run Command…** run writes a
+private receipt in Viewer's data. **Tasks…** → **Command History** lists the 100 newest that match
+its search field, and **Open Receipt** opens one as a plane.
 
 | Field   | Content                                                                                                  |
 | ------- | -------------------------------------------------------------------------------------------------------- |
@@ -198,8 +198,9 @@ changed since the panel displayed it; review the refreshed command before choosi
 
 Agents, model-authored lines, spoken plans, custom actions and macros cannot open definitions or
 start their commands. Agent navigation and task opening leave terminals deferred with **Run**
-disabled until the window is no longer agent-driven; **Shell only** remains available to the person.
-An agent-driven window cannot approve or start definition commands.
+disabled while the agent request runs; **Shell only** remains available to the person. Agent-driven
+requests carry desktop-issued per-request dispatch IDs so a person's own actions in that window stay
+separate and cannot be blocked or misattributed to an agent.
 
 Viewer types the approved line once after shell output and 120 ms of quiet, within three seconds.
 For zsh and fish, it also waits for the line editor to enable bracketed paste. It waits for tracked

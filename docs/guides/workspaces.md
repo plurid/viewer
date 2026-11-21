@@ -190,7 +190,9 @@ managed from that window. Viewer remembers recent use across restarts.
 **Workspace → New Workspace…** in the menu bar also creates a workspace. Give each kind of work its
 own: a writing workspace with a folder, a PDF and notes; a project workspace with an editor, a
 terminal and a browser. Choose where new files planes open in **Settings → Browsing → New files
-planes open at**.
+planes open at**. Menu commands act only in the focused workspace window, never in unfocused peer
+windows, and closing or deleting an inactive workspace leaves your active workspace, profile and
+Quick Preview as they were.
 
 ## Workspaces Viewer finds
 
@@ -372,9 +374,10 @@ it again with **File → Open Project…**; **File → Save Project** records la
    **Restore Copies**.
 
 The backup holds your notes, drafts, conversations, canvases, attached canvas assets, file paths and
-command history, so keep it private. Restored copies have no definition link. It does not hold other
-source files, keys, folder permissions or browser sessions. Restored terminals, servers and
-conversations stay stopped until you start them.
+command history, so keep it private. Default backup filenames use your local calendar date, and
+creating a backup does not mark a clean project dirty. Restored copies have no definition link. It
+does not hold other source files, keys, folder permissions or browser sessions. Restored terminals,
+servers and conversations stay stopped until you start them.
 [Personal backups](../reference/configuration.md#personal-backups) lists the exact contents.
 
 ## What closing a plane does

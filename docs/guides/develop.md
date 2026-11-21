@@ -15,10 +15,12 @@ Terminal Plane** and **File → Start Local Server**
    choose **Edit**.
 2. Press **⌘S** to save, or **⇧⌘S** to save it under another name. **Done** ends editing.
 
-Unsaved changes survive quitting Viewer. The first save of an editing session moves the version it
-replaces to the Trash, and **File operations** in the title bar offers **Undo** for it. If another
-app changes the file while you edit, Viewer keeps your draft and says so: choose **Reload**, **Save
-Over It** or **Cancel**.
+Unsaved changes survive quitting Viewer; closing a window or quitting waits for pending saves and
+reports any failed save instead of closing silently. The first save of an editing session moves the
+version it replaces to the Trash, and **File operations** in the title bar offers **Undo** for it.
+If another app changes the file while you edit, Viewer keeps your draft and says so: choose
+**Reload**, **Save Over It** or **Cancel** (**Save As…** also keeps your unsaved draft from a
+refusal view).
 
 ## Run commands
 

@@ -1,32 +1,96 @@
 # Product priorities
 
 Viewer should remain easy for everyday work while gaining depth in the tools people already use.
-**Next** is the working order. The sections after it are directions, not a release schedule.
+**Now**, **Next** and **Later** give the working order. The sections after them are longer-term
+directions, not a release schedule.
+
+## Now
+
+Fix waves 1 and 2 are complete across agents and actions, operations and the Trash engine, previews,
+windows and saved state, files and native helpers, and models and speech. Work continues through the
+remaining review waves and release close:
+
+1. **Fix wave 3: settings and commands, CLI, license, updates, build and persistence.** Close the
+   remaining high-severity items where workflows, custom action sequences or model proposals could
+   bypass person-only execution or where diagnostic reports could expose file names, alongside
+   persistence fixes and project-file cleanups (Office runtime workflow path, license pin versions
+   and a machine path in a test). Open problems live in
+   [Review findings](../development/findings.md).
+2. **Packaged screen review and polish pass.** Build a packaged app, run every
+   [review scene](../development/review.md) across wide, narrow, light and dark views, inspect every
+   changed screen by eye and fix what the captures show.
+3. **Fix waves 4 and 5: browsing, workspaces, runtimes, tools and interface polish.** Resolve open
+   items in explorer, workspaces and the space, canvases, Git and runtimes, layout, fabrication and
+   media, the Trash and operations screens, and interface controls and developer tools. Include the
+   interface audit improvements: dragging to reorder PDF Tools pages, tour times with their unit,
+   readable megapixel choices, hiding the update row in Store builds, turning off the Git column
+   option while Git is off, one place for Tree and Source in the structured tree header, and
+   disabled menu-button rows ([Review findings](../development/findings.md)).
+4. **Fix wave 6: documentation and remaining review checks.** Close the remaining documentation
+   findings, clear fixed items from [Review findings](../development/findings.md) and finish the two
+   tool reviews and three documentation checks left from the review.
+5. **Close and qualify the build.** Rerun the hidden-window native scenarios and `electron-smoke`,
+   qualify a signed Mac App Store build with dictation (the Store entitlement and sandboxed helper
+   are written and unit-tested, not yet run signed) and deliver the packaged build to the owner
+   ([Testing](../development/testing.md), [Release gates](../development/releases.md)).
 
 ## Next
 
-A person has to be able to try Viewer, like its first hour and pay for it. The order follows that.
+Ship the first public alpha (`0.1.0-0`, then `0.1.0-N`, never `1.x` for the direct build; see
+[Alpha versioning](../adr/0019-alpha-versioning.md)) and close the gaps people meet in their first
+days:
 
-1. **Sell Viewer.** The 30-day trial, the license key checked on the Mac and the reminder after the
-   trial are built. They stay off until the publisher sets the signing key and purchase page.
-   [The paid build](paid-build.md) has the rules and what stays out.
-2. **Close the first-hour gaps.** Help that opens without a network, more archive formats and
-   visible tags. [File-manager gaps](file-manager-gaps.md) gives each one's current state.
-3. **Run the checks only a person can run.** Use Viewer as the only file manager for two days.
-   VoiceOver and keyboard-only passes through the main flows, dictation with a real microphone, one
-   request to each hosted provider, and native acceptance on an Intel Mac, which
-   [platform status](../reference/platforms.md) lists as open.
-4. **Make the laser-job check confirm what it finds.** In the last live evaluation the check found
-   every planted problem, yet Viewer confirmed fewer than a third of them, and no hole pitch or
-   thickness at all. It also asked for a review of about one requirement per run that was not a
-   problem. Read the retained answers first. Then verify each requirement from the drawing's own
-   text at the place the model points to, so a grade stops depending on how the model words its
-   quote. [Answer and grading](../reference/fabrication.md#answer-and-grading) owns the rules.
-5. **Finish the everyday media tasks.** Audio extraction as a direct action, file transcription with
-   reviewed subtitles, and a first [3D video preview](formats.md#stereoscopic-and-immersive-video).
-6. **Earn trust before asking for attention.** Publish how Viewer is built and tested, with measured
-   startup time, memory and idle energy for the release build, and offer a Homebrew tap beside the
-   disk image.
+1. **Owner steps for release 0.1.0-0.** The offline 30-day trial, key verification and post-trial
+   reminder are built and stay off until configured ([The paid build](paid-build.md),
+   [License reference](../reference/license.md)). Before shipping 0.1.0-0, the owner writes the
+   release notes, generates the license key pair, sets up the payment link and seller details, signs
+   and notarizes the direct build, updates the website and settles the source license question
+   against paid keys ([Release gates](../development/releases.md)).
+2. **Run the checks only a person can run.** Use Viewer as the only file manager for two days, run
+   VoiceOver and keyboard-only passes through the main flows, test dictation with a real microphone,
+   send one live request to each hosted provider and qualify native acceptance on an Intel Mac
+   ([Platform status](../reference/platforms.md),
+   [Usability protocol](../development/usability.md)).
+3. **Close the first-hour gaps.** Bundle offline Help inside the app, support more archive formats
+   and show Finder tags in folder views ([File-manager gaps](file-manager-gaps.md)).
+4. **Make the laser-job check confirm what it finds.** Verify each requirement from the drawing's
+   own text at the place the model points to so grading stops depending on how the model words its
+   quote, and reduce false-positive reviews
+   ([Answer and grading](../reference/fabrication.md#answer-and-grading)).
+5. **Finish everyday media tasks and earn trust.** Add direct one-step audio extraction, long-file
+   transcription with reviewed subtitles, a first
+   [3D video preview](formats.md#stereoscopic-and-immersive-video), published release measurements
+   (startup time, memory and idle energy) and a Homebrew tap beside the disk image
+   ([Performance audits](../development/performance.md)).
+
+## Later
+
+Planned features and deferred improvements not yet started:
+
+1. **Learned workspace arrangements.** Deleting an ad-hoc workspace built mostly inside one project
+   remembers its planes in that project's workspace with an Undo notice, alongside carriers for open
+   workspaces and **Save as Definition…** for a found workspace
+   ([Found workspaces](../adr/0021-found-workspaces.md),
+   [Defined workspaces](../adr/0020-defined-workspaces.md)).
+2. **Terminal starts for declared commands.** A stopped terminal plane lists the folder's declared
+   command lines; starting one is remembered and offered on reopen behind a one-time approval
+   ([Declared commands](../adr/0022-declared-commands-are-typed-lines.md),
+   [Terminals reference](../reference/terminals.md)).
+3. **Remote planes, packages 4 to 14.** Packages 1 to 3 (location model, SFTP v3 client and OpenSSH
+   transport) are built behind `VIEWER_REMOTE=1` in the direct build, with rechecks of the SFTP
+   client and SSH transport due before resuming. Packages 4 to 14 add desktop read routing (4),
+   browsing UI (5), previews (6), server Trash and Undo (7), same-server operations (8), Mac and
+   server transfers (9), clipboard and drag (10), remote terminals (11), remote filename search
+   (12), NetFS WebDAV (13) and real-`sshd` qualification with the gate removed (14)
+   ([Remote planes](remote-planes.md),
+   [ADR 0023](../adr/0023-remote-planes-over-system-openssh.md)).
+4. **Fix mouse-wheel handling in Plurid.** The space's own wheel handler in `@plurid/plurid-react`
+   (`source/services/logic/input/wheel.ts`) reads a slow mouse wheel as a trackpad and needs to be
+   fixed in the Plurid package ([Runtime dependencies](../development/dependencies.md)).
+5. **Smaller deferred items.** Rotate an image file in place with Undo
+   ([Media reference](../reference/media.md)), rotate PDF pages ([PDF tools](../reference/pdf.md))
+   and add [review-sheet scenes](../development/review.md) for the dialogs and commands that still
+   lack one.
 
 ## Make the existing experience dependable
 
@@ -34,8 +98,9 @@ Continue long-session resource audits, real-file qualification, source-change re
 workflows. Test native permissions, external disks/providers, window restoration and accessibility
 in actual platform builds. Keep UI input, document lifetimes and runtime lifetimes distinct.
 
-The current implementation already includes worktrees/tasks, hunk review, parameterized commands,
-reported agent sessions, Journal and focused creative tools. Future planning must start from that
+The current implementation already includes defined and found workspaces, declared commands,
+worktrees/tasks, hunk review, parameterized commands, reported agent sessions, Journal and focused
+creative tools. Future planning must start from that
 [current capability map](../reference/capabilities.md).
 
 ## Deepen everyday tools

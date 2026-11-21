@@ -117,10 +117,12 @@ until you choose the command, and its first run asks as below.
 ## First-run confirmation
 
 The first time an executable or shell command runs, Viewer asks in a native dialog, **Run “Name” for
-the first time?**, showing the exact program, arguments or script. The approval belongs to the exact
-executor: changing the program, arguments, script or **Run once per selected item** asks again;
-renaming the command does not. Terminal profiles, a tmux program and a terminal application chosen
-by path ask the same way. The built-in login shell profile and the default tmux need no approval.
+the first time?**, showing the exact program, arguments or script. Scripts, arguments or terminal
+settings longer than 6,000 characters page across native dialogs without cutting text, and every
+page must be confirmed. The approval belongs to the exact executor: changing the program, arguments,
+script or **Run once per selected item** asks again; renaming the command does not. Terminal
+profiles, a tmux program and a terminal application chosen by path ask the same way. The built-in
+login shell profile and the default tmux need no approval.
 
 Approvals are kept privately, outside `config.jsonc`, up to the latest 1,000. An edited or imported
 configuration cannot approve itself. Importing a configuration that changes agent access, model
@@ -161,8 +163,10 @@ expression**, **Ignore case** and **Read document metadata for template fields**
 
 ## Review and Apply
 
-A recipe prepares a proposal; nothing changes until you choose **Apply N Changes**. Each row shows
-its source, the proposed result and the evidence used. Untick a row to leave it out.
+A recipe prepares a proposal; nothing changes until you choose **Apply N Changes**. Review dialogs
+open with keyboard focus on **Discard** (or **Cancel** in operation reviews), so pressing Return or
+Space by mistake never approves changes. **Discard** cancels the plan. Each row shows its source,
+the proposed result and the evidence used. Untick a row to leave it out.
 
 | Row marked and left unticked                  | Message                                                                              |
 | --------------------------------------------- | ------------------------------------------------------------------------------------ |
@@ -179,21 +183,21 @@ its source, the proposed result and the evidence used. Untick a row to leave it 
 Edit a marked row's name to include it. A proposal that fails while it is prepared, for example when
 a model names a file twice or leaves one out, shows only its error. Apply checks each source again;
 an Apply that stops before moving anything fails, and one that stops after moving some files is
-partial and offers **Review Recovery**. **Undo Changes** reverses an applied proposal while its
-results are unchanged. **Keep a copy of the originals** saves the affected files' contents and mode
-before Apply, without Finder tags or ACLs, within `settings.checkpoints.budgetBytes` (5 GB by
-default).
+partial and offers **Review Recovery** (completing the restore plan resolves the original partial or
+recovery plan). **Undo Changes** reverses an applied proposal while its results are unchanged.
+**Keep a copy of the originals** saves the affected files' contents and mode before Apply, without
+Finder tags or ACLs, within `settings.checkpoints.budgetBytes` (5 GB by default).
 
 A model's answer never changes a file by itself. A model-backed recipe sends only its **Permitted
 data**, and only with that provider's data permission.
 
-| Recipe limit               | Value                                                                                                 |
-| -------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Files in one task          | 2,000: `Choose at most 2,000 files per action.`                                                       |
-| Entries scanned in folders | 100,000; hidden items and symbolic links are skipped                                                  |
-| Tasks kept                 | 100; finished ones are dropped first, then `Review or finish existing tasks before starting another.` |
-| One model request          | 500,000 characters: `This batch contains too much document evidence. Select fewer files.`             |
-| Quotes sent for one file   | **Metadata and excerpts**: 16 of up to 6,000 characters; **Extracted text**: 64 of up to 20,000       |
+| Recipe limit               | Value                                                                                                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Files in one task          | 2,000: `Choose at most 2,000 files per action.`                                                                                                            |
+| Entries scanned in folders | 100,000; hidden items and symbolic links are skipped                                                                                                       |
+| Tasks kept                 | 100; finished ones are dropped first (unfinished plans are kept across undo and recovery), then `Review or finish existing tasks before starting another.` |
+| One model request          | 500,000 characters: `This batch contains too much document evidence. Select fewer files.`                                                                  |
+| Quotes sent for one file   | **Metadata and excerpts**: 16 of up to 6,000 characters; **Extracted text**: 64 of up to 20,000                                                            |
 
 ## Agents
 

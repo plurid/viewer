@@ -1,8 +1,10 @@
 # Further speech controls
 
-Local and hosted dictation are implemented in the direct macOS build: bundled recognition, verified
-model setup, provider-specific audio consent, microphone/language choices, push-to-talk and reviewed
-insertion into Ask Viewer, notes and chat. Use the [dictation guide](../guides/speech.md) and
+Local and hosted dictation are implemented in both macOS editions (direct and Mac App Store; the
+Store build carries the microphone entitlement and sandboxed speech helper, written and unit-tested,
+and still needs qualification in a signed Store build): bundled recognition, verified model setup,
+provider-specific audio consent, microphone/language choices, push-to-talk and reviewed insertion
+into Ask Viewer, notes, chat and tour captions. Use the [dictation guide](../guides/speech.md) and
 [current limits](../reference/speech.md). The directions below are proposals, not shipped features.
 
 ## Transcribe files and identify speaker turns
