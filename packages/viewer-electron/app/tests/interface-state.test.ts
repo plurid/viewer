@@ -700,6 +700,72 @@ describe('layout-only changes', () => {
     receiveWorkspaces({ ...mergedFromDesktop, lineHistory: ['old-cmd'] });
     expect(getState().saved.lineHistory).toEqual([]);
   });
+  it('advances shared list baselines after an unchanged-list workspaces broadcast arrives mid-save', async () => {
+    let resolveSave!: () => void;
+    let holdNextSave = true;
+    const saveMock = vi.fn(() => {
+      if (!holdNextSave) return Promise.resolve();
+      holdNextSave = false;
+      return new Promise<void>((resolve) => {
+        resolveSave = resolve;
+      });
+    });
+    vi.stubGlobal('window', {
+      dispatchEvent: vi.fn(),
+      viewer: { save: saveMock, operate },
+    });
+    const seeded = {
+      ...getState().saved,
+      favorites: [{ name: 'Keep', path: '/fixtures/keep' }],
+      lineHistory: ['old-cmd'],
+    };
+    initialize({ ...getState().bootstrap, state: seeded });
+    addFavorite('/fixtures/local', 'Local');
+    savePatch({ lineHistory: ['local-cmd', 'old-cmd'] });
+
+    const firstFlush = flushState(false);
+    await vi.waitFor(() => expect(saveMock).toHaveBeenCalledTimes(1));
+
+    // An unrelated workspaces broadcast arrives mid-save with both lists unchanged from baseline.
+    receiveWorkspaces({
+      ...seeded,
+      favorites: [{ name: 'Keep', path: '/fixtures/keep' }],
+      lineHistory: ['old-cmd'],
+    });
+    resolveSave();
+    await firstFlush;
+
+    // A later peer broadcast removing our saved favorite and command must not resurrect them.
+    receiveWorkspaces({
+      ...seeded,
+      favorites: [{ name: 'Keep', path: '/fixtures/keep' }],
+      lineHistory: ['old-cmd'],
+    });
+    expect(getState().saved.favorites.map((item) => item.path)).toEqual(['/fixtures/keep']);
+    expect(getState().saved.lineHistory).toEqual(['old-cmd']);
+
+    // Independent generations: a mid-save lineHistory change must not block favorites baseline advancement.
+    addFavorite('/fixtures/second', 'Second');
+    holdNextSave = true;
+    const secondFlush = flushState(false);
+    await vi.waitFor(() => expect(saveMock).toHaveBeenCalledTimes(2));
+
+    receiveWorkspaces({
+      ...seeded,
+      favorites: [{ name: 'Keep', path: '/fixtures/keep' }],
+      lineHistory: ['peer-cmd', 'old-cmd'],
+    });
+    resolveSave();
+    await secondFlush;
+
+    receiveWorkspaces({
+      ...seeded,
+      favorites: [{ name: 'Keep', path: '/fixtures/keep' }],
+      lineHistory: ['peer-cmd', 'old-cmd'],
+    });
+    expect(getState().saved.favorites.map((item) => item.path)).toEqual(['/fixtures/keep']);
+    expect(getState().saved.lineHistory).toEqual(['peer-cmd', 'old-cmd']);
+  });
 });
 describe('conditional operations', () => {
   it('merges sequenced progress, requests resync for gaps, and rejects stale snapshots', () => {

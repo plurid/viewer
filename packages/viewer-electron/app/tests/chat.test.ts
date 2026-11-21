@@ -16,7 +16,7 @@ import { ChatDocumentStore } from '../src/desktop/chat/documents';
 import { Canvases } from '../src/desktop/canvases/service';
 import { defaultSettings, type ModelProvider } from '../src/domain/services';
 import type { ChatDocument, ChatReply, ChatStep } from '../src/domain/models/chat';
-import { chatStepSchema } from '../src/domain/models/chat';
+import { chatDocumentSchema, chatStepSchema } from '../src/domain/models/chat';
 import { canvasLimits } from '../src/domain/canvases/document';
 import { canvasModelMessages } from '../src/desktop/chat/model-context';
 import type { AgentProposal } from '../src/domain/agents/requests';
@@ -893,6 +893,116 @@ describe('read-only Chat', () => {
     }
     // Recover durable state so afterEach chat.close() succeeds cleanly.
     await chat.request({ kind: 'draft', id: conversation.id, text: 'Ok', revision: 1 }, 1);
+  });
+
+  it('recovers orphaned running chats on stop, drops oversized fallback error, and retries settled saves on flush', async () => {
+    // 1. stop recovers an orphaned running conversation even without an active in-process run.
+    const orphaned = await create();
+    const orphanedFile = path.join(root, 'private', 'chat-documents', orphaned.id + '.json');
+    await new ChatDocumentStore(orphanedFile).save({ ...orphaned, status: 'running' });
+    (chat as unknown as { documents: Map<string, ChatDocument> }).documents.delete(orphaned.id);
+    const stopUpdates: ChatDocument[] = [];
+    ports.changed = (_owner, doc) => {
+      stopUpdates.push(doc);
+    };
+    const stopped = document(await chat.request({ kind: 'stop', id: orphaned.id }, 1));
+    expect(stopped.status).toBe('stopped');
+    expect(stopUpdates.at(-1)?.status).toBe('stopped');
+    expect(JSON.parse(await readFile(orphanedFile, 'utf8')).status).toBe('stopped');
+
+    // 2. Near-4-MiB ZodError followed by a disk error omits oversized error in memory and retries on flush.
+    const nearLimit = await create();
+    await chat.close();
+    const fillMessage = (index: number, text: string) => ({
+      id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      role: 'assistant' as const,
+      text,
+      at: index + 1,
+    });
+    const fullChunk = 'a'.repeat(131_000);
+    const baseMessages = Array.from({ length: 31 }, (_, index) => fillMessage(index, fullChunk));
+    const draftDoc: ChatDocument = { ...nearLimit, messages: [...baseMessages] };
+    const baseSize = Buffer.byteLength(JSON.stringify(draftDoc));
+    const targetBudget = 4 * 1024 * 1024 - 140;
+    const fillerLength =
+      targetBudget - baseSize - Buffer.byteLength(JSON.stringify(fillMessage(31, ''))) - 1;
+    const nearFile = path.join(root, 'private', 'chat-documents', nearLimit.id + '.json');
+    await new ChatDocumentStore(nearFile).save({
+      ...draftDoc,
+      messages: [...baseMessages, fillMessage(31, 'b'.repeat(fillerLength))],
+    });
+    const nearUpdates: ChatDocument[] = [];
+    ports.changed = (_owner, doc) => {
+      nearUpdates.push(doc);
+    };
+    chat = new Chats(path.join(root, 'private'), ports);
+    await chat.request({ kind: 'open', id: nearLimit.id }, 1, origin);
+
+    const realSave = ChatDocumentStore.prototype.save;
+    let saveCalls = 0;
+    const nearSpy = vi.spyOn(ChatDocumentStore.prototype, 'save').mockImplementation(function (
+      this: ChatDocumentStore,
+      doc: ChatDocument,
+    ) {
+      saveCalls += 1;
+      if (saveCalls >= 2) return Promise.reject(new Error('Disk full'));
+      return realSave.call(this, doc);
+    });
+    try {
+      await chat.request(
+        { kind: 'send', id: nearLimit.id, text: 'Hi', providerID: provider.id },
+        1,
+      );
+      await vi.waitFor(() => {
+        expect(nearUpdates.at(-1)?.status).toBe('failed');
+      });
+      const fallback = nearUpdates.at(-1)!;
+      expect(fallback.error).toBeUndefined();
+      expect(chatDocumentSchema.safeParse(fallback).success).toBe(true);
+      await expect(chat.flush()).rejects.toThrow('Disk full');
+    } finally {
+      nearSpy.mockRestore();
+    }
+    await expect(chat.flush()).resolves.toBeUndefined();
+    const persistedNear = JSON.parse(await readFile(nearFile, 'utf8')) as ChatDocument;
+    expect(persistedNear.status).toBe('failed');
+    expect(persistedNear.error).toBeUndefined();
+
+    // 3. Transient disk error during settleStatus still fails flush until disk recovers, then persists on Retry.
+    const updates: ChatDocument[] = [];
+    ports.changed = (_owner, doc) => {
+      updates.push(doc);
+    };
+    const transient = await create();
+    const transientFile = path.join(root, 'private', 'chat-documents', transient.id + '.json');
+    let failWrites = false;
+    let sendWritten = false;
+    const transientSpy = vi.spyOn(ChatDocumentStore.prototype, 'save').mockImplementation(function (
+      this: ChatDocumentStore,
+      doc: ChatDocument,
+    ) {
+      if (failWrites) return Promise.reject(new Error('Disk full'));
+      if (!sendWritten && doc.id === transient.id && doc.status === 'running') {
+        sendWritten = true;
+        failWrites = true;
+      }
+      return realSave.call(this, doc);
+    });
+    try {
+      generate.mockRejectedValueOnce(new Error('Upstream timeout'));
+      await send(transient.id);
+      await vi.waitFor(() => {
+        expect(updates.at(-1)?.status).toBe('failed');
+      });
+      await expect(chat.flush()).rejects.toThrow('Disk full');
+      failWrites = false;
+      await expect(chat.flush()).resolves.toBeUndefined();
+    } finally {
+      transientSpy.mockRestore();
+    }
+    const persistedTransient = JSON.parse(await readFile(transientFile, 'utf8')) as ChatDocument;
+    expect(persistedTransient.status).toBe('failed');
+    expect(persistedTransient.error).toContain('Upstream timeout');
   });
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(

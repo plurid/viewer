@@ -266,7 +266,10 @@ export class Speech {
       controller.signal.throwIfAborted();
       if (this.closed || !this.ports.human(owner))
         throw new Error('Speech capture is no longer available.');
-      if (!(await this.ports.requestMicrophone(owner)))
+      const microphoneBefore = this.ports.microphone();
+      const granted = await this.ports.requestMicrophone(owner);
+      if (!this.closed && this.ports.microphone() !== microphoneBefore) this.ports.changed();
+      if (!granted)
         throw new Error(
           'Microphone access is denied. Allow Viewer in System Settings → Privacy & Security → Microphone, then try again.',
         );

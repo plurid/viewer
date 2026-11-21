@@ -13,6 +13,7 @@ import {
   type SpeechTranscript,
 } from '../src/domain/speech/recognition';
 import type { SpeechModelsSnapshot, SpeechSetup } from '../src/domain/speech/models';
+import type { SpeechStatus } from '../src/domain/speech/recognition';
 import { temporaryRoot } from '../tools/temporary';
 
 const runtimeStatus = {
@@ -52,7 +53,7 @@ async function fixture() {
     settings: (owner: number) => owner === 2,
     human: (owner: number) => owner > 0,
     foreground: () => true,
-    microphone: () => 'granted' as const,
+    microphone: (): SpeechStatus['microphone'] => 'granted',
     requestMicrophone: vi.fn(async () => true),
     chooseModel: vi.fn(async (): Promise<string | undefined> => undefined),
     event: (owner: number, event: SpeechSessionEvent) => {
@@ -137,6 +138,38 @@ describe('human speech session ownership', () => {
     await expect(f.speech.request({ kind: 'begin', id: randomUUID() }, 1)).rejects.toThrow(
       'canceled',
     );
+  });
+  it('announces speech changes when microphone access transitions during begin', async () => {
+    const f = await fixture();
+    let access: SpeechStatus['microphone'] = 'not-determined';
+    f.ports.microphone = () => access;
+    f.ports.requestMicrophone.mockImplementationOnce(async () => {
+      access = 'granted';
+      return true;
+    });
+    const first = randomUUID();
+    await f.speech.request({ kind: 'begin', id: first }, 1);
+    expect(f.ports.changed).toHaveBeenCalledTimes(1);
+    await f.speech.request({ kind: 'cancel', id: first }, 1);
+
+    // An unchanged granted state does not broadcast a redundant change event.
+    f.ports.changed.mockClear();
+    f.ports.requestMicrophone.mockResolvedValueOnce(true);
+    const second = randomUUID();
+    await f.speech.request({ kind: 'begin', id: second }, 1);
+    expect(f.ports.changed).not.toHaveBeenCalled();
+    await f.speech.request({ kind: 'cancel', id: second }, 1);
+
+    // Transitioning from not-determined to denied also refreshes open Settings windows.
+    access = 'not-determined';
+    f.ports.requestMicrophone.mockImplementationOnce(async () => {
+      access = 'denied';
+      return false;
+    });
+    await expect(f.speech.request({ kind: 'begin', id: randomUUID() }, 1)).rejects.toThrow(
+      'denied',
+    );
+    expect(f.ports.changed).toHaveBeenCalledTimes(1);
   });
   it('binds PCM and cancellation to one window and releases microphone authority before inference', async () => {
     const f = await fixture(),

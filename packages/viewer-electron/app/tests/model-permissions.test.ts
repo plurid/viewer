@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import type { SettingsService } from '../src/desktop/preferences/settings';
+
+const confirmNativelyMock = vi.hoisted(() => vi.fn());
+vi.mock('../src/desktop/native/native-confirmation', () => ({
+  confirmNatively: confirmNativelyMock,
+}));
+
+import { createModelHandlers } from '../src/desktop/ipc/model-handlers';
 import { ModelPermissions } from '../src/desktop/models/model-permissions';
 import { DocumentStore } from '../src/desktop/persistence/document-store';
 import { newModelProvider } from '../src/domain/models/providers';
@@ -13,6 +21,7 @@ let provider: ReturnType<typeof newModelProvider>;
 let current: (typeof provider)[];
 let permissions: ModelPermissions;
 beforeEach(async () => {
+  confirmNativelyMock.mockReset();
   root = await temporaryRoot('viewer-model-permission-');
   provider = { ...newModelProvider('local', 'fixture'), model: 'fixture', allowContent: true };
   current = [provider];
@@ -113,6 +122,62 @@ describe('private model data authority', () => {
     expect(
       await permissions.run(provider, 'images', signal(), async () => 'allowed', 'agent'),
     ).toBe('allowed');
+  });
+  it('captures providerPermissionAgents revision before awaiting permission and rejects concurrent set', async () => {
+    await permissions.set(provider, 'names');
+    const emitted: unknown[] = [];
+    const handlers = createModelHandlers({
+      settings: {
+        snapshot: () => ({ settings: { providers: current } }),
+        announce: vi.fn(),
+      } as unknown as SettingsService,
+      credentials: {} as Credentials,
+      providers: {} as Providers,
+      modelPermissions: permissions,
+      fileAccess: { require: vi.fn(async () => {}) },
+      window: () => undefined,
+      emit: (event) => emitted.push(event),
+    });
+
+    // 1. A concurrent level change during native confirmation rejects stale agent approval.
+    let finishConfirm!: (approved: boolean) => void;
+    confirmNativelyMock.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishConfirm = resolve;
+        }),
+    );
+    const duringConfirm = handlers.providerPermissionAgents(
+      [provider.id, provider.endpoint, true],
+      1,
+    );
+    await vi.waitFor(() => expect(finishConfirm).toBeTypeOf('function'));
+    confirmNativelyMock.mockResolvedValueOnce(true);
+    await handlers.providerPermissionSet([provider.id, provider.endpoint, 'images'], 1);
+    finishConfirm(true);
+    await expect(duringConfirm).rejects.toThrow('changed');
+    expect((await permissions.get(provider))?.agents).toBeFalsy();
+
+    // 2. A concurrent providerPermissionSet completing while get() is awaiting also invalidates the grant.
+    await permissions.set(provider, 'names');
+    const realGet = permissions.get.bind(permissions);
+    let releaseGet!: () => void;
+    const getGate = new Promise<void>((resolve) => {
+      releaseGet = resolve;
+    });
+    const getSpy = vi.spyOn(permissions, 'get').mockImplementationOnce(async (item) => {
+      const value = await realGet(item);
+      await getGate;
+      return value;
+    });
+    confirmNativelyMock.mockResolvedValueOnce(true);
+    const duringGet = handlers.providerPermissionAgents([provider.id, provider.endpoint, true], 1);
+    await vi.waitFor(() => expect(getSpy).toHaveBeenCalledOnce());
+    confirmNativelyMock.mockResolvedValueOnce(true);
+    await handlers.providerPermissionSet([provider.id, provider.endpoint, 'names'], 1);
+    releaseGet();
+    await expect(duringGet).rejects.toThrow('changed');
+    expect((await permissions.get(provider))?.agents).toBeFalsy();
   });
   it('requires approval for each requested data level', async () => {
     await permissions.set(provider, 'names');

@@ -79,6 +79,18 @@ const scrollSettings = (top: number) => {
   document.querySelector('.settings-page')!.scrollTop = top;
 };
 const captureCalls = () => (window as unknown as FixtureWindow).fixtureCaptureCalls;
+/** Non-default audio inputs visible to Settings once microphone access is granted. */
+const enumeratedMicrophones = () =>
+  navigator.mediaDevices
+    .enumerateDevices()
+    .then((devices) =>
+      devices
+        .filter(
+          (device) =>
+            device.kind === 'audioinput' && device.deviceId && device.deviceId !== 'default',
+        )
+        .map((device) => device.label),
+    );
 
 /** Asks for the microphone without a dictation: the refusal's name, or UNEXPECTED_GRANT. */
 const unsolicitedMicrophone = () =>
@@ -248,6 +260,39 @@ async function inspect(restored: boolean) {
       key: 'Escape',
       code: 'Escape',
     });
+    await until(
+      () => page.evaluate(countOf('.choice-menu')),
+      (value) => value === 0,
+      'language menu closes',
+    );
+    if (status.microphone === 'granted') {
+      const devices = await page.evaluate(pageCall(enumeratedMicrophones));
+      const expectedChoices = 1 + devices.length;
+      await page.evaluate(click('[aria-label="Speech microphone"]'));
+      await until(
+        () => page.evaluate(countOf('.choice-menu .command-result')),
+        (value) => value >= expectedChoices,
+        'granted Settings microphone menu populates',
+      );
+      const menuText = await page.evaluate(textOf('.choice-menu'));
+      assert.ok(menuText.includes('System default'));
+      for (const label of devices) if (label) assert.ok(menuText.includes(label));
+      await page.command('Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        key: 'Escape',
+        code: 'Escape',
+      });
+      await until(
+        () => page.evaluate(countOf('.choice-menu')),
+        (value) => value === 0,
+        'microphone menu closes',
+      );
+      checks.push('verified granted Settings microphone menu populates without starting capture');
+    } else {
+      checks.push(
+        'granted Settings microphone menu check skipped: microphone consent not granted in this environment',
+      );
+    }
     checks.push(
       restored
         ? 'restored settings and keyboard menu'

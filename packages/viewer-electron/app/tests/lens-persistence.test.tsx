@@ -269,7 +269,11 @@ describe('lens persistence durability', () => {
     await expect(flushState(false)).rejects.toThrow('Disk full on lens');
     expect(listCalls).toBe(1);
 
-    // Subsequent edit while an apply is already in flight must be awaited by flushState(false).
+    // Re-mount so the folder has a live lens snapshot, then verify an in-flight apply is awaited.
+    await act(async () => {
+      root.render(<Harness folder={folder} />);
+      await Promise.resolve();
+    });
     holdInFlight = true;
     editLens(
       folder,

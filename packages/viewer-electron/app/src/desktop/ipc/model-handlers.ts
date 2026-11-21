@@ -94,8 +94,8 @@ export function createModelHandlers(ports: ModelPorts): ModelHandlers {
         throw new Error(
           'The provider endpoint changed. Review its new address before allowing data access.',
         );
-      const permission = await ports.modelPermissions.get(provider);
       const permissionRevision = ports.modelPermissions.revisionOf(provider.id);
+      const permission = await ports.modelPermissions.get(provider);
       if (allow && !permission) throw new ModelPermissionRequired();
       if (
         allow &&

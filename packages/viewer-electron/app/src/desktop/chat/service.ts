@@ -88,6 +88,7 @@ export class Chats {
   private writes: Promise<unknown> = Promise.resolve();
   private edits = new Map<string, Promise<void>>();
   private saveFailures = new Map<string, unknown>();
+  private pendingSettled = new Set<string>();
   private closed = false;
 
   constructor(
@@ -126,6 +127,7 @@ export class Chats {
       throw error;
     }
     this.saveFailures.delete(value.id);
+    this.pendingSettled.delete(value.id);
     this.documents.set(value.id, value);
     const principal = this.principals.get(value.id);
     if (principal) principal.document = value;
@@ -639,11 +641,13 @@ export class Chats {
     error?: string,
   ): Promise<void> {
     const trimmed = error ? error.slice(0, 2000) : undefined;
+    let fallbackError = trimmed;
     try {
       await this.edit(id, (current) => ({ ...current, status, error: trimmed }));
       return;
     } catch (firstError) {
       if (trimmed && firstError instanceof z.ZodError) {
+        fallbackError = undefined;
         try {
           await this.edit(id, (current) => ({ ...current, status, error: undefined }));
           return;
@@ -654,8 +658,9 @@ export class Chats {
     }
     const current = this.documents.get(id);
     if (!current) return;
-    const updated: ChatDocument = { ...current, status, error: trimmed };
+    const updated: ChatDocument = { ...current, status, error: fallbackError };
     this.documents.set(id, updated);
+    if (this.saveFailures.has(id)) this.pendingSettled.add(id);
     const principal = this.principals.get(id);
     if (principal) {
       principal.document = updated;
@@ -993,6 +998,14 @@ export class Chats {
   async flush(): Promise<void> {
     await this.writes.catch(() => {});
     await Promise.all(this.edits.values());
+    for (const id of [...this.pendingSettled]) {
+      if (!this.documents.has(id)) {
+        this.pendingSettled.delete(id);
+        continue;
+      }
+      // Retry settled in-memory state so a transient disk error can clear on Retry.
+      await this.edit(id, (current) => current).catch(() => {});
+    }
     for (const failure of this.saveFailures.values()) throw failure;
     await Promise.all([...this.stores.values()].map((store) => store.flush()));
   }

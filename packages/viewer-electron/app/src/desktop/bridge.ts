@@ -636,7 +636,7 @@ export class Desktop {
                 type: 'service-error',
                 service: 'models',
                 message:
-                  'A removed provider’s API key could not be cleared. Clear it again in Settings → Models.',
+                  'A removed provider’s saved API key could not be cleared. Save Settings again after checking local storage permissions.',
               }),
             );
         }

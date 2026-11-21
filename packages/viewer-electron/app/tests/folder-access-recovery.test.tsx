@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { EventEmitter } from 'node:events';
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,6 +23,7 @@ import {
 import { methodWindows, schemas } from '../src/desktop/ipc/schemas';
 import { initialize } from '../src/renderer/state/workspaces';
 import type { DesktopEvent } from '../src/domain/contracts';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const electronMock = vi.hoisted(() => ({
   dialog: { showOpenDialog: vi.fn(), showSaveDialog: vi.fn() },
@@ -54,7 +57,13 @@ describe('FolderAccessButton recovery paths', () => {
     list.mockReset();
     fileAccessPrivacySettings.mockReset();
     resetFolderAccessAttempts();
-    initialize({ home: '/Users/alex', platform: 'darwin', state: null, locations: [], openPaths: [] });
+    initialize({
+      home: '/Users/alex',
+      platform: 'darwin',
+      state: null,
+      locations: [],
+      openPaths: [],
+    });
     Object.assign(window, {
       viewer: {
         chooseFolder,
@@ -135,99 +144,109 @@ describe('native folder panel and privacy settings desktop boundary', () => {
   });
 
   it('uses the native macOS panel for permission recovery in the direct build while keeping ordinary picks in-window and Store bookmarks unchanged', async () => {
-    const inWindowPrompts: string[] = [];
-    const holder: { win?: BrowserWindow } = {};
-    const { win } = stubWindow(11, (event) => {
-      if (event.type === 'dialog' && event.prompt?.kind === 'file') {
-        inWindowPrompts.push(event.prompt.id);
-        void windowDialogs(holder.win!, false)?.request({
-          kind: 'choose',
-          id: event.prompt.id,
-          paths: ['/Users/alex/Projects'],
-        });
-      }
-    });
-    holder.win = win;
-    // Register a window dialog host as the direct build does for ordinary folder picks.
-    const dialogs = new WindowDialogs({
-      home: '/Users/alex',
-      places: async () => [],
-      access: async () => {},
-      publish: (prompt) => {
-        win.webContents.send('viewer:event', { type: 'dialog', prompt });
-      },
-    });
-    attachWindowDialogs(win, dialogs);
-    await dialogs.request({ kind: 'current' });
+    const root = await temporaryRoot('viewer-folder-recovery-');
+    const home = path.join(root, 'home');
+    const projects = path.join(home, 'Projects');
+    const documents = path.join(home, 'Documents');
+    await mkdir(projects, { recursive: true });
+    await mkdir(documents, { recursive: true });
+    try {
+      const inWindowPrompts: string[] = [];
+      const holder: { win?: BrowserWindow } = {};
+      const { win } = stubWindow(11, (event) => {
+        if (event.type === 'dialog' && event.prompt?.kind === 'file') {
+          inWindowPrompts.push(event.prompt.id);
+          void windowDialogs(holder.win!, false)?.request({
+            kind: 'choose',
+            id: event.prompt.id,
+            paths: [projects],
+          });
+        }
+      });
+      holder.win = win;
+      // Register a window dialog host as the direct build does for ordinary folder picks.
+      const dialogs = new WindowDialogs({
+        home,
+        places: async () => [],
+        access: async () => {},
+        publish: (prompt) => {
+          win.webContents.send('viewer:event', { type: 'dialog', prompt });
+        },
+      });
+      attachWindowDialogs(win, dialogs);
+      await dialogs.request({ kind: 'current' });
 
-    const directAccess = {
-      scoped: false,
-      remember: vi.fn(async () => {}),
-      allowOnce: vi.fn(async () => {}),
-      require: vi.fn(async () => {}),
-    };
-    // Ordinary pick stays in Viewer's window dialog.
-    const ordinary = await chooseRemembered(
-      directAccess,
-      win,
-      { properties: ['openDirectory'], defaultPath: '/Users/alex' },
-      true,
-      false,
-    );
-    expect(ordinary).toBe('/Users/alex/Projects');
-    expect(inWindowPrompts).toHaveLength(1);
-    expect(electronMock.dialog.showOpenDialog).not.toHaveBeenCalled();
+      const directAccess = {
+        scoped: false,
+        remember: vi.fn(async () => {}),
+        allowOnce: vi.fn(async () => {}),
+        require: vi.fn(async () => {}),
+      };
+      // Ordinary pick stays in Viewer's window dialog.
+      const ordinary = await chooseRemembered(
+        directAccess,
+        win,
+        { properties: ['openDirectory'], defaultPath: home },
+        true,
+        false,
+      );
+      expect(ordinary).toBe(projects);
+      expect(inWindowPrompts).toHaveLength(1);
+      expect(electronMock.dialog.showOpenDialog).not.toHaveBeenCalled();
 
-    // Permission recovery passes native=true and bypasses the in-window dialog.
-    electronMock.dialog.showOpenDialog.mockResolvedValueOnce({
-      canceled: false,
-      filePaths: ['/Users/alex/Documents'],
-    });
-    const recovered = await chooseRemembered(
-      directAccess,
-      win,
-      { properties: ['openDirectory'], defaultPath: '/Users/alex/Documents' },
-      true,
-      true,
-    );
-    expect(recovered).toBe('/Users/alex/Documents');
-    expect(inWindowPrompts).toHaveLength(1);
-    expect(electronMock.dialog.showOpenDialog).toHaveBeenCalledExactlyOnceWith(win, {
-      properties: ['openDirectory'],
-      defaultPath: '/Users/alex/Documents',
-      securityScopedBookmarks: false,
-    });
+      // Permission recovery passes native=true and bypasses the in-window dialog.
+      electronMock.dialog.showOpenDialog.mockResolvedValueOnce({
+        canceled: false,
+        filePaths: [documents],
+      });
+      const recovered = await chooseRemembered(
+        directAccess,
+        win,
+        { properties: ['openDirectory'], defaultPath: documents },
+        true,
+        true,
+      );
+      expect(recovered).toBe(documents);
+      expect(inWindowPrompts).toHaveLength(1);
+      expect(electronMock.dialog.showOpenDialog).toHaveBeenCalledExactlyOnceWith(win, {
+        properties: ['openDirectory'],
+        defaultPath: documents,
+        securityScopedBookmarks: false,
+      });
 
-    // Store build keeps security-scoped bookmarks unchanged.
-    const storeAccess = {
-      scoped: true,
-      remember: vi.fn(async () => {}),
-      allowOnce: vi.fn(async () => {}),
-      require: vi.fn(async () => {}),
-    };
-    electronMock.dialog.showOpenDialog.mockResolvedValueOnce({
-      canceled: false,
-      filePaths: ['/Users/alex/Documents'],
-      bookmarks: ['store-bookmark-token'],
-    });
-    const storeChosen = await chooseRemembered(
-      storeAccess,
-      win,
-      { properties: ['openDirectory'], defaultPath: '/Users/alex/Documents' },
-      true,
-      true,
-    );
-    expect(storeChosen).toBe('/Users/alex/Documents');
-    expect(electronMock.dialog.showOpenDialog).toHaveBeenLastCalledWith(win, {
-      properties: ['openDirectory'],
-      defaultPath: '/Users/alex/Documents',
-      securityScopedBookmarks: true,
-    });
-    expect(storeAccess.remember).toHaveBeenCalledExactlyOnceWith(
-      '/Users/alex/Documents',
-      true,
-      'store-bookmark-token',
-    );
+      // Store build keeps security-scoped bookmarks unchanged.
+      const storeAccess = {
+        scoped: true,
+        remember: vi.fn(async () => {}),
+        allowOnce: vi.fn(async () => {}),
+        require: vi.fn(async () => {}),
+      };
+      electronMock.dialog.showOpenDialog.mockResolvedValueOnce({
+        canceled: false,
+        filePaths: [documents],
+        bookmarks: ['store-bookmark-token'],
+      });
+      const storeChosen = await chooseRemembered(
+        storeAccess,
+        win,
+        { properties: ['openDirectory'], defaultPath: documents },
+        true,
+        true,
+      );
+      expect(storeChosen).toBe(documents);
+      expect(electronMock.dialog.showOpenDialog).toHaveBeenLastCalledWith(win, {
+        properties: ['openDirectory'],
+        defaultPath: documents,
+        securityScopedBookmarks: true,
+      });
+      expect(storeAccess.remember).toHaveBeenCalledExactlyOnceWith(
+        documents,
+        true,
+        'store-bookmark-token',
+      );
+    } finally {
+      await trashTemporary(root);
+    }
   });
 
   it('opens Privacy & Security settings with fallback, validates schemas, and blocks agent calls', async () => {

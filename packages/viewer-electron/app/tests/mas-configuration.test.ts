@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { execFile } from 'node:child_process';
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { describe, expect, it, vi } from 'vitest';
 import store from '../mac-app-store.json' with { type: 'json' };
+import { speechRuntimeName } from '../src/desktop/speech/runtime-manifest';
 import {
   macChannel,
   storeChannel,
@@ -10,6 +15,7 @@ import {
   validateStoreProfile,
   type ProfileSummary,
 } from '../tools/mas-configuration';
+import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const config = storeConfiguration.parse(store);
 const profile: ProfileSummary = {
@@ -151,5 +157,78 @@ describe('Store release boundaries', () => {
     expect(() =>
       storeConfiguration.parse({ ...config, applicationGroup: 'OTHERTEAM1.' + config.bundleID }),
     ).toThrow();
+  });
+  it('grants Store dictation audio input and network rights while keeping inheriting helper rights minimal', async () => {
+    const execute = promisify(execFile);
+    for (const channel of ['mas-dev', 'mas'] as const) {
+      const entitlements = storeEntitlements(config, channel, profile.applicationIdentifier);
+      expect(entitlements.main).toContain(
+        '<key>com.apple.security.device.audio-input</key><true/>',
+      );
+      expect(entitlements.main).toContain('<key>com.apple.security.network.client</key><true/>');
+      expect(
+        [...entitlements.inherit.matchAll(/<key>([^<]+)<\/key>/g)].map((match) => match[1]),
+      ).toEqual(['com.apple.security.app-sandbox', 'com.apple.security.inherit']);
+      if (process.platform === 'darwin') {
+        const root = await temporaryRoot('viewer-mas-plist-');
+        try {
+          for (const [name, content] of Object.entries(entitlements)) {
+            const file = path.join(root, `${channel}-${name}.plist`);
+            await writeFile(file, content, 'utf8');
+            await expect(execute('/usr/bin/plutil', ['-lint', file])).resolves.toBeDefined();
+          }
+        } finally {
+          await trashTemporary(root);
+        }
+      }
+    }
+  });
+  it('ships the speech helper with sandbox-inheriting signing and microphone purpose text in Store builds', async () => {
+    const runtime = speechRuntimeName(process.env.VIEWER_BUILD_ARCH ?? process.arch);
+    for (const channel of ['mas-dev', 'mas'] as const) {
+      vi.resetModules();
+      vi.stubEnv('VIEWER_MAC_CHANNEL', channel);
+      vi.stubEnv(
+        'VIEWER_MAS_IDENTITY',
+        channel === 'mas-dev' ? 'Apple Development: Team' : 'Apple Distribution: Team',
+      );
+      vi.stubEnv('VIEWER_MAS_PROFILE', '/private/tmp/viewer.provisionprofile');
+      vi.stubEnv('VIEWER_MAS_BUILD', '42');
+      try {
+        const { default: forge } = await import('../forge.config');
+        const packager = forge.packagerConfig;
+        expect(packager).toBeDefined();
+        const extendInfo = packager?.extendInfo as Record<string, unknown> | undefined;
+        expect(typeof extendInfo?.NSMicrophoneUsageDescription).toBe('string');
+        expect(String(extendInfo?.NSMicrophoneUsageDescription)).toContain('dictation');
+        if (process.platform === 'darwin') {
+          expect(packager?.extraResource).toContain(`assets/${runtime}`);
+        }
+        const osxSign = packager?.osxSign as
+          | {
+              optionsForFile?: (file: string) => {
+                hardenedRuntime?: boolean;
+                entitlements?: string;
+              };
+            }
+          | undefined;
+        expect(osxSign?.optionsForFile).toBeTypeOf('function');
+        expect(osxSign?.optionsForFile?.('/tmp/Viewer.app')).toEqual({
+          hardenedRuntime: false,
+          entitlements: path.resolve('out/mac-app-store/entitlements', channel, 'main.plist'),
+        });
+        for (const binary of ['viewer-speech-recognizer', 'libwhisper.dylib']) {
+          expect(
+            osxSign?.optionsForFile?.(`/tmp/Viewer.app/Contents/Resources/${runtime}/${binary}`),
+          ).toEqual({
+            hardenedRuntime: false,
+            entitlements: path.resolve('out/mac-app-store/entitlements', channel, 'inherit.plist'),
+          });
+        }
+      } finally {
+        vi.unstubAllEnvs();
+        vi.resetModules();
+      }
+    }
   });
 });

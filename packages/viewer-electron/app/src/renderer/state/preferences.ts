@@ -15,6 +15,7 @@ export const pendingPreferences = new Map<string, unknown>();
 const pendingRevisions = new Map<string, number>();
 let preferenceWrite: Promise<void> | undefined;
 let activePreferences: ReadonlyMap<string, unknown> = new Map();
+let serverSnapshot: SettingsSnapshot | undefined;
 function preferenceKeys(path: string): string[] {
   return path.startsWith('@') ? (JSON.parse(path.slice(1)) as string[]) : path.split('.');
 }
@@ -26,14 +27,43 @@ function containsPreference(parent: string, child: string): boolean {
     parentKeys.every((key, index) => key === childKeys[index])
   );
 }
-function readPreference(snapshot: SettingsSnapshot, path: string): unknown {
-  const keys = preferenceKeys(path);
-  let value: unknown = { ui: snapshot.ui, settings: snapshot.settings };
-  for (const key of keys) {
-    if (!value || typeof value !== 'object') return undefined;
-    value = (value as Record<string, unknown>)[key];
+function toPatch(path: string, value: unknown) {
+  return path.startsWith('@')
+    ? { path: 'settings.folders', keys: JSON.parse(path.slice(1)) as string[], value }
+    : { path, value };
+}
+function requeueEntries(
+  entries: Iterable<[string, unknown]>,
+  entryRevisions: ReadonlyMap<string, number>,
+): void {
+  const newer = new Map(pendingPreferences);
+  const newerRevisions = new Map(pendingRevisions);
+  pendingPreferences.clear();
+  pendingRevisions.clear();
+  for (const [path, value] of entries) {
+    if (newer.has(path)) continue;
+    if ([...newer.keys()].some((pending) => containsPreference(pending, path))) continue;
+    pendingPreferences.set(path, value);
+    pendingRevisions.set(path, entryRevisions.get(path)!);
   }
-  return value;
+  for (const [path, value] of newer) {
+    pendingPreferences.set(path, value);
+    pendingRevisions.set(path, newerRevisions.get(path)!);
+  }
+}
+function advanceDescendants(
+  writtenPaths: Iterable<string>,
+  revision: number,
+  targetRevisions: Map<string, number> = pendingRevisions,
+): void {
+  const written = [...writtenPaths];
+  // A successful write replaces its entire field, so queued descendants may
+  // build on its acknowledgement. Ancestors keep their original baseline:
+  // advancing them could hide a peer's change to a sibling we did not write.
+  for (const [path, base] of targetRevisions) {
+    if (base <= revision && written.some((entry) => containsPreference(entry, path)))
+      targetRevisions.set(path, revision);
+  }
 }
 function isSettingsConflict(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
@@ -51,10 +81,50 @@ export function schedulePreferences(): void {
     void flushPreferences().catch(report);
   }, 80);
 }
-export function resetPreferences(): void {
+export function resetPreferences(initial?: SettingsSnapshot): void {
   clearTimeout(preferenceTimer);
   pendingPreferences.clear();
   pendingRevisions.clear();
+  activePreferences = new Map();
+  serverSnapshot = initial ? structuredClone(initial) : undefined;
+}
+/** Remaps already-pending folder and sidebar paths in place when desktop renames or moves folders. */
+export function remapPendingPreferences(map: (path: string) => string): void {
+  const entries = [...pendingPreferences];
+  const revisions = new Map(pendingRevisions);
+  pendingPreferences.clear();
+  pendingRevisions.clear();
+  for (const [key, value] of entries) {
+    const revision = revisions.get(key);
+    let nextKey = key;
+    let nextValue = value;
+    if (key.startsWith('@')) {
+      const keys = JSON.parse(key.slice(1)) as string[];
+      if (keys[0] === 'settings' && keys[1] === 'folders' && keys[2]) {
+        keys[2] = map(keys[2]);
+        nextKey = '@' + JSON.stringify(keys);
+      }
+    } else if (
+      (key === 'ui.sidebar.locations' || key === 'ui.sidebar.hidden') &&
+      Array.isArray(value)
+    ) {
+      nextValue = value.map((item) => (typeof item === 'string' ? map(item) : item));
+    } else if (
+      key === 'ui.sidebar.labels' &&
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value)
+    ) {
+      nextValue = Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([folder, label]) => [
+          map(folder),
+          label,
+        ]),
+      );
+    }
+    pendingPreferences.set(nextKey, nextValue);
+    if (revision !== undefined) pendingRevisions.set(nextKey, revision);
+  }
 }
 /** An explicit edit replaces any earlier failed intent for this field and supersedes older children. */
 export function queuePreference(path: string, value: unknown): void {
@@ -89,11 +159,7 @@ export async function flushPreferences(): Promise<void> {
   const batch = new Map(
     [...pendingPreferences].filter(([path]) => revisions.get(path) === revision),
   );
-  const patches = [...batch].map(([path, value]) =>
-    path.startsWith('@')
-      ? { path: 'settings.folders', keys: JSON.parse(path.slice(1)) as string[], value }
-      : { path, value },
-  );
+  const patches = [...batch].map(([path, value]) => toPatch(path, value));
   activePreferences = batch;
   for (const path of batch.keys()) {
     pendingPreferences.delete(path);
@@ -102,37 +168,56 @@ export async function flushPreferences(): Promise<void> {
   preferenceWrite = window.viewer
     .settingsPatch(patches, revision)
     .then((snapshot) => {
-      // A successful write replaces its entire field, so queued descendants may
-      // build on its acknowledgement. Ancestors keep their original baseline:
-      // advancing them could hide a peer's change to a sibling we did not write.
-      for (const [path, base] of pendingRevisions) {
-        if (
-          base <= snapshot.revision &&
-          [...batch.keys()].some((written) => containsPreference(written, path))
-        )
-          pendingRevisions.set(path, snapshot.revision);
-      }
+      advanceDescendants(batch.keys(), snapshot.revision);
       activePreferences = new Map();
       receiveSettings(snapshot);
     })
-    .catch((error) => {
+    .catch(async (error) => {
       if (!isSettingsConflict(error)) {
-        const newer = new Map(pendingPreferences);
-        const newerRevisions = new Map(pendingRevisions);
-        pendingPreferences.clear();
-        pendingRevisions.clear();
-        for (const [path, value] of batch) {
-          if (newer.has(path)) continue;
-          if ([...newer.keys()].some((pending) => containsPreference(pending, path))) continue;
-          pendingPreferences.set(path, value);
-          pendingRevisions.set(path, revisions.get(path)!);
-        }
-        for (const [path, value] of newer) {
-          pendingPreferences.set(path, value);
-          pendingRevisions.set(path, newerRevisions.get(path)!);
-        }
+        requeueEntries(batch, revisions);
+        throw error;
       }
-      throw error;
+      activePreferences = new Map();
+      let conflictError: unknown = error;
+      if (batch.size > 1) {
+        const retryLater = new Map<string, unknown>();
+        for (const [path, value] of batch) {
+          if (
+            pendingPreferences.has(path) ||
+            [...pendingPreferences.keys()].some((pending) => containsPreference(pending, path))
+          )
+            continue;
+          activePreferences = new Map([[path, value]]);
+          try {
+            const snapshot = await window.viewer.settingsPatch(
+              [toPatch(path, value)],
+              revisions.get(path)!,
+            );
+            advanceDescendants([path], snapshot.revision, pendingRevisions);
+            advanceDescendants([path], snapshot.revision, revisions);
+            activePreferences = new Map();
+            receiveSettings(snapshot);
+          } catch (entryError) {
+            activePreferences = new Map();
+            if (isSettingsConflict(entryError)) {
+              conflictError = entryError;
+            } else {
+              retryLater.set(path, value);
+            }
+          }
+        }
+        if (retryLater.size) requeueEntries(retryLater, revisions);
+      }
+      if (window.viewer.settingsGet) {
+        try {
+          receiveSettings(await window.viewer.settingsGet());
+        } catch {
+          if (serverSnapshot) receiveSettings(serverSnapshot);
+        }
+      } else if (serverSnapshot) {
+        receiveSettings(serverSnapshot);
+      }
+      throw conflictError;
     })
     .finally(() => {
       activePreferences = new Map();
@@ -206,16 +291,7 @@ export function setLook(look: Look): void {
 }
 export function receiveSettings(snapshot: SettingsSnapshot): void {
   if (snapshot.revision < getState().settings.revision) return;
-  for (const [path, value] of [...pendingPreferences]) {
-    const keys = preferenceKeys(path);
-    const incoming = readPreference(snapshot, path);
-    const matched =
-      value === null && keys[1] === 'folders' ? incoming === undefined : sameJSON(incoming, value);
-    if (matched) {
-      pendingPreferences.delete(path);
-      pendingRevisions.delete(path);
-    }
-  }
+  serverSnapshot = structuredClone(snapshot);
   const next = structuredClone({ ui: snapshot.ui, settings: snapshot.settings });
   for (const [path, value] of new Map([...activePreferences, ...pendingPreferences])) {
     const keys: string[] = path.startsWith('@') ? JSON.parse(path.slice(1)) : path.split('.');

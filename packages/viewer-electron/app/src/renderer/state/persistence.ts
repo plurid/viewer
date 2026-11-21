@@ -49,21 +49,26 @@ export function retainedPaneIDs(): Set<string> {
 }
 let baselineFavorites: SavedState['favorites'] = [];
 let baselineLineHistory: string[] = [];
-let sharedListsGeneration = 0;
+let favoritesGeneration = 0;
+let lineHistoryGeneration = 0;
 
 export function resetSharedLists(favorites: SavedState['favorites'], lineHistory?: string[]): void {
   baselineFavorites = structuredClone(favorites);
   baselineLineHistory = [...(lineHistory ?? [])];
-  sharedListsGeneration++;
+  favoritesGeneration++;
+  lineHistoryGeneration++;
 }
 
 export function mergeSharedFavorites(
   local: SavedState['favorites'],
   peer: SavedState['favorites'],
 ): SavedState['favorites'] {
+  const peerChanged = !sameJSON(peer, baselineFavorites);
   if (sameJSON(local, baselineFavorites)) {
-    baselineFavorites = structuredClone(peer);
-    sharedListsGeneration++;
+    if (peerChanged) {
+      baselineFavorites = structuredClone(peer);
+      favoritesGeneration++;
+    }
     return peer;
   }
   const old = new Set(baselineFavorites.map((item) => item.path));
@@ -84,8 +89,10 @@ export function mergeSharedFavorites(
       merged.push(item);
     }
   }
-  baselineFavorites = structuredClone(peer);
-  sharedListsGeneration++;
+  if (peerChanged) {
+    baselineFavorites = structuredClone(peer);
+    favoritesGeneration++;
+  }
   return merged.slice(0, 200);
 }
 
@@ -93,16 +100,21 @@ export function mergeSharedLineHistory(
   local: string[] | undefined,
   peer: string[] | undefined,
 ): string[] | undefined {
+  const peerItems = peer ?? [];
+  const peerChanged = !sameJSON(peerItems, baselineLineHistory);
   if (local === undefined && peer === undefined) {
-    baselineLineHistory = [];
-    sharedListsGeneration++;
+    if (baselineLineHistory.length) {
+      baselineLineHistory = [];
+      lineHistoryGeneration++;
+    }
     return undefined;
   }
   const localItems = local ?? [];
-  const peerItems = peer ?? [];
   if (sameJSON(localItems, baselineLineHistory)) {
-    baselineLineHistory = [...peerItems];
-    sharedListsGeneration++;
+    if (peerChanged) {
+      baselineLineHistory = [...peerItems];
+      lineHistoryGeneration++;
+    }
     return peer;
   }
   const baselineIndex = new Map(baselineLineHistory.map((item, index) => [item, index]));
@@ -124,8 +136,10 @@ export function mergeSharedLineHistory(
       merged.push(item);
     }
   }
-  baselineLineHistory = [...peerItems];
-  sharedListsGeneration++;
+  if (peerChanged) {
+    baselineLineHistory = [...peerItems];
+    lineHistoryGeneration++;
+  }
   return merged.slice(0, 200);
 }
 
@@ -138,7 +152,8 @@ export function resetPersistence(): void {
   closedPanes.clear();
   baselineFavorites = [];
   baselineLineHistory = [];
-  sharedListsGeneration++;
+  favoritesGeneration++;
+  lineHistoryGeneration++;
 }
 export function storageAdapter(id: string) {
   const map = adapters.get(id) ?? new Map<string, string>();
@@ -207,11 +222,18 @@ async function flushOnce(flushEngine: boolean): Promise<void> {
   };
   replaceState({ ...getState(), saved });
   const visitSave = folderVisitSync.begin(saved.visits ?? {}, saved.recents);
-  const listsGeneration = sharedListsGeneration;
+  const savedFavoritesGeneration = favoritesGeneration;
+  const savedLineHistoryGeneration = lineHistoryGeneration;
   try {
     let shared = await window.viewer.save(saved, visitSave);
-    if (sharedListsGeneration === listsGeneration)
-      resetSharedLists(saved.favorites, saved.lineHistory);
+    if (favoritesGeneration === savedFavoritesGeneration) {
+      baselineFavorites = structuredClone(saved.favorites);
+      favoritesGeneration++;
+    }
+    if (lineHistoryGeneration === savedLineHistoryGeneration) {
+      baselineLineHistory = [...(saved.lineHistory ?? [])];
+      lineHistoryGeneration++;
+    }
     if (shared && folderVisitSync.needsRefresh(shared.revision))
       shared = await window.viewer.folderHistory();
     learnFolderAliases(shared?.aliases);

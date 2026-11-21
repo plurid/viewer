@@ -417,11 +417,13 @@ describe('Desktop window targeting and native dialog boundaries', () => {
     const pendingBytes = resources.grantBytes('/tmp', 'in-flight.txt', Buffer.from('abc'), 7);
     await vi.waitFor(() => expect(access).toHaveBeenCalledTimes(2));
 
+    const grantRejected = expect(pendingGrant).rejects.toThrow();
+    const bytesRejected = expect(pendingBytes).rejects.toThrow();
     expect(resources.stopOwner(7)).toEqual([]);
     releaseAccess();
 
-    await expect(pendingGrant).rejects.toThrow();
-    await expect(pendingBytes).rejects.toThrow();
+    await grantRejected;
+    await bytesRejected;
     expect((Reflect.get(resources, 'grants') as Map<string, unknown>).size).toBe(0);
   });
 
@@ -437,5 +439,12 @@ describe('Desktop window targeting and native dialog boundaries', () => {
     } as unknown as Date;
     expect(localDateStamp(fakeDate)).toBe('2026-11-05');
     expect(bridge).not.toContain('new Date().toISOString().slice(0, 10)');
+  });
+
+  it('does not direct users to a removed provider in Settings when API key pruning fails', () => {
+    expect(bridge).not.toContain('Clear it again in Settings → Models.');
+    expect(bridge).toContain(
+      'A removed provider’s saved API key could not be cleared. Save Settings again after checking local storage permissions.',
+    );
   });
 });

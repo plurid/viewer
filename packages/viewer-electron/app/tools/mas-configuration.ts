@@ -158,6 +158,8 @@ export function storeEntitlements(
       '<key>com.apple.security.app-sandbox</key><true/>\n' +
         '<key>com.apple.security.files.user-selected.read-write</key><true/>\n' +
         '<key>com.apple.security.files.bookmarks.app-scope</key><true/>\n' +
+        // Dictation records audio in the Store build only when the person starts recording.
+        '<key>com.apple.security.device.audio-input</key><true/>\n' +
         '<key>com.apple.security.network.client</key><true/>\n' +
         '<key>com.apple.security.network.server</key><true/>\n' +
         // PDFKit's print sheet needs the sandbox's printing right.

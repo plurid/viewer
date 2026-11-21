@@ -14,7 +14,7 @@ How to read an item:
 - Findings about security, an agent acting beyond its grant, or losing files are kept out of this
   page until they are fixed.
 
-Open here: 255 (S1 0, S2 81, S3 174); 81 confirmed.
+Open here: 211 (S1 0, S2 68, S3 143); 68 confirmed.
 
 ## Decisions for the owner
 
@@ -28,20 +28,8 @@ Open here: 255 (S1 0, S2 81, S3 174); 81 confirmed.
 
 - **S2** Copy Event ID never copies: the ID is sent as a path and the request is refused.
   `src/renderer/journal/JournalPlane.tsx:404` Confirmed.
-- **S2** Direct build: Allow Folder Access… cannot open a folder that macOS refused.
-  `src/renderer/ui/permissions/FolderAccessButton.tsx:18-31` Confirmed.
-- **S2** Document-text search with two or more words shows no passage unless the words are adjacent.
-  `src/domain/files/inspection.ts:215` Confirmed.
-- **S3** A batch rename that swaps or shifts names leaves lens groups and Map places on the wrong
-  files. `src/domain/files/lenses.ts:294`
 - **S3** A checkpoint whose removal failed is described as 'This copy was not finished'.
   `src/renderer/ui/operations/Checkpoints.tsx:44`
-- **S3** A closed or reloaded window leaves its folder watches running until Viewer quits.
-  `src/desktop/files/watchers.ts:13-40`
-- **S3** A folder check canceled by one query fails the next query's check of the same folder.
-  `src/domain/files/folder-checks.ts:59`
-- **S3** A plane keeps a folder's old rows after Finder ejects its disk or another app renames it.
-  `src/desktop/files/directory-watch.ts:48-54`
 - **S3** A second click on Skip or Keep Both answers the next file's name prompt unseen.
   `src/renderer/operations/OperationsPanel.tsx:161`
 - **S3** After Clear Finished, Command-Z undoes the oldest file operation, not the latest.
@@ -52,28 +40,14 @@ Open here: 255 (S1 0, S2 81, S3 174); 81 confirmed.
   `src/renderer/ui/trash/Trash.tsx:454`
 - **S3** Cancelling a change review leaves its plan pending; large reviews are then refused for
   good. `src/renderer/ui/operations/OperationReview.tsx:31`
-- **S3** Columns view shows only "Can't open this folder" for a folder whose path holds a backslash.
-  `src/domain/files/paths.ts:27`
-- **S3** Copying a locked item fails: its staged copy inherits the lock and cannot be published.
-  `tools/macos-files.mm:295`
-- **S3** Eject and Revoke wait for a running duplicate or compare hash to finish its file.
-  `src/desktop/files/content-hash.ts:21-63`
 - **S3** File Operations and Journal pages name controls and lists the interface does not have.
   `src/renderer/operations/OperationsPanel.tsx:69`
-- **S3** Folders under a linked folder on another disk are refused as a 'mounted volume' root.
-  `src/desktop/files/protected-paths.ts:73-78`
 - **S3** Journal export's default file name carries the UTC date, not the person's date.
   `src/desktop/bridge.ts:2541`
 - **S3** Journal search drops each typed space, so a two-word search cannot be typed.
   `src/renderer/journal/JournalPlane.tsx:128`
 - **S3** Last hour is stored as a fixed start time and the control then reads Time range….
   `src/renderer/journal/JournalPlane.tsx:171`
-- **S3** Lens name rules and member matching fold case by the system language, so img* misses IMG
-  files on a Turkish system. `src/domain/files/lenses.ts:394`
-- **S3** Map view stalls on large folders: placing items is quadratic, and it throws past about
-  125,000 items. `src/domain/files/lens-layout.ts:84`
-- **S3** Names that collate equal (1.png and 01.png, a and A, resume and résumé) have no defined
-  order. `src/domain/files/entries.ts:11`
 - **S3** No test in the suite renders the Trash window or presses Copy Event ID.
   `tests/trash-presentation.test.ts:1`
 - **S3** Put Back and Apply Changes wait in silence behind any running job or unanswered name
@@ -84,45 +58,17 @@ Open here: 255 (S1 0, S2 81, S3 174); 81 confirmed.
   `src/desktop/journal/handlers.ts:71`
 - **S3** Schema text reaches the person: over 1,000 Trash items, or an emptied name in a review.
   `src/desktop/ipc/schemas.ts:965`
-- **S3** Sort by Kind orders by extension, so the Kind column reads out of order and splits one kind
-  in two runs. `src/domain/files/entries.ts:119`
-- **S3** Store: a looping link cannot be trashed, and trying releases the folder's permission.
-  `src/desktop/files/file-access.ts:232-245`
 
 ## Windows, saved state and the app shell
 
-- **S2** A preference conflict wedges flushPreferences at a stale revision, blocking close and Quit.
-  `src/renderer/state/preferences.ts:54-65` Confirmed.
-- **S2** Any preview or canvas iframe navigation cancels active speech, branch tasks and SSH.
-  `src/desktop/bridge.ts:1753,1755,1762` Confirmed.
 - **S2** Backup relinking updates Layout sources but leaves quantities and thicknesses unmapped.
   `src/desktop/persistence/backup-state.ts:116-117` Confirmed.
-- **S2** Creating a backup leaves space.layout set, closing later planes or failing on relaunch.
-  `src/renderer/persistence/BackupDialog.tsx:59-64` Confirmed.
-- **S2** Files queued in openIn between bootstrap and commandsPublish never open.
-  `src/desktop/bridge.ts:1825-1830` Confirmed.
-- **S2** One rejected edit in Settings wedges SettingsEditQueue forever, blocking edits and Quit.
-  `src/renderer/settings/persistence/edit-queue.ts:25-46` Confirmed.
 - **S2** Restoring a backup with an agent session plane breaks it and blocks all future backups.
   `src/desktop/persistence/backup-state.ts:60-72` Confirmed.
-- **S2** Settings never receives session-keys events, so Keep and Discard leave stale bindings on
-  screen. `src/desktop/ipc/schemas.ts:992-1004` Confirmed.
-- **S2** Undoing Clear Recent Folders within 400 ms still sends clear: true and wipes desktop
-  history. `src/renderer/state/places.ts:78-92` Confirmed.
-- **S3** A peer workspace broadcast overwrites unsaved local favorites and command-line history.
-  `src/renderer/state/workspaces.ts:163-237`
 - **S3** Backup restore writes all documents before validating config, stranding copies on failure.
   `src/desktop/persistence/backup.ts:470-478`
-- **S3** Closing an inactive defined workspace drops the active workspace's profile and Quick
-  Preview. `src/renderer/state/definitions.ts:212,228-246`
 - **S3** Closing or quitting traps Viewer in a Retry loop when saved state is newer or unmovable.
   `src/desktop/persistence/storage.ts:471-498`
-- **S3** FolderHistoryChecks can spawn workers after close and reuse an errored thread slot.
-  `src/desktop/windows/folder-history-checks.ts:98-132`
-- **S3** Invalid CLI launch flags exit 0 with no error when Viewer is already running.
-  `src/main.ts:241-255`
-- **S3** launchWorker pipes worker stdout without reading it, risking worker deadlock.
-  `src/desktop/workers/utility-client.ts:58-66`
 - **S3** ModelPermissions and Updates overwrite unreadable or newer-version files without backup.
   `src/desktop/models/model-permissions.ts:67-76`
 - **S3** Names of 92-100 characters fail to save for profiles, layouts and themes via slugID.
@@ -131,45 +77,8 @@ Open here: 255 (S1 0, S2 81, S3 174); 81 confirmed.
   `src/desktop/persistence/backup.ts:322-331`
 - **S3** One failed DocumentStore save poisons all later load() calls for the rest of the session.
   `src/desktop/persistence/document-store.ts:16-17`
-- **S3** Personal backup export default filename uses the UTC date instead of the local date.
-  `src/desktop/bridge.ts:1386`
-- **S3** Quitting or closing Settings before it mounts hangs 10s and flags it unresponsive.
-  `src/desktop/bridge.ts:1867-1874`
-- **S3** Resetting a folder view then changing one field within 80 ms wipes the new field on flush.
-  `src/renderer/state/presentation.ts:102-108`
-- **S3** Reverting a failed global hotkey back to the active shortcut leaves the error shown.
-  `src/desktop/windows/hotkey-window.ts:89-115`
 - **S3** Storage.save checks UTF-16 length while load checks UTF-8 bytes, quarantining valid state.
   `src/desktop/persistence/storage.ts:538`
-- **S3** View menu shows "Hide" for default-hidden chrome when no workspace window is open.
-  `src/desktop/windows/application-menu.ts:28-43,255-284`
-
-## Models, chat and speech
-
-- **S2** A Chat validation error poisons Chats.flush() and blocks closing, quitting and backups.
-  `src/desktop/chat/service.ts:128` Confirmed.
-- **S2** Meta chat turns bypass the 256 KiB request limit and duplicate canvas data in steps.
-  `src/desktop/chat/service.ts:546` Confirmed.
-- **S2** Settings hides connected microphones and marks saved ones not connected outside capture.
-  `src/main.ts:962-970` Confirmed.
-- **S2** Store build exposes dictation and 488 MB setup without audio-input entitlement.
-  `src/desktop/bridge.ts:1012-1072` Confirmed.
-- **S3** A failed save in Chats.respond catch leaves a conversation permanently stuck running.
-  `src/desktop/chat/service.ts:600`
-- **S3** Ask Viewer by Voice steals Ctrl+Shift+Space from a person's own reassigned binding.
-  `src/renderer/speech/SpeechControls.tsx:13-15,26-34,53`
-- **S3** Failed hosted key or provider write leaves the provider blocked from checks and consent.
-  `src/desktop/speech/providers.ts:92-121`
-- **S3** Pressing the dictate shortcut opens SpokenRequest behind an open modal DictationDialog.
-  `src/renderer/speech/SpeechControls.tsx:28`
-- **S3** Re-importing or re-downloading a broken local speech model never restores dictation.
-  `src/desktop/speech/models.ts:346-359`
-- **S3** SpeechRuntime.status swallows its own non-macOS error, contradicting platforms.md.
-  `src/desktop/speech/runtime.ts:63-83`
-- **S3** Timed-out hosted check resets inline status to Not checked yet and hides error off-screen.
-  `src/desktop/speech/providers.ts:230-234,255-258`
-- **S3** Unplugged saved microphone shows an empty error alert when dictation fails.
-  `src/renderer/speech/capture.ts:20-26`
 
 ## CLI, updates, license and the build
 

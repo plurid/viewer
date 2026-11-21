@@ -88,7 +88,7 @@ describe('window preference durability', () => {
     expect(pendingPreferences.get('ui.space.grid')).toBe(true);
   });
 
-  it('does not wedge flushPreferences at a stale revision after a peer conflict on sidebar rename', async () => {
+  it('does not wedge flushPreferences at a stale revision after a peer conflict on sidebar locations', async () => {
     const dir = await temporaryRoot('viewer-pref-conflict-');
     const service = new SettingsService(
       path.join(dir, 'profile'),
@@ -102,6 +102,7 @@ describe('window preference durability', () => {
     Object.assign(window, {
       viewer: {
         save: vi.fn(async () => {}),
+        settingsGet: () => Promise.resolve(service.snapshot()),
         settingsPatch: (patches: SettingsPatch[], revision: number) =>
           service.patch(patches, revision, 'workspace'),
       },
@@ -121,12 +122,12 @@ describe('window preference durability', () => {
       baseRevision,
       'workspace',
     );
-    receiveFileChanges([{ source: '/work/old', destination: '/work/new' }]);
+    queuePreference('ui.sidebar.locations', ['/work/local']);
     await expect(flushPreferences()).rejects.toThrow(
       'This setting changed in another window or config.jsonc. Review its current value.',
     );
-    receiveSettings(peerSnapshot);
     expect(getState().settings.revision).toBe(peerSnapshot.revision);
+    expect(getState().saved.ui.sidebar.locations).toEqual(['/work/new']);
     await expect(flushPreferences()).resolves.toBeUndefined();
     expect(pendingPreferences.size).toBe(0);
   });
@@ -241,5 +242,63 @@ describe('window preference durability', () => {
     expect(pendingPreferences.size).toBe(0);
     await expect(flushPreferences()).resolves.toBeUndefined();
     expect(patchSpy).not.toHaveBeenCalled();
+
+    // Already-pending sidebar edits remap in place rather than staying stale.
+    queuePreference('ui.sidebar.locations', ['/work/new', '/work/extra']);
+    receiveFileChanges([{ source: '/work/new', destination: '/work/renamed' }]);
+    expect(pendingPreferences.get('ui.sidebar.locations')).toEqual([
+      '/work/renamed',
+      '/work/extra',
+    ]);
+  });
+
+  it('preserves a folder reset and follow-up folder field edit in the same batch when an unrelated field conflicts', async () => {
+    const dir = await temporaryRoot('viewer-pref-isolate-parent-child-');
+    const service = new SettingsService(
+      path.join(dir, 'profile'),
+      '/fixtures',
+      () => true,
+      () => {},
+    );
+    await service.load();
+    await service.patch(
+      [{ path: 'settings.folders', keys: ['settings', 'folders', '/Work', 'mode'], value: 'grid' }],
+      0,
+      'workspace',
+    );
+    const initial = service.snapshot();
+    Object.assign(window, {
+      viewer: {
+        save: vi.fn(async () => {}),
+        settingsGet: () => Promise.resolve(service.snapshot()),
+        settingsPatch: (patches: SettingsPatch[], revision: number) =>
+          service.patch(patches, revision, 'workspace'),
+      },
+    });
+    initialize({
+      home: '/fixtures',
+      platform: 'darwin',
+      state: null,
+      settings: initial,
+      locations: [],
+      openPaths: [],
+    });
+
+    // Peer changes an unrelated UI field while this window queues that field plus a folder reset and follow-up child edit.
+    await service.patch(
+      [{ path: 'ui.space.minimap', value: false }],
+      initial.revision,
+      'workspace',
+    );
+    queuePreference('ui.space.minimap', true);
+    queuePreference('@' + JSON.stringify(['settings', 'folders', '/Work']), null);
+    queuePreference('@' + JSON.stringify(['settings', 'folders', '/Work', 'mode']), 'columns');
+
+    await expect(flushPreferences()).rejects.toThrow(/changed in another window/);
+    expect(service.snapshot().ui.space.minimap).toBe(false);
+    expect(getState().saved.ui.space.minimap).toBe(false);
+    expect(service.snapshot().settings.folders['/Work']?.mode).toBe('columns');
+    expect(getState().settings.settings.folders['/Work']?.mode).toBe('columns');
+    expect(pendingPreferences.size).toBe(0);
   });
 });

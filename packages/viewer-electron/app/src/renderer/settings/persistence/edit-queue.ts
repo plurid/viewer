@@ -22,13 +22,28 @@ function isRejectedEdit(error: unknown): boolean {
 export class SettingsEditQueue {
   private readonly pending: SettingsChange[] = [];
   private writing?: Promise<void>;
+  private draining = false;
 
   constructor(private readonly writer: SettingsWriter) {}
 
   enqueue(change: SettingsChange): void {
     this.pending.push(change);
+    this.drainBackground();
+  }
+
+  private drainBackground(): void {
+    if (this.draining) return;
+    this.draining = true;
     // Background edits report through the writer. An explicit close/quit flush still rejects.
-    void this.flush().catch(() => {});
+    void this.flush()
+      .then(() => {
+        this.draining = false;
+        if (this.pending.length) this.drainBackground();
+      })
+      .catch((error) => {
+        this.draining = false;
+        if (isRejectedEdit(error) && this.pending.length) this.drainBackground();
+      });
   }
 
   flush(): Promise<void> {
@@ -50,7 +65,15 @@ export class SettingsEditQueue {
         }
       })
       .catch(async (error) => {
-        this.writer.error(error instanceof Error ? error.message : String(error));
+        const message =
+          error instanceof Error
+            ? error.message
+            : error &&
+                typeof error === 'object' &&
+                typeof (error as { message?: unknown }).message === 'string'
+              ? (error as { message: string }).message
+              : String(error);
+        this.writer.error(message);
         try {
           this.writer.accept(await this.writer.refresh());
         } catch {

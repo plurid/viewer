@@ -3,7 +3,7 @@ import { remapKnownFolders } from '../explorer/folder-availability';
 import { remapSessions } from '../workspace/sessions';
 import { pathMapper, type FileChange } from '../../domain/files/changes';
 import { getState, replaceState, update } from './core';
-import { pendingPreferences, queuePreference, schedulePreferences } from './preferences';
+import { remapPendingPreferences } from './preferences';
 import type { DiffSource } from '../../domain/comparison/diff';
 import { requestRefresh } from './refresh';
 import { remapFolderVisits } from '../../domain/files/folder-visits';
@@ -93,28 +93,26 @@ export function receiveFileChanges(changes: FileChange[], historyRevision?: numb
     },
     true,
   );
-  for (const key of ['labels', 'locations', 'hidden'] as const)
-    if (JSON.stringify(getState().saved.ui.sidebar[key]) !== JSON.stringify(saved.ui.sidebar[key]))
-      queuePreference('ui.sidebar.' + key, getState().saved.ui.sidebar[key]);
-  schedulePreferences();
+  // Desktop already persists folder remaps into config.jsonc; keep local state and any
+  // queued edits aligned without racing desktop with redundant preference patches.
   const folders = Object.fromEntries(
     Object.entries(getState().settings.settings.folders).map(([path, value]) => [map(path), value]),
   );
-  if (JSON.stringify(folders) !== JSON.stringify(getState().settings.settings.folders)) {
+  const sidebar = getState().saved.ui.sidebar;
+  const foldersChanged =
+    JSON.stringify(folders) !== JSON.stringify(getState().settings.settings.folders);
+  const sidebarChanged = JSON.stringify(sidebar) !== JSON.stringify(getState().settings.ui.sidebar);
+  if (foldersChanged || sidebarChanged) {
     replaceState({
       ...getState(),
-      settings: { ...getState().settings, settings: { ...getState().settings.settings, folders } },
+      settings: {
+        ...getState().settings,
+        ...(sidebarChanged ? { ui: { ...getState().settings.ui, sidebar } } : {}),
+        ...(foldersChanged ? { settings: { ...getState().settings.settings, folders } } : {}),
+      },
     });
-    for (const [key, value] of [...pendingPreferences]) {
-      if (!key.startsWith('@')) continue;
-      const keys = JSON.parse(key.slice(1)) as string[];
-      if (keys[0] === 'settings' && keys[1] === 'folders' && keys[2]) {
-        pendingPreferences.delete(key);
-        keys[2] = map(keys[2]);
-        pendingPreferences.set('@' + JSON.stringify(keys), value);
-      }
-    }
   }
+  remapPendingPreferences(map);
   remapSessions(changes);
   requestRefresh(changes.flatMap((change) => [change.source, change.destination]));
 }

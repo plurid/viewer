@@ -52,7 +52,9 @@ interface AccessPorts {
 }
 
 /** Fixed macOS System Settings destinations for Privacy & Security folder permissions. */
-export function privacySettingsURLs(pane: PrivacySettingsPane = 'files'): readonly [string, string] {
+export function privacySettingsURLs(
+  pane: PrivacySettingsPane = 'files',
+): readonly [string, string] {
   return [
     pane === 'all-files'
       ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'

@@ -376,9 +376,8 @@ describe('IPC method table', () => {
       Array.from({ length: 201 }, (_, index) => [`ui.key${index}`, true]),
     );
     expect(
-      schemas.save.safeParse([
-        { ...validState, profile: { id: 'p1', previous: oversizedProfile } },
-      ]).success,
+      schemas.save.safeParse([{ ...validState, profile: { id: 'p1', previous: oversizedProfile } }])
+        .success,
     ).toBe(false);
   });
 });

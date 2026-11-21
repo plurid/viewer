@@ -22,6 +22,7 @@ import {
   trashFixtureEntry,
 } from '../tools/temporary';
 import { terminalConfirmation } from '../src/desktop/actions/execution-confirmations';
+import { speechRuntimeName } from '../src/desktop/speech/runtime-manifest';
 
 assert.equal(process.platform, 'darwin', 'The signed MAS check requires macOS.');
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -57,8 +58,49 @@ const entitlements = JSON.parse(
 ) as Record<string, unknown>;
 assert.equal(entitlements['com.apple.security.app-sandbox'], true);
 assert.equal(entitlements['com.apple.security.get-task-allow'], true);
+assert.equal(entitlements['com.apple.security.device.audio-input'], true);
+assert.equal(entitlements['com.apple.security.network.client'], true);
 assert.equal(entitlements['com.apple.developer.team-identifier'], store.teamID);
 assert.deepEqual(entitlements['com.apple.security.application-groups'], [store.applicationGroup]);
+assert.ok(
+  native('/usr/bin/plutil', [
+    '-extract',
+    'NSMicrophoneUsageDescription',
+    'raw',
+    '-o',
+    '-',
+    path.join(bundle, 'Contents/Info.plist'),
+  ]).trim().length > 0,
+);
+const speechHelper = path.join(
+  bundle,
+  'Contents/Resources',
+  speechRuntimeName(process.arch),
+  'viewer-speech-recognizer',
+);
+const speechHelperEntitlements = JSON.parse(
+  execFileSync(
+    'python3',
+    [
+      '-c',
+      'import json, plistlib, sys; print(json.dumps(plistlib.loads(sys.stdin.buffer.read())))',
+    ],
+    {
+      encoding: 'utf8',
+      input: native('/usr/bin/codesign', [
+        '--display',
+        '--entitlements',
+        '-',
+        '--xml',
+        speechHelper,
+      ]),
+    },
+  ),
+) as Record<string, unknown>;
+assert.deepEqual(Object.keys(speechHelperEntitlements).sort(), [
+  'com.apple.security.app-sandbox',
+  'com.apple.security.inherit',
+]);
 
 // This run uses a unique directory inside this app's container, never the normal
 // Viewer profile. The host fixture stays outside it and receives no native grant.

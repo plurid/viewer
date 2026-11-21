@@ -60,7 +60,6 @@ import { stopTour } from '../workspace/tour';
 
 export function initialize(bootstrap: Bootstrap): void {
   resetPersistence();
-  resetPreferences();
   clearSessions();
   const settings = bootstrap.settings ?? {
     revision: 0,
@@ -69,6 +68,7 @@ export function initialize(bootstrap: Bootstrap): void {
     look: bootstrap.state?.look ?? 'dark',
     credentials: [],
   };
+  resetPreferences(settings);
   const initialFolder = newPlaneFolder(settings.settings.browsing, bootstrap.home, undefined, true);
   const pane = {
     ...folderPane(initialFolder, { visible: settings.ui.sidebar.inNewPlanes, width: 210 }),
