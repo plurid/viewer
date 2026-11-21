@@ -7,8 +7,8 @@ import { windowDialogs } from './window-dialogs';
 const maxConfirmationDetail = 6000;
 
 function requesterInPrompt(proposal: AgentProposal): string {
+  if (proposal.clientID?.startsWith('chat:')) return 'Chat';
   const requester = proposalRequester(proposal);
-  if (requester === 'Chat') return 'Chat';
   if (proposal.clientName?.trim()) return `“${requester}”`;
   if (proposal.clientID === sharedClientID) return 'the shared agent connection';
   return 'the agent';

@@ -107,4 +107,34 @@ describe('shared source-versioned drawing geometry', () => {
     expect(point!.approximate).toBe(false);
     expect(page.coverage.reasons).toEqual([]);
   });
+  it('returns bounded TEXT and MTEXT strings with an untrusted-data coverage notice', () => {
+    const longNote = 'A'.repeat(700);
+    const drawing = parseDrawing(
+      dxf(
+        entity('TEXT', [8, 'NOTES', 10, 10, 20, 10, 40, 2.5, 1, 'HOLE 8MM']) +
+          entity('MTEXT', [8, 'NOTES', 10, 20, 20, 20, 40, 2.5, 1, '{\\fArial;BEND 90\\PDEG}']) +
+          entity('TEXT', [8, 'NOTES', 10, 30, 20, 30, 40, 2.5, 1, longNote]),
+      ),
+    );
+    const page = drawingGeometryPage(drawing, {});
+    expect(page.entities[0]).toMatchObject({ type: 'TEXT', text: 'HOLE 8MM' });
+    expect(page.entities[0]!.textTruncated).toBeUndefined();
+    expect(page.entities[1]).toMatchObject({ type: 'MTEXT', text: 'BEND 90\nDEG' });
+    expect(page.entities[2]!.text).toHaveLength(512);
+    expect(page.entities[2]!.textTruncated).toBe(true);
+    expect(page.coverage.reasons.some((reason) => /untrusted/i.test(reason))).toBe(true);
+    expect(page.coverage.reasons.some((reason) => /shortened|omitted/i.test(reason))).toBe(true);
+
+    const manyText = parseDrawing(
+      dxf(
+        Array.from({ length: 60 }, (_, index) =>
+          entity('TEXT', [8, 'NOTES', 10, index, 20, 0, 40, 2, 1, `Label ${index}`]),
+        ).join(''),
+      ),
+    );
+    const capped = drawingGeometryPage(manyText, { limit: 100 });
+    expect(capped.entities.filter((item) => item.text !== undefined)).toHaveLength(50);
+    expect(capped.entities[50]!.text).toBeUndefined();
+    expect(capped.entities[50]!.textTruncated).toBe(true);
+  });
 });

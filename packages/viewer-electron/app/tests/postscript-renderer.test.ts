@@ -25,7 +25,10 @@ import {
 } from './support/postscript';
 import { guardTestTrash } from '../src/desktop/native/test-removal-policy';
 import { recordingPostScriptStage } from './support/postscript-runtime';
-import { withPostScriptStage } from '../src/desktop/previews/postscript-stage';
+import {
+  PostScriptStageError,
+  withPostScriptStage,
+} from '../src/desktop/previews/postscript-stage';
 
 type FakeMode =
   'success' | 'timeout' | 'failure' | 'oversized' | 'impostor' | 'scratch' | 'wrapper' | 'tree';
@@ -380,6 +383,54 @@ describe('explicit, bounded Ghostscript rendering', () => {
     expect(
       (await readdir(root)).some((name) => name.startsWith('Viewer Ghostscript scratch ')),
     ).toBe(true);
+  });
+  it('propagates PostScriptStageError through Resources.renderPostscript and DerivedPreviews when canceled via cancelDocument', async () => {
+    const source = path.join(root, 'stage-fail.eps');
+    await writeFile(source, binaryEPSSample(postscriptSample), { flag: 'wx' });
+    let finishCleanup!: () => void;
+    const decodeStarted = new Promise<void>((resolveStarted) => {
+      const cleanupGate = new Promise<void>((resolveCleanup) => {
+        finishCleanup = resolveCleanup;
+      });
+      const cache = new DerivedPreviews(
+        async () => {},
+        async (_source, _mode, signal) => {
+          resolveStarted();
+          await new Promise<void>((resolve) => {
+            if (signal.aborted) resolve();
+            else signal.addEventListener('abort', () => resolve(), { once: true });
+          });
+          await cleanupGate;
+          throw new PostScriptStageError(
+            'Ghostscript scratch could not be moved to Trash and was kept.',
+          );
+        },
+      );
+      const renderer = {
+        status: async () => ({ kind: 'found' as const }),
+        variant: async () => 'gs-test',
+        decode: vi.fn(),
+      } as unknown as Ghostscript;
+      const service = new Resources(
+        async () => {},
+        undefined,
+        12000,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { renderer, cache },
+      );
+      resources.push(service);
+      void service;
+    });
+    const service = resources.at(-1)!;
+    const granted = await service.grant(source);
+    const pending = service.renderPostscript(granted.id, 'cancel-stage');
+    await decodeStarted;
+    service.cancelDocument(granted.id, 'cancel-stage');
+    finishCleanup();
+    await expect(pending).rejects.toThrow('could not be moved to Trash and was kept');
   });
   it('reports a scratch Trash failure even when rendering was canceled', async () => {
     const executable = path.join(root, 'fake-gs-cancel');

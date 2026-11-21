@@ -273,9 +273,92 @@ describe('certificates and keys', () => {
       await view.findByRole('article', { name: 'Private key' });
       expect(readSpy).not.toHaveBeenCalled();
       expect(footerHex).toBeUndefined();
-      expect(
-        registry.list({ sources: ['preview:plane'] }).map((item) => item.label),
-      ).not.toContain('Show as Hex');
+      expect(registry.list({ sources: ['preview:plane'] }).map((item) => item.label)).not.toContain(
+        'Show as Hex',
+      );
+    }
+  });
+
+  it('keeps Show as Hex in Quick Preview and plane for .pages and confirmed Keynote .key archives', async () => {
+    for (const [name, extension] of [
+      ['Report.pages', 'pages'],
+      ['Deck.key', 'key'],
+    ] as const) {
+      cleanup();
+      const entry: FileEntry = {
+        path: `/fixtures/${name}`,
+        name,
+        parent: '/fixtures',
+        extension,
+        mime: 'application/octet-stream',
+        size: 128,
+        kind: 'file',
+        directory: false,
+        identity: name,
+        modified: 1,
+        created: 1,
+        hidden: false,
+      };
+      const resource: Resource = {
+        id: `res-${name}`,
+        url: `viewer-resource://res/asset/${name}`,
+        entry,
+      };
+      let resolveArchive!: (listing: { entries: []; truncated: false }) => void;
+      Object.assign(window, {
+        viewer: {
+          ...viewer,
+          onEvent: vi.fn(() => () => {}),
+          release: vi.fn(async () => {}),
+          archive: vi.fn(
+            () =>
+              new Promise<{ entries: []; truncated: false }>((resolve) => {
+                resolveArchive = resolve;
+              }),
+          ),
+          archiveEntry: vi.fn(async () => {
+            throw new Error('No preview');
+          }),
+          read: vi.fn(async () => ({ text: '', binary: true, truncated: false })),
+          openExternal: vi.fn(async () => {}),
+        },
+      });
+      changeWorkspace((space) => ({
+        ...space,
+        panes: [{ id: 'plane', type: 'preview', path: entry.path }],
+      }));
+      const registry = new CommandRegistry();
+      let footerHex: HexToggle | undefined;
+      const view = render(
+        <CommandsContext.Provider value={registry}>
+          <PreviewHost
+            resource={resource}
+            paneID="plane"
+            renderFooter={(_resource, _module, hex) => {
+              footerHex = hex;
+              return null;
+            }}
+          />
+        </CommandsContext.Provider>,
+      );
+      await waitFor(() => expect(resolveArchive).toBeTypeOf('function'));
+      if (extension === 'pages') {
+        expect(footerHex).toBeDefined();
+        expect(registry.list({ sources: ['preview:plane'] }).map((item) => item.label)).toContain(
+          'Show as Hex',
+        );
+      } else {
+        expect(footerHex).toBeUndefined();
+        expect(
+          registry.list({ sources: ['preview:plane'] }).map((item) => item.label),
+        ).not.toContain('Show as Hex');
+      }
+      resolveArchive({ entries: [], truncated: false });
+      await waitFor(() => expect(footerHex).toBeDefined());
+      expect(registry.list({ sources: ['preview:plane'] }).map((item) => item.label)).toContain(
+        'Show as Hex',
+      );
+      view.unmount();
     }
   });
 });

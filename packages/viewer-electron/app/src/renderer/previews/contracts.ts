@@ -89,6 +89,9 @@ export interface PreviewContext {
   editPDF?(): void;
   /** Shows the file's bytes in place of its preview, where the host offers it. */
   showHex?(): void;
+  /** Enables the host's Show as Hex control once an ambiguous file (such as `.key`) is confirmed
+   * not to be a private key. */
+  allowHex?(): void;
   /** Opens the file in its default app. Absent where the file is not one of its own, as an
    * archive's entry or a message's attachment. */
   openInApp?(): void;

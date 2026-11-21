@@ -153,9 +153,7 @@ function preview(name = 'Untitled', options: { openInApp?: boolean } = {}) {
       set: (key: string, value: unknown) => values.set(key, value),
     },
     openInApp:
-      options.openInApp === false
-        ? undefined
-        : () => void window.viewer.openExternal(entry.path),
+      options.openInApp === false ? undefined : () => void window.viewer.openExternal(entry.path),
     services: {
       read: async () => ({ text: '', binary: true, truncated: false }),
       sqlite,

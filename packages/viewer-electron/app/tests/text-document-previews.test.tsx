@@ -302,9 +302,7 @@ describe('preview toolbar and command availability', () => {
     expect(registered.find((item) => item.id === 'view-source')?.available).toBe(true);
     expect(registered.find((item) => item.id === 'text-wrap')?.available).toBe(true);
     fireEvent.click(md.getByRole('button', { name: 'Edit' }));
-    await waitFor(() =>
-      expect(registered.every((item) => item.available === false)).toBe(true),
-    );
+    await waitFor(() => expect(registered.every((item) => item.available === false)).toBe(true));
     md.unmount();
 
     registered = [];
@@ -322,5 +320,32 @@ describe('preview toolbar and command availability', () => {
     expect(json.queryByRole('button', { name: 'Tree' })).toBeNull();
     expect(json.queryByRole('button', { name: 'Source' })).toBeNull();
     expect(registered.find((item) => item.id === 'view-source')?.available).toBe(false);
+  });
+
+  it('refuses binary plists larger than 8 MB before fetching bytes', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(new Uint8Array()));
+    try {
+      const base = context('huge.plist', 'bplist00', { binary: true });
+      const plistContext: PreviewContext = {
+        ...base,
+        resource: {
+          ...base.resource,
+          url: 'viewer-resource://plist/asset/huge.plist',
+          entry: { ...base.resource.entry, size: 9 * 1024 * 1024 },
+        },
+      };
+      const view = render(<TextPreview {...plistContext} />);
+      expect(await view.findByLabelText('File bytes')).toBeTruthy();
+      // HexView may issue bounded Range requests, but binaryPlist must never fetch the full file.
+      const fullFetches = fetchSpy.mock.calls.filter(([, init]) => {
+        const headers = init?.headers as Record<string, string> | undefined;
+        return !headers?.Range;
+      });
+      expect(fullFetches).toHaveLength(0);
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });

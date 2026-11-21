@@ -234,12 +234,12 @@ sit in one top-level folder extracts that folder's contents, so `Photos.zip` hol
 `Photos/`, not `Photos/Photos/`. The `__MACOSX` folder of resource-fork copies is left out. An
 existing name asks before replacing.
 
-| Limit   | Extraction                                                                               | ZIP creation                                |
-| ------- | ---------------------------------------------------------------------------------------- | ------------------------------------------- |
-| Formats | Unencrypted ZIP, TAR, `.tar.gz`, `.tgz`                                                  | ZIP                                         |
-| Entries | 20,000                                                                                   | 20,000                                      |
-| Size    | 32 MB per entry, 256 MB expanded in all; 64 MB for a compressed TAR                      | 2 GB of files                               |
-| Refused | Unsafe paths, links, special files, duplicate or conflicting names; nothing is extracted | Links and special files; names that collide |
+| Limit   | Extraction                                                                               | ZIP creation                                                                                           |
+| ------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Formats | Unencrypted ZIP, TAR, `.tar.gz`, `.tgz`                                                  | ZIP                                                                                                    |
+| Entries | 20,000                                                                                   | 20,000                                                                                                 |
+| Size    | 32 MB per entry, 256 MB expanded in all; 64 MB for a compressed TAR                      | 2 GB of files                                                                                          |
+| Refused | Unsafe paths, links, special files, duplicate or conflicting names; nothing is extracted | Links and special files; names that collide; non-portable names (`:` or `\`, or longer than 255 chars) |
 
 Previewing an archive never runs its contents. **Calculate Size**, **Find Duplicates…** and
 **Compare Locations…** measure only when you choose them.
@@ -257,9 +257,11 @@ original location when known, **Put Back** or **Put Back To…**. A folder lists
 | Changed item or folder  | Refused; refresh the Trash                         |
 | Link in the destination | Refused; choose the actual folder                  |
 
-Original locations come from Viewer's own receipts, matched by identity; an item Finder trashed may
-need **Put Back To…**. **Date added** is the system's directory date, not a deletion time. Reading
-the macOS Trash can require Full Disk Access, which is separate from folder access.
+Original locations come from Viewer's private Trash-origins store (`trash-origins-v1.json`, up to
+5,000 items, mode `0600`) and operation receipts, matched by identity, so **Put Back** stays
+available after the 100-job history rolls over; an item Finder trashed may need **Put Back To…**.
+**Date added** is the system's directory date, not a deletion time. Reading the macOS Trash can
+require Full Disk Access, which is separate from folder access.
 
 Viewer never deletes a file for good unless you choose **Empty Trash…** yourself at the bottom of
 the Trash window and confirm **Empty Trash** in the system dialog. **Empty Trash…** is available

@@ -307,12 +307,27 @@ describe('HTML source composition', () => {
           complete = resolve;
         }),
     );
-    const view = render(createElement(HTMLPreview, context));
+    let registered: readonly { id: string; available?: boolean }[] = [];
+    const view = render(
+      createElement(HTMLPreview, {
+        ...context,
+        commands: {
+          register: (commands) => {
+            registered = commands;
+            return () => {};
+          },
+        },
+      }),
+    );
     const reload = view.getByRole('button', { name: 'Reload' }) as HTMLButtonElement;
     expect(reload.dataset.headerItem).toBe('reload');
     expect(reload.dataset.headerCommands).toBe('preview.reload-html');
     expect(reload.disabled).toBe(false);
     expect(reload.getAttribute('aria-disabled')).toBe('true');
+    const describedBy = reload.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent).toContain('Opening');
+    expect(registered.find((item) => item.id === 'reload-html')?.available).toBe(false);
     expect(reload.title).toContain('Opening');
     reload.focus();
     expect(document.activeElement).toBe(reload);
@@ -322,5 +337,7 @@ describe('HTML source composition', () => {
       complete({ id: capabilityID(1), url: `viewer-html://${capabilityID(1)}/page.html` }),
     );
     await waitFor(() => expect(reload.getAttribute('aria-disabled')).toBeNull());
+    expect(reload.getAttribute('aria-describedby')).toBeNull();
+    expect(registered.find((item) => item.id === 'reload-html')?.available).toBe(true);
   });
 });

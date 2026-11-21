@@ -25,6 +25,7 @@ import {
   type PDFExportPreset,
 } from '../../domain/operations/export-presets';
 import { sendWindowEvent } from '../app/window-events';
+import { withAgentDispatch } from '../app/agent-dispatch';
 export { captureTarget } from './target';
 export interface ProgramTools {
   showTasks?(target?: ReturnType<typeof captureTarget>): void;
@@ -367,7 +368,9 @@ export function programCommands(
                     throw new Error(
                       'This command doesn’t apply to the folder the workflow started in.',
                     );
-                  await executeAction(child, captured, values);
+                  await withAgentDispatch(context.agentDispatchID, () =>
+                    executeAction(child, captured, values),
+                  );
                 } else {
                   const result = line
                     ? await customLine(step.line)
@@ -397,7 +400,10 @@ export function programCommands(
                 continue;
               }
               const step = index ? (live?.() ?? context) : context;
-              if ((await customInvoke(command, step)) === false)
+              const tagged = context.agentDispatchID
+                ? { ...step, agentDispatchID: context.agentDispatchID }
+                : step;
+              if ((await customInvoke(command, tagged)) === false)
                 throw new Error(
                   `“${action.name}” stopped at “${command}”, which is not a command available here.`,
                 );
@@ -424,7 +430,10 @@ export function programCommands(
           else {
             const captured = captureTarget(context, workspace);
             const values = await requestParameters(action.name, actionInputs(action, []));
-            if (values) await executeAction(action, captured, values);
+            if (values)
+              await withAgentDispatch(context.agentDispatchID, () =>
+                executeAction(action, captured, values),
+              );
           }
         },
       })),

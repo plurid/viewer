@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { realpath } from 'node:fs/promises';
 import { RemoteConnections, remoteConnectionRoot } from './remote/connections';
 import { nativeRemotePrompt } from './remote/native-prompts';
@@ -322,6 +323,9 @@ export class Desktop {
     string,
     { finish(error?: string): void; owner: number; command: string }
   >();
+  /** Desktop-issued agent dispatch IDs retained per window so late echoed calls cannot elevate. */
+  private issuedDispatches = new Map<string, number>();
+  private requestDispatch = new AsyncLocalStorage<{ owner: number; dispatchID: string }>();
   private agentsEnabled?: boolean;
   private agentsConfiguration: Promise<void> = Promise.resolve();
   private readonly flushes = new WindowFlushRequests();
@@ -1395,7 +1399,12 @@ export class Desktop {
     });
     ipcMain.handle(
       'viewer:request',
-      async (event, method: unknown, args: unknown): Promise<ApiResult<unknown>> => {
+      async (
+        event,
+        method: unknown,
+        args: unknown,
+        dispatchID?: unknown,
+      ): Promise<ApiResult<unknown>> => {
         try {
           if (
             !this.windows.has(event.sender.id) ||
@@ -1415,7 +1424,7 @@ export class Desktop {
           return {
             ok: true,
             value: await performanceMeter.measure(name, args, async () =>
-              this.call(name, args, event.sender.id),
+              this.call(name, args, event.sender.id, dispatchID),
             ),
           };
         } catch (error) {
@@ -1473,8 +1482,14 @@ export class Desktop {
     const record = this.windows.get(window.webContents.id);
     if (record) record.stopped = false;
   }
-  /** `owner` is carrying out an agent's command; work private to the person refuses it. */
+  /** True when the current IPC request echoes a desktop-issued agent dispatch ID for `owner`.
+   * Person-initiated actions in the same window never carry a dispatch ID and are not blocked. */
   private isAgentDriven(owner: number): boolean {
+    const current = this.requestDispatch?.getStore();
+    return !!current && current.owner === owner && current.dispatchID.length > 0;
+  }
+  /** True while `owner` has a pending agent command, used only for the Start panel Run notice. */
+  private hasPendingAgentCommand(owner: number): boolean {
     return [...this.agentCommands.values()].some((item) => item.owner === owner);
   }
   private withPreferences(state: SavedState): SavedState {
@@ -2095,6 +2110,9 @@ export class Desktop {
         );
       }, 25000);
       timer.unref();
+      this.issuedDispatches.set(id, window.webContents.id);
+      if (this.issuedDispatches.size > 1000)
+        this.issuedDispatches.delete(this.issuedDispatches.keys().next().value!);
       this.agentCommands.set(id, {
         owner: window.webContents.id,
         command: payload.type === 'agent-command' ? payload.command : 'task-workflow',
@@ -2116,12 +2134,11 @@ export class Desktop {
     });
   }
   private publishTerminalAuthority(owner: number): void {
-    if (this.isAgentDriven(owner)) this.remote?.ownerClosed(owner);
     const window = this.windows.get(owner)?.window;
     if (window && !window.isDestroyed())
       sendEvent(window.webContents, {
         type: 'terminal-authority',
-        agentDriven: this.isAgentDriven(owner),
+        agentDriven: this.hasPendingAgentCommand(owner),
       });
   }
   /** A workspace window's start: its saved state, settings and the paths it opens with. */
@@ -2206,7 +2223,7 @@ export class Desktop {
       ...stored,
       launches,
       definitions: this.definitions.snapshot(),
-      agentDriven: this.isAgentDriven(sender),
+      agentDriven: this.hasPendingAgentCommand(sender),
       folderHistoryRevision: this.workspaceSessions.folderHistory().revision,
       checkedFolders: this.folderChecks.paths.filter((path) =>
         Object.hasOwn(stored.state?.visits ?? {}, path),
@@ -2808,7 +2825,22 @@ export class Desktop {
   }
   private handlerTable?: ApiHandlers;
   /** Runs a method's handler with arguments its schema produced. */
-  private call<K extends ApiMethod>(method: K, args: unknown, senderID: number): unknown {
+  private call<K extends ApiMethod>(
+    method: K,
+    args: unknown,
+    senderID: number,
+    dispatchID?: unknown,
+  ): unknown {
+    let tag: string | undefined;
+    if (dispatchID !== undefined) {
+      if (typeof dispatchID !== 'string' || !dispatchID.length || dispatchID.length > 200)
+        throw new Error('Invalid agent dispatch identifier.');
+      const issued =
+        this.agentCommands?.get(dispatchID)?.owner === senderID ||
+        this.issuedDispatches?.get(dispatchID) === senderID;
+      if (!issued) throw new Error('Invalid agent dispatch identifier.');
+      tag = dispatchID;
+    }
     const handler: ApiHandlers[K] = (this.handlerTable ??= this.createHandlers())[method];
     const parsed = schemas[method].parse(args) as Parameters<ApiHandlers[K]>[0];
     const record = this.windows.get(senderID);
@@ -2818,8 +2850,12 @@ export class Desktop {
       target && target.workspaceID === workspaceID && target.paneID !== 'none'
         ? target.paneID
         : undefined;
-    return this.activity.within({ windowID: record?.originID, workspaceID, planeID }, () =>
-      handler(parsed, senderID),
-    );
+    const run = () =>
+      this.activity.within({ windowID: record?.originID, workspaceID, planeID }, () =>
+        handler(parsed, senderID),
+      );
+    return tag && this.requestDispatch
+      ? this.requestDispatch.run({ owner: senderID, dispatchID: tag }, run)
+      : run();
   }
 }

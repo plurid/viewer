@@ -7,6 +7,7 @@ import { routeFileKeyboard } from './explorer/selection';
 import { AgentReview } from './actions/AgentReview';
 import { useAgentCatalog } from './app/useAgentCatalog';
 import { commandAtAgentOrigin, resolveAgentOrigin } from './app/agent-origin';
+import { withAgentDispatch } from './app/agent-dispatch';
 import {
   effectiveWindowLook,
   effectiveWindowSettings,
@@ -689,9 +690,10 @@ function AppWindow() {
           deferTerminalStart(
             destination.panes.filter((pane) => pane.type === 'terminal').map((pane) => pane.id),
           );
-          if (activeWorkspace().id !== destination.id) await switchTo(destination.id);
+          if (activeWorkspace().id !== destination.id)
+            await withAgentDispatch(event.id, () => switchTo(destination.id));
           if (Date.now() > event.deadline) throw new Error('The task opening request expired.');
-          await controller.installTaskArea(event.bundle);
+          await withAgentDispatch(event.id, () => controller.installTaskArea(event.bundle));
           await flushState();
         })()
           .then(
@@ -730,7 +732,7 @@ function AppWindow() {
             return;
           }
           if (event.navigation) {
-            void executeAgentNavigation(event.navigation, target, controller, switchTo)
+            void executeAgentNavigation(event.navigation, target, controller, switchTo, event.id)
               .then(() => finish())
               .catch((error: Error) => {
                 report(error);
@@ -745,7 +747,14 @@ function AppWindow() {
             origin,
             windowContext(),
           );
-          void (command ? registry.run(command, false) : Promise.resolve(false))
+          void (
+            command
+              ? registry.run(
+                  { ...command, context: { ...command.context, agentDispatchID: event.id } },
+                  false,
+                )
+              : Promise.resolve(false)
+          )
             .then((executed) =>
               finish(executed ? undefined : 'The command no longer applies to this plane.'),
             )

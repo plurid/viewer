@@ -188,6 +188,22 @@ describe('PostScript preview composition and explicit rendering', () => {
       screen.getByText('Ghostscript scratch could not be moved to Trash and was kept.'),
     ).toBeTruthy();
   });
+  it('keeps Rendering canceled when cancelDocument aborts with Reading the page was canceled', async () => {
+    const f = fixture();
+    let fail!: (error: Error) => void;
+    f.services.renderPostscript.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+    );
+    render(<PostScriptPreview {...f.context} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Render Pages' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel Rendering' }));
+    await act(async () => fail(new Error('Reading the page was canceled.')));
+    expect(screen.getByText('Rendering canceled.')).toBeTruthy();
+    expect(screen.queryByText('Reading the page was canceled.')).toBeNull();
+  });
   it('retains keyboard focus through rendering, cancellation and completion', async () => {
     const f = fixture();
     let finish!: (value: Resource) => void;

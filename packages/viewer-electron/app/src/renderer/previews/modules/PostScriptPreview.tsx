@@ -134,10 +134,13 @@ export default function PostScriptPreview(context: PreviewContext) {
     } catch (value) {
       if (!mounted.current || signal.aborted) return;
       const detail = errorMessage(value);
+      const canceledError =
+        detail === 'PostScript rendering was canceled.' ||
+        detail === 'Reading the page was canceled.';
       if (request.current === requestID) {
         setMessage(detail);
         setRenderState('idle');
-      } else if (!request.current && detail !== 'PostScript rendering was canceled.') {
+      } else if (!request.current && !canceledError) {
         setMessage(detail);
       }
     } finally {

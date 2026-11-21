@@ -452,10 +452,20 @@ export class WatchRules {
           if (prior) nextBaseline.push({ path: file.path, version: prior });
         }
       }
+      const baselineChanged =
+        nextBaseline.length !== rule.baseline.length ||
+        nextBaseline.some((file, index) => {
+          const existing = rule.baseline[index];
+          return (
+            !existing ||
+            existing.path !== file.path ||
+            !sameSourceVersion(existing.version, file.version)
+          );
+        });
       rule.baseline = nextBaseline;
       if (pendingSettle.size) this.schedule(rule);
       if (!ready.length) {
-        await this.save();
+        if (baselineChanged) await this.save();
         return;
       }
       rule.lastStarted = this.now();

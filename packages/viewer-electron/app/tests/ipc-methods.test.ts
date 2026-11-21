@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import {
   methodWindows,
   schemas,
@@ -262,5 +263,144 @@ describe('the workspace snapshot agents read (2026-10-23)', () => {
       selection: [],
     };
     expect(schemas.commandsPublish.safeParse([target, [], snapshot]).success).toBe(true);
+  });
+});
+describe('desktop-issued per-request agent dispatch IDs', () => {
+  it('isolates person actions from concurrent agent commands and never lets a tagged or expired dispatch elevate', async () => {
+    const desktop = Object.create(Desktop.prototype) as Desktop;
+    const sent: { id?: string; type?: string }[] = [];
+    const windowStub = {
+      isDestroyed: () => false,
+      webContents: {
+        id: 1,
+        isDestroyed: () => false,
+        send: (_channel: string, event: { id?: string; type?: string }) => sent.push(event),
+      },
+    };
+    const notesRequest = vi.fn(async () => ({ kind: 'list' as const, notes: [] }));
+    const operationsStart = vi.fn(() => 'job-1');
+    const executionsStart = vi.fn(async () => 'exec-1');
+    Reflect.set(desktop, 'windows', new Map([[1, { role: 'viewer', window: windowStub }]]));
+    Reflect.set(desktop, 'agentCommands', new Map());
+    Reflect.set(desktop, 'issuedDispatches', new Map());
+    Reflect.set(desktop, 'requestDispatch', new AsyncLocalStorage());
+    Reflect.set(desktop, 'activity', { within: (_ctx: unknown, work: () => unknown) => work() });
+    Reflect.set(desktop, 'notes', { request: notesRequest });
+    Reflect.set(desktop, 'receipts', { request: vi.fn() });
+    Reflect.set(desktop, 'flushes', { request: vi.fn() });
+    Reflect.set(desktop, 'operations', {
+      start: operationsStart,
+      load: vi.fn(),
+      all: vi.fn(() => []),
+      dismiss: vi.fn(),
+      cancel: vi.fn(),
+      resolve: vi.fn(),
+      undo: vi.fn(),
+      redo: vi.fn(),
+    });
+    Reflect.set(desktop, 'fabrication', { rememberOperation: vi.fn(async () => {}) });
+    Reflect.set(desktop, 'executions', {
+      start: executionsStart,
+      startManual: vi.fn(),
+      list: vi.fn(),
+      cancel: vi.fn(),
+    });
+    Reflect.set(desktop, 'options', { openSettings: vi.fn() });
+    Reflect.set(desktop, 'settings', { snapshot: vi.fn() });
+
+    const dispatchAgentEvent = Reflect.get(desktop, 'dispatchAgentEvent') as (
+      owner: number,
+      payload: unknown,
+    ) => Promise<void>;
+    const call = Reflect.get(desktop, 'call') as (
+      method: string,
+      args: unknown,
+      senderID: number,
+      dispatchID?: unknown,
+    ) => unknown;
+
+    // Start a pending agent command on window 1; capture the desktop-issued dispatch ID.
+    const pending = dispatchAgentEvent.call(desktop, 1, {
+      type: 'agent-command',
+      command: 'duplicate',
+      target: {
+        workspaceID: 'w',
+        rootID: 'r',
+        paneID: 'p',
+        directory: '/Granted',
+        selection: [],
+      },
+    });
+    const issuedID = sent.find((event) => event.type === 'agent-command')?.id;
+    expect(typeof issuedID).toBe('string');
+
+    // 1. Person's own actions without a dispatch ID succeed and are attributed to 'person' despite the pending agent command.
+    await expect(call.call(desktop, 'notes', [{ kind: 'list' }], 1)).resolves.toEqual({
+      kind: 'list',
+      notes: [],
+    });
+    await call.call(desktop, 'operate', [{ kind: 'duplicate', sources: ['/Granted/a.txt'] }], 1);
+    expect(operationsStart).toHaveBeenLastCalledWith(
+      { kind: 'duplicate', sources: ['/Granted/a.txt'] },
+      'person',
+    );
+
+    // 2. Agent command's calls echoing the desktop-issued dispatch ID are attributed to 'agent' and refused for private/program APIs.
+    await expect(call.call(desktop, 'notes', [{ kind: 'list' }], 1, issuedID)).rejects.toThrow(
+      'Notes are private to the person.',
+    );
+    await call.call(
+      desktop,
+      'operate',
+      [{ kind: 'duplicate', sources: ['/Granted/a.txt'] }],
+      1,
+      issuedID,
+    );
+    expect(operationsStart).toHaveBeenLastCalledWith(
+      { kind: 'duplicate', sources: ['/Granted/a.txt'] },
+      'agent',
+    );
+    await expect(
+      call.call(
+        desktop,
+        'customExecute',
+        [
+          'action-1',
+          { workspaceID: 'w', rootID: 'r', paneID: 'p', directory: '/Granted', selection: [] },
+          {},
+        ],
+        1,
+        issuedID,
+      ),
+    ).rejects.toThrow('Agents cannot run programs or shell scripts.');
+
+    // 3. Unissued or wrong-window dispatch IDs are rejected before reaching any handler.
+    expect(() =>
+      call.call(
+        desktop,
+        'operate',
+        [{ kind: 'duplicate', sources: ['/Granted/a.txt'] }],
+        1,
+        'forged-id',
+      ),
+    ).toThrow('dispatch');
+
+    // 4. After the agent command finishes, a late call echoing its expired desktop-issued ID STILL lowers authority to 'agent'.
+    call.call(desktop, 'agentCommandResult', [issuedID], 1);
+    await pending;
+    await expect(call.call(desktop, 'notes', [{ kind: 'list' }], 1, issuedID)).rejects.toThrow(
+      'Notes are private to the person.',
+    );
+    await call.call(
+      desktop,
+      'operate',
+      [{ kind: 'duplicate', sources: ['/Granted/a.txt'] }],
+      1,
+      issuedID,
+    );
+    expect(operationsStart).toHaveBeenLastCalledWith(
+      { kind: 'duplicate', sources: ['/Granted/a.txt'] },
+      'agent',
+    );
   });
 });

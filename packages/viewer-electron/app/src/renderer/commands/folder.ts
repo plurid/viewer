@@ -28,6 +28,7 @@ import { choosePreview } from '../previews/registry';
 import { isOfficeFormat } from '../../domain/previews/documents/layout';
 import { previewsAsFile } from '../../domain/previews/documents/embedded';
 import { networkSharingEnabled, sharedFolder } from '../explorer/network-sharing-state';
+import { withAgentDispatch } from '../app/agent-dispatch';
 export { parentPath } from '../../domain/workspaces/planes';
 
 export interface FolderActions {
@@ -262,7 +263,9 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
           byFolder.set(folder, [...(byFolder.get(folder) ?? []), entry.path]);
         }
         for (const [destination, sources] of byFolder)
-          await window.viewer.operate({ kind: 'extract', sources, destination });
+          await withAgentDispatch(context.agentDispatchID, () =>
+            window.viewer.operate({ kind: 'extract', sources, destination }),
+          );
       },
     },
     {
@@ -273,7 +276,8 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
       aliases: ['default', 'external', 'od'],
       when: selected,
       run: async (context) => {
-        for (const path of paths(context)) await window.viewer.openExternal(path);
+        for (const path of paths(context))
+          await withAgentDispatch(context.agentDispatchID, () => window.viewer.openExternal(path));
       },
     },
     {
@@ -445,11 +449,13 @@ export function folderCommands(actions: FolderActions): CommandDefinition[] {
         await refreshClipboard();
         const clipboard = getState().clipboard;
         if (clipboard?.paths.length)
-          await window.viewer.operate({
-            kind: 'move',
-            sources: clipboard.paths,
-            destination: context.directory,
-          });
+          await withAgentDispatch(context.agentDispatchID, () =>
+            window.viewer.operate({
+              kind: 'move',
+              sources: clipboard.paths,
+              destination: context.directory,
+            }),
+          );
       },
     },
     {

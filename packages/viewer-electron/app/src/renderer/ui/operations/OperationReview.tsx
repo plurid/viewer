@@ -37,7 +37,13 @@ export function OperationReviewControls() {
       rows: plan.rows.map((row) => (row.id === id ? { ...row, ...value } : row)),
     });
   return (
-    <Dialog wide title={plan.title} onClose={close} className="operation-review-dialog">
+    <Dialog
+      key={plan.id}
+      wide
+      title={plan.title}
+      onClose={close}
+      className="operation-review-dialog"
+    >
       <form
         onSubmit={(event) => {
           event.preventDefault();

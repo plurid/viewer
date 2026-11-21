@@ -157,7 +157,7 @@ struct Work {
   bool hidden = false;
   bool allowReservation = false;
   bool deferRestrictions = false;
-  bool deferred = false;
+  bool cloneDeferred = false;
   viewer_rename::Result renameResult;
   NSArray<NSDictionary *> *volumes = nil;
   NSArray<NSString *> *files = nil;
@@ -335,8 +335,12 @@ static void execute(napi_env, void *data) {
               fchflags(fd, clonedStat.st_flags & ~(UF_IMMUTABLE | UF_APPEND)) != 0) {
               task->errorNumber = errno;
               task->error = [NSString stringWithFormat:@"Could not unlock the staged clone: %s", std::strerror(errno)];
+            } else if ((clonedStat.st_mode & (S_IRUSR | S_IWUSR)) != (S_IRUSR | S_IWUSR) &&
+              fchmod(fd, (clonedStat.st_mode & 07777) | S_IRUSR | S_IWUSR) != 0) {
+              task->errorNumber = errno;
+              task->error = [NSString stringWithFormat:@"Could not make the staged clone writable for metadata restoration: %s", std::strerror(errno)];
             } else {
-              task->deferred = true;
+              task->cloneDeferred = true;
             }
             close(fd);
           }
@@ -510,7 +514,7 @@ static void complete(napi_env env, napi_status status, void *data) {
         napi_set_element(env, result, index++, item);
       }
     }
-    if (task->kind == Kind::Clone && task->deferRestrictions) result = boolean(env, task->deferred);
+    if (task->kind == Kind::Clone && task->deferRestrictions) result = boolean(env, task->cloneDeferred);
     if (task->kind == Kind::DatesAdded) {
       napi_create_array(env, &result); uint32_t index = 0;
       for (NSDictionary *date in task->dates) {

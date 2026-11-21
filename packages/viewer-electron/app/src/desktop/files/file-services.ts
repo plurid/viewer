@@ -1,3 +1,4 @@
+import type { ArchiveListing } from '../../domain/contracts';
 import type { WorksheetWindow } from '../../domain/previews/documents/office';
 import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqlite';
 import type { DrawingGeometryOptions } from '../../domain/previews/drawings/geometry';
@@ -6,7 +7,7 @@ import path from 'node:path';
 import { UtilityClient } from '../workers/utility-client';
 import type { IndexMethods } from '../workers/index-protocol';
 import type { FolderSizeMethods } from './folder-size-worker';
-import type { PreviewMethods } from '../workers/preview-worker';
+import type { ArchiveEntryText, PreviewMethods } from '../workers/preview-worker';
 import { entry } from './filesystem';
 import { assertLocalPath } from './local-path';
 import { spotlightTagged } from '../search/spotlight';
@@ -320,6 +321,29 @@ export class FileServices {
       throw new Error('File access changed. Read the database again.');
     await this.requireLocal([file]);
     return reply;
+  }
+  async archiveList(file: string, signal?: AbortSignal): Promise<ArchiveListing> {
+    await this.requireLocal([file]);
+    const revision = this.accessRevision;
+    const listing = await this.previews.call('archive-list', [file], signal);
+    if (revision !== this.accessRevision)
+      throw new Error('File access changed. Read the archive again.');
+    await this.requireLocal([file]);
+    return listing;
+  }
+  async archiveReadText(
+    file: string,
+    name: string,
+    maxBytes: number,
+    signal?: AbortSignal,
+  ): Promise<ArchiveEntryText> {
+    await this.requireLocal([file]);
+    const revision = this.accessRevision;
+    const text = await this.previews.call('archive-read-text', [file, name, maxBytes], signal);
+    if (revision !== this.accessRevision)
+      throw new Error('File access changed. Read the archive entry again.');
+    await this.requireLocal([file]);
+    return text;
   }
   async inspect(file: string, content = false, ocr = false, signal?: AbortSignal) {
     await this.requireLocal([file]);

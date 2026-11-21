@@ -321,8 +321,12 @@ function MailboxView({ context, mailbox }: { context: PreviewContext; mailbox: M
       return [...items].sort((a, b) => a - b);
     },
   });
+  const focusFrame = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(focusFrame.current), []);
   const choose = (next: number) => {
     const position = Math.max(0, Math.min(next, count - 1));
+    cancelAnimationFrame(focusFrame.current);
+    focusFrame.current = 0;
     setChosen(position);
     virtual.scrollToIndex(position, { align: 'auto' });
     const focus = () => {
@@ -332,7 +336,7 @@ function MailboxView({ context, mailbox }: { context: PreviewContext; mailbox: M
       button?.focus();
       return Boolean(button);
     };
-    if (!focus()) requestAnimationFrame(focus);
+    if (!focus()) focusFrame.current = requestAnimationFrame(focus);
   };
   const keydown = (event: KeyboardEvent<HTMLOListElement>) => {
     const moves: Record<string, number> = {
@@ -355,16 +359,24 @@ function MailboxView({ context, mailbox }: { context: PreviewContext; mailbox: M
           id: 'mail-next',
           label: 'Next Message',
           available: index < count - 1,
-          run: () => setChosen(index + 1),
+          run: () => {
+            const next = Math.min(index + 1, count - 1);
+            setChosen(next);
+            virtual.scrollToIndex(next, { align: 'auto' });
+          },
         },
         {
           id: 'mail-previous',
           label: 'Previous Message',
           available: index > 0,
-          run: () => setChosen(index - 1),
+          run: () => {
+            const next = Math.max(index - 1, 0);
+            setChosen(next);
+            virtual.scrollToIndex(next, { align: 'auto' });
+          },
         },
       ],
-      [index, count, setChosen],
+      [index, count, setChosen, virtual],
     ),
   );
   if (!count)

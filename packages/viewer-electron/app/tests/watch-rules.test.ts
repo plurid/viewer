@@ -4,6 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import path from 'node:path';
 import { Workflows } from '../src/desktop/automation/workflows';
 import { WatchRules } from '../src/desktop/automation/watch-rules';
+import { DocumentStore } from '../src/desktop/persistence/document-store';
 import { Operations } from '../src/desktop/operations/operations';
 import { OperationPlans } from '../src/desktop/operations/operation-plans';
 import { Checkpoints } from '../src/desktop/operations/checkpoints';
@@ -164,7 +165,9 @@ async function fixture(kind: 'copy' | 'inspect' | 'rename' = 'copy', content = f
   const tick = async (milliseconds = 1100) => {
     now += milliseconds;
     await vi.advanceTimersByTimeAsync(milliseconds);
-    await delay(40);
+    // Let the timer callback enqueue reconcile() on WatchRules.serial(), then wait for it to finish.
+    await Promise.resolve();
+    await rules!.request({ kind: 'list' });
   };
   return {
     root,
@@ -531,16 +534,21 @@ describe('approved incoming-file watch rules', () => {
     try {
       await f.approve();
       const target = path.join(f.inbox, 'Growing.txt');
+      const saveSpy = vi.spyOn(DocumentStore.prototype, 'save');
+      saveSpy.mockClear();
       await writeFile(target, 'chunk-1');
       f.change();
       await f.tick();
-      // Seen only once so far: must wait for a second scan with the same version.
+      // Seen only once so far: must wait for a second scan with the same version, without rewriting unchanged baseline.
       expect(await f.runs()).toEqual([]);
+      expect(saveSpy).not.toHaveBeenCalled();
       await writeFile(target, 'chunk-1-and-chunk-2');
       f.change();
       await f.tick();
-      // Still changing between scans: must not start or pause the rule.
+      // Still changing between scans: must not start, pause, or rewrite watch-rules-v1.json while baseline is unchanged.
       expect(await f.runs()).toEqual([]);
+      expect(saveSpy).not.toHaveBeenCalled();
+      saveSpy.mockRestore();
       expect((await f.list())[0]!.enabled).toBe(true);
       // Now stop writing; the next scan sees the identical version and starts the run.
       await f.tick();

@@ -240,10 +240,10 @@ export function UnknownFile(context: PreviewContext) {
           )}
           {context.openInApp && <button onClick={context.openInApp}>Open in Default App</button>}
           {context.openInApp && provider && (guess.kind === 'idle' || guess.kind === 'asking') && (
-              <button disabled={guess.kind === 'asking'} onClick={ask}>
-                {guess.kind === 'asking' ? `Asking ${provider.name}…` : `Ask ${provider.name}`}
-              </button>
-            )}
+            <button disabled={guess.kind === 'asking'} onClick={ask}>
+              {guess.kind === 'asking' ? `Asking ${provider.name}…` : `Ask ${provider.name}`}
+            </button>
+          )}
         </div>
         {refusal && <p role="alert">{refusal}</p>}
         {guess.kind === 'answered' && (

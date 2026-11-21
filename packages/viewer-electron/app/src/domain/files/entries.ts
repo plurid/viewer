@@ -314,8 +314,25 @@ export function fileFamily(entry: Pick<FileEntry, 'extension' | 'directory' | 'm
   // painted and designed images in a ZIP, which no system MIME table names
   if (['kra', 'ora', 'sketch'].includes(entry.extension)) return 'image';
   if (cameraRawFormats.includes(entry.extension)) return 'image';
-  // sound no system MIME table names
-  if (['ape', 'mpa'].includes(entry.extension)) return 'audio';
+  // audio formats no system MIME table names (or that map to application/octet-stream)
+  if (
+    [
+      'wma',
+      'aif',
+      'aiff',
+      'caf',
+      'mka',
+      'ac3',
+      'wv',
+      'amr',
+      'ape',
+      'au',
+      'snd',
+      'mp2',
+      'mpa',
+    ].includes(entry.extension)
+  )
+    return 'audio';
   if (entry.mime.startsWith('image/')) return 'image';
   if (entry.mime.startsWith('audio/')) return 'audio';
   if (entry.mime.startsWith('video/')) return 'video';

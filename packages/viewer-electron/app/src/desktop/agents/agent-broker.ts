@@ -69,6 +69,7 @@ import type { AgentSessions } from './sessions';
 import { containsPath } from '../files/containment';
 import { realHome } from '../native/home';
 import { officeFamily, readsOfficeContent } from '../../domain/previews/documents/layout';
+import { sqliteRequestSchema } from '../../domain/previews/data/sqlite';
 /** Agents see the shape of execution settings, never secrets they may carry:
  * terminal environment values, shell scripts and program arguments (`--token=…`, which were
  * shown as they were until 2026-10-20) often hold tokens. */
@@ -114,66 +115,51 @@ async function filterPathRecord<Value>(
   for (const [key, value] of Object.entries(record)) if (await allow(key)) kept[key] = value;
   return kept;
 }
+const profilePathPrefixes = new Set(['ui', 'ui.sidebar', 'settings', 'settings.browsing']);
+async function filterProfileEntry(
+  fieldPath: string,
+  value: JSONValue,
+  allow: (file: string) => Promise<boolean>,
+): Promise<JSONValue> {
+  if (
+    (fieldPath === 'ui.sidebar.locations' || fieldPath === 'ui.sidebar.hidden') &&
+    Array.isArray(value) &&
+    value.every((item): item is string => typeof item === 'string')
+  )
+    return filterPaths(value, allow);
+  if (
+    fieldPath === 'ui.sidebar.labels' &&
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value)
+  )
+    return filterPathRecord(value as Record<string, JSONValue>, allow);
+  if (
+    (fieldPath === 'settings.browsing.newPlanePath' ||
+      fieldPath === 'settings.browsing.emptyWorkspacePath') &&
+    typeof value === 'string'
+  )
+    return value && (await allow(value)) ? value : '';
+  if (
+    profilePathPrefixes.has(fieldPath) &&
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value)
+  ) {
+    const filtered: Record<string, JSONValue> = {};
+    for (const [child, next] of Object.entries(value as Record<string, JSONValue>))
+      filtered[child] = await filterProfileEntry(`${fieldPath}.${child}`, next, allow);
+    return filtered;
+  }
+  return value;
+}
 async function filterProfileValues(
   values: Readonly<Record<string, JSONValue>>,
   allow: (file: string) => Promise<boolean>,
 ): Promise<Record<string, JSONValue>> {
   const kept: Record<string, JSONValue> = {};
-  for (const [key, value] of Object.entries(values)) {
-    if (
-      (key === 'ui.sidebar.locations' || key === 'ui.sidebar.hidden') &&
-      Array.isArray(value) &&
-      value.every((item): item is string => typeof item === 'string')
-    )
-      kept[key] = await filterPaths(value, allow);
-    else if (
-      key === 'ui.sidebar.labels' &&
-      value &&
-      typeof value === 'object' &&
-      !Array.isArray(value)
-    )
-      kept[key] = await filterPathRecord(value as Record<string, JSONValue>, allow);
-    else if (
-      (key === 'settings.browsing.newPlanePath' ||
-        key === 'settings.browsing.emptyWorkspacePath') &&
-      typeof value === 'string'
-    )
-      kept[key] = value && (await allow(value)) ? value : '';
-    else if (key === 'ui.sidebar' && value && typeof value === 'object' && !Array.isArray(value)) {
-      const sidebar = { ...(value as Record<string, JSONValue>) };
-      if (
-        Array.isArray(sidebar.locations) &&
-        sidebar.locations.every((item): item is string => typeof item === 'string')
-      )
-        sidebar.locations = await filterPaths(sidebar.locations, allow);
-      if (
-        Array.isArray(sidebar.hidden) &&
-        sidebar.hidden.every((item): item is string => typeof item === 'string')
-      )
-        sidebar.hidden = await filterPaths(sidebar.hidden, allow);
-      if (sidebar.labels && typeof sidebar.labels === 'object' && !Array.isArray(sidebar.labels))
-        sidebar.labels = await filterPathRecord(sidebar.labels as Record<string, JSONValue>, allow);
-      kept[key] = sidebar;
-    } else if (
-      key === 'settings.browsing' &&
-      value &&
-      typeof value === 'object' &&
-      !Array.isArray(value)
-    ) {
-      const browsing = { ...(value as Record<string, JSONValue>) };
-      if (typeof browsing.newPlanePath === 'string')
-        browsing.newPlanePath =
-          browsing.newPlanePath && (await allow(browsing.newPlanePath))
-            ? browsing.newPlanePath
-            : '';
-      if (typeof browsing.emptyWorkspacePath === 'string')
-        browsing.emptyWorkspacePath =
-          browsing.emptyWorkspacePath && (await allow(browsing.emptyWorkspacePath))
-            ? browsing.emptyWorkspacePath
-            : '';
-      kept[key] = browsing;
-    } else kept[key] = value;
-  }
+  for (const [key, value] of Object.entries(values))
+    kept[key] = await filterProfileEntry(key, value, allow);
   return kept;
 }
 /** One reply to an `--mcp` relay. A result within its client's budget always fits the relay's
@@ -313,10 +299,11 @@ export class AgentBroker {
       // Lines are cut at newline bytes so two valid requests in one chunk never trip a buffer cap,
       // and the per-line bound leaves room for the relay's id and token wrapper.
       const maxWrappedLineBytes = 65536 + 512;
+      const maxPendingRequests = 100;
       let parts: Buffer[] = [];
       let arriving = 0;
       let requests = Promise.resolve();
-      // Bound queued requests per connection: reading pauses until earlier ones finish.
+      // Keep reading so {cancel:id} frames arrive immediately; reject excess non-cancel requests.
       let pending = 0;
       stream.on('error', () => {});
       const enqueue = (line: string) => {
@@ -342,13 +329,20 @@ export class AgentBroker {
           return;
         }
         if (wireID !== undefined && cancelled.delete(wireID)) return;
+        if (pending >= maxPendingRequests) {
+          if (!stream.destroyed)
+            stream.write(
+              JSON.stringify({ id: wireID ?? null, error: 'Too many pending requests.' }) + '\n',
+            );
+          return;
+        }
         const requestController = wireID !== undefined ? new AbortController() : undefined;
         if (wireID !== undefined && requestController)
           activeRequests.set(wireID, requestController);
         const requestSignal = requestController
           ? AbortSignal.any([lifetime.signal, requestController.signal])
           : lifetime.signal;
-        if (++pending >= 16) stream.pause();
+        pending++;
         requests = requests.then(async () => {
           let id: unknown = null;
           try {
@@ -369,7 +363,7 @@ export class AgentBroker {
               );
           } finally {
             if (wireID !== undefined) activeRequests.delete(wireID);
-            if (--pending < 16 && stream.isPaused()) stream.resume();
+            pending--;
           }
         });
       };
@@ -672,19 +666,27 @@ export class AgentBroker {
     const savedSearches: ApplicationSettings['savedSearches'] = [];
     for (const item of redacted.savedSearches)
       if (!item.root || (await allow(item.root))) savedSearches.push(item);
+    const scopedExecutable = async (value: string): Promise<string> =>
+      isPathLike(value) && !(await allow(value)) ? '[redacted]' : value;
     const customActions: ApplicationSettings['customActions'] = [];
-    for (const item of redacted.customActions)
+    for (const item of redacted.customActions) {
+      const executor =
+        item.executor.kind === 'executable' || item.executor.kind === 'shell'
+          ? { ...item.executor, executable: await scopedExecutable(item.executor.executable) }
+          : item.executor;
       customActions.push(
         item.when.directories
           ? {
               ...item,
+              executor,
               when: {
                 ...item.when,
                 directories: await filterPaths(item.when.directories, allow),
               },
             }
-          : item,
+          : { ...item, executor },
       );
+    }
     const layouts: ApplicationSettings['layouts'] = [];
     for (const layout of redacted.layouts) {
       const planes: typeof layout.planes = [];
@@ -699,10 +701,17 @@ export class AgentBroker {
     const profiles: ApplicationSettings['profiles'] = [];
     for (const profile of redacted.profiles)
       profiles.push({ ...profile, values: await filterProfileValues(profile.values, allow) });
+    const terminalProfiles: ApplicationSettings['terminals']['profiles'] = [];
+    for (const profile of redacted.terminals.profiles)
+      terminalProfiles.push({
+        ...profile,
+        executable: await scopedExecutable(profile.executable),
+      });
     const application =
       isPathLike(redacted.terminals.application) && !(await allow(redacted.terminals.application))
         ? ''
         : redacted.terminals.application;
+    const tmuxExecutable = await scopedExecutable(redacted.terminals.tmux.executable);
     const socket =
       redacted.terminals.tmux.socket && !(await allow(redacted.terminals.tmux.socket))
         ? ''
@@ -715,7 +724,8 @@ export class AgentBroker {
       terminals: {
         ...redacted.terminals,
         application,
-        tmux: { ...redacted.terminals.tmux, socket },
+        profiles: terminalProfiles,
+        tmux: { ...redacted.terminals.tmux, executable: tmuxExecutable, socket },
       },
       search: {
         ...redacted.search,
@@ -1021,7 +1031,13 @@ export class AgentBroker {
             roots: workspace.roots.filter((id) => panes.some((pane) => pane.id === id)),
           });
       }
-      value = call.name === 'list_workspaces' ? workspaces : workspaces[0]?.panes || [];
+      if (call.name === 'list_planes') {
+        if (!workspaces.length)
+          throw new Error(
+            'Workspace not found or outside the agent’s authorized folders. Call list_workspaces to see visible workspaces.',
+          );
+        value = workspaces[0]!.panes;
+      } else value = workspaces;
     } else if (
       isToolIn(call.name, [
         'propose_open_path',
@@ -1180,8 +1196,10 @@ export class AgentBroker {
           ),
         };
       } else {
+        const snapshot = this.extension.config.snapshot();
+        const scoped = await this.scopedConfiguration(snapshot, 'validate');
         signal.throwIfAborted();
-        value = this.extension.requests.configuration(input.patches);
+        value = this.extension.requests.configuration(input.patches, undefined, scoped);
         this.own((value as { id: string }).id, signal);
       }
     } else if (['read_terminal', 'write_terminal'].includes(call.name)) {
@@ -1202,6 +1220,22 @@ export class AgentBroker {
         value = await terminal.writeTerminal(input.id, input.data);
         this.own((value as { id: string }).id, signal);
       }
+    } else if (call.name === 'list_proposals') {
+      if (!this.extension) throw new Error('Proposal API is unavailable.');
+      const input = parseToolInput('list_proposals', args);
+      const actor = this.clients.actor();
+      value = this.extension.requests
+        .list()
+        .filter((proposal) => this.owned.get(proposal.id) === actor || proposal.clientID === actor)
+        .reverse()
+        .slice(0, input.limit)
+        .map((proposal) => ({
+          id: proposal.id,
+          kind: proposal.kind,
+          title: proposal.title,
+          status: proposal.status,
+          ...(proposal.error ? { error: proposal.error } : {}),
+        }));
     } else if (call.name === 'get_proposal' || call.name === 'cancel_proposal') {
       if (!this.extension) throw new Error('Proposal API is unavailable.');
       const input = parseToolInput(call.name, args);
@@ -1286,6 +1320,56 @@ export class AgentBroker {
       await this.authorize(file);
       if (!sameSourceVersion(sourceVersion(before), sourceVersion(await entry(file))))
         throw new Error('The drawing changed. Read its geometry again.');
+    } else if (isToolIn(call.name, ['read_sqlite', 'list_archive', 'read_archive_entry'])) {
+      const input = parseToolInput(call.name, args);
+      const client = await this.clients.get();
+      if (!client)
+        throw new Error(
+          'Create a named agent client with explicit content permission in Settings.',
+        );
+      await this.authorize(input.path);
+      const before = await entry(input.path);
+      if (before.directory || before.kind !== 'file') throw new Error('Choose a regular file.');
+      if (call.name === 'read_sqlite') {
+        const request =
+          'kind' in input && input.kind === 'rows'
+            ? sqliteRequestSchema.parse({
+                kind: 'rows',
+                table: input.table,
+                offset: input.offset,
+                limit: input.limit,
+              })
+            : sqliteRequestSchema.parse({ kind: 'tables' });
+        const reply = await this.files.sqlite(input.path, request, signal);
+        value = { path: input.path, version: sourceVersion(before), ...reply };
+      } else if (call.name === 'list_archive') {
+        const listing = await this.files.archiveList(input.path, signal);
+        const offset = 'offset' in input ? input.offset : 0;
+        const limit = 'limit' in input ? input.limit : 200;
+        const entries = listing.entries.slice(offset, offset + limit);
+        value = {
+          path: input.path,
+          version: sourceVersion(before),
+          totalEntries: listing.entries.length,
+          entries,
+          ...(offset + entries.length < listing.entries.length
+            ? { nextOffset: offset + entries.length }
+            : {}),
+          truncated: listing.truncated,
+        };
+      } else if ('entry' in input) {
+        const maxBytes = 'maxBytes' in input ? input.maxBytes : 65536;
+        const read = await this.files.archiveReadText(input.path, input.entry, maxBytes, signal);
+        value = {
+          path: input.path,
+          version: sourceVersion(before),
+          entry: input.entry,
+          ...read,
+        };
+      }
+      await this.authorize(input.path);
+      if (!sameSourceVersion(sourceVersion(before), sourceVersion(await entry(input.path))))
+        throw new Error('The source changed. Read it again.');
     } else if (isToolIn(call.name, ['inspect_file', 'read_content', 'query_table'])) {
       const input = parseToolInput(call.name, args);
       const client = await this.clients.get();
@@ -1444,6 +1528,38 @@ export class AgentBroker {
         this.own(id, signal);
         return { id, applyRequiresUserReview: true };
       });
+    } else if (call.name === 'list_tasks') {
+      const input = parseToolInput('list_tasks', args);
+      const actor = this.clients.actor();
+      const tasks = (await this.actions.all()).filter(
+        (plan) =>
+          this.owned.get(plan.id) === actor ||
+          (plan.context.actor === 'agent' && plan.context.clientID === actor),
+      );
+      const visible = [];
+      for (const plan of [...tasks].reverse()) {
+        if (visible.length >= input.limit) break;
+        let covered = true;
+        for (const file of plan.context.sources) {
+          try {
+            await this.authorize(file);
+          } catch {
+            covered = false;
+            break;
+          }
+        }
+        if (!covered) continue;
+        visible.push({
+          id: plan.id,
+          recipeID: plan.recipeID,
+          title: plan.title,
+          status: plan.status,
+          undoable: plan.undoable,
+          rowCount: plan.rows.length,
+          ...(plan.error ? { error: plan.error } : {}),
+        });
+      }
+      value = visible;
     } else if (call.name === 'get_task' || call.name === 'cancel_task') {
       const input = parseToolInput(call.name, args);
       const plan = await this.actions.get(input.id);
@@ -1460,10 +1576,7 @@ export class AgentBroker {
         this.actions.cancel(input.id);
         value = { cancelled: true };
       } else value = plan;
-    } else
-      throw new Error(
-        'Unknown agent tool. Commands require review or an explicit execution grant.',
-      );
+    } else throw new Error('Unknown agent tool. Call tools/list to see available tools.');
     if (capability) await this.clients.require(capability);
     else await this.clients.get();
     this.checkBudget(call.name, value, await this.clients.get());

@@ -1,4 +1,5 @@
 import { sameVersionItem } from '../files/item-identity';
+import { PostScriptStageError } from './postscript-stage';
 import { versionIdentity } from '../../domain/files/item-identity';
 import { lstat, fileStat } from '../files/stats';
 import type { FileStats as Stats } from '../files/stats';
@@ -82,32 +83,51 @@ export class DerivedPreviews {
     // Existing leases keep their allocation accounted until their final release.
     if (!entry.pins) this.bytes -= entry.value.data.length;
   }
-  private wait(item: Pending, signal: AbortSignal): Promise<Cached> {
+  private wait(item: Pending, signal: AbortSignal, mode: DerivedMode): Promise<Cached> {
     item.users++;
     return new Promise<Cached>((resolve, reject) => {
+      let detached = false;
+      const detach = () => {
+        if (detached) return;
+        detached = true;
+        signal.removeEventListener('abort', cancel);
+        item.users--;
+        if (!item.users) item.abort.abort();
+      };
       let done = false;
       const finish = (settle: () => void) => {
         if (done) return;
         done = true;
-        signal.removeEventListener('abort', cancel);
-        item.users--;
-        if (!item.users) item.abort.abort();
+        detach();
         settle();
       };
-      const cancel = () =>
+      let canceled = false;
+      const cancel = () => {
+        canceled = true;
+        detach();
+        // PostScript scratch Trash failures must still be reported when canceling; wait for the
+        // aborted Ghostscript run to finish its stage cleanup before settling.
+        if (mode === 'postscript' && item.abort.signal.aborted) return;
         finish(() => reject(signal.reason ?? new Error('The preview was canceled.')));
+      };
       signal.addEventListener('abort', cancel, { once: true });
       if (signal.aborted) cancel();
       item.work.then(
         (value) =>
           finish(() => {
-            if (value.retired) reject(new Error('Preview source invalidated.'));
+            if (canceled) reject(signal.reason ?? new Error('PostScript rendering was canceled.'));
+            else if (value.retired) reject(new Error('Preview source invalidated.'));
             else {
               value.pins++;
               resolve(value);
             }
           }),
-        (error: unknown) => finish(() => reject(error)),
+        (error: unknown) =>
+          finish(() => {
+            if (canceled && !(error instanceof PostScriptStageError))
+              reject(signal.reason ?? new Error('PostScript rendering was canceled.'));
+            else reject(error);
+          }),
       );
     });
   }
@@ -214,7 +234,7 @@ export class DerivedPreviews {
         this.pending.set(key, item);
         pending = item;
       }
-      entry = await this.wait(pending, signal);
+      entry = await this.wait(pending, signal, mode);
     }
     // Even cache hits recheck authority and exact source identity.
     try {

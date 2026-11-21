@@ -492,6 +492,130 @@ describe('broker request cancellation, framing and credential isolation', () => 
     }
   });
 
+  it('keeps reading cancel frames during a 17-request burst timeout so queued proposals never execute', async () => {
+    const root = await temporaryRoot('viewer-mcp-burst-timeout-');
+    const dataPath = path.join(root, 'Data');
+    const folder = path.join(root, 'Granted');
+    await mkdir(dataPath);
+    await mkdir(folder);
+    const file = path.join(folder, 'Scan.pdf');
+    await writeFile(file, '%PDF-1.4\n');
+    const accept = mockBrokerServer();
+    let inspectSignal: AbortSignal | undefined;
+    let releaseStarted!: () => void;
+    const inspectStarted = new Promise<void>((resolve) => {
+      releaseStarted = resolve;
+    });
+    let finishInspect!: () => void;
+    const inspect = vi.fn(
+      (_file: string, _content?: boolean, _ocr?: boolean, signal?: AbortSignal) => {
+        inspectSignal = signal;
+        releaseStarted();
+        return new Promise((resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason ?? new Error('Aborted.')), {
+            once: true,
+          });
+          finishInspect = () => resolve({ path: file, summary: 'Done' });
+        });
+      },
+    );
+    const configuration = vi.fn(() => ({ id: 'config-should-not-run', requiresUserReview: true }));
+    const settings = defaultSettings(root);
+    settings.agents.enabled = true;
+    settings.agents.roots = [folder];
+    const broker = new AgentBroker(
+      dataPath,
+      () => settings,
+      () => undefined,
+      { inspect } as unknown as FileServices,
+      { all: async () => [], cancel: () => {} } as unknown as ActionPlanner,
+      {
+        catalog: () => ({
+          target: {
+            workspaceID: 'ws',
+            rootID: 'root',
+            paneID: 'pane',
+            directory: folder,
+            selection: [],
+          },
+          commands: [],
+        }),
+        requests: {
+          configuration,
+          stop: () => {},
+          revokeGrants: async () => {},
+          has: () => false,
+          cancel: () => {},
+        } as unknown as AgentRequests,
+        config: {} as unknown as SettingsService,
+      },
+    );
+    await approveBrokerAccess(broker, folder);
+    const created = await broker.clients.create({
+      name: 'BurstTimeoutClient',
+      roots: [folder],
+      capabilities: ['metadata', 'content', 'propose'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 4 },
+    });
+    await broker.start();
+    const pair = duplexPair();
+    connect.mockImplementation(() => {
+      accept(pair.server);
+      queueMicrotask(() => pair.client.emit('connect'));
+      return pair.client;
+    });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const replies: Record<string, unknown>[] = [];
+    let outBuffer = '';
+    output.on('data', (chunk: Buffer) => {
+      outBuffer += chunk.toString('utf8');
+      for (let index = outBuffer.indexOf('\n'); index >= 0; index = outBuffer.indexOf('\n')) {
+        replies.push(JSON.parse(outBuffer.slice(0, index)));
+        outBuffer = outBuffer.slice(index + 1);
+      }
+    });
+    try {
+      const running = runMCPClient(dataPath, { input, output, token: created.token });
+      input.write(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'inspect_file', arguments: { path: file, ocr: true } },
+        }) + '\n',
+      );
+      input.write(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: {
+            name: 'propose_config',
+            arguments: { patches: [{ path: 'settings.appearance', value: 'light' }] },
+          },
+        }) + '\n',
+      );
+      for (let id = 3; id <= 16; id++)
+        input.write(JSON.stringify({ jsonrpc: '2.0', id, method: 'ping' }) + '\n');
+      await inspectStarted;
+      input.write(JSON.stringify({ jsonrpc: '2.0', id: 17, method: 'ping' }) + '\n');
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(replies).toHaveLength(17);
+      expect(inspectSignal?.aborted).toBe(true);
+      finishInspect();
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(configuration).not.toHaveBeenCalled();
+      input.end();
+      await running;
+    } finally {
+      vi.useRealTimers();
+      await broker.close();
+      await trashTemporary(root);
+    }
+  });
+
   it('preserves request id on oversized lines and frames near-65536 and batched lines cleanly', async () => {
     const root = await temporaryRoot('viewer-mcp-framing-');
     const dataPath = path.join(root, 'Data');

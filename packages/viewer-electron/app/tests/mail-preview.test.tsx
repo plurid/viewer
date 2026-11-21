@@ -233,15 +233,36 @@ describe('mailbox preview', () => {
         ? data({ mail: mail({ subject: many[request.message]!.subject }) })
         : data({ mailbox: { messages: many, truncated: false } }),
     );
-    render(<MailPreview {...preview} />);
+    const registered = new Map<string, { id: string; run(): void | Promise<void> }>();
+    render(
+      <MailPreview
+        {...preview}
+        commands={{
+          register: (commands) => {
+            for (const command of commands) registered.set(command.id, command);
+            return () => {
+              for (const command of commands)
+                if (registered.get(command.id) === command) registered.delete(command.id);
+            };
+          },
+        }}
+      />,
+    );
     const list = await screen.findByRole('list', { name: 'Messages' });
     expect(await screen.findByRole('heading', { name: 'Message 1' })).toBeTruthy();
     expect(within(list).getAllByRole('button').length).toBeLessThan(100);
     fireEvent.keyDown(list, { key: 'ArrowDown' });
     expect(await screen.findByRole('heading', { name: 'Message 2' })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement?.getAttribute('data-index')).toBe('1'));
     fireEvent.keyDown(list, { key: 'End' });
     expect(await screen.findByRole('heading', { name: 'Message 1000' })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement?.getAttribute('data-index')).toBe('999'));
     fireEvent.keyDown(list, { key: 'Home' });
+    expect(await screen.findByRole('heading', { name: 'Message 1' })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement?.getAttribute('data-index')).toBe('0'));
+    registered.get('mail-next')!.run();
+    expect(await screen.findByRole('heading', { name: 'Message 2' })).toBeTruthy();
+    registered.get('mail-previous')!.run();
     expect(await screen.findByRole('heading', { name: 'Message 1' })).toBeTruthy();
   });
 

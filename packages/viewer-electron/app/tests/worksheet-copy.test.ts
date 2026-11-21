@@ -107,7 +107,15 @@ it('keeps an earlier page merged anchor when a later page reports the merge with
             columns: 2,
             truncated: false,
             loaded: true,
-            rows: [{ row: 1, cells: [{ column: 1, value: 'Group' }, { column: 2, value: 'Subtotal' }] }],
+            rows: [
+              {
+                row: 1,
+                cells: [
+                  { column: 1, value: 'Group' },
+                  { column: 2, value: 'Subtotal' },
+                ],
+              },
+            ],
             merges: [
               {
                 fromRow: 1,

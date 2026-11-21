@@ -11,8 +11,12 @@ const publish = (_event: Electron.IpcRendererEvent, event: DesktopEvent) => {
     }
   }
 };
+let currentDispatch: string | undefined;
 async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
-  const result = (await ipcRenderer.invoke('viewer:request', method, args)) as ApiResult<T>;
+  const dispatchID = currentDispatch;
+  const result = (await (dispatchID
+    ? ipcRenderer.invoke('viewer:request', method, args, dispatchID)
+    : ipcRenderer.invoke('viewer:request', method, args))) as ApiResult<T>;
   // Electron drops custom Error properties when crossing contextBridge. A
   // plain rejection envelope preserves the code; the renderer restores Error.
   if (!result.ok) return Promise.reject({ message: result.error, code: result.code });
@@ -286,3 +290,11 @@ ipcRenderer.on(
   },
 );
 contextBridge.exposeInMainWorld('viewerNative', Object.freeze(api));
+contextBridge.exposeInMainWorld(
+  'viewerDispatch',
+  Object.freeze({
+    set(id: string | undefined) {
+      currentDispatch = typeof id === 'string' && id.length > 0 ? id : undefined;
+    },
+  }),
+);

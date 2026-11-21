@@ -180,7 +180,12 @@ it('uses audio wording and compatible copy label for converted audio files', asy
     resource: {
       id: 'audio-src',
       url: 'viewer-resource://audio-src/voice.wma',
-      entry: { name: 'voice.wma', path: '/fixture/voice.wma', extension: 'wma', mime: 'audio/x-ms-wma' },
+      entry: {
+        name: 'voice.wma',
+        path: '/fixture/voice.wma',
+        extension: 'wma',
+        mime: 'audio/x-ms-wma',
+      },
     },
     active: true,
     interactive: true,
@@ -242,4 +247,28 @@ it('uses audio wording and compatible copy label for converted audio files', asy
   await screen.findByText('Converting audio to play here…');
   fireEvent.click(screen.getByText('Cancel'));
   await screen.findByText('Audio conversion canceled');
+  cleanup();
+
+  const wavpack = {
+    ...context,
+    resource: {
+      ...context.resource,
+      id: 'res-wv',
+      url: 'viewer-resource://res-wv/asset/track.wv',
+      entry: {
+        ...context.resource.entry,
+        path: '/fixtures/track.wv',
+        name: 'track.wv',
+        extension: 'wv',
+        mime: 'application/octet-stream',
+      },
+    },
+    services: {
+      ...context.services,
+      videoRendition: vi.fn(() => new Promise(() => {})),
+    },
+  } as unknown as PreviewContext;
+  const wvView = render(<MediaPreview {...wavpack} />);
+  fireEvent.error(wvView.container.querySelector('audio')!);
+  await screen.findByText('Converting audio to play here…');
 });

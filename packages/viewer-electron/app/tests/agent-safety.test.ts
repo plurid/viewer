@@ -1008,8 +1008,52 @@ describe('agent removal safety', () => {
           directories: ['/Granted/Work', '/Outside/Private'],
         },
       },
+      {
+        ...action({
+          kind: 'executable',
+          executable: '/Outside/PrivateScripts/deploy-secret',
+          args: ['--token=secret'],
+          perItem: false,
+        }),
+        id: 'deploy',
+      },
+      {
+        ...action({
+          kind: 'shell',
+          executable: '/Outside/PrivateBin/custom-sh',
+          script: 'echo secret',
+          perItem: false,
+        }),
+        id: 'shell-secret',
+      },
+      {
+        ...action({
+          kind: 'executable',
+          executable: '/Granted/bin/tool',
+          args: ['--ok'],
+          perItem: false,
+        }),
+        id: 'granted-tool',
+      },
     ];
     snapshot.settings.terminals.application = '/Outside/CustomTerm.app';
+    snapshot.settings.terminals.profiles = [
+      {
+        id: 'login',
+        name: 'Custom shell',
+        executable: '/Outside/PrivateBin/my-shell',
+        args: ['-l'],
+        env: { SECRET: 'value' },
+      },
+      {
+        id: 'bare',
+        name: 'Bare shell',
+        executable: 'zsh',
+        args: [],
+        env: {},
+      },
+    ];
+    snapshot.settings.terminals.tmux.executable = '/Outside/PrivateBin/my-tmux';
     snapshot.settings.terminals.tmux.socket = '/Outside/tmux.sock';
     snapshot.settings.layouts = [
       {
@@ -1039,6 +1083,25 @@ describe('agent removal safety', () => {
           'ui.space.grid': false,
           'ui.sidebar.locations': ['/Granted', '/Outside/ProfLoc'],
           'settings.browsing.newPlanePath': '/Outside/ProfPlane',
+        },
+      },
+      {
+        id: 'nested',
+        name: 'Nested',
+        values: {
+          ui: {
+            sidebar: {
+              locations: ['/Granted/ProfileUI', '/Outside/ProfileUI'],
+              hidden: ['/Granted/ProfileHidden', '/Outside/ProfileHidden'],
+              labels: { '/Granted/ProfileUI': 'Keep', '/Outside/ProfileUI': 'SecretLabel' },
+            },
+          },
+          settings: {
+            browsing: {
+              newPlanePath: '/Outside/ProfilePlane',
+              emptyWorkspacePath: '/Granted/ProfileEmpty',
+            },
+          },
         },
       },
     ];
@@ -1073,7 +1136,22 @@ describe('agent removal safety', () => {
       'global-search',
     ]);
     expect(read.settings.customActions[0]!.when.directories).toEqual(['/Granted/Work']);
+    expect(read.settings.customActions[1]!.executor).toMatchObject({
+      kind: 'executable',
+      executable: '[redacted]',
+    });
+    expect(read.settings.customActions[2]!.executor).toMatchObject({
+      kind: 'shell',
+      executable: '[redacted]',
+    });
+    expect(read.settings.customActions[3]!.executor).toMatchObject({
+      kind: 'executable',
+      executable: '/Granted/bin/tool',
+    });
     expect(read.settings.terminals.application).toBe('');
+    expect(read.settings.terminals.profiles[0]!.executable).toBe('[redacted]');
+    expect(read.settings.terminals.profiles[1]!.executable).toBe('zsh');
+    expect(read.settings.terminals.tmux.executable).toBe('[redacted]');
     expect(read.settings.terminals.tmux.socket).toBe('');
     expect(read.settings.layouts).toEqual([
       {
@@ -1088,6 +1166,21 @@ describe('agent removal safety', () => {
       'ui.space.grid': false,
       'ui.sidebar.locations': ['/Granted'],
       'settings.browsing.newPlanePath': '',
+    });
+    expect(read.settings.profiles[1]!.values).toEqual({
+      ui: {
+        sidebar: {
+          locations: ['/Granted/ProfileUI'],
+          hidden: ['/Granted/ProfileHidden'],
+          labels: { '/Granted/ProfileUI': 'Keep' },
+        },
+      },
+      settings: {
+        browsing: {
+          newPlanePath: '',
+          emptyWorkspacePath: '/Granted/ProfileEmpty',
+        },
+      },
     });
     expect(read.ui.sidebar.locations).toEqual(['/Granted']);
     expect(read.ui.sidebar.hidden).toEqual(['/Granted/Hidden']);
@@ -1127,6 +1220,58 @@ describe('agent removal safety', () => {
         ],
       }),
     ).rejects.toThrow('Unknown setting.');
+
+    // propose_config must also validate against the scoped base so delete patches are not an existence oracle.
+    for (const keys of [
+      ['ui', 'sidebar', 'labels', '/Outside/SidebarLoc'],
+      ['ui', 'sidebar', 'labels', '/NeverConfigured'],
+      ['ui', 'insightsDismissed', '/Outside/Private'],
+      ['ui', 'insightsDismissed', '/NeverConfigured'],
+    ])
+      await expect(
+        f.call('propose_config', {
+          patches: [{ path: '', keys, value: undefined }],
+        }),
+      ).rejects.toThrow('Unknown setting.');
+
+    // Valid configuration proposals still validate and apply against the real SettingsService on approval.
+    const patchSpy = vi.spyOn(f.settings, 'patch').mockResolvedValue(f.settings.snapshot());
+    const proposed = await f.call<{ id: string }>('propose_config', {
+      patches: [{ path: 'settings.appearance', value: 'light' }],
+    });
+    await f.requests.review(proposed.id, true);
+    expect(patchSpy).toHaveBeenCalledWith(
+      [{ path: 'settings.appearance', value: 'light' }],
+      f.settings.snapshot().revision,
+    );
+    patchSpy.mockRestore();
+  });
+  it('populates proposal.clientName from AgentClients.nameOf() via AgentRequests authority', async () => {
+    const f = await fixture(['/Granted'], false);
+    // Recreate with actorName wired just like Desktop bridge.ts does.
+    const requests = new AgentRequests(
+      '/Memory/Viewer',
+      f.settings,
+      () => {},
+      vi.fn(async () => {}),
+      { read: () => ({ cwd: '/Granted', output: 'Screen' }) },
+      undefined,
+      {
+        actor: () => f.broker.clients.actor(),
+        actorName: () => f.broker.clients.nameOf(),
+        check: (proposal) => f.broker.authorizeProposal(proposal),
+        run: (clientID, work) => f.broker.clients.context.run(clientID, work),
+        cancelExecution: () => {},
+      },
+      vi.fn(async () => true),
+    );
+    const created = await f.broker.clients.context.run(f.created.client.id, async () =>
+      requests.configuration([{ path: 'settings.appearance', value: 'light' }]),
+    );
+    expect(requests.get(created.id)).toMatchObject({
+      clientID: f.created.client.id,
+      clientName: 'Safety fixture',
+    });
   });
   it('keeps Empty Trash unreachable from agent tools, CLI verbs, workflow steps and custom actions', async () => {
     const f = await fixture();
@@ -1407,5 +1552,113 @@ describe('synthetic captured agent selections', () => {
       }),
     ).rejects.toThrow('Review or stop a task before starting another.');
     await broker.close();
+  });
+  it('lists only the authenticated client’s proposals and tasks with bounds and points unknown tools to tools/list', async () => {
+    const f = await fixture(['/Granted'], false);
+    const second = (await f.broker.clientRequest({
+      kind: 'create',
+      client: {
+        name: 'Other client',
+        roots: ['/Granted'],
+        capabilities: ['metadata', 'propose'],
+        budgets: { maxReadBytes: 1024 * 1024, maxTasks: 4 },
+      },
+    })) as { client: { id: string }; token: string };
+    const callAs = async <T>(token: string, name: string, args: Record<string, unknown> = {}) => {
+      const result = (await f.broker.handle(token, {
+        method: 'tools/call',
+        params: { name, arguments: args },
+      })) as { content: { text: string }[] };
+      return JSON.parse(result.content[0]!.text) as T;
+    };
+    const p1 = await f.call<{ id: string }>('propose_config', {
+      patches: [{ path: 'settings.appearance', value: 'light' }],
+    });
+    const p2 = await f.call<{ id: string }>('propose_command', { commandID: 'copy-path' });
+    const otherProposal = await callAs<{ id: string }>(second.token, 'propose_config', {
+      patches: [{ path: 'settings.appearance', value: 'dark' }],
+    });
+    const listedProposals =
+      await f.call<{ id: string; kind: string; title: string; status: string }[]>('list_proposals');
+    expect(listedProposals.map((item) => item.id)).toEqual([p2.id, p1.id]);
+    expect(listedProposals.some((item) => item.id === otherProposal.id)).toBe(false);
+    expect(await f.call('list_proposals', { limit: 1 })).toHaveLength(1);
+    const otherListed = await callAs<{ id: string }[]>(second.token, 'list_proposals');
+    expect(otherListed.map((item) => item.id)).toEqual([otherProposal.id]);
+
+    // Tasks: only the caller's tasks whose sources remain within granted folders are returned.
+    const tasks = [
+      {
+        id: 'task-a-1',
+        recipeID: 'batch-rename',
+        title: 'Rename A',
+        status: 'review',
+        undoable: false,
+        rows: [{ id: 'r1' }],
+        context: {
+          actor: 'agent',
+          clientID: f.created.client.id,
+          sources: ['/Granted/Report.txt'],
+        },
+      },
+      {
+        id: 'task-a-outside',
+        recipeID: 'batch-rename',
+        title: 'Outside A',
+        status: 'review',
+        undoable: false,
+        rows: [],
+        context: {
+          actor: 'agent',
+          clientID: f.created.client.id,
+          sources: ['/Outside/Secret.txt'],
+        },
+      },
+      {
+        id: 'task-b',
+        recipeID: 'batch-rename',
+        title: 'Rename B',
+        status: 'review',
+        undoable: false,
+        rows: [],
+        context: {
+          actor: 'agent',
+          clientID: second.client.id,
+          sources: ['/Granted/Report.txt'],
+        },
+      },
+      {
+        id: 'task-person',
+        recipeID: 'batch-rename',
+        title: 'Human task',
+        status: 'review',
+        undoable: false,
+        rows: [],
+        context: {
+          actor: 'user',
+          sources: ['/Granted/Report.txt'],
+        },
+      },
+    ];
+    Reflect.set(f.broker, 'actions', { all: async () => tasks, cancel: () => {} });
+    const listedTasks =
+      await f.call<
+        { id: string; recipeID: string; title: string; status: string; rowCount: number }[]
+      >('list_tasks');
+    expect(listedTasks).toEqual([
+      {
+        id: 'task-a-1',
+        recipeID: 'batch-rename',
+        title: 'Rename A',
+        status: 'review',
+        undoable: false,
+        rowCount: 1,
+      },
+    ]);
+
+    // Unknown tool points cleanly to tools/list without mentioning non-existent execution grants.
+    await expect(f.call('nonexistent_tool')).rejects.toThrow(
+      'Unknown agent tool. Call tools/list to see available tools.',
+    );
   });
 });

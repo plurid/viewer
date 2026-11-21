@@ -1,13 +1,23 @@
 import { errorMessage } from '../../domain/errors';
+import type { ArchiveListing } from '../../domain/contracts';
 import type { WorksheetWindow } from '../../domain/previews/documents/office';
 import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqlite';
 import type { DocumentData } from '../../domain/services';
 import type { SavedPage } from '../../domain/previews/saved-page';
+import { Archives } from '../previews/archives';
 import { DocumentCache } from '../previews/document-cache';
 import { readSQLite } from '../previews/sqlite';
 import { readSavedPage } from '../previews/saved-pages';
 import type { ClientMethods, WorkerRequest } from './utility-client';
 import { workerPort } from './worker-port';
+
+export interface ArchiveEntryText {
+  text: string;
+  size: number;
+  truncated: boolean;
+}
+
+const maxArchiveEntryTextBytes = 262_144;
 
 /**
  * Reading documents for previews, apart from the search index. In the index's worker a preview
@@ -34,9 +44,17 @@ export type PreviewMethods = {
   page: { args: [file: string, format: string, message?: number]; reply: SavedPage };
   /** SQLite reads synchronously, here rather than in the process that draws windows. */
   sqlite: { args: [file: string, request: SQLiteRequest]; reply: SQLiteReply };
+  /** Read-only ZIP and TAR index listing. */
+  'archive-list': { args: [file: string]; reply: ArchiveListing };
+  /** Read-only bounded UTF-8 text from one entry inside a ZIP or TAR archive. */
+  'archive-read-text': {
+    args: [file: string, name: string, maxBytes: number];
+    reply: ArchiveEntryText;
+  };
 };
 
 const documents = new DocumentCache();
+const archives = new Archives();
 const controllers = new Map<string, AbortController>();
 const port = workerPort;
 port.on('message', async (event) => {
@@ -81,6 +99,20 @@ port.on('message', async (event) => {
       } finally {
         controllers.delete(request.id);
       }
+    } else if (request.method === 'archive-list') {
+      value = await archives.list(request.args[0]);
+    } else if (request.method === 'archive-read-text') {
+      const limit = Math.max(1, Math.min(request.args[2], maxArchiveEntryTextBytes));
+      const data = await archives.read(request.args[0], request.args[1]);
+      if (data.subarray(0, 8192).includes(0))
+        throw new Error(
+          'This archive entry is binary; read_archive_entry returns UTF-8 text only.',
+        );
+      value = {
+        text: data.subarray(0, limit).toString('utf8'),
+        size: data.length,
+        truncated: data.length > limit,
+      };
     } else if (request.method === 'cancel') {
       controllers.get(request.args[0])?.abort();
       value = true;

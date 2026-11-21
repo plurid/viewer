@@ -156,7 +156,23 @@ describe('agent review text', () => {
       }),
     );
     expect(showMessageBox.mock.calls[0]![0]).toMatchObject({
-      message: expect.stringContaining('Chat'),
+      message: 'Allow Chat to move this item to the Trash?',
+    });
+    // A named MCP client literally called "Chat" stays quoted so it cannot impersonate Viewer's Chat.
+    showMessageBox.mockClear();
+    await confirmAgentProposal(
+      undefined,
+      proposal({
+        kind: 'command',
+        title: 'Move to Trash',
+        removal: 'trash',
+        clientID: '11111111-1111-4111-8111-111111111111',
+        clientName: 'Chat',
+        target: target([file('A.jpg')]),
+      }),
+    );
+    expect(showMessageBox.mock.calls[0]![0]).toMatchObject({
+      message: 'Allow “Chat” to move this item to the Trash?',
     });
   });
   it('bounds large Trash confirmation details on whole lines and keeps the remainder and closing note', async () => {

@@ -184,7 +184,6 @@ export const filePreviewModules: (FilePreview & { id: BuiltInPreviewKind })[] = 
     id: 'embedded',
     label: 'Saved preview',
     formats: embeddedExtensions,
-    hex: 'own',
     // ahead of other readers of these names: a `.key` file that is not an archive, such as a
     // PEM or DER private key, is handed on to the preview it would otherwise have
     detect: (entry) => (embeddedFormat(entry.extension) ? 110 : 0),

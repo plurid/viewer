@@ -90,6 +90,8 @@ const readAt = async (file: FileHandle, at: number, length: number) => {
   const bytes = Buffer.alloc(length);
   return bytes.subarray(0, (await file.read(bytes, 0, length, at)).bytesRead);
 };
+/** Derived asset URLs reject path separators and NULs, even when a macOS filename contains `\\`. */
+const safeAssetName = (name: string) => name.replace(/[/\\\0]/g, '-') || 'preview';
 /** The bundled FFmpeg reads the container; the decoder still probes what it holds. */
 const hasDemuxer = (extension: string) => {
   try {
@@ -789,7 +791,7 @@ export class Resources {
       const grant = this.get(id);
       const child = this.dataChild(
         id,
-        grant.resource.entry.name + '.' + lease.value.extension,
+        safeAssetName(grant.resource.entry.name) + '.' + lease.value.extension,
         grant.resource.entry.path,
         lease.value.data,
       );
@@ -841,7 +843,7 @@ export class Resources {
     });
     // A preview closed while rendering cannot leave an orphan grant.
     this.get(id);
-    const name = `${grant.resource.entry.name}.${extension}`;
+    const name = `${safeAssetName(grant.resource.entry.name)}.${extension}`;
     return this.dataChild(id, name, grant.resource.entry.path, data);
   }
   /** Serves in-memory bytes derived from a granted file; released with that file's grant. */

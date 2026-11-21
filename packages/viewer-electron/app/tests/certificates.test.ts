@@ -214,7 +214,6 @@ describe('private keys', () => {
     expect(choosePreview(entry('id_ed25519', '')).id).toBe('certificate');
     expect(choosePreview(entry('Server.pub', 'pub')).id).toBe('certificate');
     expect(previewModules.find((module) => module.id === 'certificate')?.hex).toBe('own');
-    expect(previewModules.find((module) => module.id === 'embedded')?.hex).toBe('own');
   });
 });
 

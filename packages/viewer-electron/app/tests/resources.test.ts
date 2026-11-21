@@ -473,6 +473,27 @@ describe('rendered image previews', () => {
     expect(response.status).toBe(200);
     expect(Buffer.from(await response.arrayBuffer())).toEqual(png);
   });
+  it('serves officeLayout derived PDFs for filenames containing backslashes over viewer-resource://', async () => {
+    const { DerivedPreviews } = await import('../src/desktop/previews/derived');
+    const pdf = Buffer.from('%PDF-1.4\n%%EOF\n');
+    const office = new DerivedPreviews(
+      async () => {},
+      async () => ({
+        data: pdf,
+        extension: 'pdf',
+        kind: 'office',
+        decoder: 'test-office',
+      }),
+    );
+    resources = new Resources(async () => {}, undefined, 12000, undefined, undefined, office);
+    const file = path.join(root, 'Q1\\Q2 Report.docx');
+    await writeFile(file, 'docx-placeholder');
+    const grant = await resources.grant(file);
+    const derived = await resources.officeLayout(grant.id, { requestID: 'backslash-layout' });
+    const response = await resources.response(new Request(derived.url));
+    expect(response.status).toBe(200);
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(pdf);
+  });
 });
 describe('printing previewed PDFs', () => {
   it('prints only PDF files on disk', async () => {

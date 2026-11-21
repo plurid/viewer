@@ -1586,4 +1586,72 @@ describe('action planner bounds, recovery completion and evidence limits', () =>
     expect((await planner.get(oldestID)).status).toBe('review');
     expect(await planner.all()).toHaveLength(100);
   });
+
+  it('keeps plan count within 100 when create() races with undo() or recovery() at 99 plans', async () => {
+    const localOps = {
+      exclusive: async <T>(
+        work: (publish: (source: string, destination: string) => Promise<void>) => Promise<T>,
+      ) => work((source, destination) => rename(source, destination)),
+    } as unknown as Operations;
+    await reopen({ operations: localOps });
+    const completed = await batch('Done ');
+    await planner.apply(approve(completed));
+    const donePlan = await planner.get(completed.id);
+
+    // Seed 98 unfinished review plans + 1 completed plan = 99 plans total.
+    const unfinished = Array.from({ length: 98 }, (_, index) => ({
+      ...structuredClone(donePlan),
+      id: randomUUID(),
+      title: `Pending ${index}`,
+      status: 'review' as const,
+      undoable: false,
+      rows: [],
+    }));
+    const journalPath = path.join(root, 'action-journal-v1.json');
+    await writeFile(journalPath, JSON.stringify([...unfinished, donePlan]));
+    await reopen({ operations: localOps });
+
+    // Pause undo() inside restoreRow() while a concurrent create() takes the 100th slot.
+    const internal = planner as unknown as {
+      restoreRow: (...args: unknown[]) => Promise<unknown>;
+    };
+    const originalRestoreRow = internal.restoreRow.bind(planner);
+    let reachedRestore!: () => void;
+    const restoreStarted = new Promise<void>((resolve) => {
+      reachedRestore = resolve;
+    });
+    let releaseRestore!: () => void;
+    const restoreGate = new Promise<void>((resolve) => {
+      releaseRestore = resolve;
+    });
+    vi.spyOn(internal, 'restoreRow').mockImplementationOnce(async (...args: unknown[]) => {
+      reachedRestore();
+      await restoreGate;
+      return originalRestoreRow(...args);
+    });
+
+    const undoing = planner.undo(donePlan.id);
+    await restoreStarted;
+    // Concurrent create() now fills the 100th slot with an unfinished review plan while undo() is mid-flight.
+    const extraFile = path.join(files, 'Extra.txt');
+    await writeFile(extraFile, 'extra');
+    const createdID = await planner.start({
+      recipeID: 'batch-rename',
+      options: { prefix: 'Race ' },
+      context: {
+        workspaceID: 'workspace',
+        paneID: 'pane',
+        rootID: 'root',
+        actor: 'user',
+        sources: [extraFile],
+      },
+    });
+    await planner.settled(createdID);
+    expect((await planner.get(createdID)).status).toBe('review');
+    expect(await planner.all()).toHaveLength(100);
+    releaseRestore();
+    // undo() must re-check capacity right before publish(), refusing cleanly instead of failing max(100) schema save.
+    await expect(undoing).rejects.toThrow('Review or finish existing tasks');
+    expect(await planner.all()).toHaveLength(100);
+  });
 });

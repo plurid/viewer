@@ -248,4 +248,43 @@ describe('removing revoked clients (2026-10-30)', () => {
       await trashTemporary(root);
     }
   });
+  it('retries flushing buffered audits on close after a transient background save failure', async () => {
+    const root = await temporaryRoot('viewer-client-audit-retry-');
+    const clients = new AgentClients(root, async () => {});
+    try {
+      await clients.list();
+      const store = (clients as unknown as { auditStore: { save(value: unknown): Promise<void> } })
+        .auditStore;
+      const originalSave = store.save.bind(store);
+      let attempts = 0;
+      const saveSpy = vi.spyOn(store, 'save').mockImplementation(async (value) => {
+        attempts++;
+        if (attempts === 1) throw new Error('Transient disk error.');
+        await originalSave(value);
+      });
+      await (
+        clients.audit as (
+          tool: string,
+          status: 'completed',
+          detail: string,
+          clientID?: string,
+          durable?: boolean,
+        ) => Promise<void>
+      )('read_metadata', 'completed', 'Buffered entry', sharedClientID, false);
+      // Trigger the first flush, which fails transiently.
+      const internal = clients as unknown as { flushAudits(): Promise<void> };
+      await expect(internal.flushAudits()).rejects.toThrow('Transient disk error.');
+      expect(attempts).toBe(1);
+      // close() must retry flushing the buffered audit instead of dropping it.
+      await clients.close();
+      expect(attempts).toBe(2);
+      saveSpy.mockRestore();
+      const reopened = new AgentClients(root, async () => {});
+      expect(await reopened.history(sharedClientID)).toHaveLength(1);
+      await reopened.close();
+    } finally {
+      await clients.close();
+      await trashTemporary(root);
+    }
+  });
 });

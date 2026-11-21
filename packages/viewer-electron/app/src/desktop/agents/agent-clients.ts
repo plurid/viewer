@@ -55,7 +55,8 @@ export class AgentClients {
   private isLoaded = false;
   private queue: Promise<unknown> = Promise.resolve();
   private auditQueue: Promise<unknown> = Promise.resolve();
-  private auditDirty = false;
+  private auditVersion = 0;
+  private savedAuditVersion = 0;
   private auditTimer?: ReturnType<typeof setTimeout>;
   constructor(
     directory: string,
@@ -216,7 +217,7 @@ export class AgentClients {
       detail: detail.slice(0, 1000),
     };
     this.audits = [...this.audits.slice(-999), audit];
-    this.auditDirty = true;
+    this.auditVersion++;
   }
   private flushAudits(): Promise<void> {
     if (this.auditTimer) {
@@ -226,9 +227,10 @@ export class AgentClients {
     const work = this.auditQueue
       .catch(() => {})
       .then(async () => {
-        if (!this.auditDirty) return;
-        this.auditDirty = false;
+        if (this.auditVersion === this.savedAuditVersion) return;
+        const version = this.auditVersion;
         await this.auditStore.save([...this.audits]);
+        this.savedAuditVersion = version;
       });
     this.auditQueue = work;
     return work;
@@ -273,8 +275,9 @@ export class AgentClients {
       .then(async () => {
         await this.load();
         this.appendAudit(tool, status, detail, clientID);
-        this.auditDirty = false;
+        const version = this.auditVersion;
         await this.auditStore.save([...this.audits]);
+        this.savedAuditVersion = version;
       });
     this.auditQueue = work;
     await work;

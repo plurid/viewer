@@ -42,6 +42,7 @@ export function AgentReview() {
   };
   return (
     <Dialog
+      key={proposal.id}
       title={proposal.title}
       onClose={() => {
         if (!busy) review(false);

@@ -2,12 +2,15 @@ import type { FileEntry, FolderPane, OperationJob, SidebarSection } from '../../
 import type { ClipboardContent } from '../../domain/files/clipboard';
 import type { IconName } from '../ui/Icon';
 import { normalize, scoreLabel } from '../../domain/search/name-score';
+import { withAgentDispatch } from '../app/agent-dispatch';
 export { normalize } from '../../domain/search/name-score';
 
 export type CommandScope = 'window' | 'folder' | 'files' | 'preview' | 'sidebar' | 'workspace';
 export type CommandInvocation = 'person' | 'custom-action';
 export interface CommandContext {
   invocation?: CommandInvocation;
+  /** Desktop-issued dispatch ID echoed only for IPC calls started by an agent command. */
+  agentDispatchID?: string;
   scope: CommandScope;
   workspaceID: string;
   rootID?: string;
@@ -339,8 +342,10 @@ export class CommandRegistry {
   ): Promise<void> {
     if (definition.humanOnly && context.invocation === 'custom-action')
       throw new Error('This action cannot run from a custom action. Choose it directly.');
-    await definition.run(
-      definition.id.startsWith('custom.') ? { ...context, invocation: 'custom-action' } : context,
+    await withAgentDispatch(context.agentDispatchID, () =>
+      definition.run(
+        definition.id.startsWith('custom.') ? { ...context, invocation: 'custom-action' } : context,
+      ),
     );
   }
 }

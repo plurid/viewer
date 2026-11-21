@@ -551,7 +551,9 @@ async function scenario(filesystem: ScenarioFilesystem): Promise<void> {
     } as unknown as FileAccess);
     try {
       const snapshot = await trashService.list();
-      const volumeLocation = snapshot.locations.find((location) => location.name === 'ViewerQA');
+      const volumeLocation = snapshot.locations.find(
+        (location) => location.name.toLowerCase() === 'viewerqa',
+      );
       assert.equal(volumeLocation?.state, 'ready', JSON.stringify(snapshot.locations));
       assert.ok(snapshot.items.some((item) => item.name === 'VolumeTrashed.txt'));
     } finally {

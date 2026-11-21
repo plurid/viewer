@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CapturedTarget } from '../src/domain/automation/actions';
 import type { FileEntry, FolderPane, Workspace } from '../src/domain/contracts';
 import { executeAgentNavigation } from '../src/renderer/workspace/agent-navigation';
+import { CommandRegistry } from '../src/renderer/commands/registry';
 import { addContentPane } from '../src/renderer/state/panes';
 import { definitionRunReason } from '../src/renderer/terminals/start-authority';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
@@ -348,5 +349,86 @@ describe('workspace agent navigation through existing host records', () => {
     );
     expect(switchTo).toHaveBeenCalledWith('destination');
     expect(activeWorkspace().id).toBe('destination');
+  });
+  it('echoes the desktop-issued dispatch ID only synchronously around agent IPC calls so concurrent timers stay person-attributed', async () => {
+    const observed: (string | undefined)[] = [];
+    let currentDispatch: string | undefined;
+    Object.assign(window, {
+      viewerDispatch: {
+        set(id: string | undefined) {
+          currentDispatch = id;
+        },
+      },
+    });
+    let resolveFirstStat!: (file: FileEntry) => void;
+    const first = entry('/shared/First.txt');
+    const second = entry('/shared/Second.txt');
+    stat
+      .mockImplementationOnce(() => {
+        observed.push(currentDispatch);
+        return new Promise<FileEntry>((resolve) => {
+          resolveFirstStat = resolve;
+        });
+      })
+      .mockImplementationOnce(async () => {
+        observed.push(currentDispatch);
+        return second;
+      });
+    const captured = target();
+    const running = (
+      executeAgentNavigation as (
+        request: { kind: 'select-files'; files: FileEntry[] },
+        captured: CapturedTarget,
+        controller: WorkspaceController,
+        switchTo: (id: string) => Promise<void>,
+        dispatchID?: string,
+      ) => Promise<void>
+    )(
+      { kind: 'select-files', files: [first, second] },
+      captured,
+      controller,
+      switchTo,
+      'dispatch-1',
+    );
+    // Between awaits (when a note autosave timer or person click fires), no dispatch ID is active.
+    expect(currentDispatch).toBeUndefined();
+    resolveFirstStat(first);
+    await running;
+    expect(currentDispatch).toBeUndefined();
+    expect(observed).toEqual(['dispatch-1', 'dispatch-1']);
+
+    // CommandRegistry also echoes agentDispatchID synchronously around command execution and clears before yielding.
+    const registry = new CommandRegistry();
+    const commandObserved: (string | undefined)[] = [];
+    const ctx = {
+      scope: 'folder' as const,
+      workspaceID: captured.workspaceID,
+      paneID: captured.paneID,
+      directory: captured.directory,
+      selection: [],
+      clipboard: null,
+      jobs: [],
+      agentDispatchID: 'dispatch-2',
+    };
+    registry.register('window', {
+      context: () => ctx,
+      definitions: () => [
+        {
+          id: 'test-op',
+          label: 'Test Op',
+          group: 'Files',
+          when: () => true,
+          run: async () => {
+            commandObserved.push(currentDispatch);
+            await Promise.resolve();
+            commandObserved.push(currentDispatch);
+          },
+        },
+      ],
+    });
+    const resolved = registry.list({ ids: ['test-op'] })[0]!;
+    await registry.run(resolved, false);
+    expect(commandObserved).toEqual(['dispatch-2', undefined]);
+    expect(currentDispatch).toBeUndefined();
   });
 });

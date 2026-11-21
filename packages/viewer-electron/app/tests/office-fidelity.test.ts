@@ -226,5 +226,7 @@ it('leaves merges outside the requested page without a synthetic empty anchor wh
   expect(merges.find((merge) => merge.fromRow === 1 && merge.fromColumn === 1)?.anchor?.value).toBe(
     'Group A',
   );
-  expect(merges.find((merge) => merge.fromRow === 50 && merge.fromColumn === 2)?.anchor).toBeUndefined();
+  expect(
+    merges.find((merge) => merge.fromRow === 50 && merge.fromColumn === 2)?.anchor,
+  ).toBeUndefined();
 });

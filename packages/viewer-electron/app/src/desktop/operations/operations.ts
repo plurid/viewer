@@ -42,6 +42,7 @@ import {
   outputProofLimit,
   type OperationReceipt,
 } from './operation-journal';
+import { TrashOrigins } from './trash-origins';
 import {
   verifyReviewedFile,
   type ReviewedFile,
@@ -239,6 +240,7 @@ export class Operations {
   private undoing = new Map<string, Promise<void>>();
   private settled: (() => void)[] = [];
   private journal?: OperationLog;
+  private origins: TrashOrigins;
   private loaded?: Promise<void>;
   constructor(
     private trash: (
@@ -257,6 +259,7 @@ export class Operations {
     private transforms?: TransformExecutor,
   ) {
     if (dataPath) this.journal = new OperationLog(dataPath);
+    this.origins = new TrashOrigins(dataPath, (message) => this.notice(message));
   }
   load(): Promise<void> {
     // A transient read failure must not disable file operations until restart.
@@ -273,6 +276,7 @@ export class Operations {
     return receipts;
   }
   private async restore(): Promise<void> {
+    await this.origins.load();
     for (const receipt of await this.readJournal()) {
       if (this.tasks.has(receipt.job.id)) continue;
       const job = receipt.job;
@@ -387,17 +391,22 @@ export class Operations {
   /** Exact native Trash receipts only; a filename alone never proves an origin. */
   async trashOrigins(): Promise<TrashOrigin[]> {
     await this.load();
-    return [...this.tasks.values()].flatMap((task) =>
-      task.undo
-        .filter((step) => step.trash && path.isAbsolute(step.to))
-        .map((step) => ({
+    const byFile = new Map<string, TrashOrigin>();
+    for (const origin of await this.origins.list())
+      byFile.set(origin.file.normalize('NFC'), origin);
+    for (const task of this.tasks.values()) {
+      for (const step of task.undo) {
+        if (!step.trash || !path.isAbsolute(step.to)) continue;
+        byFile.set(step.from.normalize('NFC'), {
           file: step.from,
           originalPath: step.to,
           identity: step.identity,
           modified: step.modified,
           size: step.size,
-        })),
-    );
+        });
+      }
+    }
+    return [...byFile.values()];
   }
   /** Minimal durable provenance; bookmarks, staging paths and Undo internals stay private. */
   observedLinks(): ObservedOperationLink[] {
@@ -631,13 +640,29 @@ export class Operations {
     if (this.tasks.size > 100) {
       const finished = (old: Task) => ['completed', 'failed', 'cancelled'].includes(old.job.status);
       let retained = [...this.tasks.values()].filter(finished).length;
+      const evictedOrigins: TrashOrigin[] = [];
       for (const [id, old] of this.tasks) {
         if (retained <= 100) break;
         if (!finished(old)) continue;
+        for (const step of old.undo) {
+          if (!step.trash || !path.isAbsolute(step.to)) continue;
+          evictedOrigins.push({
+            file: step.from,
+            originalPath: step.to,
+            identity: step.identity,
+            modified: step.modified,
+            size: step.size,
+          });
+        }
         this.tasks.delete(id);
         this.dirty.delete(old);
         retained--;
         void this.journal?.forget(id).catch(() => {});
+      }
+      if (evictedOrigins.length) {
+        void this.origins.record(evictedOrigins).catch((error: unknown) => {
+          this.notice(`Trash original locations couldn’t be saved: ${errorMessage(error)}`);
+        });
       }
     }
     return task;
@@ -875,6 +900,9 @@ export class Operations {
       this.emit(task);
       await this.checkpoint(task);
     }
+    await this.origins.remove([file]).catch((error: unknown) => {
+      this.notice(`Trash original locations couldn’t be updated: ${errorMessage(error)}`);
+    });
   }
   resolve(id: string, decision: CollisionDecision, applyAll: boolean): void {
     const task = this.tasks.get(id);
@@ -904,6 +932,7 @@ export class Operations {
     while (this.running || this.exclusiveActive)
       await new Promise<void>((resolve) => this.idle.push(resolve));
     await this.journal?.flush();
+    await this.origins.close();
   }
   undo(id: string): Promise<void> {
     // a second ⌘Z while the first Undo waits would fail: the job is no longer undoable once it ran
@@ -1036,6 +1065,11 @@ export class Operations {
         throw error;
       }
       if (!step.remove) this.filesChanged([{ source: step.from, destination: step.to }]);
+      if (step.trash) {
+        await this.origins.remove([step.from]).catch((error: unknown) => {
+          this.notice(`Trash original locations couldn’t be updated: ${errorMessage(error)}`);
+        });
+      }
       task.undo.splice(task.undo.indexOf(step), 1);
       task.intent = undefined;
       await this.checkpoint(task, false);
@@ -1130,6 +1164,21 @@ export class Operations {
     if (!receipt) return;
     try {
       await this.receiptAccess(receipt, async () => {
+        const info = await lstat(receipt.path);
+        const identity = versionIdentity(info);
+        await this.origins
+          .record([
+            {
+              file: receipt.path,
+              originalPath: file,
+              identity,
+              modified: info.mtimeMs,
+              size: info.size,
+            },
+          ])
+          .catch((error: unknown) => {
+            this.notice(`Trash original location couldn’t be saved: ${errorMessage(error)}`);
+          });
         const { proof, proofVersion, proofSynthetic, proofBirthtime } = await outputEvidence(
           receipt.path,
         );
@@ -1138,7 +1187,6 @@ export class Operations {
           throw new Error(
             'it holds more than 10,000 items, too many to check before putting them back.',
           );
-        const info = await lstat(receipt.path);
         task.undo.push({
           from: receipt.path,
           to: file,
@@ -1149,7 +1197,7 @@ export class Operations {
           ...(proofVersion === 2 ? { proofVersion } : {}),
           ...(proofSynthetic ? { proofSynthetic } : {}),
           ...(proofBirthtime ? { proofBirthtime } : {}),
-          identity: versionIdentity(info),
+          identity,
           modified: info.mtimeMs,
           size: info.size,
         });
@@ -1228,6 +1276,11 @@ export class Operations {
     } catch (error) {
       this.reportRenameRecovery(task, error, destination);
       return false;
+    }
+    if (step.trash) {
+      await this.origins.remove([step.from]).catch((error: unknown) => {
+        this.notice(`Trash original locations couldn’t be updated: ${errorMessage(error)}`);
+      });
     }
     task.undo.splice(task.undo.indexOf(step), 1);
     return true;

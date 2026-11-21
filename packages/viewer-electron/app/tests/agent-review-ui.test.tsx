@@ -58,6 +58,47 @@ describe('approval dialogs keep initial keyboard focus on Reject, Cancel or Disc
     await waitFor(() => expect(agentReview).toHaveBeenCalledWith('proposal-1', false));
   });
 
+  it('resets focus to Reject when AgentReview switches to the next queued proposal', async () => {
+    const first: AgentProposal = {
+      id: 'proposal-first',
+      kind: 'transform',
+      title: 'Export one.webp',
+      detail: 'Export /Granted/One.png to /Granted/one.webp',
+      status: 'review',
+    };
+    const second: AgentProposal = {
+      id: 'proposal-second',
+      kind: 'transform',
+      title: 'Export two.webp',
+      detail: 'Export /Granted/Two.png to /Granted/two.webp',
+      status: 'review',
+    };
+    let onEventListener: ((event: { type: string; proposal: AgentProposal }) => void) | undefined;
+    Object.assign(window, {
+      viewer: {
+        agentReviewList: vi.fn(async () => [first, second]),
+        agentReview: vi.fn(async () => first),
+        onEvent: (listener: (event: { type: string; proposal: AgentProposal }) => void) => {
+          onEventListener = listener;
+          return () => {};
+        },
+      },
+    });
+    render(<AgentReview />);
+    const firstApprove = await screen.findByRole('button', { name: 'Export' });
+    firstApprove.focus();
+    expect(document.activeElement).toBe(firstApprove);
+    act(() =>
+      onEventListener?.({
+        type: 'agent-proposal',
+        proposal: { ...first, status: 'cancelled' },
+      }),
+    );
+    await screen.findByText('Export two.webp');
+    const nextReject = screen.getByRole('button', { name: 'Reject' });
+    expect(document.activeElement).toBe(nextReject);
+  });
+
   it('shows the named client or Chat that requested the action in AgentReview', async () => {
     const namedProposal = {
       id: 'proposal-named',
@@ -128,6 +169,18 @@ describe('approval dialogs keep initial keyboard focus on Reject, Cancel or Disc
     const apply = screen.getByRole('button', { name: 'Apply 1 Change' });
     expect(document.activeElement).toBe(cancel);
     expect(document.activeElement).not.toBe(apply);
+    // Moving focus to Apply then switching to a different plan must reset focus back to Cancel.
+    apply.focus();
+    expect(document.activeElement).toBe(apply);
+    act(() =>
+      reviewOperationPlan({
+        ...plan,
+        id: 'op-2',
+        title: 'Second Model Rename Plan',
+      }),
+    );
+    await screen.findByText('Second Model Rename Plan');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }));
   });
 
   it('shows Discard with initial focus in ActionHub review and cancels the plan', async () => {

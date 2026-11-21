@@ -711,8 +711,13 @@ describe('reviewed MCP workspace navigation', () => {
     expect(await call('list_planes', { workspaceID: 'destination' })).toEqual([
       plane('destination-folder', files),
     ]);
-    expect(await call('list_planes', { workspaceID: 'private' })).toEqual([]);
-    expect(await call('list_planes', { workspaceID: 'missing' })).toEqual([]);
+    expect(await call('list_planes', { workspaceID: 'empty' })).toEqual([]);
+    await expect(call('list_planes', { workspaceID: 'private' })).rejects.toThrow(
+      'Workspace not found or outside the agent’s authorized folders.',
+    );
+    await expect(call('list_planes', { workspaceID: 'missing' })).rejects.toThrow(
+      'Workspace not found or outside the agent’s authorized folders.',
+    );
     catalog = undefined;
     expect(await call('list_workspaces')).toHaveLength(3);
     await expect(call('propose_open_path', { path: files })).rejects.toThrow(

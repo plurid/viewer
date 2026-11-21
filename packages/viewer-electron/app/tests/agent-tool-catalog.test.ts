@@ -12,13 +12,28 @@ import {
 
 /** The broker's capability rule before the catalog existed, kept as the reference. */
 function previousCapability(name: string): AgentCapability | undefined {
-  return ['get_task', 'cancel_task', 'get_proposal', 'cancel_proposal'].includes(name)
+  return [
+    'list_proposals',
+    'list_tasks',
+    'get_task',
+    'cancel_task',
+    'get_proposal',
+    'cancel_proposal',
+  ].includes(name)
     ? undefined
     : ['read_terminal'].includes(name)
       ? 'terminal-read'
       : ['write_terminal'].includes(name)
         ? 'terminal-write'
-        : ['inspect_file', 'read_content', 'query_table', 'read_drawing_geometry'].includes(name)
+        : [
+              'inspect_file',
+              'read_content',
+              'query_table',
+              'read_drawing_geometry',
+              'read_sqlite',
+              'list_archive',
+              'read_archive_entry',
+            ].includes(name)
           ? 'content'
           : [
                 'propose_open_path',
@@ -249,6 +264,9 @@ const samples: Record<AgentToolName, Arguments> = {
     plan: { kind: 'image', format: 'webp' },
   },
   read_drawing_geometry: { path: '/Granted/a.dxf' },
+  read_sqlite: { path: '/Granted/a.sqlite' },
+  list_archive: { path: '/Granted/a.zip' },
+  read_archive_entry: { path: '/Granted/a.zip', entry: 'README.md' },
   get_relationships: { path: file },
   inspect_file: { path: file },
   read_content: { path: file },
@@ -266,12 +284,14 @@ const samples: Record<AgentToolName, Arguments> = {
   validate_config: { patches: [] },
   propose_config: { patches: [{ path: 'ui.space.grid', value: true }] },
   read_terminal: { id: 'terminal' },
+  list_proposals: {},
   get_proposal: { id: 'proposal' },
   get_context: {},
   list_actions: {},
   read_metadata: { path: file },
   search_files: { query: 'report', root: '/Granted' },
   run_action: { recipeID: 'recipe', sources: [file] },
+  list_tasks: {},
   get_task: { id: 'task' },
   cancel_task: { id: 'task' },
 };

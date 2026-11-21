@@ -12,8 +12,8 @@ export const documentReadRequestSchema = z
 /** What one document read asks for: a page of a worksheet, a message of a mailbox, or a cancellable read. */
 export const documentRequestSchema = z.union([
   mailboxMessageRequestSchema,
-  worksheetDocumentRequestSchema,
   documentReadRequestSchema,
+  worksheetDocumentRequestSchema,
 ]);
 export type DocumentRequest = z.input<typeof documentRequestSchema>;
 /** A mailbox message by its place in the mailbox's list. */

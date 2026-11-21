@@ -319,13 +319,28 @@ export const PreviewHost = memo(function PreviewHost({
   // all, with the host's own Show as Hex.
   const registered = useRef(new Set<readonly PreviewCommand[]>());
   const [hexFor, setHexFor] = useState<string>();
+  const [hexAllowedFor, setHexAllowedFor] = useState<string>();
   const hexShown = !!resource && hexFor === resource.id;
-  const offersHex = !!resource && (hexShown || choosePreview(resource.entry).hex !== 'own');
+  // A non-directory `.key` file may be a PEM or DER private key; hold Show as Hex until
+  // EmbeddedPreview confirms a Keynote archive.
+  const defersHex =
+    !!resource &&
+    !resource.entry.directory &&
+    resource.entry.extension.toLowerCase() === 'key' &&
+    choosePreview(resource.entry).id === 'embedded';
+  const offersHex =
+    !!resource &&
+    (hexShown ||
+      (choosePreview(resource.entry).hex !== 'own' &&
+        (!defersHex || hexAllowedFor === resource.id)));
   const resourceID = resource?.id;
   const toggleHex = useCallback(
     () => setHexFor((current) => (current === resourceID ? undefined : resourceID)),
     [resourceID],
   );
+  const allowHex = useCallback(() => {
+    if (resourceID) setHexAllowedFor(resourceID);
+  }, [resourceID]);
   const hostCommands = useMemo<readonly PreviewCommand[]>(
     () =>
       offersHex
@@ -528,6 +543,7 @@ export const PreviewHost = memo(function PreviewHost({
                 }
                 retry={!supplied ? () => setRetry((value) => value + 1) : undefined}
                 showHex={() => setHexFor(resource.id)}
+                allowHex={allowHex}
                 openInApp={
                   !supplied
                     ? () => void window.viewer.openExternal(resource.entry.path).catch(report)

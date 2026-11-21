@@ -233,7 +233,9 @@ it('turns pages with arrows, Page Down/Up and Space after clicking a PDF plane',
   vi.stubGlobal(
     'ResizeObserver',
     class {
-      constructor(private callback: (entries: { contentRect: { width: number; height: number } }[]) => void) {}
+      constructor(
+        private callback: (entries: { contentRect: { width: number; height: number } }[]) => void,
+      ) {}
       observe() {
         this.callback([{ contentRect: { width: 600, height: 800 } }]);
       }

@@ -92,7 +92,7 @@ async function extractCoordinated(
   const extension = options.format ? '.' + options.format : path.extname(file).toLowerCase();
   const format = extension.slice(1);
   if (options.worksheet && !(readsOfficeContent(format) && officeFamily(format) === 'workbook'))
-    throw new Error('Worksheet pages are available for XLSX files only.');
+    throw new Error('Worksheet pages are available for supported Excel workbooks only.');
   const result: DocumentData = {
     path: file,
     metadata: {},

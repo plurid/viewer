@@ -5,6 +5,7 @@ import { activeWorkspace, getState, navigate } from '../state/store';
 import { browseSession, updateBrowseSession } from './sessions';
 import type { WorkspaceController } from './context';
 import { deferTerminalStart } from '../terminals/sessions';
+import { withAgentDispatch } from '../app/agent-dispatch';
 
 /** Uses the same host records as the UI. This path never requests an OS grant. */
 export async function executeAgentNavigation(
@@ -12,6 +13,7 @@ export async function executeAgentNavigation(
   target: CapturedTarget,
   controller: WorkspaceController,
   switchTo: (id: string) => Promise<void>,
+  dispatchID?: string,
 ): Promise<void> {
   const origin = () => {
     const space = activeWorkspace();
@@ -74,11 +76,11 @@ export async function executeAgentNavigation(
     deferTerminalStart(
       destination.panes.filter((pane) => pane.type === 'terminal').map((pane) => pane.id),
     );
-    await switchTo(destination.id);
+    await withAgentDispatch(dispatchID, () => switchTo(destination.id));
     return;
   }
   if (request.kind === 'open-path') {
-    const entry = await window.viewer.stat(request.path);
+    const entry = await withAgentDispatch(dispatchID, () => window.viewer.stat(request.path));
     origin();
     if (!pane && request.placement === 'linked') throw new Error('Focus a files plane first.');
     if (request.placement === 'current' && entry.directory && pane?.type === 'folder') {
@@ -90,7 +92,7 @@ export async function executeAgentNavigation(
   if (pane?.type !== 'folder') throw new Error('Focus a files plane before selecting files.');
   const entries = [];
   for (const expected of request.files) {
-    const actual = await window.viewer.stat(expected.path);
+    const actual = await withAgentDispatch(dispatchID, () => window.viewer.stat(expected.path));
     origin();
     if (!sameCapturedItem(actual, expected) || actual.parent !== expected.parent)
       throw new Error(

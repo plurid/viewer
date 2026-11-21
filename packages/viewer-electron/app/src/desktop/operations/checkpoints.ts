@@ -88,7 +88,6 @@ const treeManifestSchema = z
 const fileListManifestSchema = z
   .array(z.object({ snapshot: snapshotPath, hash: z.string().length(64) }).passthrough())
   .max(10000);
-const checkpointIDPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Recovery content lives in the app's private storage. Capturing never mutates sources. */
 export class Checkpoints {
   private store: DocumentStore<CheckpointRecord[]>;
@@ -127,7 +126,7 @@ export class Checkpoints {
     // incomplete checkpoint so its bytes count toward the budget and the person can remove it.
     const discovered: CheckpointRecord[] = [];
     for (const entry of entries) {
-      if (!checkpointIDPattern.test(entry.name) || known.has(entry.name)) continue;
+      if (!recordSchema.shape.id.safeParse(entry.name).success || known.has(entry.name)) continue;
       if (stored.length + discovered.length >= 100) break;
       const folder = path.join(this.directory, entry.name);
       const info = await lstat(folder).catch(() => null);

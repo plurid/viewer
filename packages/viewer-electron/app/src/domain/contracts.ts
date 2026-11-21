@@ -1101,5 +1101,6 @@ declare global {
   interface Window {
     viewer: ViewerAPI;
     viewerNative?: ViewerAPI;
+    viewerDispatch?: { set(id: string | undefined): void };
   }
 }

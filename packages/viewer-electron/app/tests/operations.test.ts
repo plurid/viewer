@@ -1352,6 +1352,66 @@ describe('reviewed work that waits (2026-10-20)', () => {
     expect(operations.all().find((item) => item.id === job.id)?.undoable).toBe(false);
     expect(await operations.trashOrigins()).toEqual([]);
   });
+  it('retains Trash original locations in a private 0600 store past 100 finished jobs and across restarts', async () => {
+    const dataPath = path.join(root, 'private');
+    const makeService = () =>
+      new Operations(
+        async (file) => {
+          const directory = (await lstat(file)).isDirectory();
+          const target = path.join(trash, path.basename(file) + '-' + crypto.randomUUID());
+          await rename(file, target);
+          return { path: target, directory };
+        },
+        () => {},
+        undefined,
+        undefined,
+        undefined,
+        dataPath,
+      );
+    operations = makeService();
+    const trashedSource = path.join(root, 'keep-origin.txt');
+    await writeFile(trashedSource, 'keep my origin');
+    const trashJob = await run({ kind: 'trash', sources: [trashedSource] });
+    expect(trashJob.status).toBe('completed');
+    const [initialOrigin] = await operations.trashOrigins();
+    expect(initialOrigin?.originalPath).toBe(trashedSource);
+    const scratch = path.join(root, 'rollover');
+    await mkdir(scratch);
+    for (let index = 0; index < 105; index++) {
+      const done = await run({
+        kind: 'mkdir',
+        sources: [],
+        destination: scratch,
+        name: `job-${index}`,
+      });
+      expect(done.status).toBe('completed');
+    }
+    expect(operations.all().some((job) => job.id === trashJob.id)).toBe(false);
+    expect(await operations.trashOrigins()).toEqual([
+      expect.objectContaining({
+        file: initialOrigin!.file,
+        originalPath: trashedSource,
+      }),
+    ]);
+    await operations.close();
+    const storeFile = path.join(dataPath, 'trash-origins-v1.json');
+    expect((await lstat(storeFile)).mode & 0o777).toBe(0o600);
+    expect(JSON.parse(await readFile(storeFile, 'utf8'))).toMatchObject({ version: 1 });
+    operations = makeService();
+    await operations.load();
+    expect(await operations.trashOrigins()).toEqual([
+      expect.objectContaining({
+        file: initialOrigin!.file,
+        originalPath: trashedSource,
+      }),
+    ]);
+    await operations.trashRestored(initialOrigin!.file);
+    expect(await operations.trashOrigins()).toEqual([]);
+    await operations.close();
+    operations = makeService();
+    await operations.load();
+    expect(await operations.trashOrigins()).toEqual([]);
+  });
   it('lets an Eject or a revoke through while an unrelated job waits at its prompt', async () => {
     // quiesce waited for the whole queue, so an unanswered prompt anywhere held it.
     const holder = await held();

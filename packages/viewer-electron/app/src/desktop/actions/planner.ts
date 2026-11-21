@@ -868,7 +868,6 @@ export class ActionPlanner {
       if (!same(row.source!, current))
         throw new Error('A file changed after the action, so it can’t be undone.');
     }
-    this.reserveCapacity(plan.id);
     const reverse: ActionPlan = {
       ...structuredClone(plan),
       id: randomUUID(),
@@ -883,6 +882,7 @@ export class ActionPlanner {
           .map((row) => this.restoreRow(row, row.destination)),
       ),
     };
+    this.reserveCapacity(plan.id);
     await this.publish(reverse);
     await this.apply({
       id: reverse.id,
@@ -958,7 +958,6 @@ export class ActionPlanner {
         }
       }
     if (!rows.length) throw new Error('No movable files were recorded for recovery.');
-    this.reserveCapacity(plan.id);
     const review: ActionPlan = {
       ...structuredClone(plan),
       id: randomUUID(),
@@ -971,6 +970,7 @@ export class ActionPlanner {
       error: undefined,
     };
     await this.checkRows(rows);
+    this.reserveCapacity(plan.id);
     await this.publish(review);
   }
   async close(): Promise<void> {

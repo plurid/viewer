@@ -107,11 +107,14 @@ export function createResourceHandlers(ports: ResourcePorts): ResourceHandlers {
         );
       }
       if (request) {
-        const { requestID, ...rest } = request;
-        const worksheet =
-          'sheet' in rest || 'fromRow' in rest || 'limit' in rest ? rest : undefined;
-        return ports.resources.documentRead(id, requestID, (file, signal, format) =>
-          ports.files.extract(file, signal, true, worksheet, format),
+        if ('fromRow' in request) {
+          const { requestID, ...worksheet } = request;
+          return ports.resources.documentRead(id, requestID, (file, signal, format) =>
+            ports.files.extract(file, signal, true, worksheet, format),
+          );
+        }
+        return ports.resources.documentRead(id, request.requestID, (file, signal, format) =>
+          ports.files.extract(file, signal, true, undefined, format),
         );
       }
       const file = ports.resources.documentSource(id);
@@ -134,7 +137,7 @@ export function createResourceHandlers(ports: ResourcePorts): ResourceHandlers {
       try {
         return await ports.resources.documentRead(id, requestID, async (file, signal, format) => {
           if (!format || !(readsOfficeContent(format) && officeFamily(format) === 'word'))
-            throw new Error('Embedded document images require a DOCX file.');
+            throw new Error('Embedded document images require a supported Word document.');
           const document = await ports.files.extract(file, signal, true, undefined, format);
           if (!officeImageParts(document.office).includes(part))
             throw new Error('This image is not a supported embedded document relationship.');

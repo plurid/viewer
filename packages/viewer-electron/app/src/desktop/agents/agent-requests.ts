@@ -12,13 +12,13 @@ import {
   agentWorkspaceCopy,
 } from '../../domain/agents/requests';
 import type { CapturedTarget, ExecutionTask } from '../../domain/automation/actions';
-import type { SettingsPatch } from '../../domain/services';
+import type { ApplicationSettings, SettingsPatch } from '../../domain/services';
 import { DocumentStore } from '../persistence/document-store';
 import type { SettingsService } from '../preferences/settings';
 import { entry, absolute } from '../files/filesystem';
 import { agentCommandID, agentConfigurationPath } from '../../domain/agents/safety';
 import { sameSourceVersion, sourceVersion } from '../../domain/files/inspection';
-import type { OperationJob } from '../../domain/contracts';
+import type { OperationJob, UIPreferences } from '../../domain/contracts';
 import { formatBytes } from '../../domain/files/entries';
 import { outputProof } from '../operations/operation-journal';
 import { errorMessage } from '../../domain/errors';
@@ -340,9 +340,10 @@ export class AgentRequests {
   configuration(
     patches: SettingsPatch[],
     target?: CapturedTarget,
+    base?: { settings: ApplicationSettings; ui: UIPreferences },
   ): { id: string; requiresUserReview: true } {
     for (const patch of patches) agentConfigurationPath(patch.keys ?? patch.path.split('.'));
-    this.settings.preview(patches);
+    this.settings.preview(patches, base);
     const proposal = this.add({
       kind: 'configuration',
       target: target && structuredClone(target),

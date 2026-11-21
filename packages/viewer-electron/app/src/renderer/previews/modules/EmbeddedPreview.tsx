@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ComponentType } from 'react';
 import type { Resource } from '../../../domain/contracts';
 import type { PreviewContext } from '../contracts';
-import { usePreviewCommands } from '../controls';
 import { choosePreview, previewModules } from '../registry';
 import { preloadPreviewModule } from '../module-loading';
 import { Empty, Failure, Loading } from '../../ui/primitives';
@@ -47,32 +46,9 @@ async function memberText(
  * members, within their limits, and checks a picture is the PNG or JPEG it is named.
  */
 export default function EmbeddedPreview(context: PreviewContext) {
-  const { resource, services } = context;
+  const { resource, services, allowHex } = context;
   const format = embeddedFormat(resource.entry.extension) as EmbeddedFormat;
   const [reading, setReading] = useState<Reading>({ state: 'reading' });
-  const showHex = context.showHex;
-  const offersHex =
-    !resource.entry.directory &&
-    (reading.state === 'shown' ||
-      reading.state === 'missing' ||
-      (reading.state === 'failed' && format !== 'key'));
-  usePreviewCommands(
-    context,
-    useMemo(
-      () =>
-        offersHex && showHex
-          ? [
-              {
-                id: 'hex',
-                label: 'Show as Hex',
-                aliases: ['hex', 'bytes'],
-                run: () => showHex(),
-              },
-            ]
-          : [],
-      [offersHex, showHex],
-    ),
-  );
   useEffect(() => {
     let live = true,
       owned: Resource | undefined;
@@ -91,6 +67,7 @@ export default function EmbeddedPreview(context: PreviewContext) {
         if (live) setReading({ state: 'other', Viewer });
         return;
       }
+      if (live && format === 'key' && !resource.entry.directory) allowHex?.();
       const names = listing.entries.map((entry) => entry.name);
       const facts = await embeddedFacts(format, names, (name) =>
         memberText(services, resource.id, name),
@@ -116,7 +93,7 @@ export default function EmbeddedPreview(context: PreviewContext) {
       live = false;
       if (owned) void services.release(owned.id).catch(() => {});
     };
-  }, [resource.id, resource.entry, services, format]);
+  }, [resource.id, resource.entry, services, format, allowHex]);
   if (reading.state === 'reading') return <Loading label="Reading the saved preview…" />;
   if (reading.state === 'other') return <reading.Viewer {...context} />;
   if (reading.state === 'failed')

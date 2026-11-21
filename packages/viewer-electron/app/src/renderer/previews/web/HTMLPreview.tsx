@@ -82,6 +82,14 @@ export default function HTMLPreview(context: PreviewContext) {
       })
       .catch(report);
   };
+  const reloadWaiting = capability.status === 'loading' || capability.status === 'closed';
+  const reloadReason =
+    capability.status === 'loading'
+      ? 'Opening HTML preview…'
+      : capability.status === 'closed'
+        ? 'This preview is closed.'
+        : undefined;
+  const reloadWhyID = `${prefix}-reload-why`;
   usePreviewCommands(
     context,
     useMemo(
@@ -98,10 +106,11 @@ export default function HTMLPreview(context: PreviewContext) {
           id: 'reload-html',
           label: 'Reload HTML Preview',
           aliases: ['reload page'],
+          available: !reloadWaiting,
           run: reload,
         },
       ],
-      [tab, choose, reload],
+      [tab, choose, reload, reloadWaiting],
     ),
   );
   return (
@@ -141,24 +150,22 @@ export default function HTMLPreview(context: PreviewContext) {
           {...headerItem('reload', 2, ['preview.reload-html'])}
           className="html-preview-reload"
           type="button"
-          title={
-            capability.status === 'loading'
-              ? 'Opening HTML preview…'
-              : capability.status === 'closed'
-                ? 'This preview is closed.'
-                : 'Reload the saved HTML and local assets'
-          }
-          aria-disabled={
-            capability.status === 'loading' || capability.status === 'closed' || undefined
-          }
+          title={reloadReason ?? 'Reload the saved HTML and local assets'}
+          aria-disabled={reloadWaiting || undefined}
+          aria-describedby={reloadReason ? reloadWhyID : undefined}
           onClick={() => {
-            if (capability.status !== 'loading' && capability.status !== 'closed') reload();
+            if (!reloadWaiting) reload();
           }}
         >
           <Icon name="refresh" />
           Reload
         </button>
       </PreviewToolbar>
+      {reloadReason && (
+        <span id={reloadWhyID} hidden>
+          {reloadReason}
+        </span>
+      )}
       <div
         className="html-preview-panel"
         id={`${prefix}-preview`}

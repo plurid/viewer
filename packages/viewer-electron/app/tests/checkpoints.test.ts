@@ -320,6 +320,18 @@ describe('reviewed content checkpoints', () => {
     }
     await service.close();
   });
+  it('ignores non-RFC UUID-like folder names so saving later checkpoints succeeds', async () => {
+    const directory = path.join(root, 'Private');
+    const nonRFC = '11111111-1111-0111-0111-111111111111';
+    await mkdir(path.join(directory, nonRFC), { recursive: true });
+    const source = path.join(root, 'Next.txt');
+    await writeFile(source, 'hello');
+    const service = new Checkpoints(directory, access, () => 1024 ** 2, coordination);
+    expect((await service.list()).records).toEqual([]);
+    const created = await service.create('After', [source]);
+    expect((await service.list()).records.map((record) => record.id)).toEqual([created.id]);
+    await service.close();
+  });
 });
 
 describe('removing a checkpoint', () => {

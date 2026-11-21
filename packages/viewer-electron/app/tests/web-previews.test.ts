@@ -497,7 +497,9 @@ describe('explicit folder loopback servers', () => {
       // Reject during activate()'s verify() once start() has inserted the record into this.servers.
       if (f.service.list(1).length > 0) throw new Error('Simulated activate failure');
     });
-    await expect(f.service.start(1, f.root, 'pane-a')).rejects.toThrow('Folder access is required.');
+    await expect(f.service.start(1, f.root, 'pane-a')).rejects.toThrow(
+      'Folder access is required.',
+    );
     expect(f.service.list(1)).toEqual([]);
     // Starting the same pane with a different folder must not fail with "Close this server plane before changing its folder."
     await expect(f.service.start(1, other, 'pane-a')).rejects.toThrow('Folder access is required.');
