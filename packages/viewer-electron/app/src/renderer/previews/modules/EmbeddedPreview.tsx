@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ComponentType } from 'react';
 import type { Resource } from '../../../domain/contracts';
 import type { PreviewContext } from '../contracts';
+import { usePreviewCommands } from '../controls';
 import { choosePreview, previewModules } from '../registry';
 import { preloadPreviewModule } from '../module-loading';
 import { Empty, Failure, Loading } from '../../ui/primitives';
@@ -49,13 +50,37 @@ export default function EmbeddedPreview(context: PreviewContext) {
   const { resource, services } = context;
   const format = embeddedFormat(resource.entry.extension) as EmbeddedFormat;
   const [reading, setReading] = useState<Reading>({ state: 'reading' });
+  const showHex = context.showHex;
+  const offersHex =
+    !resource.entry.directory &&
+    (reading.state === 'shown' ||
+      reading.state === 'missing' ||
+      (reading.state === 'failed' && format !== 'key'));
+  usePreviewCommands(
+    context,
+    useMemo(
+      () =>
+        offersHex && showHex
+          ? [
+              {
+                id: 'hex',
+                label: 'Show as Hex',
+                aliases: ['hex', 'bytes'],
+                run: () => showHex(),
+              },
+            ]
+          : [],
+      [offersHex, showHex],
+    ),
+  );
   useEffect(() => {
     let live = true,
       owned: Resource | undefined;
     setReading({ state: 'reading' });
     void (async () => {
       const listing = await services.archive(resource.id).catch(async (error: unknown) => {
-        // a `.key` file is as often a private key written as text: it keeps the preview it had
+        // a `.key` file is as often a PEM or DER private key: hand it on without reading its bytes
+        if (format === 'key' && !resource.entry.directory) return undefined;
         if (resource.entry.directory || (await services.read(resource.id, 4096)).binary)
           throw error;
         return undefined;

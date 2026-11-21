@@ -1,12 +1,16 @@
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { fidelityWorkbook, fidelityWord, fidelityStyles } from './office-fidelity-fixtures';
 import { extractOffice } from '../src/desktop/previews/office';
+import { extractDocument } from '../src/desktop/previews/formats';
+import { Resources } from '../src/desktop/previews/resources';
+import { createResourceHandlers } from '../src/desktop/ipc/resource-handlers';
 import { workbookFormatter } from '../src/desktop/previews/office-formatting';
 import { officeXML } from '../src/desktop/previews/office-xml';
 import { officeImageParts } from '../src/domain/previews/documents/office';
+import { officeContentTypes } from '../src/domain/previews/documents/layout';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 let root: string;
 beforeEach(async () => {
@@ -153,4 +157,74 @@ it('reads macro and template packages as the documents they are, and checks each
   const mismatched = path.join(root, 'Mismatched.docm');
   await writeFile(mismatched, fidelityWord(image));
   await expect(extractOffice(mismatched)).rejects.toThrow('does not match');
+});
+
+it('extracts paged worksheets for .xlsm/.xltx/.xltm and serves embedded images for .docm/.dotx/.dotm', async () => {
+  const swap = (bytes: Uint8Array, from: string, to: string) => {
+    const files = unzipSync(bytes);
+    const types = strFromU8(files['[Content_Types].xml']!);
+    return zipSync({ ...files, '[Content_Types].xml': strToU8(types.replace(from, to)) });
+  };
+  const sheet = officeContentTypes.xlsx;
+  for (const extension of ['xlsm', 'xltx', 'xltm'] as const) {
+    const file = path.join(root, `Budget.${extension}`);
+    await writeFile(file, swap(fidelityWorkbook(), sheet, officeContentTypes[extension]));
+    const data = await extractDocument(file, {
+      worksheet: { sheet: 'Report', fromRow: 1, limit: 10 },
+    });
+    expect(data.office?.kind).toBe('workbook');
+  }
+  const image = await readFile(path.resolve('tools/playground/assets/study.png'));
+  const resources = new Resources();
+  const handlers = createResourceHandlers({
+    resources,
+    thumbnails: { get: vi.fn(async () => '') },
+    webPreviews: { releaseResource: vi.fn(async () => {}) },
+    files: {
+      extract: (file, signal, _ocr, worksheet, format) =>
+        extractDocument(file, { signal, worksheet, format }),
+    },
+    fileAccess: { require: vi.fn(async () => {}) },
+    forgetGitResource: vi.fn(),
+    warmOffice: vi.fn(),
+  });
+  try {
+    for (const extension of ['docm', 'dotx', 'dotm'] as const) {
+      const file = path.join(root, `Report.${extension}`);
+      await writeFile(
+        file,
+        swap(fidelityWord(image), officeContentTypes.docx, officeContentTypes[extension]),
+      );
+      const grant = await resources.grant(file);
+      const embedded = await handlers.officeImage(
+        [grant.id, 'word/media/study.png', `req-${extension}`],
+        1,
+      );
+      expect(embedded.entry.extension).toBe('png');
+    }
+  } finally {
+    await resources.quiesce();
+  }
+});
+
+it('leaves merges outside the requested page without a synthetic empty anchor when another merge triggers backfill', async () => {
+  const sheetNS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  const rows: string[] = [];
+  for (let r = 1; r <= 150; r++) {
+    const cells: string[] = [];
+    if (r === 1) cells.push('<c r="A1" t="inlineStr"><is><t>Group A</t></is></c>');
+    if (r === 50) cells.push('<c r="B50" t="inlineStr"><is><t>Subtotal 500</t></is></c>');
+    else cells.push(`<c r="B${r}" t="inlineStr"><is><t>r${r}</t></is></c>`);
+    rows.push(`<row r="${r}">${cells.join('')}</row>`);
+  }
+  const xml = `<worksheet xmlns="${sheetNS}"><sheetData>${rows.join('')}</sheetData><mergeCells count="2"><mergeCell ref="A1:A150"/><mergeCell ref="B50:B51"/></mergeCells></worksheet>`;
+  const file = path.join(root, 'Merged.xlsx');
+  await writeFile(file, fidelityWorkbook(false, { 'xl/worksheets/data.xml': xml }));
+  const doc = await extractOffice(file, undefined, { sheet: 'Report', fromRow: 101, limit: 50 });
+  if (doc.office?.kind !== 'workbook') throw Error('Expected workbook');
+  const merges = doc.office.sheets[0]!.merges ?? [];
+  expect(merges.find((merge) => merge.fromRow === 1 && merge.fromColumn === 1)?.anchor?.value).toBe(
+    'Group A',
+  );
+  expect(merges.find((merge) => merge.fromRow === 50 && merge.fromColumn === 2)?.anchor).toBeUndefined();
 });

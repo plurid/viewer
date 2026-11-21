@@ -2,6 +2,7 @@ import type { SavedPage, SavedPagePart } from '../saved-page';
 import { decodeBinaryPlist, isBinaryPlist, xmlPlistValue } from '../data/plist';
 import { decodeText } from '../mail/mime';
 import {
+  decodeEntities,
   escapeHtml,
   pageBase,
   partExtension,
@@ -93,7 +94,7 @@ const absolute = (reference: string, base: string) => {
 export function webArchiveSummary(bytes: Uint8Array): WebArchiveSummary & { text: string } {
   const archive = readArchive(bytes);
   const page = html(archive.main) ? decodeText(archive.main.data, archive.main.encoding) : '';
-  const title = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(page)?.[1] ?? '';
+  const title = decodeEntities(/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(page)?.[1] ?? '');
   return {
     url: archive.main.url,
     title: title.replace(/\s+/g, ' ').trim().slice(0, 500),
@@ -149,7 +150,7 @@ export function webArchivePage(bytes: Uint8Array): SavedPage {
     return path;
   };
   if (!html(main)) {
-    const path = serve(main);
+    const path = main.type.startsWith('image/') ? serve(main) : undefined;
     const body = path
       ? `<img src="${path}" alt="">`
       : main.type.startsWith('text/')

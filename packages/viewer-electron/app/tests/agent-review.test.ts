@@ -1,10 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { AgentProposal, AgentProposalKind } from '../src/domain/agents/requests';
 import type { CapturedTarget } from '../src/domain/automation/actions';
 import type { FileEntry } from '../src/domain/contracts';
 import { agentProposalKinds, needsNativeConfirmation } from '../src/domain/agents/requests';
 import { reviewButton, reviewNote } from '../src/domain/agents/review';
 import { imageTransformSchema } from '../src/domain/operations/transforms';
+
+const { showMessageBox } = vi.hoisted(() => ({
+  showMessageBox: vi.fn(async (_options: { message: string; detail: string }) => ({ response: 0 })),
+}));
+vi.mock('electron', () => ({ dialog: { showMessageBox } }));
+import { confirmAgentProposal } from '../src/desktop/native/native-confirmation';
 
 const file = (name: string) => ({ path: '/work/Photos/' + name, name }) as FileEntry;
 const target = (selection: FileEntry[]): CapturedTarget => ({
@@ -122,5 +128,70 @@ describe('agent review text', () => {
     expect(reviewNote(proposals.navigation[0])).toBe(
       'Open path changes only what Viewer shows. No files change. No system dialog follows.',
     );
+  });
+  it('names the requesting client or Chat in native confirmation dialogs', async () => {
+    showMessageBox.mockClear();
+    await confirmAgentProposal(
+      undefined,
+      proposal({
+        kind: 'command',
+        title: 'Rename',
+        clientID: 'client-1',
+        clientName: 'Research Helper',
+        target: target([file('A.jpg')]),
+      } as AgentProposal),
+    );
+    expect(showMessageBox.mock.calls[0]![0]).toMatchObject({
+      message: expect.stringContaining('Research Helper'),
+    });
+    showMessageBox.mockClear();
+    await confirmAgentProposal(
+      undefined,
+      proposal({
+        kind: 'command',
+        title: 'Move to Trash',
+        removal: 'trash',
+        clientID: 'chat:conv-1',
+        target: target([file('A.jpg')]),
+      }),
+    );
+    expect(showMessageBox.mock.calls[0]![0]).toMatchObject({
+      message: expect.stringContaining('Chat'),
+    });
+  });
+  it('bounds large Trash confirmation details on whole lines and keeps the remainder and closing note', async () => {
+    showMessageBox.mockClear();
+    const entries = Array.from({ length: 300 }, (_, index) =>
+      file(`Folder-${String(index + 1).padStart(3, '0')}/Long-Item-Name-${index + 1}.pdf`),
+    );
+    const closing =
+      'Selected folders include the contents counted above; any change to them cancels this approval. Nothing is permanently deleted. This approval applies only to this request.';
+    const detail =
+      'Move only these items to the system Trash:\n\n' +
+      entries.map((item) => item.path).join('\n') +
+      '\n\n' +
+      closing;
+    expect(detail.length).toBeGreaterThan(10000);
+    await confirmAgentProposal(
+      undefined,
+      proposal({
+        kind: 'command',
+        title: 'Move to Trash',
+        commandID: 'trash',
+        removal: 'trash',
+        target: target(entries),
+        detail,
+      }),
+    );
+    const options = showMessageBox.mock.calls[0]![0] as { detail: string };
+    expect(options.detail.length).toBeLessThanOrEqual(6000);
+    expect(options.detail).toContain(closing);
+    expect(options.detail).toMatch(/…and \d+ more, listed in the review\./);
+    // Every path line included before the remainder must be intact (not sliced mid-path).
+    const listedLines = options.detail
+      .split('\n')
+      .filter((line) => line.startsWith('/work/Photos/'));
+    expect(listedLines.length).toBeGreaterThan(10);
+    expect(listedLines.every((line) => line.endsWith('.pdf'))).toBe(true);
   });
 });

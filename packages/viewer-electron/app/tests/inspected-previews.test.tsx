@@ -7,11 +7,15 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { generateKeyPairSync } from 'node:crypto';
-import type { FileEntry } from '../src/domain/contracts';
+import type { FileEntry, Resource } from '../src/domain/contracts';
 import type { InspectedFile } from '../src/domain/previews/inspected';
 import type { PreviewContext } from '../src/renderer/previews/contracts';
-import { initialize } from '../src/renderer/state/store';
+import type { HexToggle } from '../src/renderer/previews/PreviewHost';
+import { changeWorkspace, initialize } from '../src/renderer/state/store';
 import { readInspected, readKeyFile } from '../src/desktop/previews/inspected';
+import { PreviewHost } from '../src/renderer/previews/PreviewHost';
+import { CommandRegistry } from '../src/renderer/commands/registry';
+import { CommandsContext } from '../src/renderer/commands/context';
 import CertificatePreview from '../src/renderer/previews/modules/CertificatePreview';
 import ShortcutPreview from '../src/renderer/previews/modules/ShortcutPreview';
 import TorrentPreview from '../src/renderer/previews/modules/TorrentPreview';
@@ -190,6 +194,89 @@ describe('certificates and keys', () => {
     );
     const view = render(<CertificatePreview {...context} />);
     expect(await view.findByText(line)).toBeTruthy();
+  });
+
+  it('keeps PEM and DER private keys named .key out of renderer reads and hides Show as Hex in PreviewHost', async () => {
+    const pair = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const pemBytes = new TextEncoder().encode(
+      pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+    );
+    const derBytes = new Uint8Array(pair.privateKey.export({ type: 'pkcs8', format: 'der' }));
+
+    for (const [name, bytes] of [
+      ['server.key', pemBytes],
+      ['server-der.key', derBytes],
+    ] as const) {
+      cleanup();
+      const entry: FileEntry = {
+        path: `/fixtures/${name}`,
+        name,
+        parent: '/fixtures',
+        extension: 'key',
+        mime: 'application/octet-stream',
+        size: bytes.length,
+        kind: 'file',
+        directory: false,
+        identity: name,
+        modified: 1,
+        created: 1,
+        hidden: false,
+      };
+      const resource: Resource = {
+        id: `res-${name}`,
+        url: `viewer-resource://res/asset/${name}`,
+        entry,
+      };
+      const readSpy = vi.fn(async () => ({ text: '', binary: true, truncated: false }));
+      Object.assign(window, {
+        viewer: {
+          ...viewer,
+          onEvent: vi.fn(() => () => {}),
+          release: vi.fn(async () => {}),
+          archive: vi.fn(async () => {
+            throw new Error('This is not a supported ZIP or TAR archive.');
+          }),
+          archiveEntry: vi.fn(async () => {
+            throw new Error('Not an archive');
+          }),
+          read: readSpy,
+          document: vi.fn(async () => ({
+            path: entry.path,
+            metadata: {},
+            evidence: [],
+            text: '',
+            truncated: false,
+            inspected: readKeyFile(bytes),
+          })),
+          cancelDocument: vi.fn(async () => {}),
+          openExternal: vi.fn(async () => {}),
+        },
+      });
+      changeWorkspace((space) => ({
+        ...space,
+        panes: [{ id: 'plane', type: 'preview', path: entry.path }],
+      }));
+      const registry = new CommandRegistry();
+      let footerHex: HexToggle | undefined;
+      const view = render(
+        <CommandsContext.Provider value={registry}>
+          <PreviewHost
+            resource={resource}
+            paneID="plane"
+            renderFooter={(_resource, _module, hex) => {
+              footerHex = hex;
+              return null;
+            }}
+          />
+        </CommandsContext.Provider>,
+      );
+      await view.findByRole('article', { name: 'Private key' });
+      expect(readSpy).not.toHaveBeenCalled();
+      expect(footerHex).toBeUndefined();
+      expect(
+        registry.list({ sources: ['preview:plane'] }).map((item) => item.label),
+      ).not.toContain('Show as Hex');
+    }
   });
 });
 

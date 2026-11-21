@@ -120,3 +120,31 @@ it('exports command and output as literal fenced data even when they contain Mar
   expect(text).toContain('````\n<script>not executable</script>\n```\ntext\n````');
   expect(text).toContain('Ended: 1970-01-01T00:00:00.000Z');
 });
+it('records and reopens a receipt for a quick command run from an empty workspace', async () => {
+  const root = await temporaryRoot('viewer-command-empty-workspace-'),
+    service = new CommandReceipts(root),
+    id = randomUUID();
+  await service.record({
+    id,
+    title: 'pwd',
+    command: 'pwd',
+    directory: root,
+    status: 'completed',
+    output: root + '\n',
+    exitCode: 0,
+    started: 1000,
+    ended: 1010,
+    workspaceID: 'empty-space',
+    paneID: '',
+  });
+  await service.flush();
+  const reopened = new CommandReceipts(root);
+  expect(await reopened.request({ kind: 'read', id })).toMatchObject({
+    kind: 'receipt',
+    receipt: { id, command: 'pwd', workspaceID: 'empty-space', paneID: '', status: 'completed' },
+  });
+  expect(await reopened.request({ kind: 'list' })).toMatchObject({
+    kind: 'list',
+    receipts: [{ id, paneID: '' }],
+  });
+});

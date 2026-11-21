@@ -1478,3 +1478,112 @@ describe('scoped proposal-only MCP broker', () => {
     else await expect(stat(path.dirname(connection.socket))).rejects.toThrow();
   });
 });
+
+describe('action planner bounds, recovery completion and evidence limits', () => {
+  it('prepares local book-name proposals for 300 PDFs with large evidence without hitting the 16 MB journal limit', async () => {
+    const books: string[] = [];
+    for (let index = 0; index < 300; index++) {
+      const book = path.join(files, `Book-${index}.pdf`);
+      await writeFile(book, `book-${index}`);
+      books.push(book);
+    }
+    const hugeEvidence = Array.from({ length: 20 }, (_, index) => ({
+      source: `page:${index + 1}`,
+      text: 'z'.repeat(20_000),
+    }));
+    await reopen({
+      extract: async (file) => ({
+        path: file,
+        metadata: {
+          date: '2024',
+          author: 'Author',
+          title: path.basename(file, '.pdf'),
+          publisher: 'Press',
+        },
+        evidence: hugeEvidence,
+        text: '',
+        truncated: false,
+      }),
+    });
+    const plan = await propose('book-name', { context: { ...context(), sources: books } });
+    expect(plan.status).toBe('review');
+    expect(plan.rows).toHaveLength(300);
+    // Cancelling drops retained row evidence so settled plans do not consume journal space.
+    planner.cancel(plan.id);
+    await planner.close();
+    planner = create();
+    expect((await planner.get(plan.id)).rows.every((row) => row.evidence.length === 0)).toBe(true);
+  });
+
+  it('marks a partial or recovery task resolved once its restore plan completes', async () => {
+    const localOps = {
+      exclusive: async <T>(
+        work: (publish: (source: string, destination: string) => Promise<void>) => Promise<T>,
+      ) => work((source, destination) => rename(source, destination)),
+    } as unknown as Operations;
+    const original = await batch('Broken ');
+    const staged = path.join(files, '.viewer-action-staged-a');
+    await rename(path.join(files, 'A.txt'), staged);
+    const journalPath = path.join(root, 'action-journal-v1.json');
+    const saved = JSON.parse(await readFile(journalPath, 'utf8')) as ActionPlan[];
+    saved[0]!.status = 'recovery';
+    saved[0]!.undoable = false;
+    saved[0]!.rows = [
+      {
+        ...saved[0]!.rows[0]!,
+        stagedPath: staged,
+        completed: false,
+      },
+    ];
+    await writeFile(journalPath, JSON.stringify(saved));
+    await reopen({ operations: localOps });
+    await planner.recovery(original.id);
+    const restorePlan = (await planner.all()).find((item) => item.id !== original.id)!;
+    expect(restorePlan.status).toBe('review');
+    await planner.apply(approve(restorePlan));
+    expect((await planner.get(restorePlan.id)).status).toBe('completed');
+    expect((await planner.get(original.id)).status).toBe('cancelled');
+  });
+
+  it('keeps unfinished oldest plans on disk when undo or recovery runs at 100 plans', async () => {
+    const localOps = {
+      exclusive: async <T>(
+        work: (publish: (source: string, destination: string) => Promise<void>) => Promise<T>,
+      ) => work((source, destination) => rename(source, destination)),
+    } as unknown as Operations;
+    await reopen({ operations: localOps });
+    const completed = await batch('Done ');
+    await planner.apply(approve(completed));
+    const donePlan = await planner.get(completed.id);
+    expect(donePlan.status).toBe('completed');
+    expect(donePlan.undoable).toBe(true);
+
+    // Seed 99 unfinished review plans ahead of the completed plan so total is 100.
+    const oldestID = randomUUID();
+    const unfinished = Array.from({ length: 99 }, (_, index) => ({
+      ...structuredClone(donePlan),
+      id: index === 0 ? oldestID : randomUUID(),
+      title: `Pending ${index}`,
+      status: 'review' as const,
+      undoable: false,
+      rows: [],
+    }));
+    const journalPath = path.join(root, 'action-journal-v1.json');
+    await writeFile(journalPath, JSON.stringify([...unfinished, donePlan]));
+    await reopen({ operations: localOps });
+
+    // With 99 unfinished plans and 1 completed plan (the one being undone), undo cannot evict any other plan and must refuse without dropping oldestID.
+    await expect(planner.undo(donePlan.id)).rejects.toThrow('Review or finish existing tasks');
+    await reopen({ operations: localOps });
+    expect((await planner.get(oldestID)).status).toBe('review');
+
+    // Once one other plan is finished, undo evicts that finished plan and preserves oldestID on disk.
+    planner.cancel(unfinished[1]!.id);
+    await planner.close();
+    await reopen({ operations: localOps });
+    await planner.undo(donePlan.id);
+    await reopen({ operations: localOps });
+    expect((await planner.get(oldestID)).status).toBe('review');
+    expect(await planner.all()).toHaveLength(100);
+  });
+});

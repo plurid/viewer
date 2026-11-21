@@ -140,9 +140,11 @@ export interface TextPreviewProps extends PreviewContext {
 }
 
 /** A binary property list's values as JSON; it must fit in 8 MB. */
-async function binaryPlist(url: string, signal: AbortSignal) {
+const plistLimit = 8 * 1024 * 1024;
+async function binaryPlist(url: string, size: number, signal: AbortSignal) {
+  if (size > plistLimit) throw new Error('The property list is too large.');
   const bytes = new Uint8Array(await (await fetch(url, { signal })).arrayBuffer());
-  if (bytes.length > 8 * 1024 * 1024) throw new Error('The property list is too large.');
+  if (bytes.length > plistLimit) throw new Error('The property list is too large.');
   return JSON.stringify(decodeBinaryPlist(bytes), null, 2);
 }
 
@@ -207,7 +209,7 @@ export default function TextPreview(context: TextPreviewProps) {
     ])
       .then(async ([value]) => {
         if (value.binary && resource.entry.extension === 'plist')
-          value = await binaryPlist(resource.url, signal).then(
+          value = await binaryPlist(resource.url, resource.entry.size, signal).then(
             (text) => ({ text, truncated: false, binary: false, decoded: true }),
             () => value,
           );
@@ -245,10 +247,11 @@ export default function TextPreview(context: TextPreviewProps) {
           label: raw ? 'Show Document' : 'Show Source',
           aliases: ['vs'],
           available:
+            !editing &&
             !!data &&
             !data.binary &&
             (['md', 'markdown', 'mdx'].includes(resource.entry.extension) ||
-              isStructured(resource.entry.extension)),
+              (isStructured(resource.entry.extension) && !data.truncated)),
           run: () => setRaw((value) => !value),
         },
         // the header's size and wrap buttons, which Essential leaves here
@@ -256,32 +259,32 @@ export default function TextPreview(context: TextPreviewProps) {
           id: 'text-smaller',
           label: 'Smaller Preview Text',
           aliases: ['zoom out', 'font size'],
-          available: !!data && !data.binary && !table && scale > 0.6,
+          available: !editing && !!data && !data.binary && !table && scale > 0.6,
           run: () => setScale((value) => Math.max(0.6, value - 0.1)),
         },
         {
           id: 'text-larger',
           label: 'Larger Preview Text',
           aliases: ['zoom in', 'font size'],
-          available: !!data && !data.binary && !table && scale < 2.5,
+          available: !editing && !!data && !data.binary && !table && scale < 2.5,
           run: () => setScale((value) => Math.min(2.5, value + 0.1)),
         },
         {
           id: 'text-size-reset',
           label: 'Reset Preview Text Size',
           aliases: ['actual size', 'font size'],
-          available: !!data && !data.binary && !table && scale !== 1,
+          available: !editing && !!data && !data.binary && !table && scale !== 1,
           run: () => setScale(1),
         },
         {
           id: 'text-wrap',
           label: wrap ? 'Stop Wrapping Lines' : 'Wrap Lines',
           aliases: ['wrap', 'word wrap'],
-          available: !!data && !data.binary && !table,
+          available: !editing && !!data && !data.binary && !table,
           run: () => setWrap((value) => !value),
         },
       ],
-      [raw, data, resource.entry.extension, setRaw, scale, setScale, wrap, setWrap, table],
+      [editing, raw, data, resource.entry.extension, setRaw, scale, setScale, wrap, setWrap, table],
     ),
   );
   if (editing && paneID)
@@ -317,7 +320,7 @@ export default function TextPreview(context: TextPreviewProps) {
     <div className="text-viewer">
       {!(structured && !raw && !structured.error) && (
         <PreviewToolbar context={context}>
-          {(markdown || isStructured(ext)) && (
+          {(markdown || (isStructured(ext) && !data.truncated)) && (
             <>
               <button
                 {...headerItem('document', 5, ['preview.view-source'])}

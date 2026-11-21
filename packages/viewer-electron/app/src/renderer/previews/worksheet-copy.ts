@@ -70,7 +70,12 @@ export async function worksheetTSV(
           merge.toColumn > range.toColumn
         )
           throw new Error('Select the entire merged cell before copying this range.');
-        merges.set([merge.fromRow, merge.toRow, merge.fromColumn, merge.toColumn].join(':'), merge);
+        const key = [merge.fromRow, merge.toRow, merge.fromColumn, merge.toColumn].join(':');
+        const existing = merges.get(key);
+        merges.set(
+          key,
+          existing?.anchor && !merge.anchor ? { ...merge, anchor: existing.anchor } : merge,
+        );
       }
       if (page.nextRow === undefined || page.nextRow > range.toRow) break;
       if (page.nextRow <= fromRow)

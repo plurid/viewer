@@ -459,6 +459,20 @@ describe('rendered image previews', () => {
       'can’t render this preview',
     );
   });
+  it('serves a symlink whose name differs from its target over viewer-resource://', async () => {
+    const png = Buffer.from(
+      '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415408d763f8ffff3f0005fe02fea7d646420000000049454e44ae426082',
+      'hex',
+    );
+    const target = path.join(root, '2026-11-20.png');
+    const link = path.join(root, 'latest.png');
+    await writeFile(target, png);
+    await symlink(target, link);
+    const grant = await resources.grant(link);
+    const response = await resources.response(new Request(grant.url));
+    expect(response.status).toBe(200);
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(png);
+  });
 });
 describe('printing previewed PDFs', () => {
   it('prints only PDF files on disk', async () => {

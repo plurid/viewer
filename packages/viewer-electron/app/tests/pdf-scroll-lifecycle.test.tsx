@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createRoot } from 'react-dom/client';
 import PDFPreview from '../src/renderer/previews/modules/PDFPreview';
 import type { PreviewContext } from '../src/renderer/previews/contracts';
+import { PreviewFrame } from '../src/renderer/workspace/preview-frame';
 
 const pdf = vi.hoisted(() => ({ getDocument: vi.fn(), textLayer: vi.fn() }));
 vi.mock('pdfjs-dist', () => ({
@@ -226,4 +227,63 @@ it('keeps a scroll made as soon as the page has its size', async () => {
     host.remove();
     environment.IS_REACT_ACT_ENVIRONMENT = before;
   }
+});
+
+it('turns pages with arrows, Page Down/Up and Space after clicking a PDF plane', async () => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(private callback: (entries: { contentRect: { width: number; height: number } }[]) => void) {}
+      observe() {
+        this.callback([{ contentRect: { width: 600, height: 800 } }]);
+      }
+      disconnect() {}
+    },
+  );
+  const sheet = {
+    getViewport: () => ({ width: 400, height: 600, scale: 1 }),
+    render: () => ({ promise: Promise.resolve(), cancel() {} }),
+    getTextContent: async () => ({ items: [] }),
+  };
+  pdf.getDocument.mockReturnValue({
+    promise: Promise.resolve({ numPages: 3, getPage: async () => sheet }),
+    async destroy() {},
+  });
+  const context = {
+    toolbar: 'essential',
+    active: true,
+    interactive: true,
+    look: 'dark',
+    signal: new AbortController().signal,
+    resource: {
+      id: 'pdf-nav',
+      url: 'https://fixture.invalid/Book.pdf',
+      entry: { path: '/fixtures/Book.pdf', name: 'Book.pdf', extension: 'pdf' },
+    },
+    services: {},
+  } as unknown as PreviewContext;
+  const { container } = render(
+    <PreviewFrame activate={() => {}}>
+      <PDFPreview {...context} />
+    </PreviewFrame>,
+  );
+  const input = await waitFor(() => {
+    const field = container.querySelector<HTMLInputElement>('input[aria-label="Page number"]');
+    if (!field) throw new Error('waiting for PDF');
+    return field;
+  });
+  expect(input.value).toBe('1');
+  const canvas = container.querySelector('canvas')!;
+  fireEvent.pointerDown(canvas);
+  fireEvent.click(canvas);
+  fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+  await waitFor(() => expect(input.value).toBe('2'));
+  fireEvent.keyDown(document.activeElement!, { key: 'PageDown' });
+  await waitFor(() => expect(input.value).toBe('3'));
+  fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' });
+  await waitFor(() => expect(input.value).toBe('2'));
+  fireEvent.keyDown(document.activeElement!, { key: 'PageUp' });
+  await waitFor(() => expect(input.value).toBe('1'));
+  fireEvent.keyDown(document.activeElement!, { key: ' ' });
+  await waitFor(() => expect(input.value).toBe('2'));
 });

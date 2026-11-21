@@ -220,6 +220,25 @@ export class Trash {
       this.#busy = false;
     }
   }
+  /** Trash and destination paths touched by Put Back, so unrelated restores can run beside a
+   * collision prompt while related ones still wait. */
+  restoreFootprint(
+    itemIDs: readonly string[],
+    destination: 'original' | { folder: string },
+  ): string[] {
+    const paths: string[] = [];
+    for (const itemID of new Set(itemIDs)) {
+      const item = this.#known.get(itemID);
+      if (!item) continue;
+      paths.push(item.file);
+      const target =
+        destination === 'original'
+          ? item.item.originalPath
+          : path.join(destination.folder, item.item.name);
+      if (target) paths.push(target);
+    }
+    return paths;
+  }
   async #pick(window: BrowserWindow): Promise<string | undefined> {
     const picked = await openDialog(window, {
       title: 'Put Back To…',
@@ -384,7 +403,10 @@ export class Trash {
       (await realpath(item.root.path)) !== item.root.path
     )
       throw new Error('The Trash location changed. Refresh Trash.');
-    if (process.platform !== 'win32' && (root.uid !== process.getuid!() || root.mode & 0o077))
+    if (
+      process.platform !== 'win32' &&
+      (root.uid !== process.getuid!() || (!item.root.ignoreOwnership && root.mode & 0o077))
+    )
       throw new Error('The private Trash folder could not be verified.');
     for (const current of [...item.parents, item]) {
       const info = await lstat(current.file);
@@ -538,7 +560,7 @@ export class Trash {
       if (!window.isDestroyed() && !this.#closed)
         await dialog.showMessageBox(window, {
           type: 'error',
-          message: `${title} could not be emptied`,
+          message: `${title} couldn’t be emptied`,
           detail: errorMessage(error),
           buttons: ['OK'],
         });
@@ -588,9 +610,14 @@ export class Trash {
       try {
         // Do not follow either the private root or its shared parent. No roots
         // are manufactured and no permission is conferred by a JSONC setting.
+        let sharedParent: Stats | undefined;
         if (candidate.shared) {
-          const parent = await lstat(candidate.shared);
-          if (!parent.isDirectory() || parent.isSymbolicLink() || !(parent.mode & 0o1000))
+          sharedParent = await lstat(candidate.shared);
+          if (
+            !sharedParent.isDirectory() ||
+            sharedParent.isSymbolicLink() ||
+            (!candidate.ignoreOwnership && !(sharedParent.mode & 0o1000))
+          )
             throw new Error('The shared Trash folder could not be verified.');
         }
         const root = await lstat(candidate.path);
@@ -598,8 +625,9 @@ export class Trash {
         if (
           !root.isDirectory() ||
           root.isSymbolicLink() ||
+          (sharedParent && !sameDevice(sharedParent, root)) ||
           root.uid !== process.getuid!() ||
-          root.mode & 0o077 ||
+          (!candidate.ignoreOwnership && root.mode & 0o077) ||
           (await realpath(candidate.path)) !== candidate.path
         )
           throw new Error('The private Trash folder could not be verified.');
@@ -726,7 +754,7 @@ export class Trash {
       !parent.isDirectory() ||
       parent.isSymbolicLink() ||
       parent.uid !== process.getuid!() ||
-      parent.mode & 0o077 ||
+      (!root.ignoreOwnership && parent.mode & 0o077) ||
       (await realpath(folder)) !== folder
     )
       throw new Error('Trash metadata folder could not be verified.');

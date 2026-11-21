@@ -31,7 +31,9 @@ import { setAssetRoot } from '../../src/desktop/native/assets';
 import { macFiles } from '../../src/desktop/native/macos-files';
 import { fileCoordination } from '../../src/desktop/files/file-coordination';
 import { readText } from '../../src/desktop/editing/text-files';
+import type { FileAccess } from '../../src/desktop/files/file-access';
 import { Operations } from '../../src/desktop/operations/operations';
+import { Trash } from '../../src/desktop/operations/trash';
 import { temporaryRoot } from '../../tools/temporary';
 
 interface Entity {
@@ -535,6 +537,26 @@ async function scenario(filesystem: ScenarioFilesystem): Promise<void> {
     }
     await creationSubstitutions(incoming, copied, moved);
     await temporalFlows(incoming, copied, moved, mounted['dev-entry']);
+    const trashHome = path.join(root, 'TrashHome');
+    await mkdir(path.join(trashHome, '.Trash'), { recursive: true, mode: 0o700 });
+    const volumeTrash = path.join(mount, '.Trashes', String(process.getuid!()));
+    await mkdir(volumeTrash, { recursive: true });
+    await writeFile(path.join(volumeTrash, 'VolumeTrashed.txt'), 'trashed on volume', {
+      flag: 'wx',
+    });
+    const trashService = new Trash(trashHome, {
+      require: async () => {},
+      remember: async () => {},
+      scoped: false,
+    } as unknown as FileAccess);
+    try {
+      const snapshot = await trashService.list();
+      const volumeLocation = snapshot.locations.find((location) => location.name === 'ViewerQA');
+      assert.equal(volumeLocation?.state, 'ready', JSON.stringify(snapshot.locations));
+      assert.ok(snapshot.items.some((item) => item.name === 'VolumeTrashed.txt'));
+    } finally {
+      trashService.close();
+    }
     for (const name of (await readdir(copied)).filter((name) => name.startsWith('.viewer-')))
       assert.deepEqual(await readdir(path.join(copied, name)), []);
   } catch (error) {

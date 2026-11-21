@@ -423,6 +423,7 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
   const [working, setWorking] = useState(false);
   const [exportAt, setExportAt] = useState<string>();
   const viewport = useRef<HTMLDivElement>(null);
+  const discardButton = useRef<HTMLButtonElement>(null);
   const rows = useVirtualizer({
     count: plan.rows.length,
     getScrollElement: () => viewport.current,
@@ -430,6 +431,9 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
     overscan: 4,
   });
   const review = plan.status === 'review';
+  useEffect(() => {
+    if (review) discardButton.current?.focus({ preventScroll: true });
+  }, [review]);
   const selected = edits.filter((edit) => edit.approved).length;
   const checkpointPaths = [
     ...new Set(
@@ -666,10 +670,22 @@ function TaskReview({ plan }: { plan: ActionPlan }) {
         )}
         {busy(plan) && (
           <button
+            type="button"
             disabled={working}
             onClick={() => void act(() => window.viewer.actionCancel(plan.id))}
           >
             Cancel Task
+          </button>
+        )}
+        {review && (
+          <button
+            ref={discardButton}
+            type="button"
+            data-autofocus
+            disabled={working}
+            onClick={() => void act(() => window.viewer.actionCancel(plan.id))}
+          >
+            Discard
           </button>
         )}
         {['partial', 'recovery'].includes(plan.status) && (

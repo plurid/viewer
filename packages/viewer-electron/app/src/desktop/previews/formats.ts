@@ -10,7 +10,7 @@ import type { DocumentData } from '../../domain/services';
 import { fileCoordination } from '../files/file-coordination';
 import type { WorksheetWindow } from '../../domain/previews/documents/office';
 import { epubReference, epubImagePath, epubImageLimit } from '../../domain/previews/documents/epub';
-import { readsOfficeContent } from '../../domain/previews/documents/layout';
+import { officeFamily, readsOfficeContent } from '../../domain/previews/documents/layout';
 import { mailFormats } from '../../domain/previews/mail/formats';
 import { inspectedKind, inspectedLimits } from '../../domain/previews/inspected';
 const run = promisify(execFile);
@@ -90,7 +90,8 @@ async function extractCoordinated(
   },
 ): Promise<DocumentData> {
   const extension = options.format ? '.' + options.format : path.extname(file).toLowerCase();
-  if (options.worksheet && extension !== '.xlsx')
+  const format = extension.slice(1);
+  if (options.worksheet && !(readsOfficeContent(format) && officeFamily(format) === 'workbook'))
     throw new Error('Worksheet pages are available for XLSX files only.');
   const result: DocumentData = {
     path: file,

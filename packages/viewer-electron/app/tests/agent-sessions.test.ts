@@ -68,3 +68,78 @@ it('namespaces sessions by authenticated client, preserves message IDs and seque
   expect(list.kind === 'list' && list.sessions).toHaveLength(2);
   expect(list.kind === 'list' && list.sessions[0]).not.toHaveProperty('entries');
 });
+
+it('evicts the least recently updated finished session at 100 while refusing when 100 are active', async () => {
+  const root = await realpath(await temporaryRoot('viewer-session-limit-'));
+  const directory = path.join(root, 'Checkout');
+  await mkdir(directory);
+  const changed: string[] = [];
+  const sessions = new AgentSessions(root, (id) => changed.push(id));
+  const ids: string[] = [];
+  for (let index = 1; index <= 100; index++) {
+    const saved = await sessions.report(
+      'client-one',
+      'Client one',
+      {
+        sessionID: `finished-${index}`,
+        title: `Finished ${index}`,
+        directory,
+        sequence: 1,
+        status: index === 1 ? 'failed' : 'done',
+        entries: [{ id: 'a', role: 'assistant', text: `Done ${index}.` }],
+      },
+      realpath,
+    );
+    ids.push(saved.id);
+  }
+  const extra = await sessions.report(
+    'client-one',
+    'Client one',
+    {
+      sessionID: 'finished-101',
+      title: 'Finished 101',
+      directory,
+      sequence: 1,
+      status: 'working',
+      entries: [{ id: 'a', role: 'assistant', text: 'New work.' }],
+    },
+    realpath,
+  );
+  expect(extra.title).toBe('Finished 101');
+  const list = await sessions.request({ kind: 'list' });
+  expect(list.kind === 'list' && list.sessions).toHaveLength(100);
+  await expect(sessions.request({ kind: 'read', id: ids[0]! })).rejects.toThrow('no record');
+  expect(changed).toContain(ids[0]);
+
+  const activeRoot = await realpath(await temporaryRoot('viewer-session-active-limit-'));
+  const activeSessions = new AgentSessions(activeRoot, () => {});
+  for (let index = 1; index <= 100; index++)
+    await activeSessions.report(
+      'client-one',
+      'Client one',
+      {
+        sessionID: `active-${index}`,
+        title: `Active ${index}`,
+        directory,
+        sequence: 1,
+        status: index % 2 === 0 ? 'waiting' : 'working',
+        entries: [{ id: 'a', role: 'assistant', text: 'Active.' }],
+      },
+      realpath,
+    );
+  await expect(
+    activeSessions.report(
+      'client-one',
+      'Client one',
+      {
+        sessionID: 'active-101',
+        title: 'Active 101',
+        directory,
+        sequence: 1,
+        status: 'working',
+        entries: [{ id: 'a', role: 'assistant', text: 'Too many.' }],
+      },
+      realpath,
+    ),
+  ).rejects.toThrow('100');
+});

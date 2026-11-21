@@ -254,7 +254,7 @@ export async function extractOffice(
           anchorParser.end();
           sheet.mergeLimited ||= anchorSheet.truncated || anchorBudget.truncated;
           for (const merge of sheet.merges ?? [])
-            if (!merge.anchor)
+            if (!merge.anchor && anchors.has(columnName(merge.fromColumn) + merge.fromRow))
               merge.anchor = anchorSheet.rows
                 .find((row) => row.row === merge.fromRow)
                 ?.cells.find((cell) => cell.column === merge.fromColumn) ?? {

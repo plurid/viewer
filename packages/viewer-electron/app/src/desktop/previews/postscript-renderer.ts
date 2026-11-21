@@ -12,7 +12,7 @@ import { errorMessage } from '../../domain/errors';
 import { diagnosticFailure } from '../../domain/diagnostics/failure';
 import type { DiagnosticErrorFields } from '../../domain/diagnostics/failure';
 import { previewInput } from './input-copy';
-import { withPostScriptStage } from './postscript-stage';
+import { PostScriptStageError, withPostScriptStage } from './postscript-stage';
 import { runProcessor } from '../transforms/process';
 import { readPostScript } from './postscript';
 
@@ -172,6 +172,14 @@ export class Ghostscript {
         return { data, extension: 'pdf', kind: 'postscript', decoder: `Ghostscript ${version}` };
       });
     } catch (error) {
+      // Scratch safety and Trash failures must be reported even when the person canceled rendering.
+      if (error instanceof PostScriptStageError) {
+        this.options.diagnose?.(
+          `PostScript scratch failure: ${error.message}`,
+          diagnosticFailure(error),
+        );
+        throw error;
+      }
       if (signal.aborted) throw new Error('PostScript rendering was canceled.');
       const message = errorMessage(error);
       const engine = version ? `Ghostscript ${version}` : 'Ghostscript';

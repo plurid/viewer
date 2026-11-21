@@ -144,6 +144,9 @@ export const mediaFormats = [
   'ts',
   'm2ts',
 ] as const;
+export const editableMedia = (entry: { kind: string; extension: string }): boolean =>
+  entry.kind === 'file' &&
+  (mediaFormats as readonly string[]).includes(entry.extension.toLowerCase());
 export function validateTransform(value: unknown, sources: number): TransformPlan {
   const plan = transformPlanSchema.parse(value);
   const most =

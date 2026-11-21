@@ -140,7 +140,7 @@ export const agentToolCatalog = {
   },
   propose_selection: {
     description:
-      'Select specific granted files in the captured folder after user review. Empty paths clears selection.',
+      'Select specific granted files in the captured folder after user review. Empty paths clears selection. Each MCP request line is limited to 65,536 bytes, so split large path lists into smaller calls.',
     capability: 'navigation',
     input: z.object({ paths: z.array(path).max(2000) }).strict(),
   },
@@ -234,7 +234,8 @@ export const agentToolCatalog = {
       .strict(),
   },
   run_action: {
-    description: 'Run a recipe to create a proposal. The user must review file changes in Viewer.',
+    description:
+      'Run a recipe to create a proposal. The user must review file changes in Viewer. Each MCP request line is limited to 65,536 bytes, so split large path lists into smaller calls.',
     capability: 'propose',
     input: z
       .object({

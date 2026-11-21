@@ -2,6 +2,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import path from 'node:path';
 import { Trash } from '../src/desktop/operations/trash';
+import { createAccessHandlers } from '../src/desktop/ipc/access-handlers';
 import {
   applicationsPath,
   linuxMounts,
@@ -10,9 +11,14 @@ import {
 import { trashName, forbiddenTrashCommands } from '../src/domain/files/trash';
 import { agentCommandID } from '../src/domain/agents/safety';
 import type { FileAccess } from '../src/desktop/files/file-access';
+import type { Operations } from '../src/desktop/operations/operations';
 import type { BrowserWindow } from 'electron';
 
 const mock = vi.hoisted(() => ({
+  volumes: [
+    { path: '/', name: 'Local' },
+    { path: '/Volumes/External', name: 'External' },
+  ] as { path: string; name: string; ignoreOwnership?: boolean }[],
   files: new Map<
     string,
     {
@@ -39,10 +45,7 @@ const mock = vi.hoisted(() => ({
 }));
 vi.mock('../src/desktop/native/macos-files', () => ({
   macFiles: () => ({
-    volumes: async () => [
-      { path: '/', name: 'Local' },
-      { path: '/Volumes/External', name: 'External' },
-    ],
+    volumes: async () => mock.volumes,
     trashConfirmation: mock.native,
     renameExclusive: mock.move,
     datesAdded: mock.dates,
@@ -85,6 +88,10 @@ const window = { isDestroyed: () => false } as BrowserWindow;
 let access: { require: ReturnType<typeof vi.fn>; remember: ReturnType<typeof vi.fn> };
 beforeEach(() => {
   vi.clearAllMocks();
+  mock.volumes = [
+    { path: '/', name: 'Local' },
+    { path: '/Volumes/External', name: 'External' },
+  ];
   mock.files.clear();
   mock.open.mockReset();
   mock.move.mockReset();
@@ -235,6 +242,7 @@ it('opens native UI with the sealed inventory and exposes no emptying method', a
     'preview',
     'copyPaths',
     'chooseRestoreFolder',
+    'restoreFootprint',
     'restore',
     'requestAccess',
     'confirmation',
@@ -543,4 +551,115 @@ it('rechecks destination identity after the preflight and keeps sources on a rac
     'destination changed',
   );
   expect(mock.move).not.toHaveBeenCalled();
+});
+it('lists and restores Trash items on a volume without POSIX ownership while keeping strict checks on APFS', async () => {
+  const uid = process.getuid!();
+  mock.volumes = [
+    { path: '/', name: 'Local' },
+    { path: '/Volumes/USB', name: 'USB', ignoreOwnership: true },
+    { path: '/Volumes/APFS', name: 'APFS', ignoreOwnership: false },
+  ];
+  mock.files.set('/Volumes/USB/.Trashes', {
+    directory: true,
+    uid,
+    ino: 10,
+    mode: 0o40777,
+    size: 64,
+    modified: 1000,
+  });
+  mock.files.set(`/Volumes/USB/.Trashes/${uid}`, {
+    directory: true,
+    uid,
+    ino: 11,
+    mode: 0o40777,
+    size: 64,
+    modified: 1000,
+  });
+  mock.files.set(`/Volumes/USB/.Trashes/${uid}/Photo.jpg`, {
+    directory: false,
+    uid,
+    ino: 12,
+    mode: 0o100777,
+    size: 50,
+    modified: 1000,
+  });
+  mock.files.set('/Volumes/USB/Restored', {
+    directory: true,
+    uid,
+    ino: 13,
+    mode: 0o40777,
+    size: 64,
+    modified: 1000,
+  });
+  const trash = service();
+  const snapshot = await trash.list();
+  expect(snapshot.locations.find((loc) => loc.name === 'USB')?.state).toBe('ready');
+  expect(snapshot.items.map((item) => item.name)).toContain('Photo.jpg');
+  expect(snapshot.canEmpty).toBe(true);
+  const photo = snapshot.items.find((item) => item.name === 'Photo.jpg')!;
+  expect(await trash.restore(window, [photo.id], { folder: '/Volumes/USB/Restored' })).toEqual({
+    restored: 1,
+    cancelled: false,
+  });
+  expect(mock.files.get('/Volumes/USB/Restored/Photo.jpg')?.ino).toBe(12);
+  // A POSIX volume with 0777 / no sticky bit is still rejected.
+  mock.files.set('/Volumes/APFS/.Trashes', {
+    directory: true,
+    uid,
+    ino: 20,
+    mode: 0o40777,
+    size: 64,
+    modified: 1000,
+  });
+  mock.files.set(`/Volumes/APFS/.Trashes/${uid}`, {
+    directory: true,
+    uid,
+    ino: 21,
+    mode: 0o40777,
+    size: 64,
+    modified: 1000,
+  });
+  const strict = await service().list();
+  expect(strict.locations.find((loc) => loc.name === 'APFS')?.state).toBe('unavailable');
+  expect(strict.canEmpty).toBe(false);
+  expect(
+    linuxMounts(
+      '1 0 8:1 / /media/USB rw - exfat /dev/sdb1 rw\n2 0 8:2 / /media/Ext rw - ext4 /dev/sdc1 rw',
+    ),
+  ).toEqual([
+    { path: '/media/USB', name: 'USB', ignoreOwnership: true },
+    { path: '/media/Ext', name: 'Ext' },
+  ]);
+});
+it('passes the Trash item and destination paths as the exclusive footprint for Put Back', async () => {
+  add(home + '/Documents', true, 50);
+  add(home + '/Chosen', true, 51);
+  const trash = new Trash(home, access as unknown as FileAccess, { origins });
+  const top = await trash.list();
+  const itemID = top.items[0]!.id;
+  const footprints: string[][] = [];
+  const exclusive: Operations['exclusive'] = async (work, footprint) => {
+    footprints.push(footprint ? footprint() : []);
+    return work(async () => {});
+  };
+  const handlers = createAccessHandlers({
+    fileAccess: { scoped: false, list: vi.fn(), revoke: vi.fn(), withBlocked: vi.fn() },
+    selections: { revoke: vi.fn() },
+    resources: { affected: vi.fn() },
+    files: { reset: vi.fn() },
+    operations: { exclusive },
+    trash,
+    requireWindow: () => window,
+    quiesceRoot: vi.fn(),
+    refreshIndex: vi.fn(),
+    emit: vi.fn(),
+  });
+  await handlers.trashRestore([[itemID], 'original'], 1);
+  expect(footprints[0]).toEqual([root + '/Notes.txt', home + '/Documents/Notes.txt']);
+  add(root + '/Second.txt', false, 60);
+  const refreshed = await trash.list();
+  const secondID = refreshed.items.find((item) => item.name === 'Second.txt')!.id;
+  mock.open.mockResolvedValue({ canceled: false, filePaths: [home + '/Chosen'] });
+  await handlers.trashRestore([[secondID], 'choose'], 1);
+  expect(footprints[1]).toEqual([root + '/Second.txt', home + '/Chosen/Second.txt']);
 });

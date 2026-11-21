@@ -362,6 +362,39 @@ describe('drop effect of a drag Viewer started (2026-10-20)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(over('/Volumes/Other/Folder')).toBe('copy');
   });
+  it('ignores a plain or move drop back onto its own folder while keeping Option-drag copy', async () => {
+    vi.useRealTimers();
+    const operate = vi.fn(async () => 'job-1');
+    Object.assign(window, { viewer: { ...viewer, operate } });
+    const { result } = renderHook(() => useFileDrop(() => '/Work'));
+    const drop = async (options: { altKey?: boolean; metaKey?: boolean } = {}) => {
+      const root = document.createElement('div');
+      document.body.append(root);
+      const event = {
+        dataTransfer: {
+          types: ['application/x-viewer-files'],
+          getData: () => JSON.stringify(['/Work/Report.pdf']),
+        },
+        currentTarget: root,
+        target: root,
+        altKey: !!options.altKey,
+        metaKey: !!options.metaKey,
+        preventDefault: () => {},
+        stopPropagation: () => {},
+      };
+      await result.current.onDrop(event as never);
+      root.remove();
+    };
+    await drop();
+    await drop({ metaKey: true });
+    expect(operate).not.toHaveBeenCalled();
+    await drop({ altKey: true });
+    expect(operate).toHaveBeenCalledExactlyOnceWith({
+      kind: 'copy',
+      sources: ['/Work/Report.pdf'],
+      destination: '/Work',
+    });
+  });
 });
 describe('scroll memory (2026-10-20)', () => {
   // One value was shared by every view mode, restored into the first column whichever column was

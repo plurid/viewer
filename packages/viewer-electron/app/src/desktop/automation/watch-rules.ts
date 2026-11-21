@@ -6,6 +6,7 @@ import { DocumentStore } from '../persistence/document-store';
 import { watchDirectory, type DirectoryWatch } from '../files/directory-watch';
 import { entry } from '../files/filesystem';
 import { sourceVersion, sameSourceVersion } from '../../domain/files/inspection';
+import type { SourceVersion } from '../../domain/files/inspection';
 import { resolveProjectPath } from '../../domain/workspaces/project';
 import { workflowReferences, workflowUsesSelection } from '../../domain/automation/workflows';
 import {
@@ -32,6 +33,8 @@ function publicRule(rule: StoredWatchRule): WatchRule {
 interface OwnedWatch {
   watcher: DirectoryWatch;
   timer?: ReturnType<typeof setTimeout>;
+  dueAt?: number;
+  settling: Map<string, SourceVersion>;
 }
 /** A private approval enables a bounded incoming-file workflow. It never applies its proposals. */
 export class WatchRules {
@@ -333,12 +336,15 @@ export class WatchRules {
   }
   private attach(rule: StoredWatchRule) {
     if (this.closed || this.watches.has(rule.id)) return;
-    const owned = {} as OwnedWatch;
+    const owned: OwnedWatch = {
+      watcher: undefined as unknown as DirectoryWatch,
+      settling: new Map(),
+    };
     owned.watcher = (this.dependencies.watch ?? watchDirectory)(rule.scope.root, {
       recursive: rule.scope.recursive,
       ignored: (file) => containsPath(this.directory, file) || file === rule.scope.file,
       changed: () => {
-        if (this.watches.get(rule.id) === owned) this.schedule(rule);
+        if (this.watches.get(rule.id) === owned) this.schedule(rule, 1000, true);
       },
       failed: (error) => {
         void this.serial(async () => {
@@ -348,19 +354,38 @@ export class WatchRules {
     });
     this.watches.set(rule.id, owned);
   }
-  private schedule(rule: StoredWatchRule, minimum = 1000) {
+  private schedule(rule: StoredWatchRule, minimum = 1000, reset = false) {
     const owned = this.watches.get(rule.id);
-    if (!owned || owned.timer || !rule.enabled || this.closed) return;
-    const delay = minimum;
+    if (!owned || !rule.enabled || this.closed) return;
+    const dueAt = this.now() + minimum;
+    if (owned.timer) {
+      if (!reset || (owned.dueAt !== undefined && owned.dueAt > dueAt)) return;
+      clearTimeout(owned.timer);
+      owned.timer = undefined;
+    }
+    owned.dueAt = dueAt;
     owned.timer = setTimeout(() => {
       owned.timer = undefined;
+      owned.dueAt = undefined;
       void this.serial(() => this.reconcile(rule)).catch(() => {});
-    }, delay);
+    }, minimum);
     owned.timer.unref?.();
   }
   private async refresh(rule: StoredWatchRule) {
     if (!rule.runID) return;
-    const result = await this.dependencies.workflows.request({ kind: 'get', id: rule.runID });
+    let result: Awaited<ReturnType<typeof this.dependencies.workflows.request>>;
+    try {
+      result = await this.dependencies.workflows.request({ kind: 'get', id: rule.runID });
+    } catch (error) {
+      if (errorMessage(error) === 'Viewer has no record of this workflow run.') {
+        rule.runID = undefined;
+        rule.runStatus = undefined;
+        await this.save();
+        this.dependencies.changed(publicRule(rule));
+        return;
+      }
+      throw error;
+    }
     if (!result || typeof result !== 'object' || Array.isArray(result) || !('status' in result))
       throw new Error(
         'Viewer has no record of the rule’s last run. Review the rule before continuing.',
@@ -373,7 +398,8 @@ export class WatchRules {
     return result;
   }
   private async reconcile(rule: StoredWatchRule) {
-    if (!rule.enabled || this.closed || !this.watches.has(rule.id)) return;
+    const owned = this.watches.get(rule.id);
+    if (!rule.enabled || this.closed || !owned) return;
     try {
       const { excluded } = await this.check(rule);
       const result = await this.refresh(rule);
@@ -406,9 +432,29 @@ export class WatchRules {
         throw new Error(
           'More than 50 files changed. Review them manually, then enable this rule again.',
         );
-      // Write the consumed baseline before starting. A crash cannot silently replay a mutation proposal.
-      rule.baseline = snapshot;
-      if (!changed.length) {
+      // Wait for each changed file to hold the same size and timestamp across two scans so
+      // copies still being written do not fail workflow source validation.
+      const ready: typeof changed = [];
+      const pendingSettle = new Map<string, SourceVersion>();
+      for (const file of changed) {
+        const seen = owned.settling.get(file.path);
+        if (seen && sameSourceVersion(seen, file.version)) ready.push(file);
+        else pendingSettle.set(file.path, file.version);
+      }
+      owned.settling = pendingSettle;
+      // Write the consumed baseline before starting. Unsettled files stay at their prior baseline
+      // so the next scan still detects them once writing finishes.
+      const nextBaseline: typeof snapshot = [];
+      for (const file of snapshot) {
+        if (!pendingSettle.has(file.path)) nextBaseline.push(file);
+        else {
+          const prior = previous.get(file.path);
+          if (prior) nextBaseline.push({ path: file.path, version: prior });
+        }
+      }
+      rule.baseline = nextBaseline;
+      if (pendingSettle.size) this.schedule(rule);
+      if (!ready.length) {
         await this.save();
         return;
       }
@@ -425,7 +471,7 @@ export class WatchRules {
           paneID: rule.id,
           rootID: rule.id,
           actor: 'user',
-          sources: changed.map((file) => file.path),
+          sources: ready.map((file) => file.path),
         },
         watch: { id: rule.id, approval: rule.approval },
       });

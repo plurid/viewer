@@ -42,7 +42,7 @@ const fileLimits: Record<SceneFormat, number> = {
 const geometryLimit = () => new Error('This model exceeds the geometry limit for previews.');
 const depthLimit = 1000;
 
-function fileName(url: string): string {
+export function fileName(url: string): string {
   const name = url.split(/[?#]/)[0]!.split(/[\\/]/).pop() || url;
   try {
     return decodeURIComponent(name);

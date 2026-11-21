@@ -214,10 +214,11 @@ export class FileServices {
     }
     return { ...value, tagged };
   }
-  async query(value: IndexedQuery) {
+  async query(value: IndexedQuery, signal?: AbortSignal) {
+    signal?.throwIfAborted();
     const revision = this.revision;
     if (value.root) await this.requireLocal([value.root]);
-    const result = await this.index.call('query', [await this.tagged(value)]);
+    const result = await this.index.call('query', [await this.tagged(value)], signal);
     if (revision !== this.revision) throw new Error('Search configuration changed. Search again.');
     if (value.root) await this.requireLocal([value.root]);
     await this.requireLocal(result.entries.map((entry) => entry.path));

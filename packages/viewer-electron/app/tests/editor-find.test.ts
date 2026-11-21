@@ -110,3 +110,22 @@ it('closes with Escape, back to the text, with no matches left marked', async ()
   modF(cm);
   await waitFor(() => expect(field().value).toBe('alpha'));
 });
+
+it('does not flash Invalid pattern on initial open, closes on Escape from buttons, and focuses Find on Mod+F in Replace', async () => {
+  const { view, cm, field, count } = await show();
+  act(() => cm.dispatch({ selection: { anchor: 0, head: 5 } }));
+  modF(cm);
+  // Immediately after opening (before requestAnimationFrame), valid selected text must not flash Invalid pattern
+  expect(count()).not.toBe('Invalid pattern');
+  await waitFor(() => expect(count()).toBe('1 / 3'));
+  fireEvent.click(view.getByRole('button', { name: 'Show Replace' }));
+  const replaceInput = view.getByRole('textbox', { name: 'Replace' }) as HTMLInputElement;
+  replaceInput.focus();
+  expect(document.activeElement).toBe(replaceInput);
+  fireEvent.keyDown(replaceInput, { key: 'f', ctrlKey: true });
+  expect(document.activeElement).toBe(field());
+  const matchCase = view.getByRole('button', { name: 'Match case' });
+  matchCase.focus();
+  fireEvent.keyDown(matchCase, { key: 'Escape' });
+  await waitFor(() => expect(view.container.querySelector('.editor-find')).toBeNull());
+});

@@ -174,6 +174,7 @@ export const workflowRunSchema = z
     created: z.number(),
     updated: z.number(),
     status: z.enum(['running', 'paused', 'waiting-review', 'completed', 'failed', 'cancelled']),
+    error: z.string().max(2000).optional(),
     definition: workflowDefinitionSchema,
     bindings: z.record(id, z.string().max(32768)),
     context: z

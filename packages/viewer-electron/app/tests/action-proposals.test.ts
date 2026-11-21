@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import path from 'node:path';
 import {
+  localPublication,
   mergeApproval,
   publicationName,
   reviewModelRows,
@@ -106,5 +107,43 @@ describe('action proposals', () => {
     expect(stoppedStatus([change('a', { stagedPath: '/staged' })], true)).toBe('partial');
     expect(stoppedStatus([change('a')], true)).toBe('cancelled');
     expect(stoppedStatus([change('a')], false)).toBe('failed');
+  });
+  it('bounds retained evidence per row in localPublication and reviewModelRows', () => {
+    const huge = Array.from({ length: 20 }, (_, index) => ({
+      source: `page:${index + 1}`,
+      text: 'x'.repeat(20_000),
+    }));
+    const local = localPublication(
+      file('Book.pdf'),
+      {
+        path: path.join(folder, 'Book.pdf'),
+        metadata: { title: 'Title', author: 'Author', date: '2024', publisher: 'Press' },
+        evidence: huge,
+        text: '',
+        truncated: false,
+      },
+      '{year}, {authors}, {title}, {publisher}{extension}',
+    );
+    const localChars = local.evidence.reduce((sum, item) => sum + item.text.length, 0);
+    expect(localChars).toBeLessThanOrEqual(4000);
+    expect(local.evidence.every((item) => item.text.length <= 2000)).toBe(true);
+
+    const rename = builtInRecipes.find((recipe) => recipe.id === 'rename')!;
+    const reviewed = [
+      ...reviewModelRows(
+        [
+          {
+            ...modelRow('0', 'Renamed.pdf'),
+            evidence: [{ field: 'name' as const, source: 'page:1', text: 'y'.repeat(10_000) }],
+          },
+        ],
+        [file('Book.pdf')],
+        new Map(),
+        rename,
+      ),
+    ];
+    expect(
+      reviewed[0]?.kind === 'destination' && reviewed[0].evidence[0]!.text.length,
+    ).toBeLessThanOrEqual(2000);
   });
 });

@@ -229,7 +229,7 @@ export function UnknownFile(context: PreviewContext) {
           {identity && own && (
             <button onClick={() => show(own)}>{titleCase(`Show as ${identity.label}`)}</button>
           )}
-          {getState().bootstrap.platform === 'darwin' && (
+          {context.openInApp && getState().bootstrap.platform === 'darwin' && (
             <button
               onClick={() => {
                 void window.viewer.nativeFilePanel('preview', [resource.entry.path]).catch(report);
@@ -238,18 +238,12 @@ export function UnknownFile(context: PreviewContext) {
               Quick Look in macOS
             </button>
           )}
-          <button
-            onClick={() => {
-              void window.viewer.openExternal(resource.entry.path).catch(report);
-            }}
-          >
-            Open in Default App
-          </button>
-          {provider && (guess.kind === 'idle' || guess.kind === 'asking') && (
-            <button disabled={guess.kind === 'asking'} onClick={ask}>
-              {guess.kind === 'asking' ? `Asking ${provider.name}…` : `Ask ${provider.name}`}
-            </button>
-          )}
+          {context.openInApp && <button onClick={context.openInApp}>Open in Default App</button>}
+          {context.openInApp && provider && (guess.kind === 'idle' || guess.kind === 'asking') && (
+              <button disabled={guess.kind === 'asking'} onClick={ask}>
+                {guess.kind === 'asking' ? `Asking ${provider.name}…` : `Ask ${provider.name}`}
+              </button>
+            )}
         </div>
         {refusal && <p role="alert">{refusal}</p>}
         {guess.kind === 'answered' && (

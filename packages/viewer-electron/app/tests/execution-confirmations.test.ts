@@ -119,4 +119,76 @@ describe('first-run execution confirmations', () => {
       ).detail,
     ).toContain('/usr/bin/open -a Preview {paths}');
   });
+  it('pages scripts, executable arguments and terminal settings longer than 6,000 characters and requires every page', async () => {
+    const tail = 'TAIL_MARKER_AFTER_6000';
+    const longScript = `${'# padding\n'.repeat(1400)}${tail}`;
+    expect(longScript.length).toBeGreaterThan(14000);
+    const seen: { title: string; detail: string }[] = [];
+    const ask = vi.fn(async (input: { title: string; detail: string }) => {
+      seen.push(input);
+      return true;
+    });
+    const confirmations = new ExecutionConfirmations(root, ask);
+    await confirmations.require(shell(longScript));
+    expect(seen.length).toBeGreaterThan(2);
+    expect(seen.every((page) => page.detail.length <= 6000)).toBe(true);
+    expect(seen.map((page) => page.detail).join('')).toContain(tail);
+    // Approving once remembers the exact full executor fingerprint across reloads.
+    const reloaded = new ExecutionConfirmations(root, ask);
+    await reloaded.require(shell(longScript));
+    expect(ask).toHaveBeenCalledTimes(seen.length);
+
+    // Declining a later page refuses and records no approval.
+    let calls = 0;
+    const partial = vi.fn(async () => ++calls % 2 === 1);
+    const declining = new ExecutionConfirmations(root, partial);
+    await expect(declining.require(shell(longScript + '\n# two'))).rejects.toThrow('not confirmed');
+    expect(partial).toHaveBeenCalledTimes(2);
+    await expect(declining.require(shell(longScript + '\n# two'))).rejects.toThrow('not confirmed');
+    expect(partial).toHaveBeenCalledTimes(4);
+
+    // Long executable arguments, terminal profile args and tmux options are paged too.
+    const longExecSeen: { detail: string }[] = [];
+    const longExec = new ExecutionConfirmations(root, async (input) => {
+      longExecSeen.push(input);
+      return true;
+    });
+    await longExec.require(
+      action({
+        kind: 'executable',
+        executable: '/usr/bin/tool',
+        args: ['--pad=' + 'x'.repeat(6500), '--tail=' + tail],
+        perItem: false,
+      }),
+    );
+    expect(longExecSeen.length).toBeGreaterThan(1);
+    expect(longExecSeen.every((page) => page.detail.length <= 6000)).toBe(true);
+    expect(longExecSeen.map((page) => page.detail).join('')).toContain(tail);
+
+    const longTermSeen: { detail: string }[] = [];
+    const longTerm = new ExecutionConfirmations(root, async (input) => {
+      longTermSeen.push(input);
+      return true;
+    });
+    await longTerm.requireTerminal({
+      id: 'long',
+      name: 'Long',
+      executable: '/bin/sh',
+      args: ['-c', 'a'.repeat(6500) + tail],
+      env: {},
+    });
+    expect(longTermSeen.length).toBeGreaterThan(1);
+    expect(longTermSeen.every((page) => page.detail.length <= 6000)).toBe(true);
+    expect(longTermSeen.map((page) => page.detail).join('')).toContain(tail);
+
+    const longTmuxSeen: { detail: string }[] = [];
+    const longTmux = new ExecutionConfirmations(root, async (input) => {
+      longTmuxSeen.push(input);
+      return true;
+    });
+    await longTmux.requireTmux('/opt/tmux', '/' + 'a'.repeat(6500) + '/' + tail, {});
+    expect(longTmuxSeen.length).toBeGreaterThan(1);
+    expect(longTmuxSeen.every((page) => page.detail.length <= 6000)).toBe(true);
+    expect(longTmuxSeen.map((page) => page.detail).join('')).toContain(tail);
+  });
 });

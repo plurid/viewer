@@ -98,7 +98,11 @@ const job = z
       .max(10000),
     errorCount: count,
     collision: z
-      .object({ source: file, destination: file, replaceable: z.boolean().optional() })
+      .object({
+        source: z.union([z.literal(''), file]),
+        destination: file,
+        replaceable: z.boolean().optional(),
+      })
       .optional(),
     undoable: z.boolean(),
     dismissed: z.boolean().optional(),
@@ -277,6 +281,7 @@ const event = z.discriminatedUnion('t', [
   z.object({ t: z.literal('completed'), items: z.array(completedItem).max(10000) }).strict(),
   z.object({ t: z.literal('errors'), items: z.array(errorItem).max(10000) }).strict(),
   z.object({ t: z.literal('undo'), steps: z.array(undoStepSchema).max(30000) }).strict(),
+  z.object({ t: z.literal('undo-keep'), count: z.number().int().min(0).max(30000) }).strict(),
   z.object({ t: z.literal('undo-set'), undo: z.array(undoStepSchema).max(30000) }).strict(),
   z.object({ t: z.literal('intent'), intent: intent.nullable() }).strict(),
 ]);
@@ -286,8 +291,7 @@ interface Written {
   sequence: number;
   completed: number;
   errors: number;
-  undo: number;
-  lastUndo?: object;
+  undoSteps: OperationReceipt['undo'];
   meta: string;
   intent: string;
 }
@@ -398,7 +402,11 @@ export class OperationLog {
       else if (value.t === 'completed') receipt.job.completed.push(...value.items);
       else if (value.t === 'errors') receipt.job.errors.push(...value.items);
       else if (value.t === 'undo') receipt.undo.push(...value.steps);
-      else if (value.t === 'undo-set') receipt.undo = value.undo;
+      else if (value.t === 'undo-keep') {
+        if (value.count > receipt.undo.length)
+          throw new Error('The undo record length is out of bounds.');
+        receipt.undo.length = value.count;
+      } else if (value.t === 'undo-set') receipt.undo = value.undo;
       else receipt.intent = value.intent ?? undefined;
     }
     if (!start || !receipt) throw new Error('The record is empty.');
@@ -418,8 +426,7 @@ export class OperationLog {
     return {
       completed: receipt.job.completed.length,
       errors: receipt.job.errors.length,
-      undo: receipt.undo.length,
-      lastUndo: receipt.undo.at(-1),
+      undoSteps: [...receipt.undo],
       meta: JSON.stringify(metaOf(receipt)),
       intent: JSON.stringify(receipt.intent ?? null),
     };
@@ -480,12 +487,22 @@ export class OperationLog {
         events.push({ t: 'completed', items: receipt.job.completed.slice(written.completed) });
       if (receipt.job.errors.length > written.errors)
         events.push({ t: 'errors', items: receipt.job.errors.slice(written.errors) });
-      const undoKept =
-        receipt.undo.length >= written.undo &&
-        (written.undo === 0 || receipt.undo[written.undo - 1] === written.lastUndo);
-      if (!undoKept) events.push({ t: 'undo-set', undo: receipt.undo });
-      else if (receipt.undo.length > written.undo)
-        events.push({ t: 'undo', steps: receipt.undo.slice(written.undo) });
+      const samePrefix = (length: number) => {
+        for (let index = 0; index < length; index++)
+          if (receipt.undo[index] !== written.undoSteps[index]) return false;
+        return true;
+      };
+      if (receipt.undo.length >= written.undoSteps.length && samePrefix(written.undoSteps.length)) {
+        if (receipt.undo.length > written.undoSteps.length)
+          events.push({ t: 'undo', steps: receipt.undo.slice(written.undoSteps.length) });
+      } else if (
+        receipt.undo.length < written.undoSteps.length &&
+        samePrefix(receipt.undo.length)
+      ) {
+        events.push({ t: 'undo-keep', count: receipt.undo.length });
+      } else {
+        events.push({ t: 'undo-set', undo: receipt.undo });
+      }
       const intentText = JSON.stringify(receipt.intent ?? null);
       if (intentText !== written.intent)
         events.push({ t: 'intent', intent: receipt.intent ?? null });

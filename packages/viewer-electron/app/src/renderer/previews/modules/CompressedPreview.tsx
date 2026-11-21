@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useId, useMemo, useState } from 'react';
 import type { ComponentType } from 'react';
 import type { ArchiveEntry, FileEntry, Resource } from '../../../domain/contracts';
 import type { PreviewContext } from '../contracts';
-import { PreviewToolbar } from '../controls';
+import { PreviewFrameContext } from '../controls';
 import { choosePreview } from '../registry';
 import { preloadPreviewModule } from '../module-loading';
 import { Empty, Failure, Loading } from '../../ui/primitives';
@@ -40,6 +40,16 @@ export default function CompressedPreview(context: PreviewContext) {
   const module = choosePreview(inner);
   const readable = textModules.includes(module.id);
   const [expansion, setExpansion] = useState<Expansion>({ state: 'reading' });
+  const { details } = useContext(PreviewFrameContext);
+  const detailID = useId();
+  const expandedDetail =
+    expansion.state === 'shown'
+      ? `Expanded from gzip · ${formatBytes(expansion.shown.entry.size)}`
+      : '';
+  useEffect(
+    () => details(detailID, expandedDetail ? [expandedDetail] : []),
+    [details, detailID, expandedDetail],
+  );
   useEffect(() => {
     let live = true,
       owned: Resource | undefined;
@@ -95,9 +105,6 @@ export default function CompressedPreview(context: PreviewContext) {
   const { shown, Viewer } = expansion;
   return (
     <div className="compressed-viewer">
-      <PreviewToolbar context={context}>
-        <span className="muted">Expanded from gzip · {formatBytes(shown.entry.size)}</span>
-      </PreviewToolbar>
       <Viewer {...context} resource={shown} editing={undefined} />
     </div>
   );

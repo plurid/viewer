@@ -156,6 +156,8 @@ struct Work {
   bool directory = false;
   bool hidden = false;
   bool allowReservation = false;
+  bool deferRestrictions = false;
+  bool deferred = false;
   viewer_rename::Result renameResult;
   NSArray<NSDictionary *> *volumes = nil;
   NSArray<NSString *> *files = nil;
@@ -290,11 +292,55 @@ static void execute(napi_env, void *data) {
       } else if (errno != ENOENT || !bookmark || ![NSURL writeBookmarkData:bookmark toURL:destination options:0 error:&error])
         task->error = error.localizedDescription ?: @"Could not create the Finder alias.";
     } else if (task->kind == Kind::Clone) {
-      // An APFS clone shares the source's blocks until either changes. It is made exclusively, from
-      // the descriptor whose identity the caller checked, with the source's attributes and ACLs.
-      if (fclonefileat(task->source, AT_FDCWD, task->targetFile.fileSystemRepresentation, CLONE_NOFOLLOW | CLONE_NOOWNERCOPY | CLONE_ACL) != 0) {
-        task->errorNumber = errno;
-        task->error = [NSString stringWithFormat:@"Could not clone the file: %s", std::strerror(errno)];
+      // An APFS clone shares the source's blocks until either changes. When staging a root item
+      // that will be renamed out of its private stage, defer ACLs and rename-blocking flags until
+      // after publication so immutable or deny-delete sources can be published cleanly.
+      bool defer = false;
+      bool inspected = true;
+      if (task->deferRestrictions) {
+        struct stat sourceStat{};
+        if (fstat(task->source, &sourceStat) != 0) {
+          task->errorNumber = errno;
+          task->error = [NSString stringWithFormat:@"Could not inspect the file before cloning: %s", std::strerror(errno)];
+          inspected = false;
+        } else {
+          acl_t acl = acl_get_fd_np(task->source, ACL_TYPE_EXTENDED);
+          bool hasACL = false;
+          if (acl) {
+            acl_entry_t entry{};
+            hasACL = acl_get_entry(acl, ACL_FIRST_ENTRY, &entry) == 0;
+            acl_free(acl);
+          }
+          defer = hasACL || (sourceStat.st_flags & (UF_IMMUTABLE | UF_APPEND)) != 0;
+        }
+      }
+      if (inspected) {
+        const uint32_t cloneFlags = defer
+          ? (CLONE_NOFOLLOW | CLONE_NOOWNERCOPY)
+          : (CLONE_NOFOLLOW | CLONE_NOOWNERCOPY | CLONE_ACL);
+        if (fclonefileat(task->source, AT_FDCWD, task->targetFile.fileSystemRepresentation, cloneFlags) != 0) {
+          task->errorNumber = errno;
+          task->error = [NSString stringWithFormat:@"Could not clone the file: %s", std::strerror(errno)];
+        } else if (defer) {
+          int fd = open(task->targetFile.fileSystemRepresentation, O_EVTONLY | O_NOFOLLOW | O_CLOEXEC);
+          if (fd < 0) {
+            task->errorNumber = errno;
+            task->error = [NSString stringWithFormat:@"Could not prepare the staged clone: %s", std::strerror(errno)];
+          } else {
+            struct stat clonedStat{};
+            if (fstat(fd, &clonedStat) != 0) {
+              task->errorNumber = errno;
+              task->error = [NSString stringWithFormat:@"Could not inspect the staged clone: %s", std::strerror(errno)];
+            } else if ((clonedStat.st_flags & (UF_IMMUTABLE | UF_APPEND)) != 0 &&
+              fchflags(fd, clonedStat.st_flags & ~(UF_IMMUTABLE | UF_APPEND)) != 0) {
+              task->errorNumber = errno;
+              task->error = [NSString stringWithFormat:@"Could not unlock the staged clone: %s", std::strerror(errno)];
+            } else {
+              task->deferred = true;
+            }
+            close(fd);
+          }
+        }
       }
     } else if (task->kind == Kind::Metadata) {
       if (fcopyfile(task->source, task->target, nullptr, COPYFILE_METADATA) != 0)
@@ -373,13 +419,23 @@ static void execute(napi_env, void *data) {
       for (NSURL *url in urls) {
         if (volumes.count >= 512) break;
         NSDictionary *values = [url resourceValuesForKeys:keys error:nil];
+        bool ignoreOwnership = false;
+        if (![url.path isEqualToString:@"/"]) {
+          struct statfs volume{};
+          if (statfs(url.fileSystemRepresentation, &volume) == 0) {
+            ignoreOwnership = (volume.f_flags & MNT_IGNORE_OWNERSHIP) != 0 ||
+              std::strcmp(volume.f_fstypename, "exfat") == 0 ||
+              std::strcmp(volume.f_fstypename, "msdos") == 0;
+          }
+        }
         [volumes addObject:@{
           @"path": url.path, @"name": values[NSURLVolumeNameKey] ?: url.lastPathComponent,
           @"total": values[NSURLVolumeTotalCapacityKey] ?: @0,
           @"available": values[NSURLVolumeAvailableCapacityKey] ?: @0,
           @"removable": values[NSURLVolumeIsRemovableKey] ?: @NO,
           @"ejectable": values[NSURLVolumeIsEjectableKey] ?: @NO,
-          @"readOnly": values[NSURLVolumeIsReadOnlyKey] ?: @NO
+          @"readOnly": values[NSURLVolumeIsReadOnlyKey] ?: @NO,
+          @"ignoreOwnership": @(ignoreOwnership)
         }];
       }
       task->volumes = volumes;
@@ -450,10 +506,11 @@ static void complete(napi_env env, napi_status status, void *data) {
         napi_value item; napi_create_object(env, &item);
         property(env, item, "path", text(env, volume[@"path"])); property(env, item, "name", text(env, volume[@"name"]));
         property(env, item, "total", number(env, [volume[@"total"] doubleValue])); property(env, item, "available", number(env, [volume[@"available"] doubleValue]));
-        for (NSString *key in @[@"removable", @"ejectable", @"readOnly"]) property(env, item, key.UTF8String, boolean(env, [volume[key] boolValue]));
+        for (NSString *key in @[@"removable", @"ejectable", @"readOnly", @"ignoreOwnership"]) property(env, item, key.UTF8String, boolean(env, [volume[key] boolValue]));
         napi_set_element(env, result, index++, item);
       }
     }
+    if (task->kind == Kind::Clone && task->deferRestrictions) result = boolean(env, task->deferred);
     if (task->kind == Kind::DatesAdded) {
       napi_create_array(env, &result); uint32_t index = 0;
       for (NSDictionary *date in task->dates) {
@@ -493,11 +550,17 @@ static napi_value metadata(napi_env env, napi_callback_info info) {
   Work *task = new Work{}; task->kind = Kind::Metadata; task->source = source; task->target = target; return queue(env, task);
 }
 static napi_value clone(napi_env env, napi_callback_info info) {
-  size_t count = 2; napi_value args[2]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
+  size_t count = 3; napi_value args[3]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
   int32_t source;
-  NSString *target = count == 2 ? stringArg(env, args[1]) : nil;
-  if (count != 2 || napi_get_value_int32(env, args[0], &source) != napi_ok || source < 0 || !target.isAbsolutePath) return invalid(env);
-  Work *task = new Work{}; task->kind = Kind::Clone; task->source = source; task->targetFile = target; return queue(env, task);
+  NSString *target = count >= 2 ? stringArg(env, args[1]) : nil;
+  if (count < 2 || count > 3 || napi_get_value_int32(env, args[0], &source) != napi_ok || source < 0 || !target.isAbsolutePath) return invalid(env);
+  bool deferRestrictions = false;
+  if (count == 3) {
+    napi_valuetype type;
+    if (napi_typeof(env, args[2], &type) != napi_ok) return invalid(env);
+    if (type != napi_undefined && napi_get_value_bool(env, args[2], &deferRestrictions) != napi_ok) return invalid(env);
+  }
+  Work *task = new Work{}; task->kind = Kind::Clone; task->source = source; task->targetFile = target; task->deferRestrictions = deferRestrictions; return queue(env, task);
 }
 static napi_value fileWork(napi_env env, napi_callback_info info, Kind kind) {
   size_t count = 3; napi_value args[3]; napi_get_cb_info(env, info, &count, args, nullptr, nullptr);
@@ -600,6 +663,7 @@ static napi_value init(napi_env env, napi_value exports) {
   registerRemotePrompt(env, exports);
   napi_property_descriptor methods[] = {
     {"renameRecoveryVersion", nullptr, nullptr, nullptr, nullptr, number(env, 1), napi_default, nullptr},
+    {"cloneStageVersion", nullptr, nullptr, nullptr, nullptr, number(env, 1), napi_default, nullptr},
     {"trashConfirmation", nullptr, trashConfirmation, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"clipboardVersion", nullptr, clipboardVersion, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"clipboardRead", nullptr, clipboardRead, nullptr, nullptr, nullptr, napi_default, nullptr},

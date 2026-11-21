@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AgentProposal } from '../../domain/agents/requests';
-import { reviewButton, reviewNote } from '../../domain/agents/review';
+import { proposalRequester, reviewButton, reviewNote } from '../../domain/agents/review';
 import { Dialog, PathField } from '../ui/primitives';
 import { report } from '../state/store';
 import { followSnapshot } from '../state/requests';
@@ -56,7 +56,7 @@ export function AgentReview() {
         }}
       >
         <div className="agent-review-body">
-          <p>An agent requested this action.</p>
+          <p>{proposalRequester(proposal)} requested this action.</p>
           {proposal.target && (
             <>
               <PathField className="configuration-path" path={proposal.target.directory} />
@@ -80,7 +80,7 @@ export function AgentReview() {
           {error && <p role="alert">{error}</p>}
         </div>
         <footer>
-          <button type="button" disabled={busy} onClick={() => review(false)}>
+          <button type="button" data-autofocus disabled={busy} onClick={() => review(false)}>
             Reject
           </button>
           <button className="primary" disabled={busy} type="submit">

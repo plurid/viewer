@@ -251,4 +251,76 @@ describe('append-only operation log', () => {
       blocked.mockRestore();
     }
   });
+  it('writes short undo-keep deltas while undoing a large job instead of quadratic undo-set lines', async () => {
+    const files = Array.from({ length: 80 }, (_, index) => path.join(root, `move-${index}.txt`));
+    await Promise.all(files.map((file) => writeFile(file, 'contents')));
+    const destination = path.join(root, 'out');
+    await mkdir(destination);
+    const operations = new Operations(
+      async () => {},
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      data,
+    );
+    const id = operations.start({ kind: 'move', sources: files, destination });
+    await vi.waitFor(
+      () => expect(operations.all().find((job) => job.id === id)?.status).toBe('completed'),
+      { timeout: 30000, interval: 20 },
+    );
+    const chunks: string[] = [];
+    const append = (
+      OperationLog.prototype as unknown as {
+        append: (file: string, text: string, durable?: boolean) => Promise<void>;
+      }
+    ).append;
+    vi.spyOn(
+      OperationLog.prototype as unknown as {
+        append: (file: string, text: string, durable?: boolean) => Promise<void>;
+      },
+      'append',
+    ).mockImplementation(function (
+      this: OperationLog,
+      file: string,
+      text: string,
+      durable?: boolean,
+    ) {
+      chunks.push(text);
+      return append.call(this, file, text, durable);
+    });
+    await operations.undo(id);
+    await operations.close();
+    const bytes = chunks.map((text) => Buffer.byteLength(text));
+    expect(Math.max(...bytes)).toBeLessThan(2000);
+    expect(bytes.reduce((sum, size) => sum + size, 0)).toBeLessThan(files.length * 1000);
+    expect(chunks.some((text) => text.includes('"t":"undo-keep"'))).toBe(true);
+    expect(chunks.some((text) => text.includes('"t":"undo-set"'))).toBe(false);
+    // Direct replay check for undo-keep and middle removal fallback.
+    const log = new OperationLog(data);
+    await log.load();
+    const value = receipt({ status: 'completed', undoable: true });
+    delete value.intent;
+    const steps = Array.from({ length: 5 }, (_, index) => ({
+      from: path.join(root, 'out', `f-${index}`),
+      to: path.join(root, `f-${index}`),
+      identity: temporalIdentity(`1:${index + 1}`),
+      size: 0,
+      modified: 0,
+    }));
+    value.undo = [...steps];
+    await log.record(value);
+    value.undo = steps.slice(0, 3);
+    await log.record(value);
+    const reloaded = (await new OperationLog(data).load()).receipts.find(
+      (item) => item.job.id === value.job.id,
+    )!;
+    expect(reloaded.undo).toEqual(steps.slice(0, 3));
+    value.undo = [steps[0]!, steps[2]!];
+    await log.record(value);
+    const afterMiddleRemoval = (await new OperationLog(data).load()).receipts.find(
+      (item) => item.job.id === value.job.id,
+    )!;
+    expect(afterMiddleRemoval.undo).toEqual([steps[0]!, steps[2]!]);
+  }, 30_000);
 });

@@ -6,12 +6,19 @@ export interface TrashRoot {
   info?: string;
   shared?: string;
   originBase?: string;
+  /** True on filesystems that store no POSIX permission or sticky bits (such as exFAT/FAT32). */
+  ignoreOwnership?: boolean;
+}
+export interface TrashMount {
+  path: string;
+  name: string;
+  ignoreOwnership?: boolean;
 }
 export function trashRoots(
   platform: DesktopPlatform,
   home: string,
   uid: number,
-  mounts: { path: string; name: string }[],
+  mounts: TrashMount[],
   dataHome?: string,
 ): TrashRoot[] {
   if (platform === 'win32') return [];
@@ -24,10 +31,11 @@ export function trashRoots(
           path: path.join(volume.path, '.Trashes', String(uid)),
           name: volume.name,
           shared: path.join(volume.path, '.Trashes'),
+          ...(volume.ignoreOwnership ? { ignoreOwnership: true } : {}),
         })),
     ];
   const folder = dataHome && path.isAbsolute(dataHome) ? dataHome : path.join(home, '.local/share');
-  const roots = [
+  const roots: TrashRoot[] = [
     {
       path: path.join(folder, 'Trash/files'),
       info: path.join(folder, 'Trash/info'),
@@ -46,11 +54,12 @@ export function trashRoots(
         name: mount.name,
         originBase: mount.path,
         ...(base.includes('/.Trash/') ? { shared: path.join(mount.path, '.Trash') } : {}),
+        ...(mount.ignoreOwnership ? { ignoreOwnership: true } : {}),
       });
   }
   return roots;
 }
-export function linuxMounts(source: string): { path: string; name: string }[] {
+export function linuxMounts(source: string): TrashMount[] {
   const ignored = new Set([
     'proc',
     'sysfs',
@@ -61,17 +70,23 @@ export function linuxMounts(source: string): { path: string; name: string }[] {
     'overlay',
     'squashfs',
   ]);
-  const values = new Map<string, { path: string; name: string }>();
+  const noOwnershipTypes = new Set(['vfat', 'exfat', 'msdos']);
+  const values = new Map<string, TrashMount>();
   for (const line of source.split('\n')) {
     const [left, right] = line.split(' - ');
-    if (!left || !right || ignored.has(right.split(' ')[0] ?? '')) continue;
+    const filesystem = right?.split(' ')[0] ?? '';
+    if (!left || !right || ignored.has(filesystem)) continue;
     const mount = left
       .split(' ')[4]
       ?.replace(/\\(040|011|012|134)/g, (_, octal: string) =>
         String.fromCharCode(parseInt(octal, 8)),
       );
     if (!mount || mount === '/' || !path.isAbsolute(mount)) continue;
-    values.set(mount, { path: mount, name: path.basename(mount) || mount });
+    values.set(mount, {
+      path: mount,
+      name: path.basename(mount) || mount,
+      ...(noOwnershipTypes.has(filesystem) ? { ignoreOwnership: true } : {}),
+    });
   }
   return [...values.values()];
 }

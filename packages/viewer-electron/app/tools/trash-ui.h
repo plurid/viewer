@@ -1,6 +1,7 @@
 // macOS Trash erasure belongs exclusively to the native confirmation's result.
 // No erasure function, approval token or confirmation response is exported to JS.
 #include <dirent.h>
+#include <sys/mount.h>
 #include <unistd.h>
 #include <pwd.h>
 #include <vector>
@@ -138,13 +139,25 @@ static std::vector<Root> review(NSArray* requested) {
     char canonical[PATH_MAX];
     if (!realpath(file.fileSystemRepresentation, canonical) || strcmp(canonical, file.fileSystemRepresentation))
       throw std::runtime_error("A Trash location is unavailable or contains a symbolic link.");
-    if (![file isEqualToString:[home stringByAppendingPathComponent:@".Trash"]]) {
+    const bool isHome = [file isEqualToString:[home stringByAppendingPathComponent:@".Trash"]];
+    Root root{std::string(canonical), std::make_shared<FD>(open(canonical, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)), {}, {}};
+    if (fstat(root.fd->value, &root.version))
+      throw std::runtime_error("The private Trash folder changed or belongs to another user.");
+    bool ignoreOwnership = false;
+    if (!isHome) {
+      struct statfs volume{};
+      if (fstatfs(root.fd->value, &volume) == 0) {
+        ignoreOwnership = (volume.f_flags & MNT_IGNORE_OWNERSHIP) != 0 ||
+          std::strcmp(volume.f_fstypename, "exfat") == 0 ||
+          std::strcmp(volume.f_fstypename, "msdos") == 0;
+      }
       struct stat shared{};
-      if (lstat(file.stringByDeletingLastPathComponent.fileSystemRepresentation, &shared) || !S_ISDIR(shared.st_mode) || !(shared.st_mode & S_ISVTX))
+      if (lstat(file.stringByDeletingLastPathComponent.fileSystemRepresentation, &shared) ||
+        !S_ISDIR(shared.st_mode) || shared.st_dev != root.version.st_dev ||
+        (!ignoreOwnership && !(shared.st_mode & S_ISVTX)))
         throw std::runtime_error("The volume's shared Trash could not be verified.");
     }
-    Root root{std::string(canonical), std::make_shared<FD>(open(canonical, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)), {}, {}};
-    if (fstat(root.fd->value, &root.version) || root.version.st_uid != getuid() || (root.version.st_mode & 0077) ||
+    if (root.version.st_uid != getuid() || (!ignoreOwnership && (root.version.st_mode & 0077)) ||
       identifier(root.version) != std::string([item[@"identity"] UTF8String] ?: ""))
       throw std::runtime_error("The private Trash folder changed or belongs to another user.");
     NSArray* expected = item[@"items"];
@@ -173,7 +186,7 @@ static std::vector<Root> review(NSArray* requested) {
 static void showError(NSString* message) {
   NSAlert* alert = [[NSAlert alloc] init];
   alert.alertStyle = NSAlertStyleWarning;
-  alert.messageText = @"Trash could not be emptied";
+  alert.messageText = @"Trash couldn\u2019t be emptied";
   alert.informativeText = message;
   [alert addButtonWithTitle:@"OK"];
   [alert runModal];
@@ -200,7 +213,11 @@ static void showError(NSString* message) {
           NSAlert* alert = [[NSAlert alloc] init];
           alert.alertStyle = NSAlertStyleWarning;
           alert.messageText = @"Empty Trash?";
-          alert.informativeText = [NSString stringWithFormat:@"Permanently erase %lu %@, including the contents of trashed folders? This cannot be undone.", (unsigned long)count, count == 1 ? @"item" : @"items"];
+          NSNumberFormatter* formatter = [[NSNumberFormatter alloc] init];
+          formatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US"];
+          formatter.numberStyle = NSNumberFormatterDecimalStyle;
+          NSString* formattedCount = [formatter stringFromNumber:@(count)] ?: [NSString stringWithFormat:@"%lu", (unsigned long)count];
+          alert.informativeText = [NSString stringWithFormat:@"%@ %@ will be erased for good, including what is inside trashed folders. You can\u2019t undo this.", formattedCount, count == 1 ? @"item" : @"items"];
           NSButton* cancel = [alert addButtonWithTitle:@"Cancel"];
           cancel.keyEquivalent = @"\r";
           NSButton* erase = [alert addButtonWithTitle:@"Empty Trash"];

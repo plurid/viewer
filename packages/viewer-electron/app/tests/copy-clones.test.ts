@@ -8,6 +8,7 @@ import type * as MacFilesModule from '../src/desktop/native/macos-files';
 import { execFile } from 'node:child_process';
 import {
   appendFile,
+  chmod,
   lstat,
   mkdir,
   open,
@@ -24,7 +25,7 @@ import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 /** What the native clone does in each test: clone, refuse as a volume that cannot, or clone and
  * then change the source as a writer would. */
-type CloneMode = 'native' | 'unsupported' | 'change-source';
+type CloneMode = 'native' | 'unsupported' | 'change-source' | 'staged-defer';
 const native = vi.hoisted(() => ({
   mode: 'native' as CloneMode,
   clones: [] as string[],
@@ -38,13 +39,36 @@ vi.mock('../src/desktop/native/macos-files', async (original) => {
     macFiles: () => {
       const files = actual.macFiles();
       return Object.defineProperties(Object.create(files), {
+        cloneStageVersion: {
+          get: () => (native.mode === 'staged-defer' ? 1 : files.cloneStageVersion),
+        },
         clone: {
-          value: async (sourceFD: number, target: string) => {
+          value: async (sourceFD: number, target: string, deferRestrictions?: boolean) => {
             native.clones.push(target);
             if (native.mode === 'unsupported')
               throw Object.assign(new Error('Could not clone the file'), { code: 'ENOTSUP' });
-            await files.clone(sourceFD, target);
+            if (native.mode === 'staged-defer' && deferRestrictions) {
+              await files.clone(sourceFD, target);
+              const info = JSON.parse(await files.information(target)) as {
+                revision: string;
+                locked: boolean;
+              };
+              if (info.locked) {
+                await files.updateInformation(
+                  target,
+                  info.revision,
+                  JSON.stringify({ locked: false }),
+                );
+                return true;
+              }
+              return false;
+            }
+            const result =
+              deferRestrictions !== undefined
+                ? await files.clone(sourceFD, target, deferRestrictions)
+                : await files.clone(sourceFD, target);
             if (native.mode === 'change-source') await appendFile(native.changed, ' and more');
+            return result;
           },
         },
         copyMetadata: {
@@ -57,6 +81,7 @@ vi.mock('../src/desktop/native/macos-files', async (original) => {
     },
   };
 });
+import { macFiles } from '../src/desktop/native/macos-files';
 import { Operations } from '../src/desktop/operations/operations';
 import { copyTree } from '../src/desktop/operations/file-transfer';
 
@@ -177,5 +202,109 @@ describe.runIf(process.platform === 'darwin')('copying files', () => {
     native.mode = 'unsupported';
     await copyTree(job, folder, path.join(root, 'Streamed'), [], access, 'written');
     expect(sync).not.toHaveBeenCalled();
+  });
+
+  async function setLocked(file: string, locked: boolean): Promise<void> {
+    const info = JSON.parse(await macFiles().information(file)) as { revision: string };
+    await macFiles().updateInformation(file, info.revision, JSON.stringify({ locked }));
+  }
+
+  async function isLocked(file: string): Promise<boolean> {
+    return (JSON.parse(await macFiles().information(file)) as { locked: boolean }).locked;
+  }
+
+  it.each(['native', 'unsupported'] as const)(
+    'copies and duplicates a read-only 0555 folder with its mode and Undo proof (%s)',
+    async (mode) => {
+      native.mode = mode;
+      const folder = path.join(root, 'ReadOnly');
+      await mkdir(folder);
+      await writeFile(path.join(folder, 'note.txt'), 'kept', { flag: 'wx' });
+      await chmod(folder, 0o555);
+      const copiedTarget = path.join(destination, 'ReadOnly');
+      const duplicateTarget = path.join(root, 'ReadOnly copy');
+      try {
+        const job = await copied([folder]);
+        expect(job.status, JSON.stringify(job.errors)).toBe('completed');
+        expect((await lstat(copiedTarget)).mode & 0o777).toBe(0o555);
+        expect(await readFile(path.join(copiedTarget, 'note.txt'), 'utf8')).toBe('kept');
+        const dupID = operations.start({ kind: 'duplicate', sources: [folder] });
+        await operations.drained();
+        const dup = operations.all().find((item) => item.id === dupID)!;
+        expect(dup.status, JSON.stringify(dup.errors)).toBe('completed');
+        expect((await lstat(duplicateTarget)).mode & 0o777).toBe(0o555);
+        // Undo hashes mode and ctime, so deferred metadata must finish before recordUndo.
+        expect(await operations.matchesOutput(job.id, copiedTarget)).toBe(true);
+      } finally {
+        await chmod(folder, 0o755).catch(() => {});
+        await chmod(copiedTarget, 0o755).catch(() => {});
+        await chmod(duplicateTarget, 0o755).catch(() => {});
+      }
+    },
+  );
+
+  it.each(['native', 'unsupported'] as const)(
+    'copies a folder with a deny-delete ACL like Home folders and preserves it (%s)',
+    async (mode) => {
+      native.mode = mode;
+      const folder = path.join(root, 'DocumentsFixture');
+      await mkdir(folder);
+      await writeFile(path.join(folder, 'doc.txt'), 'private', { flag: 'wx' });
+      await run('/bin/chmod', ['+a', 'everyone deny delete', folder]);
+      const target = path.join(destination, 'DocumentsFixture');
+      try {
+        const job = await copied([folder]);
+        expect(job.status, JSON.stringify(job.errors)).toBe('completed');
+        expect(await readFile(path.join(target, 'doc.txt'), 'utf8')).toBe('private');
+        const { stdout } = await run('/bin/ls', ['-lde', target]);
+        expect(stdout).toContain('deny delete');
+      } finally {
+        await run('/bin/chmod', ['-N', folder]).catch(() => {});
+        await run('/bin/chmod', ['-N', target]).catch(() => {});
+      }
+    },
+  );
+
+  it('copies and duplicates a locked file on the streamed path and preserves its lock', async () => {
+    native.mode = 'unsupported';
+    const source = path.join(root, 'Locked.txt');
+    await writeFile(source, 'sealed', { flag: 'wx' });
+    await setLocked(source, true);
+    const target = path.join(destination, 'Locked.txt');
+    const duplicate = path.join(root, 'Locked copy.txt');
+    try {
+      const job = await copied([source]);
+      expect(job.status, JSON.stringify(job.errors)).toBe('completed');
+      expect(await readFile(target, 'utf8')).toBe('sealed');
+      expect(await isLocked(target)).toBe(true);
+      const dupID = operations.start({ kind: 'duplicate', sources: [source] });
+      await operations.drained();
+      const dup = operations.all().find((item) => item.id === dupID)!;
+      expect(dup.status, JSON.stringify(dup.errors)).toBe('completed');
+      expect(await isLocked(duplicate)).toBe(true);
+    } finally {
+      await setLocked(source, false).catch(() => {});
+      await setLocked(target, false).catch(() => {});
+      await setLocked(duplicate, false).catch(() => {});
+    }
+  });
+
+  it('copies a locked file on the clone path when staged cloning defers restrictions', async () => {
+    native.mode = 'staged-defer';
+    const source = path.join(root, 'LockedClone.txt');
+    await writeFile(source, 'cloned secret', { flag: 'wx' });
+    await setLocked(source, true);
+    const target = path.join(destination, 'LockedClone.txt');
+    try {
+      const job = await copied([source]);
+      expect(job.status, JSON.stringify(job.errors)).toBe('completed');
+      expect(await readFile(target, 'utf8')).toBe('cloned secret');
+      expect(await isLocked(target)).toBe(true);
+      expect(native.clones).toHaveLength(1);
+      expect(native.metadata).toBe(1);
+    } finally {
+      await setLocked(source, false).catch(() => {});
+      await setLocked(target, false).catch(() => {});
+    }
   });
 });

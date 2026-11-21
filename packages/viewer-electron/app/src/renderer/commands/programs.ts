@@ -14,7 +14,7 @@ import { captureTarget, toolFiles } from './target';
 import { localServerCommands } from '../local-servers/commands';
 import { layoutCommands } from '../layout/commands';
 import { checkCommands, checkResultCommands } from '../fabrication/commands';
-import { mediaFormats } from '../../domain/operations/transforms';
+import { editableMedia } from '../../domain/operations/transforms';
 import { transformableImage } from '../../domain/operations/image-conversions';
 import { optimizable } from '../../domain/operations/optimization';
 import type { FileEntry } from '../../domain/contracts';
@@ -192,15 +192,7 @@ export function programCommands(
       aliases: ['trim', 'join clips', 'extract audio', 'mute video', 'mix audio', 'media editor'],
       when: (context) => {
         const files = toolFiles(context);
-        return (
-          files.length > 0 &&
-          files.length <= 16 &&
-          files.every(
-            (file) =>
-              file.kind === 'file' &&
-              (mediaFormats as readonly string[]).includes(file.extension.toLowerCase()),
-          )
-        );
+        return files.length > 0 && files.length <= 16 && files.every(editableMedia);
       },
       run: (context) =>
         workspace.openMedia(

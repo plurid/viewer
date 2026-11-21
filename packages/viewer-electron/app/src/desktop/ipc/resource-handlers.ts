@@ -1,4 +1,5 @@
 import type { Resource } from '../../domain/contracts';
+import { officeFamily, readsOfficeContent } from '../../domain/previews/documents/layout';
 import { officeImageParts } from '../../domain/previews/documents/office';
 import type { ApiHandlers } from './schemas';
 import type { Resources } from '../previews/resources';
@@ -106,7 +107,9 @@ export function createResourceHandlers(ports: ResourcePorts): ResourceHandlers {
         );
       }
       if (request) {
-        const { requestID, ...worksheet } = request;
+        const { requestID, ...rest } = request;
+        const worksheet =
+          'sheet' in rest || 'fromRow' in rest || 'limit' in rest ? rest : undefined;
         return ports.resources.documentRead(id, requestID, (file, signal, format) =>
           ports.files.extract(file, signal, true, worksheet, format),
         );
@@ -130,7 +133,8 @@ export function createResourceHandlers(ports: ResourcePorts): ResourceHandlers {
       let child: Resource | undefined;
       try {
         return await ports.resources.documentRead(id, requestID, async (file, signal, format) => {
-          if (format !== 'docx') throw new Error('Embedded document images require a DOCX file.');
+          if (!format || !(readsOfficeContent(format) && officeFamily(format) === 'word'))
+            throw new Error('Embedded document images require a DOCX file.');
           const document = await ports.files.extract(file, signal, true, undefined, format);
           if (!officeImageParts(document.office).includes(part))
             throw new Error('This image is not a supported embedded document relationship.');

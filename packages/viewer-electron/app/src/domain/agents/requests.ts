@@ -94,6 +94,7 @@ export function needsNativeConfirmation(proposal: Pick<AgentProposal, 'kind'>): 
 export interface AgentProposal {
   id: string;
   clientID?: string;
+  clientName?: string;
   kind: AgentProposalKind;
   taskSetup?: AgentTaskSetup;
   taskResult?: AgentTaskResult;

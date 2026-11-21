@@ -82,6 +82,7 @@ export class AgentRequests {
     private navigate?: (request: AgentNavigation, target: CapturedTarget) => Promise<void>,
     private authority?: {
       actor(): string;
+      actorName?(): string | undefined;
       check(proposal: AgentProposal): Promise<void>;
       run<T>(clientID: string, work: () => Promise<T>): Promise<T>;
       cancelExecution(id: string): void;
@@ -240,9 +241,11 @@ export class AgentRequests {
       this.proposals.delete(old[0]);
       this.contents.delete(old[0]);
     }
+    const clientName = this.authority?.actorName?.();
     const value = {
       ...proposal,
       clientID: this.authority?.actor() ?? sharedClientID,
+      ...(clientName ? { clientName } : {}),
       id: randomUUID(),
       status: 'review' as const,
       fingerprint: hash,

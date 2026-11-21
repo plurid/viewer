@@ -269,6 +269,62 @@ describe('editing a previewed file', () => {
     );
     await waitFor(() => expect(view.getByText(/Allow access to its folder/)).toBeTruthy());
   });
+  it('saves kept unsaved edits from the refusal screen when opening refuses', async () => {
+    const { id } = addPane('/fixtures/notes.md', 'preview', true);
+    const bufferID = '0b6f3a52-0a8e-4c7e-8d0f-58f3f3b7f1c3';
+    kept.set(bufferID, {
+      id: bufferID,
+      kind: 'file',
+      file: '/fixtures/notes.md',
+      base: version(1),
+      title: 'notes.md',
+      text: 'kept unsaved edits  \n',
+      revision: 1,
+      updated: 1,
+    });
+    updatePane(id, { bufferID });
+    viewer.textOpen.mockResolvedValueOnce({
+      editable: false,
+      reason: 'This file is read-only.',
+    } as never);
+    const view = render(
+      createElement(FileEditor, { resourceID: 'resource', paneID: id, bufferID, onClose: vi.fn() }),
+    );
+    fireEvent.click(await view.findByRole('button', { name: 'Save Unsaved Edits As…' }));
+    await waitFor(() =>
+      expect(viewer.textSaveAs).toHaveBeenCalledWith(
+        'kept unsaved edits\n',
+        'notes.md',
+        expect.any(String),
+      ),
+    );
+    expect(kept.has(bufferID)).toBe(false);
+  });
+  it('saves the latest unsaved edits when Save Over It hits refusal', async () => {
+    const { id } = addPane('/fixtures/notes.md', 'preview', true);
+    const view = render(
+      createElement(FileEditor, { resourceID: 'resource', paneID: id, onClose: vi.fn() }),
+    );
+    await type(await editor(view.container), 'my unsaved edit ');
+    await waitFor(() => expect(pane(id)).toHaveProperty('bufferID'));
+    viewer.textSave.mockRejectedValueOnce(
+      Object.assign(new Error('changed'), { code: textChangedCode }),
+    );
+    await editingPlane(id)!.save!();
+    await view.findByText('Save Over It');
+    viewer.textOpen.mockResolvedValueOnce({
+      editable: false,
+      reason: 'This file is read-only.',
+    } as never);
+    fireEvent.click(view.getByText('Save Over It'));
+    fireEvent.click(await view.findByRole('button', { name: 'Save Unsaved Edits As…' }));
+    await waitFor(() => expect(viewer.textSaveAs).toHaveBeenCalledTimes(1));
+    expect(viewer.textSaveAs).toHaveBeenCalledWith(
+      'my unsaved edit one\n',
+      'notes.md',
+      expect.any(String),
+    );
+  });
 });
 
 describe('the editor settings (2026-10-23)', () => {

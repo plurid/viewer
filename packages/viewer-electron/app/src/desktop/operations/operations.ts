@@ -63,6 +63,7 @@ import type { CorrectionReport } from '../../domain/fabrication/plan';
 import {
   aliasName,
   copyTree,
+  createDeferredMetadata,
   keepBothName,
   numberedName,
   previousName,
@@ -304,12 +305,20 @@ export class Operations {
         undo: receipt.undo,
         abort: new AbortController(),
         lastProgress: 0,
-        intent: receipt.intent,
+        // Once job.recovery holds an interrupted intent, clear it from the task so the next
+        // checkpoint writes intent null and a later launch does not treat the job as an
+        // interrupted Undo or append duplicate interruption errors.
+        intent: undefined,
       };
       this.tasks.set(job.id, task);
       // An interrupted job's new status reaches its log with the next checkpoint.
       this.dirty.add(task);
     }
+  }
+  /** Transient collision prompts never survive a restart, so omit them from journaled receipts. */
+  private receiptOf({ job, request, undo, intent }: Task): OperationReceipt {
+    const { collision: _collision, ...persisted } = job;
+    return { job: persisted, request, undo, intent };
   }
   /** Records `task` and every job that changed since the last checkpoint, so a job is
    * journaled however many others are queued. Each appends only what changed. */
@@ -324,11 +333,7 @@ export class Operations {
     const changed = [...this.dirty];
     this.dirty.clear();
     if (!journal) return Promise.resolve();
-    return Promise.all(
-      changed.map(({ job, request, undo, intent }) =>
-        journal.record({ job, request, undo, intent }, durable),
-      ),
-    )
+    return Promise.all(changed.map((item) => journal.record(this.receiptOf(item), durable)))
       .then(() => {})
       .catch((error) => {
         throw new ReceiptFailure(errorMessage(error));
@@ -336,8 +341,7 @@ export class Operations {
   }
   /** A finished job's log becomes one line; the uncompacted log stays valid on failure. */
   private async compact(task: Task): Promise<void> {
-    const { job, request, undo, intent } = task;
-    await this.journal?.compact({ job, request, undo, intent }).catch(() => {});
+    await this.journal?.compact(this.receiptOf(task)).catch(() => {});
   }
   all(): OperationJob[] {
     return [...this.tasks.values()].map((task) => structuredClone(task.job));
@@ -791,23 +795,16 @@ export class Operations {
       this.emit(task);
       // The running job must keep ownership of its pending receipt and any failure saving it.
       this.dirty.delete(task);
-      void this.journal
-        ?.record({
-          job: task.job,
-          request: task.request,
-          undo: task.undo,
-          intent: task.intent,
-        })
-        .catch((error: unknown) => {
-          // This job touched no files; its failed cancellation record cannot fail unrelated work.
-          task.job.errors.push({
-            path: task.job.destination || '',
-            message: 'Viewer couldn’t record the canceled picture. ' + errorMessage(error),
-          });
-          this.emit(task);
-          // Retrying this failed record from another job's checkpoint would fail that job too.
-          this.dirty.delete(task);
+      void this.journal?.record(this.receiptOf(task)).catch((error: unknown) => {
+        // This job touched no files; its failed cancellation record cannot fail unrelated work.
+        task.job.errors.push({
+          path: task.job.destination || '',
+          message: 'Viewer couldn’t record the canceled picture. ' + errorMessage(error),
         });
+        this.emit(task);
+        // Retrying this failed record from another job's checkpoint would fail that job too.
+        this.dirty.delete(task);
+      });
     }
     task.decision?.('cancel');
   }
@@ -977,58 +974,71 @@ export class Operations {
     }
     for (const step of [...task.undo].reverse()) {
       task.intent = { source: step.from, destination: step.remove ? undefined : step.to };
-      await this.checkpoint(task);
-      await this.withStep(step, () =>
-        fileCoordination.run(
-          step.remove
-            ? [{ path: step.from, mode: 'delete' }]
-            : [
-                { path: step.from, mode: 'move' },
-                { path: step.to, mode: 'write' },
-              ],
-          async (signal) => {
-            signal?.throwIfAborted();
-            await this.access(step.remove ? [step.from] : [step.from, step.to]);
-            const current = await lstat(step.from);
-            if (
-              !matchesVersionIdentity(current, step.identity) ||
-              (!current.isDirectory() &&
-                (current.size !== step.size || current.mtimeMs !== step.modified))
-            )
-              throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
-            if (
-              step.proof &&
-              !(
-                await matchesOutputProof(
-                  step.from,
-                  step.proof,
-                  step.proofVersion,
-                  step.proofSynthetic,
-                  step.proofBirthtime,
-                )
-              ).matches
-            )
-              throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
-            if (step.remove) await this.trash(step.from);
-            else if (step.caseOnly && (await exists(step.to)))
-              await this.changeCase(step.from, step.to);
-            // A Trash bookmark authorizes its item without access to browse its parent.
-            // Native restoration preserves that boundary and the source's metadata.
-            else if (step.trash && process.platform === 'darwin')
-              await renameExclusive(
-                fileCoordination.path(step.from),
-                fileCoordination.path(step.to),
-                fileCoordination.purpose(),
-                signal,
-              );
-            else await publish(step.from, step.to, this.access);
-          },
-        ),
-      );
+      try {
+        await this.checkpoint(task);
+        await this.withStep(step, () =>
+          fileCoordination.run(
+            step.remove
+              ? [{ path: step.from, mode: 'delete' }]
+              : [
+                  { path: step.from, mode: 'move' },
+                  { path: step.to, mode: 'write' },
+                ],
+            async (signal) => {
+              signal?.throwIfAborted();
+              await this.access(step.remove ? [step.from] : [step.from, step.to]);
+              const current = await lstat(step.from);
+              if (
+                !matchesVersionIdentity(current, step.identity) ||
+                (!current.isDirectory() &&
+                  (current.size !== step.size || current.mtimeMs !== step.modified))
+              )
+                throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
+              if (
+                step.proof &&
+                !(
+                  await matchesOutputProof(
+                    step.from,
+                    step.proof,
+                    step.proofVersion,
+                    step.proofSynthetic,
+                    step.proofBirthtime,
+                  )
+                ).matches
+              )
+                throw new Error(`Cannot undo: ${step.from} changed since the operation.`);
+              if (step.remove) await this.trash(step.from);
+              else if (step.caseOnly && (await exists(step.to)))
+                await this.changeCase(step.from, step.to);
+              // A Trash bookmark authorizes its item without access to browse its parent.
+              // Native restoration preserves that boundary and the source's metadata.
+              else if (step.trash && process.platform === 'darwin')
+                await renameExclusive(
+                  fileCoordination.path(step.from),
+                  fileCoordination.path(step.to),
+                  fileCoordination.purpose(),
+                  signal,
+                );
+              else await publish(step.from, step.to, this.access);
+            },
+          ),
+        );
+      } catch (error) {
+        if (!(error instanceof ReceiptFailure)) {
+          const priorErrors = task.job.errors.length;
+          this.reportRenameRecovery(task, error, step.to || step.from);
+          if (task.job.errors.length > priorErrors) this.emit(task);
+        }
+        // Only a process exit leaves an Undo step's outcome unknown; a refused step clears its
+        // intent so the next launch keeps the job completed and undoable.
+        task.intent = undefined;
+        if (!(error instanceof ReceiptFailure)) await this.checkpoint(task).catch(() => {});
+        throw error;
+      }
       if (!step.remove) this.filesChanged([{ source: step.from, destination: step.to }]);
       task.undo.splice(task.undo.indexOf(step), 1);
       task.intent = undefined;
-      await this.checkpoint(task);
+      await this.checkpoint(task, false);
     }
     task.job.undoable = false;
     // Redo may only act on the very items Undo put back.
@@ -1167,7 +1177,7 @@ export class Operations {
       throw new Error(
         `${path.basename(destination)} was not replaced: this volume has no Trash, and agents replace items only by moving them to the Trash.`,
       );
-    const kept = await previousName(destination);
+    const kept = await previousName(destination, replaced.info.isDirectory());
     await publish(destination, kept, this.access, undefined, async () => {
       if (!unchanged(await lstat(destination), replaced))
         throw new Error(
@@ -1405,7 +1415,7 @@ export class Operations {
       // conversion to the source's own format, keeps both.
       if (sameItem(await lstat(source), existing)) {
         if (['copy', 'convert'].includes(task.request.kind))
-          return { path: await keepBothName(destination) };
+          return { path: await keepBothName(destination, existing.isDirectory()) };
         throw new Error('Source and destination are the same item.');
       }
       if (await holds(existing, source)) replaceable = false;
@@ -1433,7 +1443,12 @@ export class Operations {
       this.check(task);
     }
     if (decision === 'skip') return null;
-    if (decision === 'keep-both') return { path: await keepBothName(destination) };
+    if (decision === 'keep-both') {
+      const directory =
+        ['mkdir', 'extract'].includes(task.request.kind) ||
+        (!!source && (await lstat(source)).isDirectory());
+      return { path: await keepBothName(destination, directory) };
+    }
     if (!replaceable)
       throw new Error(
         task.request.kind === 'mkdir' || task.request.kind === 'mkfile'
@@ -1464,6 +1479,7 @@ export class Operations {
     const staging = stage.file;
     task.intent = { source, destination, staging };
     const fingerprints: CopyFingerprint[] = [];
+    const deferred = createDeferredMetadata();
     try {
       await this.checkpoint(task);
       // a move removes its sources once this copy is on permanent storage; a copy keeps them
@@ -1474,6 +1490,7 @@ export class Operations {
         fingerprints,
         this.access,
         move ? 'flushed' : 'written',
+        deferred,
       );
       this.check(task);
       // Do not clobber a file created while the transfer was in flight.
@@ -1482,6 +1499,7 @@ export class Operations {
           'A file appeared at the destination during the transfer. Retry to choose a collision action.',
         );
       await this.publishReplacing(task, staging, destination, replaced, guard);
+      await deferred.apply(destination);
       if (move) {
         for (const fingerprint of fingerprints) {
           const info = await lstat(fingerprint.file);
@@ -1530,6 +1548,7 @@ export class Operations {
       }
       return false;
     } finally {
+      await deferred.close();
       await this.disposeStage(task, stage);
     }
   }
@@ -1727,7 +1746,13 @@ export class Operations {
     const { request } = task;
     const destination =
       request.kind === 'duplicate'
-        ? await keepBothName(source)
+        ? await keepBothName(
+            source,
+            await lstat(source).then(
+              (info) => info.isDirectory(),
+              () => false,
+            ),
+          )
         : request.kind === 'alias'
           ? await aliasName(source)
           : outputName(request, source);

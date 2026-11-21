@@ -203,9 +203,19 @@ export function WorkflowControls() {
                 : []),
             ],
     });
-    setDocument(
-      documentReply(await window.viewer.workflow({ kind: 'save', file, revision: '', definition })),
-    );
+    try {
+      setDocument(
+        documentReply(
+          await window.viewer.workflow({ kind: 'save', file, revision: '', definition }),
+        ),
+      );
+    } catch (error) {
+      if (errorMessage(error).includes('changed on disk'))
+        throw new Error(
+          'This folder already has a workflow. Open it with Open Workflow…, or choose another folder.',
+        );
+      throw error;
+    }
     setBindings({});
     setEditor(undefined);
     select();
@@ -427,6 +437,11 @@ export function WorkflowControls() {
             <h3>
               {current.definition.name} · {statusLabel(current.status)}
             </h3>
+            {current.error && (
+              <p className="error" role="alert">
+                {current.error}
+              </p>
+            )}
             <ol className="workflow-steps">
               {current.steps.map((record) => (
                 <li key={record.id}>

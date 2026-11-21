@@ -948,4 +948,38 @@ describe('reviewed MCP workspace navigation', () => {
     await broker.clientRequest({ kind: 'revoke', id: named.client.id, revision: 1 });
     expect(await requests.listGrants()).toEqual([]);
   });
+  it('refuses a named client folder that was later replaced by a symlink', async () => {
+    const project = path.join(root, 'Project');
+    const moved = path.join(root, 'ProjectMoved');
+    const secretFile = path.join(secret, 'ReplacedSecret.txt');
+    await mkdir(project);
+    await writeFile(path.join(project, 'Public.txt'), 'Public');
+    await writeFile(secretFile, 'Top secret');
+    const created = await broker.clients.create({
+      name: 'ScopedReader',
+      roots: [await realpath(project)],
+      capabilities: ['metadata', 'content'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 2 },
+    });
+    const prev = token;
+    try {
+      token = created.token;
+      expect(await call('read_metadata', { path: path.join(project, 'Public.txt') })).toMatchObject(
+        { name: 'Public.txt' },
+      );
+      // Replace the client's granted folder with a symlink to an ungranted folder.
+      await rename(project, moved);
+      await symlink(secret, project);
+      await expect(
+        call('read_metadata', { path: path.join(project, 'ReplacedSecret.txt') }),
+      ).rejects.toThrow('outside');
+      await expect(call('read_metadata', { path: secretFile })).rejects.toThrow('outside');
+      // Even a missing file under the replaced root must answer as outside, never as ENOENT.
+      await expect(
+        call('read_metadata', { path: path.join(project, 'NoSuchFile.txt') }),
+      ).rejects.toThrow('outside');
+    } finally {
+      token = prev;
+    }
+  });
 });

@@ -107,3 +107,17 @@ it('rejects an expanded ZIP entry above its limit before allocating its data', a
   await expect(extractArchive(archive, path.join(root, 'out'), work())).rejects.toThrow('32 MB');
   await expect(lstat(path.join(root, 'out'))).rejects.toMatchObject({ code: 'ENOENT' });
 });
+it('names the offending file when compressing an item with a colon or backslash', async () => {
+  const reports = path.join(root, 'Reports');
+  await mkdir(reports);
+  await writeFile(path.join(reports, 'Budget 1:2.xlsx'), 'sheet');
+  await expect(createArchive([reports], path.join(root, 'reports.zip'), work())).rejects.toThrow(
+    /Budget 1:2\.xlsx/,
+  );
+  const backslashes = path.join(root, 'Drafts');
+  await mkdir(backslashes);
+  await writeFile(path.join(backslashes, 'Draft\\1.txt'), 'draft');
+  await expect(createArchive([backslashes], path.join(root, 'drafts.zip'), work())).rejects.toThrow(
+    /Draft\\1\.txt/,
+  );
+});

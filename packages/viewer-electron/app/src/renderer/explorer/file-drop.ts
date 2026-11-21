@@ -241,6 +241,17 @@ export function useFileDrop(directory: () => string | undefined, navigation?: Sp
         )
           throw new Error("Viewer couldn't read the dragged files.");
         if (sources.includes(destination)) throw new Error("A folder can't be moved into itself.");
+        const normalizedDestination =
+          destination.length > 1 ? destination.replace(/[/\\]+$/, '') : destination;
+        const parentOf = (file: string) => {
+          const clean = file.length > 1 ? file.replace(/[/\\]+$/, '') : file;
+          const index = Math.max(clean.lastIndexOf('/'), clean.lastIndexOf('\\'));
+          return index <= 0 ? clean.slice(0, 1) : clean.slice(0, index);
+        };
+        if (kind !== 'copy' && sources.every((file) => parentOf(file) === normalizedDestination)) {
+          clear(true);
+          return;
+        }
         clear(true);
         void window.viewer.operate({ kind, sources, destination }).catch(report);
       } catch (error) {

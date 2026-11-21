@@ -283,6 +283,7 @@ describe('approved incoming-file watch rules', () => {
       await writeFile(path.join(f.inbox, 'New.txt'), 'Changed selection');
       f.change();
       await f.tick();
+      await f.tick();
       const runs = await settle(f.runs, (value) => value[0]?.status === 'waiting-review');
       expect(runs[0].context.sources).toEqual([path.join(f.inbox, 'New.txt')]);
       expect(await readdir(f.destination)).toEqual([]);
@@ -311,6 +312,7 @@ describe('approved incoming-file watch rules', () => {
       );
       expect(await readFile(path.join(f.destination, 'New.txt'), 'utf8')).toBe('Changed selection');
       await f.tick(11000);
+      await f.tick();
       const second = await settle(
         f.runs,
         (runs) => runs.length === 2 && runs[0].status === 'waiting-review',
@@ -331,6 +333,7 @@ describe('approved incoming-file watch rules', () => {
       expect(await f.runs()).toEqual([]);
       await writeFile(path.join(f.inbox, 'Cold.txt'), 'New file after restart.');
       f.change();
+      await f.tick();
       await f.tick();
       await settle(f.runs, (runs) => runs[0]?.status === 'completed');
       await writeFile(
@@ -398,6 +401,7 @@ describe('approved incoming-file watch rules', () => {
       await writeFile(path.join(f.inbox, 'Model.txt'), 'generated');
       f.change();
       await f.tick();
+      await f.tick();
       const run = (await settle(f.runs, (runs) => runs[0]?.status === 'waiting-review'))[0];
       const waiting = await f.run(run.id),
         taskID = waiting.steps[1].taskID!;
@@ -464,6 +468,85 @@ describe('approved incoming-file watch rules', () => {
       ).rejects.toThrow('changed after approval');
       expect(await f.actions.all()).toEqual([]);
       expect(f.operations.all()).toEqual([]);
+    } finally {
+      await f.close();
+    }
+  });
+  it('forgets a removed last run so the watch rule can still reconcile, re-enable and be removed', async () => {
+    const f = await fixture('inspect');
+    try {
+      const rule = await f.approve();
+      await writeFile(path.join(f.inbox, 'First.txt'), 'first');
+      f.change();
+      await f.tick();
+      await f.tick();
+      const runs = await settle(f.runs, (value) => value[0]?.status === 'completed');
+      const removeRun = async (id: string) => {
+        await settle(
+          async () => {
+            try {
+              await f.flows.request({ kind: 'remove', id });
+              return true;
+            } catch (error) {
+              if ((error as NodeJS.ErrnoException).code === 'TEST_REMOVAL_BLOCKED') return true;
+              if (error instanceof Error && error.message.includes('Finish or cancel'))
+                return false;
+              throw error;
+            }
+          },
+          (done) => done,
+        );
+        await expect(f.flows.request({ kind: 'get', id })).rejects.toThrow(
+          'Viewer has no record of this workflow run.',
+        );
+      };
+      await removeRun(runs[0]!.id);
+      await writeFile(path.join(f.inbox, 'Second.txt'), 'second');
+      f.change();
+      await f.tick(31000);
+      await f.tick();
+      const next = await settle(f.runs, (value) => value[0]?.status === 'completed');
+      expect(next[0]!.context.sources).toEqual([path.join(f.inbox, 'Second.txt')]);
+      // Also verify approve and remove succeed after removing the latest run history.
+      await removeRun(next[0]!.id);
+      const current = (await f.list())[0]!;
+      const updated = (await f.rules.request({
+        kind: 'approve',
+        id: current.id,
+        revision: current.revision,
+        scope: current.scope,
+      })) as WatchRule;
+      expect(updated.enabled).toBe(true);
+      expect(
+        await f.rules.request({ kind: 'remove', id: updated.id, revision: updated.revision }),
+      ).toBeNull();
+      expect(await f.list()).toEqual([]);
+      expect(rule.id).toBe(updated.id);
+    } finally {
+      await f.close();
+    }
+  });
+  it('waits until a file being written stops changing before starting a workflow run', async () => {
+    const f = await fixture('inspect');
+    try {
+      await f.approve();
+      const target = path.join(f.inbox, 'Growing.txt');
+      await writeFile(target, 'chunk-1');
+      f.change();
+      await f.tick();
+      // Seen only once so far: must wait for a second scan with the same version.
+      expect(await f.runs()).toEqual([]);
+      await writeFile(target, 'chunk-1-and-chunk-2');
+      f.change();
+      await f.tick();
+      // Still changing between scans: must not start or pause the rule.
+      expect(await f.runs()).toEqual([]);
+      expect((await f.list())[0]!.enabled).toBe(true);
+      // Now stop writing; the next scan sees the identical version and starts the run.
+      await f.tick();
+      const runs = await settle(f.runs, (value) => value[0]?.status === 'completed');
+      expect(runs[0]!.context.sources).toEqual([target]);
+      expect((await f.list())[0]!.enabled).toBe(true);
     } finally {
       await f.close();
     }

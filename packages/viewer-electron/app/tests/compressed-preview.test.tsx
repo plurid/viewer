@@ -8,6 +8,7 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import type { ArchiveEntry, FileEntry, Resource, ResourceRead } from '../src/domain/contracts';
 import type { PreviewContext } from '../src/renderer/previews/contracts';
 import CompressedPreview from '../src/renderer/previews/modules/CompressedPreview';
+import { PreviewFrameFixture } from './support/preview-frame';
 import { initialize } from '../src/renderer/state/store';
 import { mockElementBox } from './support/layout';
 
@@ -76,7 +77,11 @@ function fixture(name: string, member: Partial<ArchiveEntry>, text = '') {
 it('shows the expanded text read-only, labelled, and releases it on close', async () => {
   const text = 'Field notes\n\nA short walk, a few photographs and time to look around.\n';
   const { context, services } = fixture('notes.txt.gz', {}, text);
-  const view = render(<CompressedPreview {...context} />);
+  const view = render(
+    <PreviewFrameFixture>
+      <CompressedPreview {...context} />
+    </PreviewFrameFixture>,
+  );
   await screen.findByText(
     'A short walk, a few photographs and time to look around.',
     {},
@@ -90,6 +95,26 @@ it('shows the expanded text read-only, labelled, and releases it on close', asyn
   view.unmount();
   expect(services.release).toHaveBeenCalledWith('expanded');
   expect(services.release).not.toHaveBeenCalledWith('source');
+});
+
+it('portals only the inner preview toolbar into a plane header and delivers gzip info to footer details', async () => {
+  const header = document.createElement('div');
+  document.body.appendChild(header);
+  try {
+    const text = 'hello world\n';
+    const { context } = fixture('notes.txt.gz', {}, text);
+    context.commands = { header, register: () => () => {} };
+    render(
+      <PreviewFrameFixture>
+        <CompressedPreview {...context} />
+      </PreviewFrameFixture>,
+    );
+    await waitFor(() => expect(header.textContent).toContain('Wrap'));
+    expect(header.querySelectorAll('.preview-toolbar')).toHaveLength(1);
+    expect(screen.getByText(`Expanded from gzip · ${text.length} B`)).toBeTruthy();
+  } finally {
+    header.remove();
+  }
 });
 
 it('reads data and rotated logs with the preview of the file they were', async () => {

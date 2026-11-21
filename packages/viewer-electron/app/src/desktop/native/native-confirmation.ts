@@ -1,6 +1,57 @@
 import { dialog, type BrowserWindow, type MessageBoxOptions } from 'electron';
 import type { AgentProposal } from '../../domain/agents/requests';
+import { proposalRequester } from '../../domain/agents/review';
+import { sharedClientID } from '../../domain/agents/clients';
 import { windowDialogs } from './window-dialogs';
+
+const maxConfirmationDetail = 6000;
+
+function requesterInPrompt(proposal: AgentProposal): string {
+  const requester = proposalRequester(proposal);
+  if (requester === 'Chat') return 'Chat';
+  if (proposal.clientName?.trim()) return `“${requester}”`;
+  if (proposal.clientID === sharedClientID) return 'the shared agent connection';
+  return 'the agent';
+}
+
+/** Keeps Trash confirmation details within the dialog bound on whole lines with a stated remainder and closing note. */
+function boundedRemovalDetail(detail: string): string {
+  if (detail.length <= maxConfirmationDetail) return detail;
+  const sections = detail.split('\n\n');
+  if (sections.length >= 3) {
+    const header = sections[0]!;
+    const closing = sections.at(-1)!;
+    const lines = sections.slice(1, -1).join('\n\n').split('\n').filter(Boolean);
+    const kept: string[] = [];
+    for (let index = 0; index < lines.length; index++) {
+      const remaining = lines.length - index - 1;
+      const suffix = remaining > 0 ? `\n…and ${remaining} more, listed in the review.` : '';
+      const candidate = `${header}\n\n${[...kept, lines[index]!].join('\n')}${suffix}\n\n${closing}`;
+      if (candidate.length > maxConfirmationDetail) break;
+      kept.push(lines[index]!);
+    }
+    const remaining = lines.length - kept.length;
+    const middle = kept.length
+      ? `${kept.join('\n')}${remaining > 0 ? `\n…and ${remaining} more, listed in the review.` : ''}`
+      : `…${lines.length} items, listed in the review.`;
+    const composed = `${header}\n\n${middle}\n\n${closing}`;
+    if (composed.length <= maxConfirmationDetail) return composed;
+  }
+  const lines = detail.split('\n');
+  const kept: string[] = [];
+  for (let index = 0; index < lines.length; index++) {
+    const remaining = lines.length - index - 1;
+    const suffix = remaining > 0 ? `\n…and ${remaining} more, listed in the review.` : '';
+    const candidate = `${[...kept, lines[index]!].join('\n')}${suffix}`;
+    if (candidate.length > maxConfirmationDetail) break;
+    kept.push(lines[index]!);
+  }
+  const remaining = lines.length - kept.length;
+  return `${kept.join('\n')}${remaining > 0 ? `\n…and ${remaining} more, listed in the review.` : ''}`.slice(
+    0,
+    maxConfirmationDetail,
+  );
+}
 
 /** Ordinary notices use the owning window. Security approvals and failed renderers stay native. */
 export async function showViewerMessage(
@@ -22,19 +73,22 @@ export async function confirmAgentProposal(
   const listed = files.slice(0, 30).join('\n');
   const more = files.length > 30 ? `\n…and ${files.length - 30} more, listed in the review.` : '';
   const removal = proposal.removal === 'trash';
+  const actor = requesterInPrompt(proposal);
   const options: MessageBoxOptions = {
     type: 'warning',
     title: 'Agent request',
     message: removal
-      ? `Allow the agent to move ${files.length === 1 ? 'this item' : `these ${files.length} items`} to the Trash?`
+      ? `Allow ${actor} to move ${files.length === 1 ? 'this item' : `these ${files.length} items`} to the Trash?`
       : proposal.kind === 'configuration'
-        ? 'Allow the agent to change your configuration?'
-        : `Allow the agent to run “${proposal.title}”?`,
+        ? `Allow ${actor} to change your configuration?`
+        : `Allow ${actor} to run “${proposal.title}”?`,
     // a removal shows what was reviewed: each folder with the contents counted in it
-    detail: (removal
-      ? proposal.detail
-      : proposal.detail + (files.length ? '\n\nItems:\n' + listed + more : '')
-    ).slice(0, 6000),
+    detail: removal
+      ? boundedRemovalDetail(proposal.detail)
+      : (proposal.detail + (files.length ? '\n\nItems:\n' + listed + more : '')).slice(
+          0,
+          maxConfirmationDetail,
+        ),
     buttons: [
       'Cancel',
       removal

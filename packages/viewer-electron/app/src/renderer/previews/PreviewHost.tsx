@@ -53,6 +53,7 @@ import { documentServices } from './document-cache';
 import { PreviewFileInfo } from './PreviewFileInfo';
 import { rotatedCopyRequest } from './rotation';
 import { rotatableImage } from '../../domain/operations/image-conversions';
+import { editableMedia } from '../../domain/operations/transforms';
 import { kindLabel } from '../../domain/files/entries';
 import { pictureShortcuts } from '../../domain/preferences/shortcuts';
 import { saveAttachments } from './attachments';
@@ -514,7 +515,7 @@ export const PreviewHost = memo(function PreviewHost({
                     : undefined
                 }
                 editMedia={
-                  !supplied && workspace
+                  !supplied && workspace && editableMedia(resource.entry)
                     ? () =>
                         void workspace
                           .openMedia(

@@ -45,18 +45,25 @@ export function decodeBinaryPlist(bytes: Uint8Array, options: PlistOptions = {})
     for (let index = 0; index < size; index++) value = value * 256 + view.getUint8(at + index);
     return value;
   };
-  const offsets = Array.from({ length: count }, (_, index) =>
-    unsigned(table + index * offsetSize, offsetSize),
-  );
+  const offsets = Array.from({ length: count }, (_, index) => {
+    const offset = unsigned(table + index * offsetSize, offsetSize);
+    if (offset < 8 || offset >= table) throw new Error('A property list offset is out of range.');
+    return offset;
+  });
   /** A collection's length: in the marker's low bits, or an integer object after it. */
   const length = (at: number, info: number): [number, number] => {
     if (info !== 0xf) return [info, at + 1];
+    if (at + 1 >= trailer) throw new Error('A property list length is out of range.');
     const marker = view.getUint8(at + 1);
     if (marker >> 4 !== 0x1) throw new Error('A property list length is malformed.');
-    const size = 1 << (marker & 0xf);
+    const power = marker & 0xf;
+    if (power > 3) throw new Error('A property list length is out of range.');
+    const size = 1 << power;
     return [unsigned(at + 2, size), at + 2 + size];
   };
+  let visited = 0;
   const read = (reference: number, depth: number, open: Set<number>): unknown => {
+    if (++visited > maximumObjects) throw new Error('The property list is too large.');
     if (reference >= count) throw new Error('A property list reference is out of range.');
     if (depth > maximumDepth) throw new Error('The property list nests too deeply.');
     if (open.has(reference)) throw new Error('The property list refers to itself.');
@@ -68,13 +75,21 @@ export function decodeBinaryPlist(bytes: Uint8Array, options: PlistOptions = {})
       case 0x0:
         return info === 0x8 ? false : info === 0x9 ? true : null;
       case 0x1: {
+        if (info > 3) throw new Error('A property list integer is out of range.');
         const size = 1 << info;
+        if (at + 1 + size > trailer) throw new Error('A property list integer is out of range.');
         if (size === 8) return Number(view.getBigInt64(at + 1));
         return unsigned(at + 1, size);
       }
-      case 0x2:
+      case 0x2: {
+        if (info !== 2 && info !== 3) throw new Error('A property list number is malformed.');
+        const size = info === 2 ? 4 : 8;
+        if (at + 1 + size > trailer) throw new Error('A property list number is out of range.');
         return info === 2 ? view.getFloat32(at + 1) : view.getFloat64(at + 1);
+      }
       case 0x3:
+        if (info !== 3 || at + 9 > trailer)
+          throw new Error('A property list date is out of range.');
         return new Date((view.getFloat64(at + 1) + epoch) * 1000).toISOString();
       case 0x4: {
         const [size, start] = length(at, info);
@@ -93,11 +108,15 @@ export function decodeBinaryPlist(bytes: Uint8Array, options: PlistOptions = {})
         return new TextDecoder('utf-16be').decode(bytes.subarray(start, start + size * 2));
       }
       case 0x8:
+        if (info > 7) throw new Error('A property list UID is out of range.');
         return { UID: unsigned(at + 1, info + 1) };
       case 0xa:
       case 0xc:
       case 0xd: {
         const [size, start] = length(at, info);
+        const slots = type === 0xd ? size * 2 : size;
+        if (size > maximumObjects || start + slots * referenceSize > trailer)
+          throw new Error('A property list collection is out of range.');
         const references = (index: number) =>
           unsigned(start + index * referenceSize, referenceSize);
         const inside = new Set(open).add(reference);

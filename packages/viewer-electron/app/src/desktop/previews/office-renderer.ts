@@ -407,13 +407,11 @@ export function officePDFCopy(directory: string) {
     } finally {
       await handle.close();
     }
-    const { data } = await renderOffice(
-      directory,
-      input,
-      path.extname(source).slice(1).toLowerCase(),
-      signal,
-      { name: path.basename(source), whole: true },
-    );
+    const extension = path.extname(source).slice(1).toLowerCase();
+    const { data } = await renderOffice(directory, input, extension, signal, {
+      name: officeFileName(path.basename(source), extension),
+      whole: true,
+    });
     await writeFile(output, data, { flag: 'wx', mode: 0o644 });
   };
 }

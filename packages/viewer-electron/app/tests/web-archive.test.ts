@@ -85,6 +85,10 @@ describe('Safari web archives', () => {
       resources: 5,
       frames: 1,
     });
+    const entities = archive(
+      '<!doctype html><html><head><title>Q&amp;A &lt;2026&gt; &quot;Notes&quot;</title></head><body></body></html>',
+    );
+    expect(webArchiveSummary(entities).title).toBe('Q&A <2026> "Notes"');
   });
 
   it('serves the page with the subresources the archive holds, and nothing else', () => {
@@ -124,6 +128,28 @@ describe('Safari web archives', () => {
     const saved = webArchivePage(encode(xml));
     expect(saved.html).toContain('plain &lt;text&gt;');
     expect(saved.parts).toEqual([]);
+    const cssArchive = binaryPlist({
+      WebMainResource: resource(
+        'https://example.invalid/site.css',
+        'text/css',
+        encode('body { color: red; }'),
+        'UTF-8',
+      ),
+    });
+    const cssPage = webArchivePage(cssArchive);
+    expect(cssPage.html).toContain('<pre');
+    expect(cssPage.html).toContain('body { color: red; }');
+    expect(cssPage.html).not.toContain('<img');
+    const fontArchive = binaryPlist({
+      WebMainResource: resource(
+        'https://example.invalid/font.woff2',
+        'font/woff2',
+        new Uint8Array([0x77, 0x4f, 0x46, 0x32]),
+      ),
+    });
+    const fontPage = webArchivePage(fontArchive);
+    expect(fontPage.html).toContain('Viewer does not show');
+    expect(fontPage.html).not.toContain('<img');
   });
 
   it('refuses property lists that hold no page, malformed archives and oversized files', () => {

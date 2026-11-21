@@ -339,4 +339,62 @@ describe('explicit portable workflows', () => {
       await f.close();
     }
   });
+  it('records the failure reason on the run when authorization is withdrawn between steps', async () => {
+    let calls = 0;
+    const f = await fixture({
+      authorizeRun: async () => {
+        // Succeed during start(), before step 1, and inside step 1; fail before step 2 starts.
+        if (++calls >= 5) throw new Error('This watch rule was paused.');
+      },
+    });
+    try {
+      const twoReads = workflowDefinitionSchema.parse({
+        version: 1,
+        id: 'two-reads',
+        name: 'Two reads',
+        bindings: [],
+        inputs: { source: { path: 'Source.txt' } },
+        steps: [
+          { id: 'first', kind: 'inspect', sources: [{ kind: 'input', name: 'source' }] },
+          {
+            id: 'second',
+            kind: 'inspect',
+            needs: ['first'],
+            sources: [{ kind: 'step', id: 'first' }],
+          },
+        ],
+      });
+      const document = (await f.flows.request({
+        kind: 'save',
+        file: path.join(f.root, 'two-reads.workflow.jsonc'),
+        revision: '',
+        definition: twoReads,
+      })) as WorkflowDocument;
+      const run = (await f.flows.request({
+        kind: 'start',
+        file: document.file,
+        revision: document.revision,
+        bindings: {},
+        context: { actor: 'user', workspaceID: 'w', paneID: 'p', rootID: 'r', sources: [] },
+      })) as WorkflowRun;
+      await expect
+        .poll(
+          async () => ((await f.flows.request({ kind: 'get', id: run.id })) as WorkflowRun).status,
+        )
+        .toBe('failed');
+      const failed = (await f.flows.request({ kind: 'get', id: run.id })) as WorkflowRun & {
+        error?: string;
+      };
+      expect(failed.error).toBe('This watch rule was paused.');
+      expect(failed.steps[0]!.status).toBe('completed');
+      expect(failed.steps[1]!.status).toBe('pending');
+      await f.reopen();
+      const reloaded = (await f.flows.request({ kind: 'get', id: run.id })) as WorkflowRun & {
+        error?: string;
+      };
+      expect(reloaded.error).toBe('This watch rule was paused.');
+    } finally {
+      await f.close();
+    }
+  });
 });

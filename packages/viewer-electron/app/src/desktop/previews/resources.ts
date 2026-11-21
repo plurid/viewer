@@ -915,7 +915,8 @@ export class Resources {
           return new Response(null, { status: 403 });
         file = await realpath(resolved);
         if (!file.startsWith(grant.root + path.sep)) return new Response(null, { status: 403 });
-      } else if (relative !== grant.resource.entry.name) return new Response(null, { status: 404 });
+      } else if (relative !== (grant.file ? path.basename(grant.file) : grant.resource.entry.name))
+        return new Response(null, { status: 404 });
       // The granted path must still be the same real file, not a substituted link.
       else if (file && !grant.data && (await realpath(file)) !== file)
         return new Response(null, { status: 403 });

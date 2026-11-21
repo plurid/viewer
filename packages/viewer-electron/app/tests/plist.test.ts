@@ -82,3 +82,63 @@ it('keeps refusing a declaration that defines entities', () => {
   );
   expect(() => xmlPlistValue(entities)).toThrow('not supported');
 });
+
+it('refuses binary plist DAGs that expand exponentially and rejects out-of-range offsets or integer widths', () => {
+  const buildDag = (depth: number) => {
+    const count = depth + 1;
+    const body: number[] = [];
+    const offsets: number[] = [];
+    let cursor = 8;
+    for (let k = 0; k < depth; k++) {
+      offsets.push(cursor);
+      body.push(0xa2, k + 1, k + 1);
+      cursor += 3;
+    }
+    offsets.push(cursor);
+    body.push(0x51, 0x78);
+    const tableOffset = 8 + body.length;
+    const total = tableOffset + offsets.length + 32;
+    const bytes = new Uint8Array(total);
+    bytes.set(new TextEncoder().encode('bplist00'), 0);
+    bytes.set(body, 8);
+    bytes.set(offsets, tableOffset);
+    const view = new DataView(bytes.buffer);
+    const trailer = total - 32;
+    view.setUint8(trailer + 6, 1);
+    view.setUint8(trailer + 7, 1);
+    view.setBigUint64(trailer + 8, BigInt(count));
+    view.setBigUint64(trailer + 16, 0n);
+    view.setBigUint64(trailer + 24, BigInt(tableOffset));
+    return bytes;
+  };
+  const started = performance.now();
+  expect(() => decodeBinaryPlist(buildDag(18))).toThrow('too large');
+  expect(() => decodeBinaryPlist(buildDag(35))).toThrow('too large');
+  expect(performance.now() - started).toBeLessThan(500);
+
+  // Offset pointing past the offset table into the trailer
+  const badOffset = Buffer.alloc(8 + 2 + 1 + 32);
+  badOffset.write('bplist00', 0);
+  badOffset[8] = 0x10;
+  badOffset[9] = 0x01;
+  badOffset[10] = 40; // out of range (>= tableOffset 10)
+  badOffset.writeUInt8(1, 11 + 6);
+  badOffset.writeUInt8(1, 11 + 7);
+  badOffset.writeBigUInt64BE(1n, 11 + 8);
+  badOffset.writeBigUInt64BE(0n, 11 + 16);
+  badOffset.writeBigUInt64BE(10n, 11 + 24);
+  expect(() => decodeBinaryPlist(badOffset)).toThrow('out of range');
+
+  // Integer with info = 4 (16-byte integer) must throw a clean error, not RangeError
+  const wideInt = Buffer.alloc(8 + 2 + 1 + 32);
+  wideInt.write('bplist00', 0);
+  wideInt[8] = 0x14;
+  wideInt[9] = 0x00;
+  wideInt[10] = 8;
+  wideInt.writeUInt8(1, 11 + 6);
+  wideInt.writeUInt8(1, 11 + 7);
+  wideInt.writeBigUInt64BE(1n, 11 + 8);
+  wideInt.writeBigUInt64BE(0n, 11 + 16);
+  wideInt.writeBigUInt64BE(10n, 11 + 24);
+  expect(() => decodeBinaryPlist(wideInt)).toThrow('out of range');
+});

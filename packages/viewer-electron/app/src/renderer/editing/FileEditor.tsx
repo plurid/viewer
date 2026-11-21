@@ -11,11 +11,11 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
+import type { TextDocument, TextVersion } from '../../domain/editing/documents';
 import {
   sameTextVersion,
   textChangedCode,
-  type TextDocument,
-  type TextVersion,
+  trimTrailingWhitespace,
 } from '../../domain/editing/documents';
 import { languageFor } from '../../domain/editing/languages';
 import { baseName } from '../../domain/workspaces/planes';
@@ -234,9 +234,20 @@ export function FileEditor({
     await open(false);
   };
   const saveAs = async (suggested?: string): Promise<boolean> => {
-    if (!loaded) return false;
-    const text = editor.current?.text() ?? loaded.text;
-    const result = await window.viewer.textSaveAs(text, suggested ?? name, session);
+    let text: string;
+    let fileName = suggested;
+    if (editor.current) {
+      if (settings.trimTrailingWhitespace) editor.current.trimTrailingWhitespace();
+      text = editor.current.text();
+      fileName ??= name;
+    } else {
+      const kept = buffer.current ? await readBuffer(buffer.current) : null;
+      const raw = kept?.text ?? loaded?.text;
+      if (raw === undefined) return false;
+      text = settings.trimTrailingWhitespace ? trimTrailingWhitespace(raw) : raw;
+      fileName ??= document ? name : kept?.file ? baseName(kept.file) : kept?.title || name;
+    }
+    const result = await window.viewer.textSaveAs(text, fileName, session);
     if (!result) return false;
     await forget();
     // the plane shows the new file, still edited in this session

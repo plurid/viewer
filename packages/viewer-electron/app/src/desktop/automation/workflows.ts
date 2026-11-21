@@ -270,6 +270,7 @@ export class Workflows {
       );
     await this.dependencies.access(Object.values(run.bindings));
     await this.dependencies.authorizeRun?.(run);
+    run.error = undefined;
     run.status = 'running';
     await this.save(run);
     this.advance(run);
@@ -323,11 +324,12 @@ export class Workflows {
     const task = this.execute(run, abort.signal)
       .catch(async (error) => {
         if (run.status === 'cancelled' || this.closed) return;
+        const message = String(error instanceof Error ? error.message : error).slice(0, 2000);
         const record = run.steps.find((step) => step.status === 'running');
         if (record) {
           record.status = 'failed';
-          record.error = String(error instanceof Error ? error.message : error).slice(0, 2000);
-        }
+          record.error = message;
+        } else run.error = message;
         run.status = 'failed';
         await this.save(run);
       })

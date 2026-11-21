@@ -52,8 +52,11 @@ export class AgentClients {
   private clients: DocumentStore<PrivateClient[]>;
   private auditStore: DocumentStore<AgentAudit[]>;
   private loaded?: Promise<void>;
+  private isLoaded = false;
   private queue: Promise<unknown> = Promise.resolve();
   private auditQueue: Promise<unknown> = Promise.resolve();
+  private auditDirty = false;
+  private auditTimer?: ReturnType<typeof setTimeout>;
   constructor(
     directory: string,
     private access: (paths: readonly string[]) => Promise<void>,
@@ -86,6 +89,7 @@ export class AgentClients {
       .then(([clients, audit]) => {
         this.records = clients ?? [];
         this.audits = audit ?? [];
+        this.isLoaded = true;
       })
       .catch((error: unknown) => {
         // A failed read is retried by the next caller instead of disabling this service.
@@ -99,6 +103,11 @@ export class AgentClients {
   }
   actor(): string {
     return this.context.getStore() ?? sharedClientID;
+  }
+  /** The display name of a loaded named client, if known. */
+  nameOf(id = this.actor()): string | undefined {
+    if (id === sharedClientID) return;
+    return this.records.find((client) => client.id === id)?.name;
   }
   async get(id = this.actor()): Promise<AgentClient | undefined> {
     await this.load();
@@ -192,26 +201,80 @@ export class AgentClients {
       return records.map(publicClient);
     });
   }
+  private appendAudit(
+    tool: string,
+    status: AgentAudit['status'],
+    detail: string,
+    clientID: string,
+  ): void {
+    const audit: AgentAudit = {
+      id: randomUUID(),
+      at: Date.now(),
+      clientID,
+      tool,
+      status,
+      detail: detail.slice(0, 1000),
+    };
+    this.audits = [...this.audits.slice(-999), audit];
+    this.auditDirty = true;
+  }
+  private flushAudits(): Promise<void> {
+    if (this.auditTimer) {
+      clearTimeout(this.auditTimer);
+      this.auditTimer = undefined;
+    }
+    const work = this.auditQueue
+      .catch(() => {})
+      .then(async () => {
+        if (!this.auditDirty) return;
+        this.auditDirty = false;
+        await this.auditStore.save([...this.audits]);
+      });
+    this.auditQueue = work;
+    return work;
+  }
+  private scheduleAuditFlush(): void {
+    if (this.auditTimer) return;
+    this.auditTimer = setTimeout(() => {
+      this.auditTimer = undefined;
+      void this.flushAudits().catch(() => {});
+    }, 1000);
+    this.auditTimer.unref?.();
+  }
   async audit(
     tool: string,
     status: AgentAudit['status'],
     detail: string,
     clientID = this.actor(),
+    durable = true,
   ): Promise<void> {
+    if (!durable) {
+      if (this.isLoaded) {
+        this.appendAudit(tool, status, detail, clientID);
+        this.scheduleAuditFlush();
+        return;
+      }
+      const queued = this.auditQueue
+        .catch(() => {})
+        .then(async () => {
+          await this.load();
+          this.appendAudit(tool, status, detail, clientID);
+          this.scheduleAuditFlush();
+        });
+      this.auditQueue = queued;
+      return;
+    }
+    if (this.auditTimer) {
+      clearTimeout(this.auditTimer);
+      this.auditTimer = undefined;
+    }
     const work = this.auditQueue
       .catch(() => {})
       .then(async () => {
         await this.load();
-        const audit: AgentAudit = {
-          id: randomUUID(),
-          at: Date.now(),
-          clientID,
-          tool,
-          status,
-          detail: detail.slice(0, 1000),
-        };
-        this.audits = [...this.audits.slice(-999), audit];
-        await this.auditStore.save(this.audits);
+        this.appendAudit(tool, status, detail, clientID);
+        this.auditDirty = false;
+        await this.auditStore.save([...this.audits]);
       });
     this.auditQueue = work;
     await work;
@@ -223,6 +286,7 @@ export class AgentClients {
   async close() {
     await this.queue.catch(() => {});
     await this.auditQueue.catch(() => {});
+    await this.flushAudits().catch(() => {});
     await Promise.all([this.clients.flush(), this.auditStore.flush()]);
   }
 }

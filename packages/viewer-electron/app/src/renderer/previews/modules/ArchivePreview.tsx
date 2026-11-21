@@ -84,9 +84,7 @@ export default function ArchivePreview(context: PreviewContext) {
               selected.current = null;
             }}
           />
-          <span {...headerItem('archive-child', 9, 'detail')}>
-            <FileName name={child.entry.name} />
-          </span>
+          <span {...headerItem('archive-child', 9, 'detail')}>{child.entry.name}</span>
         </PreviewToolbar>
         {/* the archive's own footer is the plane's; the entry adds no second one */}
         <PreviewHost resource={child} active={active} renderFooter={() => null} />

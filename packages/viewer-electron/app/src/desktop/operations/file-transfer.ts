@@ -48,6 +48,34 @@ export interface CopyFingerprint {
  * plain copy keeps its sources, so one lost to a power failure can be made again.
  */
 export type CopyDurability = 'flushed' | 'written';
+/**
+ * Metadata held back from a staged root item until publication succeeds: immutable flags, read-only
+ * folder modes and deny-delete ACLs otherwise stop macOS from renaming the item out of its stage.
+ */
+export interface DeferredMetadata {
+  set(apply: (destination: string) => Promise<void>, release?: () => Promise<void>): void;
+  apply(destination: string): Promise<void>;
+  close(): Promise<void>;
+}
+export function createDeferredMetadata(): DeferredMetadata {
+  let pending:
+    { apply: (destination: string) => Promise<void>; release?: () => Promise<void> } | undefined;
+  return {
+    set(apply, release) {
+      pending = { apply, release };
+    },
+    async apply(destination) {
+      const work = pending;
+      if (!work) return;
+      await work.apply(destination);
+    },
+    async close() {
+      const work = pending;
+      pending = undefined;
+      await work?.release?.();
+    },
+  };
+}
 /** Where a volume cannot clone a file, and its bytes are streamed instead. */
 const cannotClone = ['ENOTSUP', 'EOPNOTSUPP', 'EXDEV', 'EINVAL', 'ENOSYS'];
 /** Make a published tree's directory entries durable before its sources on another
@@ -148,10 +176,19 @@ export async function publish(
     throw error;
   }
 }
+/** Only a short tail without spaces after a leading name is an extension (DESIGN.md). */
+const extensionTail = /\.[A-Za-z0-9]{1,8}$/;
+/** Splits a path into stem and extension; folders and non-extension dotted names stay whole. */
+function splitName(destination: string, directory: boolean): { stem: string; ext: string } {
+  if (directory) return { stem: destination, ext: '' };
+  const base = path.basename(destination);
+  const tail = extensionTail.exec(base);
+  const ext = tail && tail.index > 0 ? tail[0] : '';
+  return { stem: destination.slice(0, destination.length - ext.length), ext };
+}
 /** The Finder-style "copy" name that is free next to `destination`. */
-export async function keepBothName(destination: string): Promise<string> {
-  const ext = path.extname(destination);
-  const stem = destination.slice(0, destination.length - ext.length);
+export async function keepBothName(destination: string, directory = false): Promise<string> {
+  const { stem, ext } = splitName(destination, directory);
   let suffix = 1;
   let candidate = `${stem} copy${ext}`;
   while (await exists(candidate)) candidate = `${stem} copy ${++suffix}${ext}`;
@@ -161,9 +198,8 @@ export async function keepBothName(destination: string): Promise<string> {
  * The free name for something newly created beside an existing one: "Pasted image 2.png", then
  * "Pasted image 3.png". A copy keeps "copy" in its name; a new item only counts.
  */
-export async function numberedName(destination: string): Promise<string> {
-  const ext = path.extname(destination);
-  const stem = destination.slice(0, destination.length - ext.length);
+export async function numberedName(destination: string, directory = false): Promise<string> {
+  const { stem, ext } = splitName(destination, directory);
   let suffix = 2;
   let candidate = `${stem} ${suffix}${ext}`;
   while (await exists(candidate)) candidate = `${stem} ${++suffix}${ext}`;
@@ -171,9 +207,8 @@ export async function numberedName(destination: string): Promise<string> {
 }
 /** Where a replaced item is kept on a volume without a Trash: "Notes (previous).md", then
  * "Notes (previous 2).md". */
-export async function previousName(destination: string): Promise<string> {
-  const ext = path.extname(destination);
-  const stem = destination.slice(0, destination.length - ext.length);
+export async function previousName(destination: string, directory = false): Promise<string> {
+  const { stem, ext } = splitName(destination, directory);
   let suffix = 1;
   let candidate = `${stem} (previous)${ext}`;
   while (await exists(candidate)) candidate = `${stem} (previous ${++suffix})${ext}`;
@@ -195,6 +230,7 @@ export async function copyTree(
   fingerprints: CopyFingerprint[],
   access: Access,
   durability: CopyDurability = 'flushed',
+  deferred?: DeferredMetadata,
 ): Promise<void> {
   job.check();
   // Content coordination can hydrate a placeholder. Capture its fingerprint
@@ -212,7 +248,7 @@ export async function copyTree(
         const info = await lstat(source);
         if (!info.isFile()) throw new Error('Source changed while waiting for its file provider.');
         fingerprints.push({ file: source, info, identity: versionIdentity(info) });
-        await copyFile(source, target, info, job, signal, durability);
+        await copyFile(source, target, info, job, signal, durability, deferred);
       },
       job.signal,
     );
@@ -235,7 +271,19 @@ export async function copyTree(
           throw new Error('The symbolic link changed while waiting for its file provider.');
         fingerprints.push({ file: source, info: current, identity: versionIdentity(current) });
         await symlink(await readlink(from), to);
-        if (process.platform === 'darwin') await macFiles().copyLinkMetadata(from, to);
+        if (process.platform === 'darwin') {
+          if (deferred) {
+            const owned = await lstat(to);
+            deferred.set(async (destination) => {
+              const published = await lstat(destination);
+              if (!sameItem(published, owned))
+                throw new Error('The symbolic link changed during the transfer.');
+              await macFiles().copyLinkMetadata(source, destination);
+            });
+          } else {
+            await macFiles().copyLinkMetadata(from, to);
+          }
+        }
         signal?.throwIfAborted();
       },
       job.signal,
@@ -268,6 +316,7 @@ export async function copyTree(
             constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
           );
           let output: Awaited<ReturnType<typeof open>> | undefined;
+          let retained = false;
           try {
             const opened = await fileStat(input);
             if (!sameVersionItem(opened, info))
@@ -276,33 +325,70 @@ export async function copyTree(
               fileCoordination.path(target),
               constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
             );
-            await macFiles().copyMetadata(input.fd, output.fd);
             signal?.throwIfAborted();
             job.check();
+            if (deferred) {
+              const sourceHandle = input;
+              const targetHandle = output;
+              deferred.set(
+                async () => {
+                  await macFiles().copyMetadata(sourceHandle.fd, targetHandle.fd);
+                  if (durability === 'flushed') await targetHandle.sync();
+                },
+                async () => {
+                  await Promise.allSettled([sourceHandle.close(), targetHandle.close()]);
+                },
+              );
+              retained = true;
+            } else {
+              await macFiles().copyMetadata(input.fd, output.fd);
+              signal?.throwIfAborted();
+              job.check();
+            }
           } finally {
-            await input.close();
-            await output?.close();
+            if (!retained) {
+              await input.close();
+              await output?.close();
+            }
           }
         },
         job.signal,
       );
+    } else if (deferred) {
+      deferred.set(async (destination) => {
+        await chmod(destination, info.mode);
+        await utimes(destination, info.atime, info.mtime);
+      });
     } else await chmod(target, info.mode);
   } else if (info.isFile()) {
     throw new Error('Source changed while starting the copy.');
   } else {
     throw new Error('Special devices and sockets cannot be transferred.');
   }
-  if (process.platform !== 'darwin') await utimes(target, info.atime, info.mtime);
+  if (process.platform !== 'darwin' && !deferred) await utimes(target, info.atime, info.mtime);
+}
+interface CloneOutcome {
+  cloned: boolean;
+  deferred: boolean;
 }
 /** Clones the open file `input` to the new path `target` where its volume can: an APFS clone
  * shares the source's blocks and attributes. False where it cannot, and the bytes are streamed. */
-async function cloned(input: FileHandle, target: string): Promise<boolean> {
-  if (process.platform !== 'darwin') return false;
+async function cloned(
+  input: FileHandle,
+  target: string,
+  deferRestrictions: boolean,
+): Promise<CloneOutcome> {
+  if (process.platform !== 'darwin') return { cloned: false, deferred: false };
   try {
-    await macFiles().clone(input.fd, target);
-    return true;
+    const native = macFiles();
+    const deferred =
+      deferRestrictions && native.cloneStageVersion === 1
+        ? Boolean(await native.clone(input.fd, target, true))
+        : (await native.clone(input.fd, target), false);
+    return { cloned: true, deferred };
   } catch (error) {
-    if (cannotClone.includes((error as NodeJS.ErrnoException).code ?? '')) return false;
+    if (cannotClone.includes((error as NodeJS.ErrnoException).code ?? ''))
+      return { cloned: false, deferred: false };
     throw error;
   }
 }
@@ -316,6 +402,7 @@ async function copyFile(
   job?: TransferJob,
   signal?: AbortSignal,
   durability: CopyDurability = 'flushed',
+  deferred?: DeferredMetadata,
 ): Promise<void> {
   source = fileCoordination.path(source);
   target = fileCoordination.path(target);
@@ -325,7 +412,9 @@ async function copyFile(
     source,
     constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
   );
-  let output: Awaited<ReturnType<typeof open>> | undefined, owned: Stats | undefined;
+  let output: Awaited<ReturnType<typeof open>> | undefined,
+    owned: Stats | undefined,
+    retained = false;
   try {
     const opened = await fileStat(input);
     if (
@@ -336,16 +425,20 @@ async function copyFile(
       opened.ctimeMs !== info.ctimeMs
     )
       throw new Error('Source changed before copying; it has been left untouched.');
-    if (await cloned(input, target)) {
+    const outcome = await cloned(input, target, Boolean(deferred));
+    let needsDeferred = false;
+    if (outcome.cloned) {
       // made exclusively in the private stage: the item there now is the clone
       owned = await lstat(target);
       job?.copied(info.size);
-      if (durability === 'flushed')
+      needsDeferred = Boolean(deferred && outcome.deferred);
+      if (durability === 'flushed' || needsDeferred)
         output = await open(target, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
     } else {
-      output = await open(target, 'wx', info.mode);
+      output = await open(target, 'wx', deferred ? 0o600 : info.mode);
       owned = await fileStat(output);
-      await streamFile(input, output, info, job, signal);
+      await streamFile(input, output, info, job, signal, !deferred);
+      needsDeferred = Boolean(deferred);
     }
     signal?.throwIfAborted();
     if (durability === 'flushed') await output?.sync();
@@ -358,15 +451,37 @@ async function copyFile(
     )
       throw new Error('Source changed while copying; it has been left untouched.');
     job?.check();
-    if (process.platform !== 'darwin') await utimes(target, info.atime, info.mtime);
+    if (deferred && needsDeferred && output) {
+      const sourceHandle = input;
+      const targetHandle = output;
+      deferred.set(
+        async () => {
+          if (process.platform === 'darwin')
+            await macFiles().copyMetadata(sourceHandle.fd, targetHandle.fd);
+          else {
+            await targetHandle.chmod(info.mode & 0o7777);
+            await targetHandle.utimes(info.atime, info.mtime);
+          }
+          if (durability === 'flushed') await targetHandle.sync();
+        },
+        async () => {
+          await Promise.allSettled([sourceHandle.close(), targetHandle.close()]);
+        },
+      );
+      retained = true;
+    } else if (process.platform !== 'darwin') {
+      await utimes(target, info.atime, info.mtime);
+    }
   } catch (error) {
     const current = owned && (await lstat(target).catch(() => null));
     if (current && owned && sameItem(current, owned))
       await unlinkVerified(target).catch(() => undefined);
     throw error;
   } finally {
-    await input.close();
-    await output?.close();
+    if (!retained) {
+      await input.close();
+      await output?.close();
+    }
   }
 }
 /** Streams `info.size` bytes from `input` into the new file `output`, with the source's metadata. */
@@ -376,6 +491,7 @@ async function streamFile(
   info: Stats,
   job?: TransferJob,
   signal?: AbortSignal,
+  applyMetadata = true,
 ): Promise<void> {
   const buffer = Buffer.allocUnsafe(256 * 1024);
   let total = 0;
@@ -401,5 +517,6 @@ async function streamFile(
     job?.copied(bytesRead);
   }
   signal?.throwIfAborted();
-  if (process.platform === 'darwin') await macFiles().copyMetadata(input.fd, output.fd);
+  if (applyMetadata && process.platform === 'darwin')
+    await macFiles().copyMetadata(input.fd, output.fd);
 }

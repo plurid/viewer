@@ -220,6 +220,31 @@ describe('mailbox preview', () => {
     expect(await screen.findByRole('heading', { name: 'Second' })).toBeTruthy();
   });
 
+  it('virtualizes large mailboxes and moves selection and focus with keyboard keys', async () => {
+    const many = Array.from({ length: 1000 }, (_, index) => ({
+      subject: `Message ${index + 1}`,
+      from: `Sender ${index + 1}`,
+      date: 'Mon, 02 Mar 2026 09:00:00 +0000',
+      time: Date.parse('2026-03-02T09:00:00Z'),
+      size: 100,
+    }));
+    const { context: preview } = context('mbox', (request) =>
+      request && 'message' in request
+        ? data({ mail: mail({ subject: many[request.message]!.subject }) })
+        : data({ mailbox: { messages: many, truncated: false } }),
+    );
+    render(<MailPreview {...preview} />);
+    const list = await screen.findByRole('list', { name: 'Messages' });
+    expect(await screen.findByRole('heading', { name: 'Message 1' })).toBeTruthy();
+    expect(within(list).getAllByRole('button').length).toBeLessThan(100);
+    fireEvent.keyDown(list, { key: 'ArrowDown' });
+    expect(await screen.findByRole('heading', { name: 'Message 2' })).toBeTruthy();
+    fireEvent.keyDown(list, { key: 'End' });
+    expect(await screen.findByRole('heading', { name: 'Message 1000' })).toBeTruthy();
+    fireEvent.keyDown(list, { key: 'Home' });
+    expect(await screen.findByRole('heading', { name: 'Message 1' })).toBeTruthy();
+  });
+
   it("saves an attachment of the chosen message by the message's place in the mailbox", async () => {
     const { context: preview } = context('mbox', mailbox);
     const saveAttachments = vi.fn(async () => {});

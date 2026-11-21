@@ -1,5 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps } from 'react';
+import { createContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { ComponentProps } from 'react';
 import { PreviewHost } from './PreviewHost';
+
+/** True inside the offscreen waiting layer while HeldPreview keeps the current preview visible. */
+export const HeldPreviewHiddenContext = createContext(false);
 
 type HostProps = Omit<ComponentProps<typeof PreviewHost>, 'path' | 'resource'>;
 
@@ -67,7 +71,9 @@ export function HeldPreview({ path, ...props }: HostProps & { path: string }) {
             className={hidden ? 'held-preview-layer held-preview-waiting' : 'held-preview-layer'}
             aria-hidden={hidden || undefined}
           >
-            <PreviewHost path={layer.path} {...props} />
+            <HeldPreviewHiddenContext value={hidden}>
+              <PreviewHost path={layer.path} {...props} />
+            </HeldPreviewHiddenContext>
           </div>
         );
       })}

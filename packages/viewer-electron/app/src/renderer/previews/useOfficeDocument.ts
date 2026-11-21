@@ -25,14 +25,13 @@ export function useOfficeDocument(context: PreviewContext, worksheet?: Worksheet
     fromRow = worksheet?.fromRow,
     limit = worksheet?.limit;
   useEffect(() => {
+    const requestID = crypto.randomUUID();
     const request = enabled
-      ? { sheet, fromRow: fromRow ?? 1, limit: limit ?? 100, requestID: crypto.randomUUID() }
-      : undefined;
+      ? { sheet, fromRow: fromRow ?? 1, limit: limit ?? 100, requestID }
+      : { requestID };
     let alive = true;
     const cancel = () =>
-      request
-        ? context.services.cancelDocument(context.resource.id, request.requestID).catch(() => {})
-        : Promise.resolve();
+      context.services.cancelDocument(context.resource.id, requestID).catch(() => {});
     const fail = (message: string) =>
       setResult((previous) => ({
         resource: context.resource.id,
@@ -44,8 +43,7 @@ export function useOfficeDocument(context: PreviewContext, worksheet?: Worksheet
       if (!alive) return;
       alive = false;
       fail('Reading this document is taking longer than expected. Try again.');
-      if (request) void cancel();
-      else void context.services.release(context.resource.id).catch(() => {});
+      void cancel();
     }, 15000);
     const aborted = () => {
       alive = false;

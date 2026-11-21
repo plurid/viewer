@@ -45,7 +45,7 @@ export function EditorFind({
   const [regexp, setRegexp] = useState(last.regexp);
   const [replacing, setReplacing] = useState(request.replace);
   const [replacement, setReplacement] = useState(last.replace);
-  const [status, setStatus] = useState<FindStatus | null>(null);
+  const [status, setStatus] = useState<FindStatus | null | undefined>(undefined);
   // where finding as it is typed starts: where find opened, then where a step left it
   const origin = useRef(view.state.selection.main.from);
   useEffect(() => {
@@ -106,15 +106,13 @@ export function EditorFind({
     toggle((value) => !value);
     return true;
   };
-  const keys = (event: KeyboardEvent<HTMLInputElement>, enter: () => void) => {
+  const containerKeys = (event: KeyboardEvent<HTMLDivElement>) => {
     let handled = options(event);
-    if (event.key === 'Enter') {
-      enter();
-      handled = true;
-    } else if (event.key === 'Escape') {
+    if (event.key === 'Escape') {
       onClose();
       handled = true;
     } else if (event.key.toLowerCase() === 'f' && (event.metaKey || event.ctrlKey)) {
+      field.current?.focus();
       field.current?.select();
       handled = true;
     }
@@ -123,15 +121,25 @@ export function EditorFind({
       event.stopPropagation();
     }
   };
+  const inputKeys = (event: KeyboardEvent<HTMLInputElement>, enter: () => void) => {
+    if (event.key === 'Enter') {
+      enter();
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+  const invalid = !!search && status === null;
   const count = !search
     ? ''
-    : !status
-      ? 'Invalid pattern'
-      : !status.count
-        ? 'No matches'
-        : status.index >= 0
-          ? `${status.index + 1} / ${status.count}${status.capped ? '+' : ''}`
-          : `${status.count}${status.capped ? '+' : ''} ${status.count === 1 ? 'match' : 'matches'}`;
+    : status === undefined
+      ? ''
+      : !status
+        ? 'Invalid pattern'
+        : !status.count
+          ? 'No matches'
+          : status.index >= 0
+            ? `${status.index + 1} / ${status.count}${status.capped ? '+' : ''}`
+            : `${status.count}${status.capped ? '+' : ''} ${status.count === 1 ? 'match' : 'matches'}`;
   const found = !!status?.count;
   const option = (label: string, title: string, on: boolean, set: (value: boolean) => void) => (
     <button
@@ -148,7 +156,7 @@ export function EditorFind({
     </button>
   );
   return (
-    <div className="editor-find" role="search" aria-label="Find in text">
+    <div className="editor-find" role="search" aria-label="Find in text" onKeyDown={containerKeys}>
       <IconButton
         className="editor-find-disclosure"
         icon={replacing ? 'down' : 'right'}
@@ -166,16 +174,13 @@ export function EditorFind({
               spellCheck={false}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              onKeyDown={(event) => keys(event, () => step(!event.shiftKey))}
+              onKeyDown={(event) => inputKeys(event, () => step(!event.shiftKey))}
             />
             {option('Match case', 'Match case (⌥C)', caseSensitive, setCaseSensitive)}
             {option('Whole word', 'Whole word (⌥W)', wholeWord, setWholeWord)}
             {option('Regular expression', 'Regular expression (⌥R)', regexp, setRegexp)}
           </div>
-          <span
-            className={'editor-find-count' + (search && !status ? ' is-invalid' : '')}
-            aria-live="polite"
-          >
+          <span className={'editor-find-count' + (invalid ? ' is-invalid' : '')} aria-live="polite">
             {count}
           </span>
           <IconButton
@@ -197,7 +202,7 @@ export function EditorFind({
                 value={replacement}
                 onChange={(event) => setReplacement(event.target.value)}
                 onKeyDown={(event) =>
-                  keys(event, () => {
+                  inputKeys(event, () => {
                     if (!valid()) return;
                     // ⌘Enter replaces them all
                     if (event.metaKey || event.ctrlKey) replaceAll(view);

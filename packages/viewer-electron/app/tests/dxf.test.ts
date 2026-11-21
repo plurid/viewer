@@ -18,6 +18,7 @@ import {
   readCutDrawing,
 } from '../src/domain/layout/nesting/drawing';
 import { decodeDXF } from '../src/domain/previews/drawings/dxf/decode';
+import { gridLines } from '../src/renderer/previews/dxf/canvas';
 
 describe('DXF geometry and measurements', () => {
   it('loads a millimetre drawing and computes geometry bounds instead of stale header bounds', () => {
@@ -203,5 +204,22 @@ describe('DXF geometry and measurements', () => {
     expect(convertUnits(645.16, 4, 1, true)).toBeCloseTo(1);
     expect(unitInfo(0).symbol).toBe('units');
     expect(convertUnits(5, 0, 4)).toBe(5);
+  });
+  it('leaves POINT entities without length or approximate sampling flags', () => {
+    const drawing = parseDrawing(
+      dxf(
+        entity('LINE', [8, '0', 10, 0, 20, 0, 11, 10, 21, 0]) +
+          entity('POINT', [8, 'DRILL', 10, 5, 20, 5]),
+      ),
+    );
+    const point = drawing.entities.find((item) => item.type === 'POINT');
+    expect(point).toBeDefined();
+    expect(point!.length).toBeUndefined();
+    expect(point!.approximate).toBe(false);
+  });
+  it('terminates grid generation cleanly when zoomed in on large coordinates', () => {
+    // At 1e10, float64 ULP (~1.9e-6) exceeds step 5e-7; additive x += step would loop forever.
+    expect(gridLines(1e10, 1e10 + 4e-6, 5e-7)).toEqual([]);
+    expect(gridLines(0, 100, 25)).toEqual([0, 25, 50, 75, 100]);
   });
 });

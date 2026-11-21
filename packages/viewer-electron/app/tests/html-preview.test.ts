@@ -298,4 +298,29 @@ describe('HTML source composition', () => {
     expect(document.activeElement).toBe(preview);
     expect(read).toHaveBeenCalledOnce();
   });
+
+  it('registers Reload for header overflow and keeps it keyboard-focusable with aria-disabled while loading', async () => {
+    let complete!: (preview: HtmlPreview) => void;
+    htmlPreview.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const view = render(createElement(HTMLPreview, context));
+    const reload = view.getByRole('button', { name: 'Reload' }) as HTMLButtonElement;
+    expect(reload.dataset.headerItem).toBe('reload');
+    expect(reload.dataset.headerCommands).toBe('preview.reload-html');
+    expect(reload.disabled).toBe(false);
+    expect(reload.getAttribute('aria-disabled')).toBe('true');
+    expect(reload.title).toContain('Opening');
+    reload.focus();
+    expect(document.activeElement).toBe(reload);
+    fireEvent.click(reload);
+    expect(htmlPreview).toHaveBeenCalledTimes(1);
+    await act(async () =>
+      complete({ id: capabilityID(1), url: `viewer-html://${capabilityID(1)}/page.html` }),
+    );
+    await waitFor(() => expect(reload.getAttribute('aria-disabled')).toBeNull());
+  });
 });

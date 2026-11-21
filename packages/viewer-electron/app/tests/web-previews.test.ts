@@ -476,6 +476,34 @@ describe('explicit folder loopback servers', () => {
     await expect(f.service.start(3, f.root, 'late')).rejects.toThrow('closed');
   });
 
+  it('keeps open conversation canvases alive when an unrelated folder is quiesced, and closes them on global quiesce', async () => {
+    const f = await fixture();
+    const files = new Map<string, Uint8Array<ArrayBuffer>>([
+      ['index.html', new TextEncoder().encode('<p>Canvas</p>') as Uint8Array<ArrayBuffer>],
+    ]);
+    const preview = await f.service.openCanvas(1, 'canvas-quiesce', files);
+    await f.service.quiesce(path.join(process.cwd(), 'src'));
+    await f.service.quiesce('/');
+    expect((await f.service.response(new Request(preview.url))).status).toBe(200);
+    await f.service.quiesce();
+    expect((await f.service.response(new Request(preview.url))).status).toBe(404);
+  });
+
+  it('rolls back a failed initial server start so the pane folder is not locked and no record leaks', async () => {
+    const f = await fixture();
+    const other = path.join(f.temporary, 'Other');
+    await mkdir(other);
+    f.access.mockImplementation(async () => {
+      // Reject during activate()'s verify() once start() has inserted the record into this.servers.
+      if (f.service.list(1).length > 0) throw new Error('Simulated activate failure');
+    });
+    await expect(f.service.start(1, f.root, 'pane-a')).rejects.toThrow('Folder access is required.');
+    expect(f.service.list(1)).toEqual([]);
+    // Starting the same pane with a different folder must not fail with "Close this server plane before changing its folder."
+    await expect(f.service.start(1, other, 'pane-a')).rejects.toThrow('Folder access is required.');
+    expect(f.service.list(1)).toEqual([]);
+  });
+
   it('aborts admission that is waiting for access when the owner closes', async () => {
     let entered!: () => void;
     let release!: () => void;

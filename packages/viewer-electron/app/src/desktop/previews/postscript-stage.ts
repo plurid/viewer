@@ -14,6 +14,13 @@ export interface PostScriptStageOptions {
   stage?: typeof privateStage;
 }
 
+export class PostScriptStageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PostScriptStageError';
+  }
+}
+
 /** Only interpreter scratch can reach the Trash; normal completion disposes an empty stage. */
 export async function withPostScriptStage<T>(
   options: PostScriptStageOptions,
@@ -33,14 +40,16 @@ export async function withPostScriptStage<T>(
   } finally {
     const current = await lstat(directory);
     if (current.isSymbolicLink() || !current.isDirectory() || !sameItem(original, current))
-      throw new Error('The Ghostscript scratch folder changed and was kept.');
+      throw new PostScriptStageError('The Ghostscript scratch folder changed and was kept.');
     if (!(await readdir(directory)).length) {
       await stage.dispose();
     } else {
       try {
         await scratchBytes(directory);
       } catch {
-        throw new Error('The Ghostscript scratch folder could not be safely checked and was kept.');
+        throw new PostScriptStageError(
+          'The Ghostscript scratch folder could not be safely checked and was kept.',
+        );
       }
       const retained = path.join(
         path.dirname(directory),
@@ -49,9 +58,9 @@ export async function withPostScriptStage<T>(
       await renameExclusive(directory, retained);
       const moved = await lstat(retained);
       if (!sameItem(original, moved) || moved.isSymbolicLink())
-        throw new Error('The Ghostscript scratch folder changed and was kept.');
+        throw new PostScriptStageError('The Ghostscript scratch folder changed and was kept.');
       if (!options.trash)
-        throw new Error(
+        throw new PostScriptStageError(
           'Ghostscript’s temporary files were kept because Viewer couldn’t move them to the Trash.',
         );
       try {
@@ -64,10 +73,12 @@ export async function withPostScriptStage<T>(
         )
           throw new Error('Scratch remains.');
       } catch {
-        throw new Error('Ghostscript scratch could not be moved to Trash and was kept.');
+        throw new PostScriptStageError(
+          'Ghostscript scratch could not be moved to Trash and was kept.',
+        );
       }
       if (completed)
-        throw new Error(
+        throw new PostScriptStageError(
           'Ghostscript left scratch behind after rendering; the scratch was moved to Trash.',
         );
     }

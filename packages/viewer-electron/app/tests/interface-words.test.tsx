@@ -3,8 +3,11 @@
  * The shared words of the interface: counts with their nouns, titles in the macOS case, keys as a
  * Mac menu shows them, states in words, and the one failure with Try Again.
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { journalSummary } from '../src/domain/journal/events';
 import { plural, pluralWord } from '../src/domain/plural';
 import { titleCase } from '../src/domain/title-case';
 import {
@@ -78,6 +81,16 @@ describe('states in words', () => {
     expect(statusLabel('waiting-review')).toBe('Needs review');
     expect(operationLabel('mkdir')).toBe('New Folder');
     expect(capabilityLabel('terminal-read')).toBe('Read terminal output');
+    expect(journalSummary({ action: 'copy', phase: 'cancelled' })).toBe('Copy canceled');
+  });
+
+  it('keeps the macOS Empty Trash alert wording aligned with the swept confirmation copy', () => {
+    const header = readFileSync(path.resolve(__dirname, '../tools/trash-ui.h'), 'utf8');
+    expect(header).toContain('will be erased for good, including what is inside trashed folders.');
+    expect(header).toContain('You can\\u2019t undo this.');
+    expect(header).toContain('Trash couldn\\u2019t be emptied');
+    expect(header).not.toContain('This cannot be undone.');
+    expect(header).not.toContain('Trash could not be emptied');
   });
 });
 

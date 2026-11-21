@@ -9,7 +9,7 @@ import {
 import type { OperationJob } from '../../domain/contracts';
 import { randomUUID, createHash } from 'node:crypto';
 import { constants } from 'node:fs';
-import { chmod, mkdir, open, opendir } from 'node:fs/promises';
+import { chmod, mkdir, open, opendir, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import { DocumentStore } from '../persistence/document-store';
@@ -88,6 +88,7 @@ const treeManifestSchema = z
 const fileListManifestSchema = z
   .array(z.object({ snapshot: snapshotPath, hash: z.string().length(64) }).passthrough())
   .max(10000);
+const checkpointIDPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Recovery content lives in the app's private storage. Capturing never mutates sources. */
 export class Checkpoints {
   private store: DocumentStore<CheckpointRecord[]>;
@@ -108,9 +109,42 @@ export class Checkpoints {
     );
   }
   private load(): Promise<void> {
-    return (this.loaded ??= this.store.load().then((records) => {
-      this.records = records ?? [];
+    return (this.loaded ??= this.loadRecords().catch((error) => {
+      this.loaded = undefined;
+      throw error;
     }));
+  }
+  private async loadRecords(): Promise<void> {
+    const stored = (await this.store.load()) ?? [];
+    const known = new Set(stored.map((record) => record.id));
+    const entries = await readdir(this.directory, { withFileTypes: true }).catch(
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return [];
+        throw error;
+      },
+    );
+    // A crash during create() can leave a UUID folder without an index entry. Surface it as an
+    // incomplete checkpoint so its bytes count toward the budget and the person can remove it.
+    const discovered: CheckpointRecord[] = [];
+    for (const entry of entries) {
+      if (!checkpointIDPattern.test(entry.name) || known.has(entry.name)) continue;
+      if (stored.length + discovered.length >= 100) break;
+      const folder = path.join(this.directory, entry.name);
+      const info = await lstat(folder).catch(() => null);
+      if (!info?.isDirectory() || info.isSymbolicLink()) continue;
+      const bytes = await this.footprint(folder).catch(() => 0);
+      discovered.push({
+        id: entry.name,
+        created: info.birthtimeMs || info.mtimeMs,
+        title: 'Incomplete checkpoint',
+        bytes,
+        roots: [],
+        scope: 'contents-and-mode',
+        status: 'failed',
+        manifestVersion: 2,
+      });
+    }
+    this.records = [...stored, ...discovered];
   }
   private serial<T>(work: () => Promise<T>): Promise<T> {
     if (this.closed) return Promise.reject(new Error('Checkpoints have closed.'));

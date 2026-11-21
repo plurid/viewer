@@ -125,7 +125,7 @@ function setProviders(providers: ReturnType<typeof newModelProvider>[]) {
   snapshot.settings.providers = providers;
   act(() => receiveSettings(snapshot));
 }
-function preview(name = 'Untitled') {
+function preview(name = 'Untitled', options: { openInApp?: boolean } = {}) {
   const values = new Map<string, unknown>();
   const sqlite = vi.fn(async (_id: string, _request: SQLiteRequest) => database);
   const entry = {
@@ -152,6 +152,10 @@ function preview(name = 'Untitled') {
       get: (key: string) => values.get(key),
       set: (key: string, value: unknown) => values.set(key, value),
     },
+    openInApp:
+      options.openInApp === false
+        ? undefined
+        : () => void window.viewer.openExternal(entry.path),
     services: {
       read: async () => ({ text: '', binary: true, truncated: false }),
       sqlite,
@@ -203,6 +207,18 @@ describe('a file no preview reads', () => {
     await waitFor(() => expect(fetched).toHaveBeenCalled());
     expect(view.getByText('No preview for this kind of file')).toBeTruthy();
     expect(view.queryByRole('button', { name: /^Ask/ })).toBeNull();
+  });
+
+  it('hides disk-path actions when openInApp is absent (such as archive entries or Git snapshots)', async () => {
+    served = new Uint8Array([0x13, 0x37, 0, 0, 0x42]);
+    setProviders([{ ...newModelProvider('local', 'fixture'), name: 'Studio model' }]);
+    const { view } = preview('payload.bin', { openInApp: false });
+    await waitFor(() => expect(fetched).toHaveBeenCalled());
+    expect(view.getByText('No preview for this kind of file')).toBeTruthy();
+    expect(view.queryByRole('button', { name: 'Quick Look in macOS' })).toBeNull();
+    expect(view.queryByRole('button', { name: 'Open in Default App' })).toBeNull();
+    expect(view.queryByRole('button', { name: /^Ask/ })).toBeNull();
+    expect(view.getByRole('grid', { name: 'File bytes' })).toBeTruthy();
   });
 });
 

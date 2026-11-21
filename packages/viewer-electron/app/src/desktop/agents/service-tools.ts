@@ -280,6 +280,10 @@ export class AgentServiceTools {
         },
       }),
     );
+    if (context.signal.aborted) {
+      await this.ports.workflows.request({ kind: 'cancel', id: run.id }).catch(() => {});
+      context.signal.throwIfAborted();
+    }
     return { id: run.id, status: run.status };
   }
   private async listWorkflows(args: Record<string, unknown>, context: AgentServiceContext) {

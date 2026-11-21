@@ -168,6 +168,26 @@ describe('PostScript preview composition and explicit rendering', () => {
     expect(screen.getByText('Two squares')).toBeTruthy();
     expect(screen.queryByText('Existing PDF viewer')).toBeNull();
   });
+  it('reports a Ghostscript scratch Trash failure even after clicking Cancel Rendering', async () => {
+    const f = fixture();
+    let fail!: (error: Error) => void;
+    f.services.renderPostscript.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+    );
+    render(<PostScriptPreview {...f.context} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Render Pages' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel Rendering' }));
+    expect(screen.getByText('Rendering canceled.')).toBeTruthy();
+    await act(async () =>
+      fail(new Error('Ghostscript scratch could not be moved to Trash and was kept.')),
+    );
+    expect(
+      screen.getByText('Ghostscript scratch could not be moved to Trash and was kept.'),
+    ).toBeTruthy();
+  });
   it('retains keyboard focus through rendering, cancellation and completion', async () => {
     const f = fixture();
     let finish!: (value: Resource) => void;

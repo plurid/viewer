@@ -58,7 +58,7 @@ export class CommandReceipts {
       !task.directory ||
       task.started === undefined ||
       !task.workspaceID ||
-      !task.paneID
+      task.paneID === undefined
     )
       return Promise.resolve();
     const receipt = receiptSchema.parse({

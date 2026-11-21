@@ -380,7 +380,13 @@ export class WebPreviews {
           throw new WebPreviewError(429, 'Too many server planes.');
         }
         this.servers.set(record.info.id, record);
-        await this.activate(record, signal);
+        try {
+          await this.activate(record, signal);
+        } catch (error) {
+          if (this.servers.get(record.info.id) === record) this.servers.delete(record.info.id);
+          await record.reader.close().catch(() => {});
+          throw error;
+        }
         return { ...record.info };
       }),
     );
@@ -525,15 +531,20 @@ export class WebPreviews {
 
   async quiesce(root?: string): Promise<void> {
     const canonical = root ? await realpath(root).catch(() => path.resolve(root)) : undefined;
-    const affected = async (paths: string[]) =>
-      !root ||
-      (await Promise.all(paths.map((file) => realpath(file).catch(() => path.resolve(file))))).some(
+    const affected = async (paths: string[]) => {
+      if (!root) return true;
+      const targets = paths.filter(Boolean);
+      if (!targets.length) return false;
+      return (
+        await Promise.all(targets.map((file) => realpath(file).catch(() => path.resolve(file))))
+      ).some(
         (file) =>
           containsPath(canonical!, file) ||
           containsPath(file, canonical!) ||
           containsPath(path.resolve(root), file) ||
           containsPath(file, path.resolve(root)),
       );
+    };
     const work: Promise<unknown>[] = [];
     for (const [task, item] of this.pending)
       if (await affected(item.paths)) {

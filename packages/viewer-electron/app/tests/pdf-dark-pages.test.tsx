@@ -175,17 +175,21 @@ function open(
     anchor?: EvidenceAnchor;
     saved?: Record<string, unknown>;
     toolbar?: PreviewContext['toolbar'];
+    path?: string;
+    openInApp?: boolean;
   } = {},
 ) {
   const values = new Map<string, unknown>(Object.entries(options.saved ?? {}));
+  const filePath = options.path ?? '/Jobs/Bracket.pdf';
+  const fileName = filePath.split('/').pop() ?? 'Bracket.pdf';
   const context = {
     resource: {
       id: 'pdf',
-      url: 'https://fixture.invalid/Bracket.pdf',
-      entry: { path: '/Jobs/Bracket.pdf', name: 'Bracket.pdf', extension: 'pdf' },
+      url: `https://fixture.invalid/${fileName}`,
+      entry: { path: filePath, name: fileName, extension: 'pdf' },
     },
     evidence: options.anchor && {
-      path: '/Jobs/Bracket.pdf',
+      path: filePath,
       version: { identity: temporalIdentity('1:2'), modified: 1, size: 1 },
       anchor: options.anchor,
       quote: '',
@@ -200,6 +204,7 @@ function open(
       get: (key: string) => values.get(key),
       set: (key: string, value: unknown) => values.set(key, value),
     },
+    openInApp: options.openInApp === false ? undefined : vi.fn(),
     optimize: vi.fn(),
     editPDF: vi.fn(),
     services: {},
@@ -382,6 +387,19 @@ describe('what dark pages leave alone', () => {
     expect(view.queryByText('Optimize…')).toBeNull();
     for (const id of ['pdf-pages', 'pdf-outline', 'pdf-print'])
       expect(command(id)?.available, id).toBe(true);
+  });
+  it('hides Print PDF for archive PDFs without openInApp and for misnamed Show-as PDFs', async () => {
+    const archiveChild = open({ openInApp: false });
+    await waitFor(() => expect(renders).toHaveLength(1));
+    expect(archiveChild.view.queryByRole('button', { name: 'Print…' })).toBeNull();
+    expect(command('pdf-print')?.available).toBe(false);
+    archiveChild.view.unmount();
+    renders.length = 0;
+
+    const misnamed = open({ path: '/Jobs/Statement.bin' });
+    await waitFor(() => expect(renders).toHaveLength(1));
+    expect(misnamed.view.queryByRole('button', { name: 'Print…' })).toBeNull();
+    expect(command('pdf-print')?.available).toBe(false);
   });
   it('are drawn only by the page previews: printing, exports, layout and nesting never use them', async () => {
     const source = path.join(import.meta.dirname, '../src');

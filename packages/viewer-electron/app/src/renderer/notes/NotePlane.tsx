@@ -209,9 +209,9 @@ export default function NotePlane({ pane, visible }: { pane: NotePaneRecord; vis
               editor.current = handle;
             }}
             onChange={() => {
-              if (editor.current) changeNote(pane.id, { text: editor.current.text() });
+              if (editor.current)
+                changeNote(pane.id, { text: editor.current.text() }, { fromEditor: true });
             }}
-            onFinal={(text) => changeNote(pane.id, { text })}
           />
         </Suspense>
       ) : checklist ? (

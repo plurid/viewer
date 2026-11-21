@@ -9,10 +9,20 @@ import {
   maxAgentReadBytes,
   maxAgentReplyBytes,
 } from '../src/domain/agents/clients';
-const { connect } = vi.hoisted(() => ({ connect: vi.fn() }));
-vi.mock('node:net', () => ({ connect }));
+const { connect, createServer } = vi.hoisted(() => ({
+  connect: vi.fn(),
+  createServer: vi.fn(),
+}));
+vi.mock('node:net', () => ({ connect, createServer }));
 import { runMCPClient } from '../src/desktop/agents/mcp-client';
-import { replyLine } from '../src/desktop/agents/agent-broker';
+import { AgentBroker, replyLine } from '../src/desktop/agents/agent-broker';
+import { defaultSettings } from '../src/domain/services';
+import type { FileServices } from '../src/desktop/files/file-services';
+import type { ActionPlanner } from '../src/desktop/actions/planner';
+import type { AgentRequests } from '../src/desktop/agents/agent-requests';
+import type { SettingsService } from '../src/desktop/preferences/settings';
+import { EventEmitter } from 'node:events';
+import type { Server, Socket } from 'node:net';
 const record = '{"socket":"fixture","pid":1}';
 /** A socket that answers each request with `reply(id)`, split into `pieces` chunks. */
 const replying = (reply: (id: string) => Buffer, pieces = 1) =>
@@ -285,5 +295,358 @@ describe('an agent started while Viewer is closed (2026-10-30)', () => {
       'Viewer is not running. Open Viewer (/Applications/Viewer.app), then start the agent ' +
         'again. This agent starts another copy, at /Users/me/Downloads/Viewer.app.',
     );
+  });
+});
+
+function duplexPair() {
+  const clientSide: Duplex = new Duplex({
+    allowHalfOpen: false,
+    read() {},
+    write(chunk, _encoding, callback) {
+      serverSide.push(Buffer.from(chunk));
+      callback();
+    },
+    final(callback) {
+      serverSide.push(null);
+      callback();
+    },
+  });
+  const serverSide: Duplex = new Duplex({
+    allowHalfOpen: false,
+    read() {},
+    write(chunk, _encoding, callback) {
+      clientSide.push(Buffer.from(chunk));
+      callback();
+    },
+    final(callback) {
+      clientSide.push(null);
+      callback();
+    },
+  });
+  clientSide.on('close', () => {
+    if (!serverSide.destroyed) serverSide.destroy();
+  });
+  serverSide.on('close', () => {
+    if (!clientSide.destroyed) clientSide.destroy();
+  });
+  return { client: clientSide, server: serverSide };
+}
+
+function mockBrokerServer() {
+  let onConnection: ((stream: Socket) => void) | undefined;
+  createServer.mockImplementation((listener: (stream: Socket) => void) => {
+    onConnection = listener;
+    const server = Object.assign(new EventEmitter(), {
+      listening: false,
+      listen(socket: string, callback?: () => void) {
+        server.listening = true;
+        void writeFile(socket, '').then(() => callback?.());
+        return server;
+      },
+      close(callback?: () => void) {
+        server.listening = false;
+        callback?.();
+        return server;
+      },
+    });
+    return server as unknown as Server;
+  });
+  return (stream: Duplex) => onConnection!(stream as unknown as Socket);
+}
+
+async function approveBrokerAccess(broker: AgentBroker, folder: string) {
+  const change = { enabled: true, add: [folder] };
+  const review = await broker.access.captureReview(change);
+  await broker.access.approve(change, review);
+}
+
+describe('broker request cancellation, framing and credential isolation', () => {
+  it('cancels timed-out in-flight reads and skips queued proposals across the relay', async () => {
+    const root = await temporaryRoot('viewer-mcp-timeout-');
+    const dataPath = path.join(root, 'Data');
+    const folder = path.join(root, 'Granted');
+    await mkdir(dataPath);
+    await mkdir(folder);
+    const file = path.join(folder, 'Scan.pdf');
+    await writeFile(file, '%PDF-1.4\n');
+    const accept = mockBrokerServer();
+    let inspectSignal: AbortSignal | undefined;
+    let releaseInspect!: () => void;
+    const inspectStarted = new Promise<void>((resolve) => {
+      releaseInspect = resolve;
+    });
+    let finishInspect!: () => void;
+    const inspect = vi.fn(
+      (_file: string, _content?: boolean, _ocr?: boolean, signal?: AbortSignal) => {
+        inspectSignal = signal;
+        releaseInspect();
+        return new Promise((resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason ?? new Error('Aborted.')), {
+            once: true,
+          });
+          finishInspect = () => resolve({ path: file, summary: 'Done' });
+        });
+      },
+    );
+    const transform = vi.fn(() => ({ id: 'proposal-should-not-exist', status: 'review' }));
+    const settings = defaultSettings(root);
+    settings.agents.enabled = true;
+    settings.agents.roots = [folder];
+    const broker = new AgentBroker(
+      dataPath,
+      () => settings,
+      () => undefined,
+      { inspect } as unknown as FileServices,
+      { all: async () => [], cancel: () => {} } as unknown as ActionPlanner,
+      {
+        catalog: () => ({
+          target: {
+            workspaceID: 'ws',
+            rootID: 'root',
+            paneID: 'pane',
+            directory: folder,
+            selection: [],
+          },
+          commands: [],
+        }),
+        requests: {
+          transform,
+          stop: () => {},
+          revokeGrants: async () => {},
+          has: () => false,
+          cancel: () => {},
+        } as unknown as AgentRequests,
+        config: {} as unknown as SettingsService,
+      },
+    );
+    await approveBrokerAccess(broker, folder);
+    const created = await broker.clients.create({
+      name: 'TimeoutClient',
+      roots: [folder],
+      capabilities: ['metadata', 'content', 'propose'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 4 },
+    });
+    await broker.start();
+    const pair = duplexPair();
+    connect.mockImplementation(() => {
+      accept(pair.server);
+      queueMicrotask(() => pair.client.emit('connect'));
+      return pair.client;
+    });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const replies: Record<string, unknown>[] = [];
+    let outBuffer = '';
+    output.on('data', (chunk: Buffer) => {
+      outBuffer += chunk.toString('utf8');
+      for (let index = outBuffer.indexOf('\n'); index >= 0; index = outBuffer.indexOf('\n')) {
+        replies.push(JSON.parse(outBuffer.slice(0, index)));
+        outBuffer = outBuffer.slice(index + 1);
+      }
+    });
+    try {
+      const running = runMCPClient(dataPath, { input, output, token: created.token });
+      input.write(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'inspect_file', arguments: { path: file, ocr: true } },
+        }) + '\n',
+      );
+      input.write(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: {
+            name: 'propose_transform',
+            arguments: {
+              sources: [file],
+              destination: folder,
+              name: 'out.webp',
+              plan: { kind: 'image', format: 'webp' },
+            },
+          },
+        }) + '\n',
+      );
+      await inspectStarted;
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(replies).toHaveLength(2);
+      expect(
+        replies.every((item) =>
+          String((item.error as { message?: string })?.message).includes('timed out'),
+        ),
+      ).toBe(true);
+      expect(inspectSignal?.aborted).toBe(true);
+      finishInspect();
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(transform).not.toHaveBeenCalled();
+      input.end();
+      await running;
+    } finally {
+      vi.useRealTimers();
+      await broker.close();
+      await trashTemporary(root);
+    }
+  });
+
+  it('preserves request id on oversized lines and frames near-65536 and batched lines cleanly', async () => {
+    const root = await temporaryRoot('viewer-mcp-framing-');
+    const dataPath = path.join(root, 'Data');
+    const folder = path.join(root, 'Granted');
+    await mkdir(dataPath);
+    await mkdir(folder);
+    const accept = mockBrokerServer();
+    const settings = defaultSettings(root);
+    settings.agents.enabled = true;
+    settings.agents.roots = [folder];
+    const broker = new AgentBroker(
+      dataPath,
+      () => settings,
+      () => undefined,
+      {} as unknown as FileServices,
+      { all: async () => [], cancel: () => {} } as unknown as ActionPlanner,
+    );
+    await approveBrokerAccess(broker, folder);
+    const token = await broker.credential();
+    await broker.start();
+    const pair = duplexPair();
+    connect.mockImplementation(() => {
+      accept(pair.server);
+      queueMicrotask(() => pair.client.emit('connect'));
+      return pair.client;
+    });
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const replies: Record<string, unknown>[] = [];
+    let outBuffer = '';
+    output.on('data', (chunk: Buffer) => {
+      outBuffer += chunk.toString('utf8');
+      for (let index = outBuffer.indexOf('\n'); index >= 0; index = outBuffer.indexOf('\n')) {
+        replies.push(JSON.parse(outBuffer.slice(0, index)));
+        outBuffer = outBuffer.slice(index + 1);
+      }
+    });
+    try {
+      const running = runMCPClient(dataPath, { input, output, token });
+      // 1. Oversized line (> 65,536 bytes) must answer -32600 with its actual id.
+      const tooBig = JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'req-oversized',
+        method: 'ping',
+        params: { pad: 'a'.repeat(70_000) },
+      });
+      expect(Buffer.byteLength(tooBig)).toBeGreaterThan(65536);
+      // 2. Near-limit line (65,500 bytes) must pass through relay+broker without dropping socket.
+      const prefix = '{"jsonrpc":"2.0","id":"req-near","method":"ping","params":{"pad":"';
+      const suffix = '"}}';
+      const nearLimit = prefix + 'b'.repeat(65500 - prefix.length - suffix.length) + suffix;
+      expect(Buffer.byteLength(nearLimit)).toBe(65500);
+      // 3. Two 40 KB lines delivered in one write must both succeed without tripping a buffer cap.
+      const batchOne = JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'req-batch-1',
+        method: 'ping',
+        params: { pad: 'c'.repeat(40_000) },
+      });
+      const batchTwo = JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'req-batch-2',
+        method: 'ping',
+        params: { pad: 'd'.repeat(40_000) },
+      });
+      input.write(`${tooBig}\n${nearLimit}\n${batchOne}\n${batchTwo}\n`);
+      input.end();
+      await running;
+      expect(replies).toEqual([
+        {
+          jsonrpc: '2.0',
+          id: 'req-oversized',
+          error: { code: -32600, message: 'Request exceeded its size limit.' },
+        },
+        { jsonrpc: '2.0', id: 'req-near', result: {} },
+        { jsonrpc: '2.0', id: 'req-batch-1', result: {} },
+        { jsonrpc: '2.0', id: 'req-batch-2', result: {} },
+      ]);
+    } finally {
+      await broker.close();
+      await trashTemporary(root);
+    }
+  });
+
+  it('disconnects only shared-token streams when rotating the shared credential', async () => {
+    const root = await temporaryRoot('viewer-mcp-rotate-');
+    const dataPath = path.join(root, 'Data');
+    const folder = path.join(root, 'Granted');
+    await mkdir(dataPath);
+    await mkdir(folder);
+    const accept = mockBrokerServer();
+    const settings = defaultSettings(root);
+    settings.agents.enabled = true;
+    settings.agents.roots = [folder];
+    const broker = new AgentBroker(
+      dataPath,
+      () => settings,
+      () => undefined,
+      {} as unknown as FileServices,
+      { all: async () => [], cancel: () => {} } as unknown as ActionPlanner,
+    );
+    await approveBrokerAccess(broker, folder);
+    const sharedToken = await broker.credential();
+    const named = await broker.clients.create({
+      name: 'NamedKeepOpen',
+      roots: [folder],
+      capabilities: ['metadata'],
+      budgets: { maxReadBytes: 1048576, maxTasks: 4 },
+    });
+    await broker.start();
+    const sharedPair = duplexPair();
+    const namedPair = duplexPair();
+    accept(sharedPair.server);
+    accept(namedPair.server);
+    const askOnce = (client: Duplex, line: string) =>
+      new Promise<Record<string, unknown>>((resolve) => {
+        let buf = '';
+        const onData = (chunk: Buffer) => {
+          buf += chunk.toString('utf8');
+          const nl = buf.indexOf('\n');
+          if (nl >= 0) {
+            client.off('data', onData);
+            resolve(JSON.parse(buf.slice(0, nl)));
+          }
+        };
+        client.on('data', onData);
+        client.write(line + '\n');
+      });
+    try {
+      expect(
+        await askOnce(
+          sharedPair.client,
+          JSON.stringify({ id: '1', token: sharedToken, request: { method: 'ping' } }),
+        ),
+      ).toEqual({ id: '1', value: {} });
+      expect(
+        await askOnce(
+          namedPair.client,
+          JSON.stringify({ id: '2', token: named.token, request: { method: 'ping' } }),
+        ),
+      ).toEqual({ id: '2', value: {} });
+      await broker.credential();
+      expect(sharedPair.server.destroyed).toBe(true);
+      expect(namedPair.server.destroyed).toBe(false);
+      expect(
+        await askOnce(
+          namedPair.client,
+          JSON.stringify({ id: '3', token: named.token, request: { method: 'ping' } }),
+        ),
+      ).toEqual({ id: '3', value: {} });
+    } finally {
+      sharedPair.client.destroy();
+      namedPair.client.destroy();
+      await broker.close();
+      await trashTemporary(root);
+    }
   });
 });

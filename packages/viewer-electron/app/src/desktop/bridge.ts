@@ -1168,6 +1168,7 @@ export class Desktop {
       },
       {
         actor: () => this.chats?.actor() ?? this.agents.clients.actor(),
+        actorName: () => (this.chats?.actor() ? 'Chat' : this.agents.clients.nameOf()),
         check: (proposal) =>
           proposal.clientID?.startsWith('chat:')
             ? this.chats.authorizeProposal(proposal)

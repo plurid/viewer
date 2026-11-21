@@ -174,11 +174,29 @@ function loginShell(profile: TerminalProfile): boolean {
     profile.args.every((arg) => arg === '-l')
   );
 }
+/** Splits long confirmation text into pages within the native dialog bound without cutting a surrogate pair. */
+function detailPages(detail: string, limit = 6000): string[] {
+  if (detail.length <= limit) return [detail];
+  const pages: string[] = [];
+  let start = 0;
+  while (start < detail.length) {
+    let end = Math.min(start + limit, detail.length);
+    if (end < detail.length) {
+      const newline = detail.lastIndexOf('\n', end - 1);
+      if (newline > start + limit - 400) end = newline + 1;
+      else if (detail.charCodeAt(end - 1) >= 0xd800 && detail.charCodeAt(end - 1) <= 0xdbff)
+        end -= 1;
+    }
+    pages.push(detail.slice(start, end));
+    start = end;
+  }
+  return pages;
+}
 /** Describes exactly what a terminal profile starts, for a native confirmation. */
 function terminalSummary(profile: TerminalProfile): Summary {
   return {
     title: `Start terminal profile “${reviewLine(profile.name)}” for the first time?`,
-    detail: terminalProgram(profile).slice(0, 6000),
+    detail: terminalProgram(profile),
   };
 }
 
@@ -191,7 +209,7 @@ export function executionSummary(action: CustomAction): { title: string; detail:
       : executor.kind === 'executable'
         ? `${[executor.executable, ...executor.args].join(' ')}${executor.perItem ? '\n\nRuns once per selected item.' : ''}`
         : `Terminal profile ${JSON.stringify(executor)}`;
-  return { title: `Run “${action.name}” for the first time?`, detail: detail.slice(0, 6000) };
+  return { title: `Run “${action.name}” for the first time?`, detail };
 }
 
 /**
@@ -339,16 +357,14 @@ export class ExecutionConfirmations {
     if (executable === 'tmux' && !socket && !Object.keys(env).length) return;
     await this.confirm(fingerprint({ tmux: { executable, socket, env } }), {
       title: 'Use this tmux program for the first time?',
-      detail: [...environment(env), executable, ...(socket ? ['-S', socket] : [])]
-        .join(' ')
-        .slice(0, 6000),
+      detail: [...environment(env), executable, ...(socket ? ['-S', socket] : [])].join(' '),
     });
   }
   /** An application chosen by path, rather than one of the discovered terminal apps. */
   async requireTerminalApplication(application: string): Promise<void> {
     await this.confirm(fingerprint({ application }), {
       title: 'Open terminals with this application for the first time?',
-      detail: application.slice(0, 6000),
+      detail: application,
     });
   }
   private async confirm(key: string, summary: Summary): Promise<void> {
@@ -361,8 +377,13 @@ export class ExecutionConfirmations {
     let pending = this.asking.get(key);
     if (!pending) {
       pending = (async () => {
-        if (!(await this.ask(summary)))
-          throw new Error('The action was not confirmed. Nothing was run.');
+        const pages = detailPages(summary.detail);
+        for (const [index, detail] of pages.entries()) {
+          const title =
+            pages.length > 1 ? `${summary.title} (${index + 1} of ${pages.length})` : summary.title;
+          if (!(await this.ask({ title, detail })))
+            throw new Error('The action was not confirmed. Nothing was run.');
+        }
         await this.record([key], confirmed);
       })().finally(() => this.asking.delete(key));
       this.asking.set(key, pending);

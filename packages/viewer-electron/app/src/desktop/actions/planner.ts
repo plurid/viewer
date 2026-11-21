@@ -128,6 +128,7 @@ const planSchema = z.object({
   outputRoot: z.string().optional(),
   summary: z.string().optional(),
   summaryInputs: z.array(fileEntrySchema).max(2000).optional(),
+  restoresPlanID: z.string().optional(),
   error: z.string().optional(),
   undoable: z.boolean(),
 });
@@ -248,11 +249,25 @@ export class ActionPlanner {
     if (!plan) throw new Error('This review has ended. Prepare the action again.');
     return structuredClone(plan);
   }
+  private dropEvidence(plan: ActionPlan): void {
+    for (const row of plan.rows) row.evidence = [];
+  }
+  /** Evicts only finished plans to stay within 100 stored plans; never drops an unfinished plan. */
+  private reserveCapacity(excludeID?: string): void {
+    if (this.plans.size >= 100)
+      for (const [id, old] of this.plans) {
+        if (this.plans.size < 100) break;
+        if (id !== excludeID && ['completed', 'failed', 'cancelled'].includes(old.status))
+          this.plans.delete(id);
+      }
+    if (this.plans.size >= 100)
+      throw new Error('Review or finish existing tasks before starting another.');
+  }
   private async publish(plan: ActionPlan, durable = true) {
     plan.revision++;
     this.plans.set(plan.id, plan);
     this.dependencies.emit(structuredClone(plan));
-    if (durable) await this.store.save([...this.plans.values()].slice(-100));
+    if (durable) await this.store.save([...this.plans.values()]);
   }
   start(
     request: ActionRequest,
@@ -282,15 +297,7 @@ export class ActionPlanner {
     if (expectedRecipe && JSON.stringify(recipe) !== JSON.stringify(expectedRecipe))
       throw new Error('The recipe changed after approval. Review the workflow rule again.');
     if (!request.context.sources.length) throw new Error('Select files or a folder first.');
-    if (this.plans.size >= 100)
-      for (const [id, old] of this.plans) {
-        if (this.plans.size < 100) break;
-        if (['completed', 'failed', 'cancelled'].includes(old.status)) {
-          this.plans.delete(id);
-        }
-      }
-    if (this.plans.size >= 100)
-      throw new Error('Review or finish existing tasks before starting another.');
+    this.reserveCapacity();
     const plan: ActionPlan = {
       version: 1,
       id: randomUUID(),
@@ -348,6 +355,7 @@ export class ActionPlanner {
     const plan = this.plans.get(id);
     if (plan?.status === 'review') {
       plan.status = 'cancelled';
+      this.dropEvidence(plan);
       void this.publish(plan).catch(() => {});
     }
   }
@@ -706,8 +714,18 @@ export class ActionPlanner {
       plan.status = stoppedStatus(selected, signal.aborted);
       plan.undoable = false;
     } finally {
+      if (['completed', 'failed', 'cancelled'].includes(plan.status)) this.dropEvidence(plan);
       if (changes.length) this.dependencies.changed(changes);
       await this.publish(plan);
+      if (plan.status === 'completed' && plan.restoresPlanID) {
+        const original = this.plans.get(plan.restoresPlanID);
+        if (original && ['partial', 'recovery'].includes(original.status)) {
+          original.status = 'cancelled';
+          original.undoable = false;
+          this.dropEvidence(original);
+          await this.publish(original);
+        }
+      }
       // Recorded as settled, the plan no longer needs its step log (see sweepSteps).
       await removePrivateData(this.dataPath, this.stepFile(plan.id)).catch(() => {});
     }
@@ -835,6 +853,7 @@ export class ActionPlanner {
       }
   }
   async undo(id: string): Promise<void> {
+    await this.load();
     if (this.closed) throw new Error('Actions have closed.');
     const plan = this.plans.get(id);
     if (!plan?.undoable || plan.status !== 'completed')
@@ -849,6 +868,7 @@ export class ActionPlanner {
       if (!same(row.source!, current))
         throw new Error('A file changed after the action, so it can’t be undone.');
     }
+    this.reserveCapacity(plan.id);
     const reverse: ActionPlan = {
       ...structuredClone(plan),
       id: randomUUID(),
@@ -856,6 +876,7 @@ export class ActionPlanner {
       title: 'Undo ' + plan.title,
       status: 'review',
       undoable: false,
+      restoresPlanID: undefined,
       rows: await Promise.all(
         plan.rows
           .filter((row) => row.completed && row.source)
@@ -906,6 +927,7 @@ export class ActionPlanner {
     await this.publish(plan);
   }
   async recovery(id: string): Promise<void> {
+    await this.load();
     if (this.closed) throw new Error('Actions have closed.');
     const plan = this.plans.get(id);
     if (!plan || !['partial', 'recovery'].includes(plan.status))
@@ -936,6 +958,7 @@ export class ActionPlanner {
         }
       }
     if (!rows.length) throw new Error('No movable files were recorded for recovery.');
+    this.reserveCapacity(plan.id);
     const review: ActionPlan = {
       ...structuredClone(plan),
       id: randomUUID(),
@@ -944,6 +967,7 @@ export class ActionPlanner {
       status: 'review',
       rows,
       undoable: false,
+      restoresPlanID: plan.id,
       error: undefined,
     };
     await this.checkRows(rows);

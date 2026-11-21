@@ -61,4 +61,8 @@ it('names a file shown as a confirmed format with that format, so the engine acc
     ).toBe(`/tmp/viewer-input/Report.${extension}`);
   // a name that already says it is kept as written
   expect(officeFileName('Plan.ODT', 'odt')).toBe('Plan.ODT');
+  // a legal macOS filename containing a backslash is sanitized for the RAM job while createOfficeJob still rejects raw paths
+  const safe = officeFileName('Q1\\Q2 Report.docx', 'docx');
+  expect(createOfficeJob('docx', { name: safe }).inputPath).toBe('/tmp/viewer-input/' + safe);
+  expect(() => createOfficeJob('docx', { name: 'C:\\private\\report.docx' })).toThrow('filename');
 });

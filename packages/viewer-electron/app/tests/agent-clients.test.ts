@@ -211,4 +211,41 @@ describe('removing revoked clients (2026-10-30)', () => {
     ).rejects.toThrow('Only you can remove an agent client');
     expect(clientRequest).not.toHaveBeenCalled();
   });
+  it('batches non-durable tool audits in the background without blocking replies and flushes on close', async () => {
+    const root = await temporaryRoot('viewer-client-audit-batch-');
+    const clients = new AgentClients(root, async () => {});
+    try {
+      await clients.list();
+      const store = (clients as unknown as { auditStore: { save(value: unknown): Promise<void> } })
+        .auditStore;
+      const originalSave = store.save.bind(store);
+      let saves = 0;
+      const saveSpy = vi.spyOn(store, 'save').mockImplementation(async (value) => {
+        saves++;
+        await originalSave(value);
+      });
+      for (let index = 0; index < 25; index++)
+        await (
+          clients.audit as (
+            tool: string,
+            status: 'completed',
+            detail: string,
+            clientID?: string,
+            durable?: boolean,
+          ) => Promise<void>
+        )('read_metadata', 'completed', `Read ${index}`, sharedClientID, false);
+      // Coalesced background writes must not synchronously rewrite the file 25 times.
+      expect(saves).toBe(0);
+      expect(await clients.history(sharedClientID)).toHaveLength(25);
+      await clients.close();
+      expect(saves).toBe(1);
+      saveSpy.mockRestore();
+      const reopened = new AgentClients(root, async () => {});
+      expect(await reopened.history(sharedClientID)).toHaveLength(25);
+      await reopened.close();
+    } finally {
+      await clients.close();
+      await trashTemporary(root);
+    }
+  });
 });

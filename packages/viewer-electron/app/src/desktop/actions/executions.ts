@@ -3,6 +3,7 @@ import { itemIdentity } from '../../domain/files/item-identity';
 import { sameItem } from '../files/item-identity';
 import { stat } from '../files/stats';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { StringDecoder } from 'node:string_decoder';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -21,6 +22,13 @@ import { childEnvironment } from '../terminals/process-environment';
 import { errorMessage } from '../../domain/errors';
 import { containsPath } from '../files/containment';
 import type { RunTerminalCommand } from '../terminals/terminal-commands';
+/** Keeps the last `limit` bytes on a UTF-8 code-point boundary so truncation never emits U+FFFD. */
+function tailUtf8(bytes: Buffer, limit: number): string {
+  if (bytes.length <= limit) return bytes.toString('utf8');
+  let start = bytes.length - limit;
+  while (start < bytes.length && (bytes[start]! & 0xc0) === 0x80) start++;
+  return bytes.subarray(start).toString('utf8');
+}
 /** Commands running or starting at once. */
 const commandLimit = 20;
 const configuredShells = new Set(['zsh', 'bash', 'fish']);
@@ -251,7 +259,7 @@ export class Executions {
           const output = (data: string) => {
             const bytes = Buffer.from(task.output + data);
             task.truncated ||= bytes.length > 256 * 1024;
-            task.output = bytes.subarray(-256 * 1024).toString('utf8');
+            task.output = tailUtf8(bytes, 256 * 1024);
             timer ??= setTimeout(() => {
               timer = undefined;
               this.emit({ ...task }, owner);
@@ -293,13 +301,22 @@ export class Executions {
                   stdio: ['ignore', 'pipe', 'pipe'],
                 });
                 this.children.set(task.id, child);
-                child.stdout?.on('data', (data: Buffer) => output(data.toString()));
-                child.stderr?.on('data', (data: Buffer) => output(data.toString()));
-                child.on('error', reject);
-                child.on('close', (code, signal) => {
+                const stdoutDecoder = new StringDecoder('utf8');
+                const stderrDecoder = new StringDecoder('utf8');
+                let settled = false;
+                let exitTimer: ReturnType<typeof setTimeout> | undefined;
+                let exited: { code: number | null; signal: NodeJS.Signals | null } | undefined;
+                const settle = (code: number | null, signal: NodeJS.Signals | null) => {
+                  if (settled) return;
+                  settled = true;
+                  clearTimeout(exitTimer);
                   clearTimeout(this.killTimers.get(task.id));
                   this.killTimers.delete(task.id);
                   this.children.delete(task.id);
+                  const tailOut = stdoutDecoder.end();
+                  const tailErr = stderrDecoder.end();
+                  if (tailOut) output(tailOut);
+                  if (tailErr) output(tailErr);
                   task.exitCode = code ?? undefined;
                   if ((code !== 0 || signal) && task.status !== 'cancelled')
                     reject(
@@ -308,7 +325,39 @@ export class Executions {
                       ),
                     );
                   else resolve();
+                };
+                child.stdout?.on('data', (data: Buffer) => {
+                  const text = stdoutDecoder.write(data);
+                  if (text) output(text);
                 });
+                child.stderr?.on('data', (data: Buffer) => {
+                  const text = stderrDecoder.write(data);
+                  if (text) output(text);
+                });
+                child.on('error', (error) => {
+                  if (settled) return;
+                  settled = true;
+                  clearTimeout(exitTimer);
+                  clearTimeout(this.killTimers.get(task.id));
+                  this.killTimers.delete(task.id);
+                  this.children.delete(task.id);
+                  reject(error);
+                });
+                child.on('exit', (code, signal) => {
+                  exited = { code, signal };
+                  // Detached grandchildren in another session can keep inherited stdio pipes open
+                  // after the command exits; drain briefly then release the pipes so Quit finishes.
+                  exitTimer = setTimeout(() => {
+                    if (settled) return;
+                    child.stdout?.destroy();
+                    child.stderr?.destroy();
+                    settle(code, signal);
+                  }, 250);
+                  exitTimer.unref();
+                });
+                child.on('close', (code, signal) =>
+                  settle(code ?? exited?.code ?? null, signal ?? exited?.signal ?? null),
+                );
               });
           } finally {
             clearTimeout(timer);
@@ -343,6 +392,12 @@ export class Executions {
       return;
     }
     const child = this.children.get(id);
+    if (child && (child.exitCode !== null || child.signalCode !== null)) {
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      this.emit({ ...task }, this.owners.get(id));
+      return;
+    }
     try {
       if (
         child?.pid &&
@@ -363,6 +418,8 @@ export class Executions {
       } catch {
         /* already stopped */
       }
+      child?.stdout?.destroy();
+      child?.stderr?.destroy();
     }, 1500);
     this.killTimers.set(id, timer);
     timer.unref();

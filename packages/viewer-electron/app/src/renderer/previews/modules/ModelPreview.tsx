@@ -7,7 +7,7 @@ import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
 import { importMesh, meshObjects } from '../model/mesh';
 import { meshTriangleLimit, meshVertexLimit } from '../model/mesh-data';
 import type { MeshResult } from '../model/mesh-data';
-import { isSceneFormat, loadScene, sceneNotices } from '../model/scenes';
+import { fileName, isSceneFormat, loadScene, sceneNotices } from '../model/scenes';
 import { assertModelMemory } from '../model/memory';
 import { cadFormats } from '../../../domain/previews/models/formats';
 import { cadObject, importCad, retainCadWorker } from '../model/cad';
@@ -502,7 +502,7 @@ export default function ModelPreview(context: PreviewContext) {
       return local.href;
     });
     manager.onError = (url) => {
-      missing.add(decodeURIComponent(url.split('/').pop() || url));
+      missing.add(fileName(url));
       if (!disposed) setWarnings([...missing]);
     };
     const abort = new AbortController();

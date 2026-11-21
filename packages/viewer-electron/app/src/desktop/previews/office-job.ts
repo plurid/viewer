@@ -15,10 +15,12 @@ interface OfficeRenderJob {
   whole?: true;
 }
 
-/** The name a file has in the engine: its own, given the extension of the format its bytes
- * confirmed when its name does not end in it, so the engine reads it as that format. */
+/** The name a file has in the engine: its own (with path separators replaced for RAM staging),
+ * given the extension of the format its bytes confirmed when its name does not end in it, so the
+ * engine reads it as that format. */
 export function officeFileName(name: string, extension: string): string {
-  return name.toLowerCase().endsWith('.' + extension) ? name : `${name}.${extension}`;
+  const safe = name.replace(/[/\\\0]/g, '-');
+  return safe.toLowerCase().endsWith('.' + extension) ? safe : `${safe}.${extension}`;
 }
 
 /** Preserve filename fields without passing host directories into the engine.

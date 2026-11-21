@@ -4,16 +4,18 @@ import { temporalIdentity } from '../src/domain/files/item-identity';
  * Notebooks, calendars and contacts, and subtitles render as documents from their text, keep a
  * Source view of that text, and fall back to the text view for content they do not read.
  */
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import type { ComponentType } from 'react';
 import type { FileEntry, ResourceRead } from '../src/domain/contracts';
-import type { PreviewContext } from '../src/renderer/previews/contracts';
+import type { PreviewCommand, PreviewContext } from '../src/renderer/previews/contracts';
 import NotebookPreview from '../src/renderer/previews/modules/NotebookPreview';
 import CardsPreview from '../src/renderer/previews/modules/CardsPreview';
 import SubtitlesPreview from '../src/renderer/previews/modules/SubtitlesPreview';
-import { initialize } from '../src/renderer/state/store';
+import TextPreview from '../src/renderer/previews/modules/TextPreview';
+import { addPane, initialize } from '../src/renderer/state/store';
 import { mockElementBox } from './support/layout';
+import { PreviewFrameFixture } from './support/preview-frame';
 
 beforeAll(() => {
   // the text view reads the editor's font settings
@@ -53,7 +55,11 @@ function context(name: string, text: string, read: Partial<ResourceRead> = {}): 
 }
 
 const show = (Preview: ComponentType<PreviewContext>, name: string, text: string) =>
-  render(<Preview {...context(name, text)} />);
+  render(
+    <PreviewFrameFixture>
+      <Preview {...context(name, text)} />
+    </PreviewFrameFixture>,
+  );
 
 const pixel =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
@@ -249,5 +255,72 @@ describe('subtitles preview', () => {
   it('shows a file without timed cues as text with a note', async () => {
     const view = show(SubtitlesPreview, 'empty.srt', 'just words\n');
     await waitFor(() => expect(view.container.textContent).toContain('No timed cues were found'));
+  });
+});
+
+describe('preview toolbar and command availability', () => {
+  it('tags ParsedDocument view controls for overflow and moves its summary fact to footer details', async () => {
+    const view = show(NotebookPreview, 'sales.ipynb', notebook);
+    const notebookButton = await view.findByRole('button', { name: 'Notebook' });
+    const sourceButton = view.getByRole('button', { name: 'Source' });
+    expect(notebookButton.closest('[data-header-item]')?.getAttribute('data-header-commands')).toBe(
+      'preview.view-source',
+    );
+    expect(sourceButton.closest('[data-header-item]')?.getAttribute('data-header-commands')).toBe(
+      'preview.view-source',
+    );
+    const toolbar = view.container.querySelector('.preview-toolbar')!;
+    expect(toolbar.textContent).not.toContain('Python 3 · 2 cells');
+    expect(view.getByText('Python 3 · 2 cells')).toBeTruthy();
+  });
+
+  it('marks read-only TextPreview commands unavailable while editing and hides Tree/Source for truncated JSON', async () => {
+    let registered: readonly PreviewCommand[] = [];
+    const pane = addPane('/fixtures/notes.md', 'preview', true);
+    Object.assign(window, {
+      viewer: {
+        save: vi.fn(async () => {}),
+        textOpen: vi.fn(async () => ({
+          editable: false,
+          reason: 'Read-only fixture',
+        })),
+        textEditEnd: vi.fn(async () => {}),
+      },
+    });
+    const mdContext: PreviewContext = {
+      ...context('notes.md', '# Hello\n'),
+      editing: { paneID: pane.id },
+      commands: {
+        register: (commands) => {
+          registered = commands;
+          return () => {};
+        },
+      },
+    };
+    const md = render(<TextPreview {...mdContext} />);
+    await waitFor(() => expect(md.getByRole('button', { name: 'Edit' })).toBeTruthy());
+    expect(registered.find((item) => item.id === 'view-source')?.available).toBe(true);
+    expect(registered.find((item) => item.id === 'text-wrap')?.available).toBe(true);
+    fireEvent.click(md.getByRole('button', { name: 'Edit' }));
+    await waitFor(() =>
+      expect(registered.every((item) => item.available === false)).toBe(true),
+    );
+    md.unmount();
+
+    registered = [];
+    const truncatedJson: PreviewContext = {
+      ...context('huge.json', '{"a": 1}', { truncated: true }),
+      commands: {
+        register: (commands) => {
+          registered = commands;
+          return () => {};
+        },
+      },
+    };
+    const json = render(<TextPreview {...truncatedJson} />);
+    await waitFor(() => expect(json.getByLabelText('File text')).toBeTruthy());
+    expect(json.queryByRole('button', { name: 'Tree' })).toBeNull();
+    expect(json.queryByRole('button', { name: 'Source' })).toBeNull();
+    expect(registered.find((item) => item.id === 'view-source')?.available).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFile, writeFile, realpath, readdir, symlink } from 'node:fs/promises';
+import { open, readFile, writeFile, realpath, readdir, stat, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import type * as Coordination from '../src/desktop/files/file-coordination';
 import type * as Processes from 'node:child_process';
@@ -380,6 +380,81 @@ describe('explicit, bounded Ghostscript rendering', () => {
     expect(
       (await readdir(root)).some((name) => name.startsWith('Viewer Ghostscript scratch ')),
     ).toBe(true);
+  });
+  it('reports a scratch Trash failure even when rendering was canceled', async () => {
+    const executable = path.join(root, 'fake-gs-cancel');
+    const source = path.join(root, 'cancel.eps');
+    const ready = path.join(root, 'scratch-ready');
+    await writeFile(source, binaryEPSSample(postscriptSample), { flag: 'wx' });
+    const script = `#!${process.execPath}
+const fs = require('node:fs');
+const path = require('node:path');
+if (process.argv.slice(2).includes('-h')) {
+  process.stdout.write('GPL Ghostscript 10.99.1 (generated test program)\\n');
+} else {
+  fs.readFileSync(0);
+  fs.writeFileSync(path.join(process.env.TMPDIR, 'gs_cancel'), Buffer.alloc(64));
+  fs.writeFileSync(${JSON.stringify(ready)}, 'ready');
+  setInterval(() => {}, 1000);
+}
+`;
+    await writeFile(executable, script, { flag: 'wx', mode: 0o700 });
+    const recording = recordingPostScriptStage(root);
+    const diagnose = vi.fn();
+    const renderer = new Ghostscript({
+      ...recording.options,
+      trash: async () => {
+        throw new Error('Trash unavailable');
+      },
+      resolveExecutable: async (file) =>
+        realpath(ghostscriptLocations.includes(file) ? executable : file),
+      diagnose,
+      store: () => false,
+      timeout: 5000,
+    });
+    const variant = await renderer.variant();
+    const handle = await open(source, 'r');
+    const info = await stat(source);
+    const controller = new AbortController();
+    let settled = false;
+    const outcome = renderer
+      .decode(
+        { file: source, handle, info, format: 'eps' },
+        'postscript',
+        controller.signal,
+        undefined,
+        variant,
+      )
+      .then(
+        () => {
+          settled = true;
+          return undefined;
+        },
+        (error: Error) => {
+          settled = true;
+          return error;
+        },
+      );
+    try {
+      for (let attempt = 0; attempt < 200 && !settled; attempt++) {
+        const present = await stat(ready).then(
+          () => true,
+          () => false,
+        );
+        if (present) break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      controller.abort();
+      const error = await outcome;
+      expect(error).toBeInstanceOf(Error);
+      expect(error?.message).toContain('could not be moved to Trash and was kept');
+      expect(diagnose).toHaveBeenCalledWith(
+        expect.stringContaining('PostScript scratch failure:'),
+        expect.anything(),
+      );
+    } finally {
+      await handle.close();
+    }
   });
   it('has no discovery or render path in the Store edition', async () => {
     const f = await fixture('success', true);

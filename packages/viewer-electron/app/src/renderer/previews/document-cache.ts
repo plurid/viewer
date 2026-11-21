@@ -137,14 +137,18 @@ export function documentServices(
   const key = (request?: Partial<WorksheetWindow> | DocumentRequest) => {
     if (request && 'message' in request)
       return previewDocuments.key(owner, resource, undefined, request.message);
-    if (request?.sheet) {
+    const page =
+      request && ('sheet' in request || 'fromRow' in request || 'limit' in request)
+        ? request
+        : undefined;
+    if (page?.sheet) {
       // The initial request lets the reader choose a visible sheet. Reuse that
       // same page when the user later selects its explicit name in the tabs.
-      const firstKey = previewDocuments.key(owner, resource, { ...request, sheet: undefined });
+      const firstKey = previewDocuments.key(owner, resource, { ...page, sheet: undefined });
       const first = previewDocuments.get(firstKey)?.office;
-      if (first?.kind === 'workbook' && first.page?.sheet === request.sheet) return firstKey;
+      if (first?.kind === 'workbook' && first.page?.sheet === page.sheet) return firstKey;
     }
-    return previewDocuments.key(owner, resource, request);
+    return previewDocuments.key(owner, resource, page);
   };
   return {
     ...base,

@@ -14,7 +14,7 @@ export const receiptSchema = z
     exitCode: z.number().int().optional(),
     error: z.string().max(16000).optional(),
     workspaceID: z.string().min(1).max(200),
-    paneID: z.string().min(1).max(200),
+    paneID: z.string().max(200),
   })
   .strict();
 export type CommandReceipt = z.infer<typeof receiptSchema>;

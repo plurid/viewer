@@ -480,6 +480,198 @@ describe('file operation queue', () => {
     expect(await readFile(staging, 'utf8')).toBe('partial');
     await expect(lstat(path.join(destination, 'source'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
+  it('keeps Undo and dismissal for an interrupted forward job across a second launch', async () => {
+    const dataPath = path.join(root, 'private');
+    const first = path.join(root, 'first.txt');
+    const second = path.join(root, 'second.txt');
+    const copiedFirst = path.join(destination, 'first.txt');
+    await writeFile(first, 'first');
+    await writeFile(second, 'second');
+    await writeFile(copiedFirst, 'first');
+    const copiedInfo = await lstat(copiedFirst);
+    const id = crypto.randomUUID();
+    const log = new OperationLog(dataPath);
+    await log.load();
+    await log.record({
+      job: {
+        id,
+        revision: 2,
+        kind: 'copy',
+        status: 'running',
+        sources: [first, second],
+        destination,
+        bytesDone: 5,
+        bytesTotal: 11,
+        itemsDone: 1,
+        itemsTotal: 2,
+        completed: [{ source: first, destination: copiedFirst }],
+        errors: [],
+        errorCount: 0,
+        undoable: false,
+      },
+      request: { kind: 'copy', sources: [first, second], destination },
+      undo: [
+        {
+          from: copiedFirst,
+          to: '',
+          remove: true,
+          proof: (await outputProof(copiedFirst))!,
+          identity: temporalIdentity(`${copiedInfo.dev}:${copiedInfo.ino}`),
+          modified: copiedInfo.mtimeMs,
+          size: copiedInfo.size,
+        },
+      ],
+      intent: { source: second, destination: path.join(destination, 'second.txt') },
+    });
+    const makeService = () =>
+      new Operations(
+        async (file) => {
+          await rename(file, path.join(trash, path.basename(file) + '-' + crypto.randomUUID()));
+        },
+        () => {},
+        undefined,
+        undefined,
+        undefined,
+        dataPath,
+      );
+    operations = makeService();
+    await operations.load();
+    expect(operations.all()[0]).toMatchObject({
+      status: 'failed',
+      undoable: true,
+      errorCount: 1,
+      recovery: { source: second, destination: path.join(destination, 'second.txt') },
+    });
+    await operations.dismiss([id]);
+    await operations.close();
+    operations = makeService();
+    await operations.load();
+    expect(operations.all()[0]).toMatchObject({
+      status: 'failed',
+      undoable: true,
+      errorCount: 1,
+      dismissed: true,
+    });
+    await operations.undo(id);
+    await expect(lstat(copiedFirst)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it('keeps an interrupted Undo non-undoable without gaining errors at later launches', async () => {
+    const dataPath = path.join(root, 'private');
+    const source = path.join(root, 'original.txt');
+    await writeFile(source, 'original');
+    const makeService = () =>
+      new Operations(
+        async () => {},
+        () => {},
+        undefined,
+        undefined,
+        undefined,
+        dataPath,
+      );
+    operations = makeService();
+    const copied = await run({ kind: 'copy', sources: [source], destination });
+    await operations.close();
+    const journal = new OperationLog(dataPath);
+    const [receipt] = (await journal.load()).receipts;
+    receipt.intent = { source: path.join(destination, 'original.txt') };
+    await journal.compact(receipt);
+    operations = makeService();
+    await operations.load();
+    expect(operations.all()[0]).toMatchObject({
+      status: 'failed',
+      undoable: false,
+      errorCount: 1,
+    });
+    await operations.dismiss([copied.id]);
+    await operations.close();
+    operations = makeService();
+    await operations.load();
+    expect(operations.all()[0]).toMatchObject({
+      status: 'failed',
+      undoable: false,
+      errorCount: 1,
+      dismissed: true,
+    });
+  });
+  it('keeps a completed job undoable across restart when an Undo step fails while running', async () => {
+    const dataPath = path.join(root, 'private');
+    const folderA = path.join(root, 'FolderA');
+    const folderAway = path.join(root, 'FolderA-away');
+    const folderB = path.join(root, 'FolderB');
+    await mkdir(folderA);
+    await mkdir(folderB);
+    const original = path.join(folderA, 'Notes.txt');
+    await writeFile(original, 'notes');
+    const makeService = () =>
+      new Operations(
+        async () => {},
+        () => {},
+        undefined,
+        undefined,
+        undefined,
+        dataPath,
+      );
+    operations = makeService();
+    const moved = await run({ kind: 'move', sources: [original], destination: folderB });
+    expect(moved.status).toBe('completed');
+    expect(moved.undoable).toBe(true);
+    await rename(folderA, folderAway);
+    await expect(operations.undo(moved.id)).rejects.toThrow();
+    await operations.close();
+    operations = makeService();
+    await operations.load();
+    expect(operations.all().find((job) => job.id === moved.id)).toMatchObject({
+      status: 'completed',
+      undoable: true,
+      errors: [],
+    });
+    expect(operations.all().find((job) => job.id === moved.id)?.recovery).toBeUndefined();
+    await rename(folderAway, folderA);
+    await operations.undo(moved.id);
+    expect(await readFile(original, 'utf8')).toBe('notes');
+  });
+  it('allows text saves, Undo and Clear Finished while New Folder waits at its collision prompt', async () => {
+    const dataPath = path.join(root, 'private');
+    const other = path.join(root, 'other');
+    const otherDest = path.join(other, 'moved');
+    await mkdir(otherDest, { recursive: true });
+    const note = path.join(other, 'draft.txt');
+    const movable = path.join(other, 'move-me.txt');
+    await writeFile(note, 'before');
+    await writeFile(movable, 'move');
+    await mkdir(path.join(destination, 'untitled folder'));
+    operations = new Operations(
+      async (file) => {
+        const directory = (await lstat(file)).isDirectory();
+        const target = path.join(trash, crypto.randomUUID());
+        await rename(file, target);
+        return { path: target, directory };
+      },
+      () => {},
+      undefined,
+      undefined,
+      undefined,
+      dataPath,
+    );
+    const earlier = await run({ kind: 'move', sources: [movable], destination: otherDest });
+    const waiting = operations.start({
+      kind: 'mkdir',
+      sources: [],
+      destination,
+      name: 'untitled folder',
+    });
+    await waitFor(waiting, (job) => job.status === 'collision');
+    const saved = await operations.writeText(note, 'after', {
+      version: sourceVersion(await entry(note)),
+    });
+    expect(saved.status).toBe('completed');
+    expect(await readFile(note, 'utf8')).toBe('after');
+    await expect(operations.dismiss([earlier.id])).resolves.toBeUndefined();
+    await expect(operations.undo(earlier.id)).resolves.toBeUndefined();
+    expect(await readFile(movable, 'utf8')).toBe('move');
+    operations.resolve(waiting, 'keep-both', false);
+    expect((await waitFor(waiting)).status).toBe('completed');
+  });
   it('stops before changing files when the operation receipt cannot be saved', async () => {
     operations = new Operations(
       async () => {},
@@ -1298,6 +1490,22 @@ describe('reviewed work that waits (2026-10-20)', () => {
       await waiting;
       expect(await readFile(path.join(folder, 'sibling.txt'), 'utf8')).toBe('sibling');
     });
+    it('runs unrelated exclusive Put Back work beside a prompt while related work waits', async () => {
+      const holder = await held();
+      const unrelated = operations.exclusive(
+        async () => 'restored',
+        () => [path.join(trash, 'other.txt'), path.join(root, 'elsewhere', 'other.txt')],
+      );
+      expect(await settles(unrelated, 3000)).toBe('done');
+      expect(status(holder)).toBe('collision');
+      const related = operations.exclusive(
+        async () => 'restored',
+        () => [path.join(trash, 'near.txt'), path.join(destination, 'near.txt')],
+      );
+      expect(await settles(related)).toBe('waiting');
+      operations.resolve(holder, 'skip', false);
+      expect(await related).toBe('restored');
+    });
   });
   it('counts what Quit would cancel, and says when it is done (2026-10-21)', async () => {
     // Quit asks before cancelling: a job waiting at its prompt counts until it is answered.
@@ -1588,6 +1796,42 @@ describe('an item from start to finish', () => {
       ]);
       expect(await readFile(path.join(root, 'Report copy 2.pdf'), 'utf8')).toBe('report');
     });
+    it('keeps dotted folder names and non-extension dots whole for Duplicate and Keep Both', async () => {
+      const dottedFolder = path.join(root, 'Project v1.2');
+      const dottedFile = path.join(root, 'Dr. Jones letter');
+      const hiddenFile = path.join(root, '.gitignore');
+      const versionedPdf = path.join(root, 'Report v1.2.pdf');
+      await mkdir(dottedFolder);
+      await writeFile(dottedFile, 'letter');
+      await writeFile(hiddenFile, 'node_modules');
+      await writeFile(versionedPdf, 'pdf');
+      const duplicated = await run({
+        kind: 'duplicate',
+        sources: [dottedFolder, dottedFile, hiddenFile, versionedPdf],
+      });
+      expect(duplicated.completed).toEqual([
+        { source: dottedFolder, destination: path.join(root, 'Project v1.2 copy') },
+        { source: dottedFile, destination: path.join(root, 'Dr. Jones letter copy') },
+        { source: hiddenFile, destination: path.join(root, '.gitignore copy') },
+        { source: versionedPdf, destination: path.join(root, 'Report v1.2 copy.pdf') },
+      ]);
+      await mkdir(path.join(destination, 'Project v1.2'));
+      const id = operations.start({ kind: 'copy', sources: [dottedFolder], destination });
+      await waitFor(id, (job) => job.status === 'collision');
+      operations.resolve(id, 'keep-both', false);
+      const kept = await waitFor(id);
+      expect(kept.completed).toEqual([
+        { source: dottedFolder, destination: path.join(destination, 'Project v1.2 copy') },
+      ]);
+      await writeFile(path.join(destination, 'Dr. Jones letter'), 'existing');
+      const fileId = operations.start({ kind: 'copy', sources: [dottedFile], destination });
+      await waitFor(fileId, (job) => job.status === 'collision');
+      operations.resolve(fileId, 'keep-both', false);
+      const keptFile = await waitFor(fileId);
+      expect(keptFile.completed).toEqual([
+        { source: dottedFile, destination: path.join(destination, 'Dr. Jones letter copy') },
+      ]);
+    });
     it.each([
       ['notes.tar.gz', 'notes', () => gzipSync(notesTar())],
       ['notes.TGZ', 'notes', () => gzipSync(notesTar())],
@@ -1728,15 +1972,38 @@ describe('an item from start to finish', () => {
   });
 
   describe('guards', () => {
-    it('refuses an output that is its own source, leaving the folder chosen as recovery', async () => {
+    it('keeps both when copying a file or folder into its own folder', async () => {
+      const file = path.join(root, 'Report.pdf');
+      const folder = path.join(root, 'Reports');
+      await writeFile(file, 'report bytes');
+      await mkdir(folder);
+      await writeFile(path.join(folder, 'item.txt'), 'inside');
+      const copiedFile = await run({ kind: 'copy', sources: [file], destination: root });
+      expect(copiedFile.status, JSON.stringify(copiedFile.errors)).toBe('completed');
+      expect(copiedFile.errors).toEqual([]);
+      expect(copiedFile.completed).toEqual([
+        { source: file, destination: path.join(root, 'Report copy.pdf') },
+      ]);
+      expect(await readFile(path.join(root, 'Report copy.pdf'), 'utf8')).toBe('report bytes');
+      const copiedFolder = await run({ kind: 'copy', sources: [folder], destination: root });
+      expect(copiedFolder.status, JSON.stringify(copiedFolder.errors)).toBe('completed');
+      expect(copiedFolder.errors).toEqual([]);
+      expect(copiedFolder.completed).toEqual([
+        { source: folder, destination: path.join(root, 'Reports copy') },
+      ]);
+      expect(await readFile(path.join(root, 'Reports copy', 'item.txt'), 'utf8')).toBe('inside');
+    });
+    it('refuses a move, transfer or rename onto its own source, leaving the folder chosen as recovery', async () => {
       const source = path.join(root, 'same.txt');
       await writeFile(source, 'only copy');
       const same = 'Source and destination are the same.';
-      const copied = await run({ kind: 'copy', sources: [source], destination: root });
-      expect(copied.status).toBe('failed');
-      expect(copied.errors).toEqual([{ path: source, message: same }]);
-      // Refused before the output path became the item's intent.
-      expect(copied.recovery).toEqual({ source, destination: root });
+      for (const kind of ['move', 'transfer'] as const) {
+        const job = await run({ kind, sources: [source], destination: root });
+        expect(job.status).toBe('failed');
+        expect(job.errors).toEqual([{ path: source, message: same }]);
+        // Refused before the output path became the item's intent.
+        expect(job.recovery).toEqual({ source, destination: root });
+      }
       const renamed = await run({ kind: 'rename', sources: [source], name: 'same.txt' });
       expect(renamed.errors).toEqual([{ path: source, message: same }]);
       expect(renamed.recovery).toEqual({ source });

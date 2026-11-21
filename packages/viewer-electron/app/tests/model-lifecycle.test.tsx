@@ -111,3 +111,70 @@ it.each(['glb', 'stl'])(
     expect(disposedWhileConnected).toEqual([true, true, true]);
   },
 );
+
+it('reports a missing companion asset with a literal percent sign without throwing URIError', async () => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  const gltf = JSON.stringify({
+    asset: { version: '2.0' },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ mesh: 0 }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+    accessors: [
+      {
+        bufferView: 0,
+        componentType: 5126,
+        count: 3,
+        type: 'VEC3',
+        min: [0, 0, 0],
+        max: [1, 1, 0],
+      },
+    ],
+    bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 36 }],
+    buffers: [{ byteLength: 36, uri: '50%gray.bin' }],
+  });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('.gltf'))
+        return new Response(gltf, { status: 200, headers: { 'content-type': 'model/gltf+json' } });
+      return new Response('Not Found', { status: 404 });
+    }),
+  );
+  const context: PreviewContext = {
+    resource: {
+      id: 'model-percent',
+      url: 'https://fixture.invalid/scene.gltf',
+      entry: {
+        path: '/fixture/scene.gltf',
+        name: 'scene.gltf',
+        parent: '/fixture',
+        extension: 'gltf',
+        kind: 'file',
+        directory: false,
+        size: gltf.length,
+        modified: 1,
+        created: 1,
+        hidden: false,
+        mime: 'model/gltf+json',
+        identity: 'model-percent',
+      },
+    },
+    active: true,
+    interactive: true,
+    look: 'dark',
+    signal: new AbortController().signal,
+    services: {} as PreviewContext['services'],
+  };
+  const view = render(<ModelPreview {...context} />);
+  await vi.waitFor(() => {
+    expect(view.container.textContent).toContain('50%gray.bin');
+  });
+});

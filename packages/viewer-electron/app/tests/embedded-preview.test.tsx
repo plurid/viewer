@@ -184,19 +184,19 @@ it('shows the picture inside an iWork package folder', async () => {
   expect(services.read).not.toHaveBeenCalled();
 });
 
-it('hands a `.key` file written as text to the preview it would otherwise have', async () => {
+it('hands a non-archive `.key` file to the certificate preview without reading its bytes', async () => {
   const entry = file('server.key');
   const next = choosePreview(
     entry,
     previewModules.filter((module) => module.id !== 'embedded'),
   );
   const load = next.load;
-  next.load = async () => ({ default: () => <p>Read as text</p> });
+  next.load = async () => ({ default: () => <p>Read as key</p> });
   try {
     const { context, services } = fixture(entry, new Error('ZIP directory was not found.'));
     render(<EmbeddedPreview {...context} />);
-    await screen.findByText('Read as text');
-    expect(services.read).toHaveBeenCalledWith('source', 4096);
+    await screen.findByText('Read as key');
+    expect(services.read).not.toHaveBeenCalled();
     expect(services.archiveEntry).not.toHaveBeenCalled();
   } finally {
     next.load = load;

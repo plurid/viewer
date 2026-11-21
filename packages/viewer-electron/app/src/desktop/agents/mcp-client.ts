@@ -142,7 +142,7 @@ export async function runMCPClient(
   });
   input.on('line', (line) => {
     if (Buffer.byteLength(line) > 65536) {
-      fail(null, 'Request exceeded its size limit.', -32600);
+      fail(extractRequestID(line), 'Request exceeded its size limit.', -32600);
       return;
     }
     try {
@@ -159,6 +159,8 @@ export async function runMCPClient(
       const id = String(++sequence);
       const timer = setTimeout(() => {
         pending.delete(id);
+        if (!socket.destroyed && socket.writable)
+          socket.write(JSON.stringify({ cancel: id }) + '\n');
         fail(request.id, 'Viewer request timed out.');
         drained();
       }, 120000);
@@ -178,6 +180,16 @@ export async function runMCPClient(
     transport.signal?.throwIfAborted();
   } finally {
     transport.signal?.removeEventListener('abort', abort);
+  }
+}
+/** Reads the top-level JSON-RPC `id` of an oversized line so the caller receives its -32600 error. */
+function extractRequestID(line: string): string | number | null {
+  if (Buffer.byteLength(line) > 1_048_576) return null;
+  try {
+    const parsed = JSON.parse(line) as { id?: unknown };
+    return typeof parsed?.id === 'string' || typeof parsed?.id === 'number' ? parsed.id : null;
+  } catch {
+    return null;
   }
 }
 /** Whether the process a connection record names still runs; unknown where Viewer cannot ask. */

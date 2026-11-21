@@ -256,6 +256,105 @@ describe('literal command execution', () => {
     executions.cancel(id);
     expect(executions.list().find((task) => task.id === id)!.status).toBe('cancelled');
   });
+  it('decodes multi-byte UTF-8 across chunk and 256 KiB tail boundaries without replacement characters', async () => {
+    // Split a 3-byte UTF-8 character across two stdout writes, then overflow the 256 KiB tail.
+    const script = [
+      'const bytes = Buffer.from("日本語テスト");',
+      'process.stdout.write(bytes.subarray(0, 2));',
+      'setTimeout(() => {',
+      '  process.stdout.write(bytes.subarray(2));',
+      '  process.stdout.write("あ".repeat(100000));',
+      '}, 10);',
+    ].join('');
+    config.customActions = [
+      command({
+        kind: 'executable',
+        executable: process.execPath,
+        args: ['-e', script],
+        perItem: false,
+      }),
+    ];
+    const executions = new Executions(
+      () => config,
+      () => {},
+      undefined,
+      async () => {},
+    );
+    cleanup.push(() => executions.close());
+    const id = await executions.start('fixture', target());
+    await vi.waitFor(() =>
+      expect(executions.list().find((task) => task.id === id)?.status).toBe('completed'),
+    );
+    const task = executions.list().find((item) => item.id === id)!;
+    expect(task.truncated).toBe(true);
+    expect(task.output).not.toContain('\uFFFD');
+    expect(task.output.endsWith('ああああ')).toBe(true);
+
+    // Also verify small output split across chunks keeps exact Unicode without truncation.
+    const smallScript = [
+      'const bytes = Buffer.from("日本語テスト");',
+      'process.stdout.write(bytes.subarray(0, 1));',
+      'setTimeout(() => process.stdout.write(bytes.subarray(1)), 10);',
+    ].join('');
+    config.customActions = [
+      command({
+        kind: 'executable',
+        executable: process.execPath,
+        args: ['-e', smallScript],
+        perItem: false,
+      }),
+    ];
+    const smallID = await executions.start('fixture', target());
+    await vi.waitFor(() =>
+      expect(executions.list().find((item) => item.id === smallID)?.status).toBe('completed'),
+    );
+    expect(executions.list().find((item) => item.id === smallID)!.output).toBe('日本語テスト');
+  });
+  it('completes and lets close() finish when a detached grandchild keeps inherited stdout open', async () => {
+    const pidFile = path.join(root, 'grandchild.pid');
+    const launcher = [
+      'const { spawn } = require("node:child_process");',
+      'const fs = require("node:fs");',
+      'const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)"], { detached: true, stdio: ["ignore", 1, 2] });',
+      'fs.writeFileSync(process.argv[1], String(child.pid));',
+      'child.unref();',
+      'process.stdout.write("parent-done");',
+    ].join('');
+    config.customActions = [
+      command({
+        kind: 'executable',
+        executable: process.execPath,
+        args: ['-e', launcher, pidFile],
+        perItem: false,
+      }),
+    ];
+    const executions = new Executions(
+      () => config,
+      () => {},
+      undefined,
+      async () => {},
+    );
+    try {
+      const id = await executions.start('fixture', target());
+      await vi.waitFor(
+        () => expect(executions.list().find((task) => task.id === id)?.status).toBe('completed'),
+        { timeout: 2000 },
+      );
+      expect(executions.list().find((task) => task.id === id)?.output).toContain('parent-done');
+      await executions.close();
+    } finally {
+      const pidText = await fs.readFile(pidFile, 'utf8').catch(() => '');
+      const pid = Number(pidText.trim());
+      if (Number.isInteger(pid) && pid > 1) {
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch {
+          /* already exited */
+        }
+      }
+      await executions.close();
+    }
+  });
   it('runs at most 20 commands, counting those still starting', async () => {
     config.customActions = [
       command({ kind: 'executable', executable: '/bin/sleep', args: ['30'], perItem: false }),

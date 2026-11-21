@@ -144,10 +144,16 @@ export async function loadNote(paneID: string, id: string, refresh = false): Pro
   loading.set(paneID, pending);
   return pending;
 }
-export function changeNote(paneID: string, change: { text?: string; title?: string }): void {
+export function changeNote(
+  paneID: string,
+  change: { text?: string; title?: string },
+  options?: { fromEditor?: boolean },
+): void {
   const session = sessions.get(paneID);
   if (!session || noteLocked(session.document.id)) return;
   Object.assign(session, change);
+  // Text changed outside CodeMirror (such as accepted dictation) remounts the editor to show it.
+  if (change.text !== undefined && !options?.fromEditor) session.editorKey = crypto.randomUUID();
   clearTimeout(session.timer);
   session.timer = setTimeout(() => {
     void flushNote(paneID).catch(() => {});

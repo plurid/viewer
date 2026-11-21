@@ -1,5 +1,4 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
 import { flushSync } from 'react-dom';
 import {
   getDocument,
@@ -68,6 +67,7 @@ export default function PDFPreview(
   }, [context.evidence, setPage, setZoom]);
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
+  const viewer = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (searchOpen) searchInput.current?.focus();
   }, [searchOpen]);
@@ -313,6 +313,8 @@ export default function PDFPreview(
   }, [pdf, query, signal, setPage]);
   const printable =
     context.printable !== false &&
+    Boolean(context.openInApp) &&
+    /\.pdf$/i.test(resource.entry.path) &&
     getState().bootstrap.platform === 'darwin' &&
     resource.derivation?.kind !== 'office';
   const print = useMemo(
@@ -404,6 +406,44 @@ export default function PDFPreview(
       [pdf, page, scale, setPage, setZoom, sidebar, setSidebar, printable, print, dark, pages],
     ),
   );
+  // In a plane, ← and → turn pages, and Space and Page Down turn the page at its end, as Preview
+  // does; Quick Look keeps those keys for its own files and for closing. PreviewFrame holds focus
+  // on the ancestor `.preview-plane`, so listen on that plane rather than only inside `.pdf-viewer`.
+  const onPageKey = useEffectEvent((event: globalThis.KeyboardEvent) => {
+    if (!pdf || !context.toolbar || event.defaultPrevented || event.metaKey || event.ctrlKey)
+      return;
+    if (
+      event.target instanceof HTMLElement &&
+      event.target.closest('input, textarea, select, button')
+    )
+      return;
+    const box = scroll.current;
+    const atEnd = !box || box.scrollTop + box.clientHeight >= box.scrollHeight - 2;
+    const atStart = !box || box.scrollTop <= 1;
+    const back =
+      event.key === 'ArrowLeft' ||
+      (event.key === 'PageUp' && atStart) ||
+      (event.key === ' ' && event.shiftKey && atStart);
+    const ahead =
+      event.key === 'ArrowRight' ||
+      (event.key === 'PageDown' && atEnd) ||
+      (event.key === ' ' && !event.shiftKey && atEnd);
+    if (back && page > 1) {
+      event.preventDefault();
+      setPage(page - 1);
+    } else if (ahead && page < pdf.numPages) {
+      event.preventDefault();
+      setPage(page + 1);
+    }
+  });
+  useEffect(() => {
+    if (!pdf) return;
+    const host = viewer.current?.closest<HTMLElement>('.preview-plane') ?? viewer.current;
+    if (!host) return;
+    const listener = (event: globalThis.KeyboardEvent) => onPageKey(event);
+    host.addEventListener('keydown', listener);
+    return () => host.removeEventListener('keydown', listener);
+  }, [pdf]);
   if (error)
     return (
       <PreviewFailure context={context} icon="pdf" title="Can't show this PDF" detail={error} />
@@ -444,32 +484,8 @@ export default function PDFPreview(
   if (!pdf) return <Loading label="Opening PDF…" />;
   // Essential leaves Optimize, the sidebars and Print to "…", where each is a command
   const every = context.toolbar !== 'essential';
-  // In a plane, ← and → turn pages, and Space and Page Down turn the page at its end, as Preview
-  // does; Quick Look keeps those keys for its own files and for closing.
-  const pageKeys = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!context.toolbar || event.defaultPrevented || event.metaKey || event.ctrlKey) return;
-    if ((event.target as HTMLElement).closest('input, textarea, select, button')) return;
-    const box = scroll.current;
-    const atEnd = !box || box.scrollTop + box.clientHeight >= box.scrollHeight - 2;
-    const atStart = !box || box.scrollTop <= 1;
-    const back =
-      event.key === 'ArrowLeft' ||
-      (event.key === 'PageUp' && atStart) ||
-      (event.key === ' ' && event.shiftKey && atStart);
-    const ahead =
-      event.key === 'ArrowRight' ||
-      (event.key === 'PageDown' && atEnd) ||
-      (event.key === ' ' && !event.shiftKey && atEnd);
-    if (back && page > 1) {
-      event.preventDefault();
-      setPage(page - 1);
-    } else if (ahead && page < pdf.numPages) {
-      event.preventDefault();
-      setPage(page + 1);
-    }
-  };
   return (
-    <div className="pdf-viewer" onKeyDown={pageKeys}>
+    <div className="pdf-viewer" ref={viewer}>
       <PreviewToolbar context={context}>
         {every && context.optimize && (
           <button {...headerItem('optimize', 8, ['optimize-files'])} onClick={context.optimize}>

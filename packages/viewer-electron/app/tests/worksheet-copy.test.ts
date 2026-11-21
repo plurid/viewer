@@ -85,3 +85,88 @@ it('rejects partial extraction and selections larger than its budget', async () 
   ).rejects.toThrow('10,000');
   expect(f.document).not.toHaveBeenCalled();
 });
+
+it('keeps an earlier page merged anchor when a later page reports the merge without an anchor', async () => {
+  const f = fixture();
+  f.document
+    .mockResolvedValueOnce({
+      path: '/Generated.xlsx',
+      text: '',
+      evidence: [],
+      metadata: {},
+      truncated: true,
+      office: {
+        kind: 'workbook',
+        formulas: 0,
+        missingCached: 0,
+        page: { sheet: 'Data', fromRow: 1, lastRow: 2, nextRow: 3, limited: false },
+        sheets: [
+          {
+            name: 'Data',
+            hidden: false,
+            columns: 2,
+            truncated: false,
+            loaded: true,
+            rows: [{ row: 1, cells: [{ column: 1, value: 'Group' }, { column: 2, value: 'Subtotal' }] }],
+            merges: [
+              {
+                fromRow: 1,
+                toRow: 4,
+                fromColumn: 1,
+                toColumn: 1,
+                anchor: { column: 1, value: 'Group' },
+              },
+              {
+                fromRow: 1,
+                toRow: 2,
+                fromColumn: 2,
+                toColumn: 2,
+                anchor: { column: 2, value: 'Subtotal' },
+              },
+            ],
+          },
+        ],
+      },
+    })
+    .mockResolvedValueOnce({
+      path: '/Generated.xlsx',
+      text: '',
+      evidence: [],
+      metadata: {},
+      truncated: true,
+      office: {
+        kind: 'workbook',
+        formulas: 0,
+        missingCached: 0,
+        page: { sheet: 'Data', fromRow: 3, lastRow: 4, nextRow: undefined, limited: false },
+        sheets: [
+          {
+            name: 'Data',
+            hidden: false,
+            columns: 2,
+            truncated: false,
+            loaded: true,
+            rows: [{ row: 3, cells: [{ column: 2, value: 'Row 3' }] }],
+            merges: [
+              {
+                fromRow: 1,
+                toRow: 4,
+                fromColumn: 1,
+                toColumn: 1,
+                anchor: { column: 1, value: 'Group' },
+              },
+              { fromRow: 1, toRow: 2, fromColumn: 2, toColumn: 2 },
+            ],
+          },
+        ],
+      },
+    });
+  const tsv = await worksheetTSV(
+    f.context,
+    'Data',
+    { fromRow: 1, toRow: 4, fromColumn: 1, toColumn: 2 },
+    true,
+    new AbortController().signal,
+  );
+  expect(tsv.split('\n')[0]).toBe('Group\tSubtotal');
+});

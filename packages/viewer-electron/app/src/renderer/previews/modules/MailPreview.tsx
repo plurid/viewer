@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
+import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import type { DocumentData } from '../../../domain/services';
 import type { MailAttachment, MailMessage } from '../../../domain/previews/mail/message';
 import type { Mailbox } from '../../../domain/previews/mail/mailbox';
@@ -292,11 +293,46 @@ function MailboxView({ context, mailbox }: { context: PreviewContext; mailbox: M
   const count = mailbox.messages.length;
   const index = Math.max(0, Math.min(chosen, count - 1));
   const message = useMailboxMessage(context, count ? index : undefined);
-  const list = useRef<HTMLOListElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const rows = count + (mailbox.truncated ? 1 : 0);
+  const virtual = useVirtualizer({
+    count: rows,
+    getScrollElement: () => list.current,
+    estimateSize: () => 52,
+    overscan: 8,
+    initialRect: { width: 260, height: 600 },
+    // Keep initialRect until layout gives the list a real box (e.g., before first paint or in tests).
+    observeElementRect: (instance, notify) => {
+      const element = instance.scrollElement;
+      if (!element) return;
+      const update = () => {
+        const rect = element.getBoundingClientRect();
+        if (rect.height > 0 || rect.width > 0) notify({ width: rect.width, height: rect.height });
+      };
+      update();
+      if (typeof ResizeObserver === 'undefined') return;
+      const observer = new ResizeObserver(update);
+      observer.observe(element);
+      return () => observer.disconnect();
+    },
+    rangeExtractor: (range) => {
+      const items = new Set(defaultRangeExtractor(range));
+      if (count > 0) items.add(index);
+      return [...items].sort((a, b) => a - b);
+    },
+  });
   const choose = (next: number) => {
     const position = Math.max(0, Math.min(next, count - 1));
     setChosen(position);
-    list.current?.querySelectorAll<HTMLButtonElement>('button')[position]?.focus();
+    virtual.scrollToIndex(position, { align: 'auto' });
+    const focus = () => {
+      const button = list.current?.querySelector<HTMLButtonElement>(
+        `button[data-index="${position}"]`,
+      );
+      button?.focus();
+      return Boolean(button);
+    };
+    if (!focus()) requestAnimationFrame(focus);
   };
   const keydown = (event: KeyboardEvent<HTMLOListElement>) => {
     const moves: Record<string, number> = {
@@ -348,27 +384,44 @@ function MailboxView({ context, mailbox }: { context: PreviewContext; mailbox: M
         </span>
       </PreviewToolbar>
       <div className="mailbox-layout">
-        <ol ref={list} className="mailbox-messages" aria-label="Messages" onKeyDown={keydown}>
-          {mailbox.messages.map((row, position) => (
-            <li key={position}>
-              <button
-                type="button"
-                aria-current={position === index}
-                tabIndex={position === index ? 0 : -1}
-                onClick={() => choose(position)}
-              >
-                <span className="mailbox-from">{row.from || 'Unknown sender'}</span>
-                <span className="muted tabular">{shownDate(row.date, row.time)}</span>
-                <span className="mailbox-subject">{row.subject || 'No subject'}</span>
-              </button>
-            </li>
-          ))}
-          {mailbox.truncated && (
-            <li className="muted mail-notice">
-              The first {mailboxLimits.messages.toLocaleString()} messages are listed.
-            </li>
-          )}
-        </ol>
+        <div ref={list} className="mailbox-messages">
+          <ol
+            className="mailbox-list"
+            aria-label="Messages"
+            onKeyDown={keydown}
+            style={{ height: virtual.getTotalSize() }}
+          >
+            {virtual.getVirtualItems().map((item) => {
+              const row = mailbox.messages[item.index];
+              return row ? (
+                <li
+                  key={item.key}
+                  style={{ height: item.size, transform: `translateY(${item.start}px)` }}
+                >
+                  <button
+                    type="button"
+                    data-index={item.index}
+                    aria-current={item.index === index}
+                    tabIndex={item.index === index ? 0 : -1}
+                    onClick={() => choose(item.index)}
+                  >
+                    <span className="mailbox-from">{row.from || 'Unknown sender'}</span>
+                    <span className="muted tabular">{shownDate(row.date, row.time)}</span>
+                    <span className="mailbox-subject">{row.subject || 'No subject'}</span>
+                  </button>
+                </li>
+              ) : (
+                <li
+                  key="truncated"
+                  className="muted mail-notice"
+                  style={{ height: item.size, transform: `translateY(${item.start}px)` }}
+                >
+                  The first {mailboxLimits.messages.toLocaleString()} messages are listed.
+                </li>
+              );
+            })}
+          </ol>
+        </div>
         <div className="mailbox-message">
           {!message ? (
             <Loading label="Reading message…" />

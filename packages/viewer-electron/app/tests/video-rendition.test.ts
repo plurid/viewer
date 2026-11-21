@@ -179,3 +179,55 @@ it('counts the frames of a raw elementary stream, which states no duration', asy
     ),
   ).rejects.toThrow('no supported duration');
 });
+it('uses audioCopy for audio files that carry embedded attached_pic cover art', async () => {
+  const track = path.join(root, 'album-track.m4a');
+  await writeFile(track, 'generated source');
+  const source = await open(track);
+  try {
+    const probed = {
+      format: { duration: '1800.0' },
+      streams: [
+        { codec_type: 'audio', codec_name: 'alac', sample_rate: '48000', channels: 2 },
+        {
+          codec_type: 'video',
+          codec_name: 'mjpeg',
+          width: 600,
+          height: 600,
+          disposition: { attached_pic: 1 },
+        },
+      ],
+    };
+    const frames = Math.round((1800 * 48000) / 1024);
+    let count = 0;
+    const execute = vi.fn<typeof runProcessor>(async () =>
+      Buffer.from(
+        JSON.stringify(
+          ++count === 1
+            ? probed
+            : count === 2
+              ? 'encoded'
+              : {
+                  streams: [
+                    {
+                      codec_type: 'audio',
+                      codec_name: 'aac',
+                      sample_rate: '48000',
+                      nb_read_frames: String(frames),
+                    },
+                  ],
+                },
+        ),
+      ),
+    );
+    const result = await videoDecoder('/bundled', execute)(
+      { file: track, handle: source, info: await fileStat(source) },
+      'video',
+      new AbortController().signal,
+    );
+    expect(result.extension).toBe('m4a');
+    expect(execute.mock.calls[0]![1].join(' ')).toContain('stream_disposition=attached_pic');
+    expect(execute.mock.calls[1]![1]).toEqual(expect.arrayContaining(['-vn', '192k']));
+  } finally {
+    await source.close();
+  }
+});

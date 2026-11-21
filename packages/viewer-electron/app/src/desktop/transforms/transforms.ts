@@ -199,7 +199,7 @@ export class Transforms implements TransformExecutor {
         '-i',
         'fd:',
         '-show_entries',
-        'format=duration:stream=codec_name,codec_type,width,height,duration,avg_frame_rate,sample_rate,channels:stream_side_data=rotation',
+        'format=duration:stream=codec_name,codec_type,width,height,duration,avg_frame_rate,sample_rate,channels:stream_disposition=attached_pic:stream_side_data=rotation',
         '-of',
         'json',
       ],

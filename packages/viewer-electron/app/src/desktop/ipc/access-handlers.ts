@@ -37,6 +37,7 @@ interface AccessPorts {
     | 'preview'
     | 'copyPaths'
     | 'chooseRestoreFolder'
+    | 'restoreFootprint'
     | 'restore'
     | 'requestAccess'
   >;
@@ -99,8 +100,10 @@ export function createAccessHandlers(ports: AccessPorts): AccessHandlers {
           ? await ports.trash.chooseRestoreFolder(ports.requireWindow(owner))
           : undefined;
       if (destination === 'choose' && !folder) return { restored: 0, cancelled: true };
-      return ports.operations.exclusive(() =>
-        ports.trash.restore(ports.requireWindow(owner), itemIDs, folder ? { folder } : 'original'),
+      const target = folder ? { folder } : 'original';
+      return ports.operations.exclusive(
+        () => ports.trash.restore(ports.requireWindow(owner), itemIDs, target),
+        () => ports.trash.restoreFootprint(itemIDs, target),
       );
     },
     trashAccess: ([locationID], owner) =>

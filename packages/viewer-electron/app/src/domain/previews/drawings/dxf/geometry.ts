@@ -443,7 +443,7 @@ function drawingFrom(data: IDxf, source: string): Drawing {
       Math.abs(scaleX - scaleY) < 1e-8 &&
       Math.abs(matrix[0] * matrix[2] + matrix[1] * matrix[3]) < 1e-8;
     if (length !== undefined && uniform) length *= scaleX;
-    else if (!text) {
+    else if (!text && transformed.length > 1) {
       length = pathLength(transformed);
       approximate = true;
     }

@@ -93,4 +93,18 @@ describe('shared source-versioned drawing geometry', () => {
     abort.abort();
     await expect(readDrawingGeometry(file, {}, abort.signal)).rejects.toThrow();
   });
+  it('keeps DXF POINT entities without length or approximate sampling warning', () => {
+    const drawing = parseDrawing(
+      dxf(
+        entity('LINE', [8, '0', 10, 0, 20, 0, 11, 10, 21, 0]) +
+          entity('POINT', [8, 'DRILL', 10, 5, 20, 5]),
+      ),
+    );
+    const page = drawingGeometryPage(drawing, {});
+    const point = page.entities.find((item) => item.type === 'POINT');
+    expect(point).toBeDefined();
+    expect(point!.length).toBeUndefined();
+    expect(point!.approximate).toBe(false);
+    expect(page.coverage.reasons).toEqual([]);
+  });
 });

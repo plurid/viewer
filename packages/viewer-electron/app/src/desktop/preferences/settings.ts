@@ -6,7 +6,7 @@ import { settingCatalog, workspaceMayChange } from '../../domain/preferences/cat
 import path from 'node:path';
 import { z } from 'zod';
 import { profileDiagnostics } from '../../domain/preferences/presentation/resolver';
-import type { SettingsPatch, SettingsSnapshot } from '../../domain/services';
+import type { ApplicationSettings, SettingsPatch, SettingsSnapshot } from '../../domain/services';
 import { defaultSettings } from '../../domain/services';
 import type { UIPreferences, Pane, FolderPane, Look } from '../../domain/contracts';
 import { normalizePreferences, upgradeUIPreferences } from '../../domain/preferences/ui';
@@ -372,8 +372,20 @@ export class SettingsService {
     );
     return task;
   }
-  preview(patches: SettingsPatch[]): { valid: true; changes: string[] } {
-    const next = structuredClone(this.document) as unknown as Record<string, unknown>;
+  preview(
+    patches: SettingsPatch[],
+    base?: { settings: ApplicationSettings; ui: UIPreferences },
+  ): { valid: true; changes: string[] } {
+    const source = base
+      ? {
+          $schema: this.document.$schema,
+          version: this.document.version,
+          settings: base.settings,
+          ui: base.ui,
+          revision: this.document.revision,
+        }
+      : this.document;
+    const next = structuredClone(source) as unknown as Record<string, unknown>;
     const absent: string[][] = [];
     for (const patch of patches) {
       const keys = patchKeys(patch);
@@ -381,10 +393,10 @@ export class SettingsService {
     }
     const { revision: _revision, ...config } = next;
     const parsed = validated(config, absent);
-    validateCustomProfiles(parsed.settings.profiles, this.document.settings.profiles);
+    validateCustomProfiles(parsed.settings.profiles, source.settings.profiles);
     // An agent edits a recipe, not what binds it to the person: its shortcut, its model provider,
     // or more data than it sent. A whole-recipes patch carried them.
-    const recipes = new Map(this.document.settings.recipes.map((recipe) => [recipe.id, recipe]));
+    const recipes = new Map(source.settings.recipes.map((recipe) => [recipe.id, recipe]));
     for (const recipe of parsed.settings.recipes) {
       const before = recipes.get(recipe.id);
       if (
@@ -397,12 +409,12 @@ export class SettingsService {
         );
     }
     // an agent's change may leave an earlier reference to a missing item; it may not add one
-    const earlier = new Set(referenceIssues(this.document.settings));
+    const earlier = new Set(referenceIssues(source.settings));
     const added = referenceIssues(parsed.settings).filter((issue) => !earlier.has(issue));
     if (added.length) throw new Error(added.join(' '));
     return {
       valid: true,
-      changes: configChanges(this.document, next).map((change) => change.keys.join('.')),
+      changes: configChanges(source, next).map((change) => change.keys.join('.')),
     };
   }
   /** Writes a removed config.jsonc back from the settings in effect (a no-op while it is there). */

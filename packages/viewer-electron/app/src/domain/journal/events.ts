@@ -162,7 +162,7 @@ const phaseLabels: Record<JournalPhase, string> = {
   started: 'started',
   waiting: 'waiting for a decision',
   succeeded: 'completed',
-  cancelled: 'cancelled',
+  cancelled: 'canceled',
   failed: 'failed',
 };
 

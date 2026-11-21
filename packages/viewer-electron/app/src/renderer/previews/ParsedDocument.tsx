@@ -5,6 +5,7 @@ import type { PreviewContext } from './contracts';
 import type { TextPreviewProps } from './modules/TextPreview';
 import TextPreview from './modules/TextPreview';
 import { PreviewToolbar, usePreviewCommands } from './controls';
+import { headerItem } from '../workspace/header-overflow';
 import { usePreviewState } from './state';
 import { Loading } from '../ui/primitives';
 import { PreviewFailure } from './PreviewFailure';
@@ -163,6 +164,7 @@ export function ParsedDocument<T>({
     <div className="text-viewer parsed-document">
       <PreviewToolbar context={context}>
         <button
+          {...headerItem('document', 5, ['preview.view-source'])}
           type="button"
           className={source ? '' : 'selected'}
           aria-pressed={!source}
@@ -171,6 +173,7 @@ export function ParsedDocument<T>({
           {name}
         </button>
         <button
+          {...headerItem('source', 5, ['preview.view-source'])}
           type="button"
           className={source ? 'selected' : ''}
           aria-pressed={source}
@@ -181,7 +184,9 @@ export function ParsedDocument<T>({
         {summary && (
           <>
             <span className="toolbar-spacer" />
-            <span className="muted tabular">{summary(document)}</span>
+            <span {...headerItem('summary', 9, 'detail')} className="muted tabular">
+              {summary(document)}
+            </span>
           </>
         )}
       </PreviewToolbar>

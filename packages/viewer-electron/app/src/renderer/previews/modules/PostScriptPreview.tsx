@@ -35,6 +35,7 @@ export default function PostScriptPreview(context: PreviewContext) {
   const [rendered, setRendered] = useState<Resource>();
   const request = useRef<string | undefined>(undefined);
   const owned = useRef<Resource | undefined>(undefined);
+  const mounted = useRef(true);
   // Render Pages goes once the pages are ready; a keyboard on it moves on to the Pages view
   const renderButton = useRef<HTMLButtonElement>(null);
   const pagesButton = useRef<HTMLButtonElement>(null);
@@ -46,6 +47,7 @@ export default function PostScriptPreview(context: PreviewContext) {
   }, [renderState]);
 
   useEffect(() => {
+    mounted.current = true;
     let live = true;
     let preview: Resource | undefined;
     const requestID = crypto.randomUUID();
@@ -84,6 +86,7 @@ export default function PostScriptPreview(context: PreviewContext) {
     };
     signal.addEventListener('abort', cancel, { once: true });
     return () => {
+      mounted.current = false;
       live = false;
       signal.removeEventListener('abort', cancel);
       cancel();
@@ -129,9 +132,13 @@ export default function PostScriptPreview(context: PreviewContext) {
       setRenderState('finished');
       setMessage(`Pages rendered with ${value.derivation?.decoder ?? 'Ghostscript'}.`);
     } catch (value) {
-      if (request.current === requestID && !signal.aborted) {
-        setMessage(errorMessage(value));
+      if (!mounted.current || signal.aborted) return;
+      const detail = errorMessage(value);
+      if (request.current === requestID) {
+        setMessage(detail);
         setRenderState('idle');
+      } else if (!request.current && detail !== 'PostScript rendering was canceled.') {
+        setMessage(detail);
       }
     } finally {
       if (request.current === requestID) request.current = undefined;

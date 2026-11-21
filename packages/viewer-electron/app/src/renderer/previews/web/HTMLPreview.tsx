@@ -1,6 +1,7 @@
 import { useCallback, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { PreviewContext } from '../contracts';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
+import { headerItem } from '../../workspace/header-overflow';
 import TextPreview from '../modules/TextPreview';
 import { editingPlane } from '../../editing/planes';
 import { Failure, Loading } from '../../ui/primitives';
@@ -137,11 +138,22 @@ export default function HTMLPreview(context: PreviewContext) {
           </button>
         </div>
         <button
+          {...headerItem('reload', 2, ['preview.reload-html'])}
           className="html-preview-reload"
           type="button"
-          title="Reload the saved HTML and local assets"
-          disabled={capability.status === 'loading' || capability.status === 'closed'}
-          onClick={reload}
+          title={
+            capability.status === 'loading'
+              ? 'Opening HTML preview…'
+              : capability.status === 'closed'
+                ? 'This preview is closed.'
+                : 'Reload the saved HTML and local assets'
+          }
+          aria-disabled={
+            capability.status === 'loading' || capability.status === 'closed' || undefined
+          }
+          onClick={() => {
+            if (capability.status !== 'loading' && capability.status !== 'closed') reload();
+          }}
         >
           <Icon name="refresh" />
           Reload

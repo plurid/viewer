@@ -34,6 +34,24 @@ function archiveName(name: string): string {
     throw new Error('Unsafe archive path.');
   return parts.join('/');
 }
+/** Validates a local entry being added to a ZIP and names the offending item when rejected. */
+function sourceArchiveName(name: string, file: string): string {
+  const leaf = path.basename(file) || name;
+  if (name.includes('\\'))
+    throw new Error(
+      `Can’t add “${leaf}” to a ZIP because its name contains “\\”, which isn’t portable across systems. Rename it and try again.`,
+    );
+  const parts = name.split('/').filter((part) => part && part !== '.');
+  if (parts.some((part) => part.includes(':')))
+    throw new Error(
+      `Can’t add “${leaf}” to a ZIP because its name contains “:” (a slash in Finder), which isn’t portable across systems. Rename it and try again.`,
+    );
+  if (parts.some((part) => part.length > 255))
+    throw new Error(
+      `Can’t add “${leaf}” to a ZIP because its name is longer than 255 characters. Rename it and try again.`,
+    );
+  return archiveName(name);
+}
 export async function createArchive(
   sources: readonly string[],
   target: string,
@@ -45,7 +63,7 @@ export async function createArchive(
   const visit = async (file: string, name: string) => {
     work.signal.throwIfAborted();
     await work.access([file]);
-    name = archiveName(name);
+    name = sourceArchiveName(name, file);
     const key = name.normalize('NFC').toLocaleLowerCase('en-US');
     if (!name || names.has(key))
       throw new Error('The selection has conflicting archive names. Choose files from one folder.');

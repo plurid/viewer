@@ -1,7 +1,18 @@
 import type { AgentProposal } from './requests';
 import { needsNativeConfirmation } from './requests';
+import { sharedClientID } from './clients';
 
 const count = (value: number) => value.toLocaleString();
+
+/** Names the client or Chat that submitted a proposal. */
+export function proposalRequester(
+  proposal: Pick<AgentProposal, 'clientID' | 'clientName'>,
+): string {
+  if (proposal.clientName?.trim()) return proposal.clientName.trim();
+  if (proposal.clientID?.startsWith('chat:')) return 'Chat';
+  if (proposal.clientID === sharedClientID) return 'Shared agent connection';
+  return 'An agent';
+}
 
 /** The button that approves a proposal in Viewer's review. */
 export function reviewButton(proposal: AgentProposal): string {

@@ -23,17 +23,17 @@ refused. Every path argument must be inside the client's folders.
 
 ### Discover the workspace
 
-| Tool              | Needs      | What it does                                                                                                                                                                 |
-| ----------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_context`     | `metadata` | The active workspace, root, plane and selected sources, keeping only granted paths                                                                                           |
-| `list_workspaces` | `metadata` | Each workspace with its granted planes (ID, type, path, view mode) and root plane IDs. Planes outside the folders and search planes over all locations are left out          |
-| `list_planes`     | `metadata` | The granted planes of one workspace; `workspaceID` defaults to the active one                                                                                                |
-| `list_task_areas` | `metadata` | Task names, checkout paths, branches and commits inside the folders, for every workspace or one `workspace` (an ID or an exact unique name)                                  |
-| `list_commands`   | `metadata` | The commands an agent may propose for the captured folder and selection: ID, label, group, aliases and key, with the removal policy                                          |
-| `explain_command` | `metadata` | One command (`commandID`), its captured target, and a custom action's definition                                                                                             |
-| `list_actions`    | `metadata` | Action recipes: ID, name, formats, data level and kind                                                                                                                       |
-| `read_config`     | `metadata` | The effective configuration: `version`, `settings`, `ui` and `revision`. Terminal arguments and environment values, shell scripts and executable arguments read `[redacted]` |
-| `validate_config` | `metadata` | Checks up to 100 patches without applying them                                                                                                                               |
+| Tool              | Needs      | What it does                                                                                                                                                                                                                           |
+| ----------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_context`     | `metadata` | The active workspace, root, plane and selected sources, keeping only granted paths                                                                                                                                                     |
+| `list_workspaces` | `metadata` | Each workspace with its granted planes (ID, type, path, view mode) and root plane IDs. Planes outside the folders and search planes over all locations are left out                                                                    |
+| `list_planes`     | `metadata` | The granted planes of one workspace; `workspaceID` defaults to the active one                                                                                                                                                          |
+| `list_task_areas` | `metadata` | Task names, checkout paths, branches and commits inside the folders, for every workspace or one `workspace` (an ID or an exact unique name)                                                                                            |
+| `list_commands`   | `metadata` | The commands an agent may propose for the captured folder and selection: ID, label, group, aliases and key, with the removal policy                                                                                                    |
+| `explain_command` | `metadata` | One command (`commandID`), its captured target, and a custom action's definition                                                                                                                                                       |
+| `list_actions`    | `metadata` | Action recipes: ID, name, formats, data level and kind                                                                                                                                                                                 |
+| `read_config`     | `metadata` | The effective configuration: `version`, `settings`, `ui` and `revision`. Paths outside the client's folders are hidden or omitted; terminal arguments and environment values, shell scripts and executable arguments read `[redacted]` |
+| `validate_config` | `metadata` | Checks up to 100 patches without applying them, evaluated against the client's scoped configuration                                                                                                                                    |
 
 ### Read files and checkouts
 

@@ -1,4 +1,5 @@
-import { memo, useCallback, useContext, useEffect, useMemo } from 'react';
+import { memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo } from 'react';
+import type { ReactNode } from 'react';
 import type { FileEntry, Resource } from '../../domain/contracts';
 import {
   followQuickPreview,
@@ -17,7 +18,7 @@ import { AppIcon, hasBundleIcon } from '../explorer/app-icon';
 import { Dialog, IconButton } from '../ui/primitives';
 import { Icon } from '../ui/Icon';
 import { OpenDefaultButton } from '../ui/navigation/OpenDefaultButton';
-import { HeldPreview } from './HeldPreview';
+import { HeldPreview, HeldPreviewHiddenContext } from './HeldPreview';
 import { PreviewFacts, PreviewFileInfo } from './PreviewFileInfo';
 import type { PreviewModule } from './contracts';
 import type { HexToggle } from './PreviewHost';
@@ -101,6 +102,84 @@ function SuggestedAction({
     >
       {suggestion.command.label}
     </button>
+  );
+}
+
+function QuickPreviewFooter({
+  resource,
+  module,
+  hex,
+  details,
+  navigation,
+  editKey,
+  paneID,
+  workspaceID,
+  open,
+}: {
+  resource: Resource;
+  module: PreviewModule;
+  hex?: HexToggle;
+  details?: readonly string[];
+  navigation: ReactNode;
+  editKey: string;
+  paneID?: string;
+  workspaceID: string;
+  open(file: string, edit: boolean): void;
+}) {
+  const hidden = useContext(HeldPreviewHiddenContext);
+  const canEdit = module.editing === 'text' && resource.entry.size <= MAX_TEXT_BYTES;
+  const path = resource.entry.path;
+  useLayoutEffect(() => {
+    if (hidden) return;
+    if (!canEdit) {
+      editShown = undefined;
+      return;
+    }
+    const action = () => open(path, true);
+    editShown = action;
+    return () => {
+      if (editShown === action) editShown = undefined;
+    };
+  }, [hidden, canEdit, path, open]);
+  return (
+    <footer className="quick-preview-footer">
+      {/* the dialog's title names the file */}
+      <PreviewFileInfo
+        entry={resource.entry}
+        kind={module.id === 'hex' ? module.label : kindLabel(resource.entry)}
+        details={details}
+        named={false}
+      />
+      <div className="quick-preview-actions">
+        {navigation}
+        {hex && (
+          <button type="button" aria-pressed={hex.shown} onClick={hex.toggle}>
+            {hex.shown ? 'Show Preview' : 'Show as Hex'}
+          </button>
+        )}
+        <OpenDefaultButton path={resource.entry.path} />
+        <SuggestedAction
+          excluded={[
+            'edit-selected',
+            ...(['image', 'rendered-image'].includes(module.id) &&
+            transformableImage(resource.entry)
+              ? ['image-tools']
+              : []),
+          ]}
+          entry={resource.entry}
+          paneID={paneID}
+          workspaceID={workspaceID}
+        />
+        {canEdit && (
+          <button title={withShortcut('Edit Text', editKey)} onClick={() => open(path, true)}>
+            Edit
+          </button>
+        )}
+        <button className="primary" onClick={() => open(path, false)}>
+          Open Linked Plane
+        </button>
+      </div>
+    </footer>
   );
 }
 
@@ -212,53 +291,19 @@ export const QuickPreview = memo(function QuickPreview({
   // a folder the plane's selection moved to has no preview of its own: Quick Preview names it
   const folder = session.folders?.find((entry) => entry.path === path);
   const footer = useCallback(
-    (resource: Resource, module: PreviewModule, hex?: HexToggle, details?: readonly string[]) => {
-      const editable = module.editing === 'text' && resource.entry.size <= MAX_TEXT_BYTES;
-      editShown = editable ? () => open(resource.entry.path, true) : undefined;
-      return (
-        <footer className="quick-preview-footer">
-          {/* the dialog's title names the file */}
-          <PreviewFileInfo
-            entry={resource.entry}
-            kind={module.id === 'hex' ? module.label : kindLabel(resource.entry)}
-            details={details}
-            named={false}
-          />
-          <div className="quick-preview-actions">
-            {navigation}
-            {hex && (
-              <button type="button" aria-pressed={hex.shown} onClick={hex.toggle}>
-                {hex.shown ? 'Show Preview' : 'Show as Hex'}
-              </button>
-            )}
-            <OpenDefaultButton path={resource.entry.path} />
-            <SuggestedAction
-              excluded={[
-                'edit-selected',
-                ...(['image', 'rendered-image'].includes(module.id) &&
-                transformableImage(resource.entry)
-                  ? ['image-tools']
-                  : []),
-              ]}
-              entry={resource.entry}
-              paneID={session.paneID}
-              workspaceID={session.workspaceID}
-            />
-            {editable && (
-              <button
-                title={withShortcut('Edit Text', editKey)}
-                onClick={() => open(resource.entry.path, true)}
-              >
-                Edit
-              </button>
-            )}
-            <button className="primary" onClick={() => open(resource.entry.path, false)}>
-              Open Linked Plane
-            </button>
-          </div>
-        </footer>
-      );
-    },
+    (resource: Resource, module: PreviewModule, hex?: HexToggle, details?: readonly string[]) => (
+      <QuickPreviewFooter
+        resource={resource}
+        module={module}
+        hex={hex}
+        details={details}
+        navigation={navigation}
+        editKey={editKey}
+        paneID={session.paneID}
+        workspaceID={session.workspaceID}
+        open={open}
+      />
+    ),
     [open, navigation, editKey, session.paneID, session.workspaceID],
   );
   useEffect(

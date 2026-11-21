@@ -284,6 +284,42 @@ describe('reviewed content checkpoints', () => {
     await cold.close();
     await service.close();
   });
+  it('surfaces orphaned UUID folders left by a crash as incomplete and counts them toward the budget', async () => {
+    const directory = path.join(root, 'Private');
+    const orphanID = crypto.randomUUID();
+    const partialFile = path.join(directory, orphanID, '0', 'Source', 'partial.bin');
+    await mkdir(path.dirname(partialFile), { recursive: true });
+    await writeFile(partialFile, Buffer.alloc(16384, 7));
+    const source = path.join(root, 'Next.txt');
+    await writeFile(source, 'hello');
+    const service = new Checkpoints(directory, access, () => 1024 ** 2, coordination);
+    const listed = await service.list();
+    expect(listed.records).toEqual([
+      expect.objectContaining({
+        id: orphanID,
+        status: 'failed',
+        title: 'Incomplete checkpoint',
+      }),
+    ]);
+    expect(listed.records[0]!.bytes).toBeGreaterThanOrEqual(16384);
+    expect(listed.usedBytes).toBe(listed.records[0]!.bytes);
+    const estimate = await service.estimate([source]);
+    expect(estimate.availableBytes).toBe(1024 ** 2 - listed.usedBytes);
+    const destination = path.join(root, 'Restore');
+    await mkdir(destination);
+    await expect(service.restore(orphanID, destination, { start: vi.fn() })).rejects.toThrow(
+      'no longer saved',
+    );
+    if (removalBlocked('incomplete checkpoint removal', [path.join(directory, orphanID)])) {
+      await expect(service.remove(orphanID)).rejects.toMatchObject({
+        code: 'TEST_REMOVAL_BLOCKED',
+      });
+    } else {
+      await service.remove(orphanID);
+      expect((await service.list()).records).toEqual([]);
+    }
+    await service.close();
+  });
 });
 
 describe('removing a checkpoint', () => {

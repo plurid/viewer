@@ -22,7 +22,13 @@ import {
   agentCommandID,
   agentDispatchRefusal,
   agentRemovalPolicy,
+  modelLineCommandProblem,
 } from '../src/domain/agents/safety';
+import { forbiddenTrashCommands } from '../src/domain/files/trash';
+import { cliCommands } from '../src/domain/cli/catalog';
+import { verbs } from '../src/domain/command-line/verbs';
+import { workflowDefinitionSchema } from '../src/domain/automation/workflows';
+import { agentTools } from '../src/desktop/agents/agent-tools';
 import { SettingsService } from '../src/desktop/preferences/settings';
 import { AgentRequests } from '../src/desktop/agents/agent-requests';
 import { AgentBroker, redactedSettings } from '../src/desktop/agents/agent-broker';
@@ -953,12 +959,12 @@ describe('agent removal safety', () => {
     const f = await fixture();
     f.settings.snapshot().ui.insightsDismissed = {
       '/Home/code/acme-site': ['workspace.open'],
-      '/Home/Downloads': ['screenshots', 'workspace.open'],
+      '/Granted/Downloads': ['screenshots', 'workspace.open'],
     };
     const read = await f.call<{ ui: { insightsDismissed?: Record<string, string[]> } }>(
       'read_config',
     );
-    expect(read.ui.insightsDismissed).toEqual({ '/Home/Downloads': ['screenshots'] });
+    expect(read.ui.insightsDismissed).toEqual({ '/Granted/Downloads': ['screenshots'] });
     expect(JSON.stringify(read)).not.toContain('acme-site');
     // a change preview names changed keys: never a root a dismissal names
     const preview = await f.call<{ changes: string[] }>('validate_config', {
@@ -967,6 +973,237 @@ describe('agent removal safety', () => {
     expect(JSON.stringify(preview)).not.toContain('acme-site');
     // nor can an agent show them again: Show Hidden Insights is the person's command
     expect(() => agentCommandID('show-hidden-insights', [])).toThrow('only to the person');
+  });
+  it('exposes only granted paths in read_config and validate_config while keeping non-path configuration', async () => {
+    const f = await fixture(['/Granted']);
+    const snapshot = f.settings.snapshot();
+    snapshot.settings.browsing.newPlaneLocation = 'custom';
+    snapshot.settings.browsing.newPlanePath = '/Outside/NewPlane';
+    snapshot.settings.browsing.emptyWorkspaceLocation = 'custom';
+    snapshot.settings.browsing.emptyWorkspacePath = '/Granted/Empty';
+    snapshot.settings.folders = {
+      '/Granted/Work': { mode: 'columns' },
+      '/Outside/Private': { mode: 'grid' },
+    };
+    snapshot.settings.search = {
+      roots: ['/Granted', '/Outside/SearchRoot'],
+      contentRoots: ['/Granted/Docs', '/Outside/ContentRoot'],
+      exclusions: ['node_modules', '/Outside/Library', '/Granted/Ignored'],
+      paused: false,
+    };
+    snapshot.settings.agents.roots = ['/Granted', '/Outside/AgentRoot'];
+    snapshot.settings.savedSearches = [
+      { id: 'granted-search', name: 'Granted', query: 'invoice', root: '/Granted/Work' },
+      { id: 'secret-search', name: 'Secret', query: 'payroll', root: '/Outside/Private' },
+      { id: 'global-search', name: 'Global', query: 'todo' },
+    ];
+    snapshot.settings.customActions = [
+      {
+        ...action({ kind: 'builtin', command: 'copy-path' }),
+        when: {
+          target: 'any',
+          extensions: [],
+          min: 0,
+          max: 10000,
+          directories: ['/Granted/Work', '/Outside/Private'],
+        },
+      },
+    ];
+    snapshot.settings.terminals.application = '/Outside/CustomTerm.app';
+    snapshot.settings.terminals.tmux.socket = '/Outside/tmux.sock';
+    snapshot.settings.layouts = [
+      {
+        id: 'mixed',
+        name: 'Mixed',
+        layout: 'even-horizontal',
+        main: 0.5,
+        planes: [
+          { kind: 'folder', path: '/Granted/Work' },
+          { kind: 'folder', path: '/Outside/LayoutFolder' },
+          { kind: 'scratch' },
+        ],
+      },
+      {
+        id: 'private-only',
+        name: 'Private only',
+        layout: 'even-horizontal',
+        main: 0.5,
+        planes: [{ kind: 'folder', path: '~/OutsideTilde' }],
+      },
+    ];
+    snapshot.settings.profiles = [
+      {
+        id: 'desk',
+        name: 'Desk',
+        values: {
+          'ui.space.grid': false,
+          'ui.sidebar.locations': ['/Granted', '/Outside/ProfLoc'],
+          'settings.browsing.newPlanePath': '/Outside/ProfPlane',
+        },
+      },
+    ];
+    snapshot.ui.sidebar.locations = ['/Granted', '/Outside/SidebarLoc'];
+    snapshot.ui.sidebar.hidden = ['/Granted/Hidden', '/Outside/Hidden'];
+    snapshot.ui.sidebar.labels = { '/Granted': 'Work', '/Outside/SidebarLoc': 'Secret' };
+    snapshot.ui.insightsDismissed = {
+      '/Granted/Work': ['screenshots', 'workspace.open'],
+      '/Outside/Private': ['screenshots'],
+    };
+
+    const read = await f.call<{
+      settings: typeof snapshot.settings;
+      ui: typeof snapshot.ui;
+    }>('read_config');
+    const serialized = JSON.stringify(read);
+    expect(serialized).not.toContain('/Outside');
+    expect(serialized).not.toContain('OutsideTilde');
+    expect(serialized).not.toContain('payroll');
+    expect(serialized).not.toContain('CustomTerm');
+    expect(serialized).not.toContain('tmux.sock');
+    expect(read.settings.appearance).toBe(snapshot.settings.appearance);
+    expect(read.settings.browsing.newPlanePath).toBe('');
+    expect(read.settings.browsing.emptyWorkspacePath).toBe('/Granted/Empty');
+    expect(read.settings.folders).toEqual({ '/Granted/Work': { mode: 'columns' } });
+    expect(read.settings.search.roots).toEqual(['/Granted']);
+    expect(read.settings.search.contentRoots).toEqual(['/Granted/Docs']);
+    expect(read.settings.search.exclusions).toEqual(['node_modules', '/Granted/Ignored']);
+    expect(read.settings.agents.roots).toEqual(['/Granted']);
+    expect(read.settings.savedSearches.map((item) => item.id)).toEqual([
+      'granted-search',
+      'global-search',
+    ]);
+    expect(read.settings.customActions[0]!.when.directories).toEqual(['/Granted/Work']);
+    expect(read.settings.terminals.application).toBe('');
+    expect(read.settings.terminals.tmux.socket).toBe('');
+    expect(read.settings.layouts).toEqual([
+      {
+        id: 'mixed',
+        name: 'Mixed',
+        layout: 'even-horizontal',
+        main: 0.5,
+        planes: [{ kind: 'folder', path: '/Granted/Work' }, { kind: 'scratch' }],
+      },
+    ]);
+    expect(read.settings.profiles[0]!.values).toEqual({
+      'ui.space.grid': false,
+      'ui.sidebar.locations': ['/Granted'],
+      'settings.browsing.newPlanePath': '',
+    });
+    expect(read.ui.sidebar.locations).toEqual(['/Granted']);
+    expect(read.ui.sidebar.hidden).toEqual(['/Granted/Hidden']);
+    expect(read.ui.sidebar.labels).toEqual({ '/Granted': 'Work' });
+    expect(read.ui.insightsDismissed).toEqual({ '/Granted/Work': ['screenshots'] });
+
+    // validate_config must never leak ungranted paths in diff keys or via existence/value oracles.
+    const clearFolders = await f.call<{ valid: true; changes: string[] }>('validate_config', {
+      patches: [{ path: 'settings.folders', value: {} }],
+    });
+    expect(clearFolders.changes).toEqual(['settings.folders./Granted/Work']);
+    expect(JSON.stringify(clearFolders)).not.toContain('/Outside');
+
+    const clearLabels = await f.call<{ valid: true; changes: string[] }>('validate_config', {
+      patches: [{ path: 'ui.sidebar.labels', value: {} }],
+    });
+    expect(clearLabels.changes).toEqual(['ui.sidebar.labels./Granted']);
+
+    const appearance = await f.call<{ valid: true; changes: string[] }>('validate_config', {
+      patches: [{ path: 'settings.appearance', value: 'light' }],
+    });
+    expect(appearance).toEqual({ valid: true, changes: ['settings.appearance'] });
+
+    const sidebarProbe = await f.call<{ valid: true; changes: string[] }>('validate_config', {
+      patches: [{ path: 'ui.sidebar.locations', value: ['/Granted', '/Outside/SidebarLoc'] }],
+    });
+    expect(sidebarProbe.changes).toEqual(['ui.sidebar.locations']);
+
+    await expect(
+      f.call('validate_config', {
+        patches: [
+          {
+            path: 'ui.sidebar.labels',
+            keys: ['ui', 'sidebar', 'labels', '/Outside/SidebarLoc'],
+            value: undefined,
+          },
+        ],
+      }),
+    ).rejects.toThrow('Unknown setting.');
+  });
+  it('keeps Empty Trash unreachable from agent tools, CLI verbs, workflow steps and custom actions', async () => {
+    const f = await fixture();
+    // 1. Agent tools: no empty-trash tool exists and direct calls fail.
+    expect(
+      agentTools.some((tool) => /empty.?trash|trash.?empty|trash.?confirm/i.test(tool.name)),
+    ).toBe(false);
+    for (const tool of ['empty_trash', 'empty-trash', 'trash_empty', 'trashConfirmation'])
+      await expect(f.call(tool)).rejects.toThrow();
+
+    // 2. CLI verbs and command-line verbs: no verb targets emptying Trash.
+    expect(
+      cliCommands.some(
+        (command) =>
+          command.name.some((part) => /empty|trash/i.test(part)) ||
+          /empty|trash/i.test(command.tool ?? ''),
+      ),
+    ).toBe(false);
+    expect(verbs.some((verb) => verb.names.some((name) => /empty/i.test(name)))).toBe(false);
+
+    for (const command of forbiddenTrashCommands) {
+      let output = '';
+      const sink = new Writable({
+        write(chunk, _encoding, done) {
+          output += String(chunk);
+          done();
+        },
+      });
+      const code = await runCLI(['command', 'run', command], {
+        dataPath: '/Memory/Viewer',
+        version: 'test',
+        cwd: '/Granted',
+        home: '/Home',
+        input: Readable.from([]),
+        output: sink,
+        error: sink,
+        call: (method, params, signal) =>
+          f.broker.handle(f.created.token, { method, params }, signal),
+      });
+      expect(code).not.toBe(0);
+      expect(output).toBeTruthy();
+
+      // 3. Custom actions: builtin, sequence, nested sequence and model line reject every forbidden command.
+      const builtin = action({ kind: 'builtin', command });
+      const seq = action({ kind: 'sequence', commands: [command] });
+      const nested = [
+        action({ kind: 'sequence', commands: ['custom.inner'] }),
+        { ...action({ kind: 'builtin', command }), id: 'inner' },
+      ];
+      expect(() => agentCommandID(command, [])).toThrow('native user interface');
+      expect(() => agentCommandID('custom.cleanup', [builtin])).toThrow('native user interface');
+      expect(() => agentCommandID('custom.cleanup', [seq])).toThrow('native user interface');
+      expect(() => agentCommandID('custom.cleanup', nested)).toThrow('native user interface');
+      expect(modelLineCommandProblem(command, [])).toBeDefined();
+      expect(modelLineCommandProblem('custom.cleanup', [builtin])).toBeDefined();
+      expect(modelLineCommandProblem('custom.cleanup', [seq])).toBeDefined();
+      f.config.customActions = [builtin];
+      await expect(f.call('propose_command', { commandID: 'custom.cleanup' })).rejects.toThrow(
+        'native user interface',
+      );
+    }
+
+    // 4. Workflow steps: workflow schema accepts only inspect, compare, recipe, copy and convert.
+    for (const kind of ['empty-trash', 'trash', 'delete', 'command', 'shell']) {
+      expect(
+        workflowDefinitionSchema.safeParse({
+          version: 1,
+          id: 'unsafe',
+          name: 'Unsafe',
+          bindings: [],
+          inputs: {},
+          steps: [{ id: 'step', kind, sources: [{ kind: 'selection' }] }],
+        }).success,
+      ).toBe(false);
+    }
+    expect(f.execute).not.toHaveBeenCalled();
+    await f.broker.close();
   });
   it('allows only bounded built-in commands and refuses clipboard paste', () => {
     for (const id of ['trash', 'copy-path', 'view-list', 'recipe.books', 'rename'])
@@ -1121,4 +1358,54 @@ describe('synthetic captured agent selections', () => {
       expect(dispatched).not.toHaveBeenCalled();
     },
   );
+  it('enforces the recipe task budget on the shared connection too', async () => {
+    const f = await fixture(['/Granted'], false);
+    const sharedToken = await f.broker.credential();
+    const sharedTasks = Array.from({ length: 20 }, (_, index) => ({
+      id: `task-${index}`,
+      status: 'review',
+      context: { actor: 'agent', clientID: 'shared', sources: ['/Granted/Report.txt'] },
+    }));
+    const broker = new AgentBroker(
+      '/Memory/Viewer',
+      () => f.config,
+      () => ({
+        workspaceID: 'workspace',
+        paneID: 'folder',
+        rootID: 'root',
+        actor: 'user',
+        sources: ['/Granted/Report.txt'],
+      }),
+      {} as unknown as FileServices,
+      {
+        all: async () => sharedTasks,
+        start: vi.fn(async () => 'task-21'),
+        cancel: vi.fn(),
+      } as unknown as ActionPlanner,
+      {
+        catalog: () => ({ target: f.target, commands: [] }),
+        requests: f.requests,
+        config: f.settings,
+      },
+    );
+    const change = {
+      enabled: true,
+      add: ['/Granted'],
+      capabilities: ['metadata' as const, 'propose' as const],
+    };
+    const review = await broker.access.captureReview(change);
+    await broker.access.approve(change, review);
+    const token = await broker.credential();
+    expect(token).not.toBe(sharedToken);
+    await expect(
+      broker.handle(token, {
+        method: 'tools/call',
+        params: {
+          name: 'run_action',
+          arguments: { recipeID: 'batch-rename', sources: ['/Granted/Report.txt'] },
+        },
+      }),
+    ).rejects.toThrow('Review or stop a task before starting another.');
+    await broker.close();
+  });
 });

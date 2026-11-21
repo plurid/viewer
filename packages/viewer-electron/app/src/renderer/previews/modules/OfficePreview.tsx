@@ -210,15 +210,20 @@ function OfficeContent(context: PreviewContext & { viewControls?: ReactNode }) {
   );
   if ((!document && error) || (document && !office))
     return (
-      <PreviewFailure
-        context={context}
-        icon="file"
-        title="Can't show this document"
-        detail={error || 'Viewer found no text or worksheets it can show in this document.'}
-        onRetry={workbook ? retry : (context.retry ?? retry)}
-      >
-        {workbook && <button onClick={firstWorksheet}>First Worksheet</button>}
-      </PreviewFailure>
+      <div className="office-viewer">
+        {context.viewControls && (
+          <PreviewToolbar context={context}>{context.viewControls}</PreviewToolbar>
+        )}
+        <PreviewFailure
+          context={context}
+          icon="file"
+          title="Can't show this document"
+          detail={error || 'Viewer found no text or worksheets it can show in this document.'}
+          onRetry={workbook ? retry : (context.retry ?? retry)}
+        >
+          {workbook && <button onClick={firstWorksheet}>First Worksheet</button>}
+        </PreviewFailure>
+      </div>
     );
   if (!document || !office)
     return <Loading label={workbook ? 'Reading worksheet rows…' : 'Reading Office document…'} />;

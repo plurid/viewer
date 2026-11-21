@@ -4,6 +4,15 @@ import { cleanup, fireEvent, render, screen, waitFor, act } from '@testing-libra
 import { ActionParameters } from '../src/renderer/commands/ActionParameters';
 import { programCommands } from '../src/renderer/commands/programs';
 import { commandFolders } from '../src/renderer/commands/folders';
+import { WatchRuleControls } from '../src/renderer/ui/automation/WatchRules';
+import { WorkflowControls } from '../src/renderer/ui/automation/Workflows';
+import { sendWindowEvent } from '../src/renderer/app/window-events';
+import type { WorkflowDocument, WorkflowRun } from '../src/domain/automation/workflows';
+
+const workspaceMock = vi.hoisted(() => ({
+  rootID: vi.fn(() => 'root'),
+}));
+vi.mock('../src/renderer/workspace/context', () => ({ useWorkspace: () => workspaceMock }));
 import { activeWorkspace, getState, initialize } from '../src/renderer/state/store';
 import type { CommandContext, ResolvedCommand } from '../src/renderer/commands/registry';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
@@ -188,3 +197,112 @@ it.each(['smart:path', 'smart:calc', 'smart:folder:jump'])(
     );
   },
 );
+
+it('offers watch rule cooldown intervals up to 24 hours', async () => {
+  Object.assign(window.viewer, {
+    watchRules: vi.fn(async () => []),
+    chooseFolder: vi.fn(async () => null),
+  });
+  const doc: WorkflowDocument = {
+    file: '/fixture/viewer.workflow.jsonc',
+    root: '/fixture',
+    revision: 'rev-1',
+    definition: {
+      version: 1,
+      id: 'incoming',
+      name: 'Incoming',
+      bindings: [],
+      inputs: {},
+      steps: [
+        {
+          id: 'inspect',
+          kind: 'inspect',
+          needs: [],
+          sources: [{ kind: 'selection' }],
+          content: false,
+          ocr: false,
+        },
+      ],
+    },
+  };
+  render(
+    <WatchRuleControls
+      document={doc}
+      bindings={{}}
+      disabled={false}
+      openRun={() => {}}
+      reviewDefinition={async () => {}}
+    />,
+  );
+  fireEvent.click(await screen.findByText('Watch a folder…'));
+  fireEvent.click(screen.getByRole('button', { name: /Minimum time between runs/i }));
+  expect(await screen.findByRole('menuitemradio', { name: '1 hour' })).toBeTruthy();
+  expect(screen.getByRole('menuitemradio', { name: '24 hours' })).toBeTruthy();
+});
+
+it('explains when Create chooses a folder that already has a workflow and displays run-level errors', async () => {
+  const failedRun = {
+    version: 1 as const,
+    id: '11111111-1111-4111-8111-111111111111',
+    file: '/fixture/viewer.workflow.jsonc',
+    revision: 'rev-1',
+    created: 1000,
+    updated: 1000,
+    status: 'failed' as const,
+    error: 'This watch rule was paused.',
+    definition: {
+      version: 1 as const,
+      id: 'incoming',
+      name: 'Incoming',
+      bindings: [],
+      inputs: {},
+      steps: [
+        {
+          id: 'inspect',
+          kind: 'inspect' as const,
+          needs: [],
+          sources: [{ kind: 'selection' as const }],
+          content: false,
+          ocr: false,
+        },
+      ],
+    },
+    bindings: {},
+    context: {
+      workspaceID: 'w',
+      rootID: 'r',
+      paneID: 'p',
+      sources: ['/fixture/a.txt'],
+      actor: 'user' as const,
+    },
+    steps: [
+      {
+        id: 'inspect',
+        kind: 'inspect' as const,
+        status: 'pending' as const,
+        sources: [],
+        outputs: [],
+      },
+    ],
+  } as WorkflowRun;
+  Object.assign(window.viewer, {
+    watchRules: vi.fn(async () => []),
+    workflow: vi.fn(async (request: { kind: string }) => {
+      if (request.kind === 'list') return [failedRun];
+      if (request.kind === 'get') return failedRun;
+      if (request.kind === 'choose') return '/fixture/viewer.workflow.jsonc';
+      if (request.kind === 'save')
+        throw new Error('The workflow changed on disk. Review Reload Workflow before saving.');
+      return null;
+    }),
+  });
+  render(<WorkflowControls />);
+  act(() => sendWindowEvent('viewer:workflows', { runID: failedRun.id }));
+  expect(await screen.findByText('This watch rule was paused.')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Create…' }));
+  expect(
+    await screen.findByText(
+      'This folder already has a workflow. Open it with Open Workflow…, or choose another folder.',
+    ),
+  ).toBeTruthy();
+});

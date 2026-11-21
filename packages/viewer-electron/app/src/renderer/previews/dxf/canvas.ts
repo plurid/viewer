@@ -46,6 +46,23 @@ export interface DrawingFocus {
   view?: Bounds;
   measurements?: readonly Measurement[];
 }
+
+/** World coordinates for grid lines in `[min, max]`, bounded when zoom makes `step` too fine
+ * to advance floating-point coordinates or would emit more lines than a frame can draw. */
+export function gridLines(min: number, max: number, step: number, limit = 2000): number[] {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(step) || step <= 0)
+    return [];
+  if (min > max) return [];
+  const magnitude = Math.max(Math.abs(min), Math.abs(max));
+  if (step <= magnitude * Number.EPSILON * 4) return [];
+  const start = Math.ceil(min / step);
+  const end = Math.floor(max / step);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return [];
+  if (end - start + 1 > limit) return [];
+  const lines: number[] = [];
+  for (let index = start; index <= end; index++) lines.push(index * step);
+  return lines;
+}
 export interface DrawingCanvas {
   set(options: CanvasOptions): void;
   frame(): void;
@@ -369,12 +386,12 @@ export function createDrawingCanvas(
       ctx!.globalAlpha = 0.4;
       ctx!.lineWidth = 0.5;
       ctx!.beginPath();
-      for (let x = Math.ceil(bounds.min.x / step) * step; x <= bounds.max.x; x += step) {
+      for (const x of gridLines(bounds.min.x, bounds.max.x, step)) {
         const p = screen({ x, y: 0 });
         ctx!.moveTo(p.x, 0);
         ctx!.lineTo(p.x, height);
       }
-      for (let y = Math.ceil(bounds.min.y / step) * step; y <= bounds.max.y; y += step) {
+      for (const y of gridLines(bounds.min.y, bounds.max.y, step)) {
         const p = screen({ x: 0, y });
         ctx!.moveTo(0, p.y);
         ctx!.lineTo(width, p.y);

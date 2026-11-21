@@ -8,6 +8,7 @@ import { NativeOpenActions } from '../../ui/navigation/NativeOpenActions';
 import { usePreviewState } from '../state';
 import type { Resource } from '../../../domain/contracts';
 import { fileFamily } from '../../../domain/files/entries';
+import { editableMedia } from '../../../domain/operations/transforms';
 import { Loading } from '../../ui/primitives';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
 import {
@@ -60,13 +61,23 @@ export default function MediaPreview(context: PreviewContext) {
       if (owned) void services.release(owned.id);
     };
   }, [requested, attempt, resource.id, services, cancelled]);
-  if (audioOnly) return <MediaPlayer {...context} audioOnly />;
+  const isAudio = fileFamily(resource.entry) === 'audio';
+  const editMedia = editableMedia(resource.entry) ? context.editMedia : undefined;
+  if (audioOnly) return <MediaPlayer {...context} editMedia={editMedia} audioOnly />;
   if (requested && (!derived || cancelled)) {
     if (error || cancelled)
       return (
         <Failure
-          icon="video"
-          title={cancelled ? 'Video conversion canceled' : "Can't convert this video to play here"}
+          icon={isAudio ? 'audio' : 'video'}
+          title={
+            cancelled
+              ? isAudio
+                ? 'Audio conversion canceled'
+                : 'Video conversion canceled'
+              : isAudio
+                ? "Can't convert this audio to play here"
+                : "Can't convert this video to play here"
+          }
           detail={cancelled ? undefined : error}
           onRetry={() => {
             setError('');
@@ -81,7 +92,9 @@ export default function MediaPreview(context: PreviewContext) {
       );
     return (
       <div className="media-converting">
-        <Loading label="Converting video to play here…" />
+        <Loading
+          label={isAudio ? 'Converting audio to play here…' : 'Converting video to play here…'}
+        />
         <button
           onClick={() => {
             if (pending.current) void services.cancelDocument(resource.id, pending.current);
@@ -97,6 +110,7 @@ export default function MediaPreview(context: PreviewContext) {
   return (
     <MediaPlayer
       {...context}
+      editMedia={editMedia}
       key={derived?.id ?? resource.id}
       resource={
         derived ? { ...derived, entry: { ...derived.entry, name: resource.entry.name } } : resource
@@ -319,7 +333,7 @@ function MediaPlayer(
         <PreviewToolbar context={context}>
           {context.compatible && (
             <span className="muted" {...headerItem('compatibility', 9, 'detail')}>
-              Playing a 720p copy
+              {audio ? 'Playing a compatible copy' : 'Playing a 720p copy'}
             </span>
           )}
           {!!subtitles?.files.length && (

@@ -24,6 +24,8 @@ export interface NativeVolume {
   removable: boolean;
   ejectable: boolean;
   readOnly: boolean;
+  /** True when the volume does not store POSIX ownership or permission bits (such as exFAT/FAT32). */
+  ignoreOwnership?: boolean;
 }
 export interface FileAccessIntent {
   /** Long-lived streaming access uses its own bounded native queue. */
@@ -80,6 +82,8 @@ export interface MacFiles {
   cancelRemotePrompt?(id: string): void;
   /** Older helpers must never enter reservation publication with path-based cleanup. */
   readonly renameRecoveryVersion?: number;
+  /** Supports deferring flags and ACLs during staged APFS clones until after publication. */
+  readonly cloneStageVersion?: number;
   /** Public AppKit transition notifications, read only for a live owned NSView handle. */
   windowFullscreenPhase(handle: Buffer): FullscreenPhase;
   /** Displays native confirmation only. No callable erasure/approval endpoint. */
@@ -111,8 +115,10 @@ export interface MacFiles {
   clipboardWrite(paths: string[]): number;
   copyMetadata(sourceFD: number, targetFD: number): Promise<void>;
   /** An APFS clone of the open file `sourceFD` at the new path `target`, made exclusively with the
-   * source's attributes. Rejects with ENOTSUP or EXDEV where the volume cannot clone it. */
-  clone(sourceFD: number, target: string): Promise<void>;
+   * source's attributes. Rejects with ENOTSUP or EXDEV where the volume cannot clone it. When
+   * `deferRestrictions` is true on a supporting helper, returns true if flags or ACLs were deferred
+   * so the caller reapplies metadata after publication. */
+  clone(sourceFD: number, target: string, deferRestrictions?: boolean): Promise<boolean | void>;
   copyLinkMetadata(source: string, target: string): Promise<void>;
   renameExclusive(
     source: string,

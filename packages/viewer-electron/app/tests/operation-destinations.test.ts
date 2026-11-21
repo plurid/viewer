@@ -183,6 +183,12 @@ describe('an output named from its request', () => {
       ],
     ),
     [
+      'a copy into its own folder, which keeps both',
+      { kind: 'copy', sources: [photo], destination: '/Work' },
+      photo,
+      photo,
+    ],
+    [
       'a copy under the name chosen',
       { kind: 'copy', sources: [photo], destination: '/Output', name: 'Picture.jpg' },
       photo,
@@ -194,8 +200,14 @@ describe('an output named from its request', () => {
 
   it.each<[string, OperationRequest, string, string]>([
     [
-      'a copy into its own folder',
-      { kind: 'copy', sources: [photo], destination: '/Work' },
+      'a move into its own folder',
+      { kind: 'move', sources: [photo], destination: '/Work' },
+      photo,
+      'Source and destination are the same.',
+    ],
+    [
+      'a transfer into its own folder',
+      { kind: 'transfer', sources: [photo], destination: '/Work' },
       photo,
       'Source and destination are the same.',
     ],

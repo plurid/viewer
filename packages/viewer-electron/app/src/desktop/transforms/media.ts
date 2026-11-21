@@ -62,11 +62,14 @@ export function mediaInfo(value: unknown, extension: string): MediaInfo {
       duration?: string;
       sample_rate?: string;
       channels?: number;
+      disposition?: { attached_pic?: number };
       side_data_list?: { rotation?: number }[];
     }[];
     format?: { duration?: string };
   };
-  const video = raw.streams?.find((stream) => stream.codec_type === 'video'),
+  const video = raw.streams?.find(
+      (stream) => stream.codec_type === 'video' && stream.disposition?.attached_pic !== 1,
+    ),
     audio = raw.streams?.find((stream) => stream.codec_type === 'audio');
   const ratio = video?.avg_frame_rate?.split('/').map(Number);
   const fps = ratio?.[0] && ratio[1] ? ratio[0] / ratio[1] : 30;

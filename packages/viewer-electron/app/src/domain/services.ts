@@ -328,6 +328,7 @@ export interface ProposedChange {
 export interface ActionPlan extends ChangePlan<ProposedChange> {
   recipeID: string;
   context: ActionContext;
+  restoresPlanID?: string;
   outputRoot?: string;
   summary?: string;
   summaryInputs?: FileEntry[];

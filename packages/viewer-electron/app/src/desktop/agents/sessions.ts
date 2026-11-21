@@ -73,6 +73,8 @@ export class AgentSessions {
           (value) => value.clientID === clientID && value.externalID === report.sessionID,
         );
         const hash = createHash('sha256').update(JSON.stringify(report)).digest('hex');
+        let retained = values;
+        let evicted: AgentSession | undefined;
         if (existing) {
           if (existing.directory !== directory || existing.identity !== identity)
             throw new Error('This session belongs to another checkout. Use a new session ID.');
@@ -80,8 +82,13 @@ export class AgentSessions {
             return sessionSummary(existing);
           if (report.sequence <= existing.sequence)
             throw new Error('A newer session report is already stored.');
-        } else if (values.length >= 100)
-          throw new Error('Viewer supports up to 100 reported agent sessions.');
+        } else if (values.length >= 100) {
+          evicted = values
+            .filter((value) => value.status === 'done' || value.status === 'failed')
+            .sort((left, right) => left.updated - right.updated)[0];
+          if (!evicted) throw new Error('Viewer supports up to 100 reported agent sessions.');
+          retained = values.filter((value) => value.id !== evicted!.id);
+        }
         const kept = [...(existing?.entries ?? [])];
         for (const entry of entries) {
           const previous = kept.find((value) => value.id === entry.id);
@@ -105,9 +112,10 @@ export class AgentSessions {
         };
         await this.store.save(
           existing
-            ? values.map((value) => (value.id === existing.id ? session : value))
-            : [...values, session],
+            ? retained.map((value) => (value.id === existing.id ? session : value))
+            : [...retained, session],
         );
+        if (evicted) this.changed(evicted.id);
         this.changed(session.id);
         return sessionSummary(session);
       });

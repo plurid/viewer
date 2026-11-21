@@ -93,6 +93,21 @@ export function publicationName(
       key === 'extension' ? extension : fields[key] || '[' + key + ']',
   );
 }
+const maxEvidenceItems = 20;
+const maxEvidenceItemCharacters = 2000;
+const maxRowEvidenceCharacters = 4000;
+/** Keeps per-row evidence bounded so large batches stay well within the action journal limit. */
+function boundedEvidence(items: readonly DocumentEvidence[]): DocumentEvidence[] {
+  const kept: DocumentEvidence[] = [];
+  let remaining = maxRowEvidenceCharacters;
+  for (const item of items) {
+    if (kept.length >= maxEvidenceItems || remaining <= 0) break;
+    const text = item.text.slice(0, Math.min(maxEvidenceItemCharacters, remaining));
+    remaining -= text.length;
+    kept.push({ ...item, text });
+  }
+  return kept;
+}
 /** A book named from its own metadata, when its recipe has no model. */
 export function localPublication(
   file: FileEntry,
@@ -103,7 +118,9 @@ export function localPublication(
   const unresolved = publicationFields.filter((key) => !fields[key]);
   return {
     destination: path.join(file.parent, publicationName(template, fields, path.extname(file.name))),
-    evidence: document.evidence.filter((item) => !item.source.startsWith('chapter:')).slice(0, 20),
+    evidence: boundedEvidence(
+      document.evidence.filter((item) => !item.source.startsWith('chapter:')),
+    ),
     issue: unresolved.length
       ? 'Missing ' + unresolved.join(', ') + '. Edit the name or configure a model.'
       : undefined,
@@ -197,10 +214,12 @@ function reviewDestination(
     issue = 'The destination is outside this action’s scope.';
   return {
     destination,
-    evidence: proposed.evidence.map((item) => ({
-      source: item.field + ' · ' + item.source,
-      text: item.text,
-    })),
+    evidence: boundedEvidence(
+      proposed.evidence.map((item) => ({
+        source: item.field + ' · ' + item.source,
+        text: item.text,
+      })),
+    ),
     issue,
   };
 }

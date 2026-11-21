@@ -172,7 +172,7 @@ export function OperationReviewControls() {
           {busy && <Loading label="Checking and queuing changes…" />}
         </div>
         <footer>
-          <button type="button" disabled={busy} onClick={close}>
+          <button type="button" data-autofocus disabled={busy} onClick={close}>
             Cancel
           </button>
           <button
