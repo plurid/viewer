@@ -1341,7 +1341,7 @@ export class AgentBroker {
               })
             : sqliteRequestSchema.parse({ kind: 'tables' });
         const reply = await this.files.sqlite(input.path, request, signal);
-        value = { path: input.path, version: sourceVersion(before), ...reply };
+        value = { ...reply, path: input.path, version: sourceVersion(before) };
       } else if (call.name === 'list_archive') {
         const listing = await this.files.archiveList(input.path, signal);
         const offset = 'offset' in input ? input.offset : 0;

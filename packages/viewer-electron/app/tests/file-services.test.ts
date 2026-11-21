@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileServices } from '../src/desktop/files/file-services';
 import { defaultSettings } from '../src/domain/services';
 import { FileAccessRequired } from '../src/desktop/files/file-access';
+import { fileCoordination } from '../src/desktop/files/file-coordination';
 
 const fork = vi.hoisted(() => vi.fn());
 vi.mock('electron', () => ({ utilityProcess: { fork } }));
@@ -259,5 +260,64 @@ describe('read-only file-services shutdown', () => {
     await rejected;
     expect(fork).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
+  });
+  it('coordinates SQLite reads and dispatches archive list and entry text reads through the preview worker', async () => {
+    const runSpy = vi
+      .spyOn(fileCoordination, 'run')
+      .mockImplementation(async (_intents, work, signal) => work(signal));
+    const pathSpy = vi
+      .spyOn(fileCoordination, 'path')
+      .mockImplementation((file) => `/coordinated${file}`);
+    let denied = false;
+    const files = new FileServices(
+      '/private',
+      '/worker',
+      '/ocr',
+      () => {},
+      () => {},
+      {
+        access: async (paths) => {
+          if (denied) throw new FileAccessRequired(paths[0]);
+        },
+      },
+    );
+    const sqlitePending = files.sqlite('/Data.sqlite', { kind: 'tables' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runSpy).toHaveBeenCalledWith(
+      [{ path: '/Data.sqlite', mode: 'read' }],
+      expect.any(Function),
+      undefined,
+    );
+    expect(pathSpy).toHaveBeenCalledWith('/Data.sqlite');
+    const sqliteReq = worker.postMessage.mock.calls.find(([req]) => req.method === 'sqlite')![0];
+    expect(sqliteReq.args).toEqual(['/coordinated/Data.sqlite', { kind: 'tables' }]);
+    worker.emit('message', { id: sqliteReq.id, value: { kind: 'tables', objects: [] } });
+    await expect(sqlitePending).resolves.toEqual({ kind: 'tables', objects: [] });
+
+    const listPending = files.archiveList('/Bundle.zip');
+    await vi.advanceTimersByTimeAsync(0);
+    const listReq = worker.postMessage.mock.calls.find(
+      ([req]) => req.method === 'archive-list',
+    )![0];
+    expect(listReq.args).toEqual(['/Bundle.zip']);
+    worker.emit('message', { id: listReq.id, value: { entries: [], truncated: false } });
+    await expect(listPending).resolves.toEqual({ entries: [], truncated: false });
+
+    const textPending = files.archiveReadText('/Bundle.zip', 'notes.txt', 128);
+    const textRejected = expect(textPending).rejects.toMatchObject({
+      code: 'FILE_ACCESS_REQUIRED',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const textReq = worker.postMessage.mock.calls.find(
+      ([req]) => req.method === 'archive-read-text',
+    )![0];
+    expect(textReq.args).toEqual(['/Bundle.zip', 'notes.txt', 128]);
+    denied = true;
+    worker.emit('message', {
+      id: textReq.id,
+      value: { text: 'secret', size: 6, truncated: false },
+    });
+    await textRejected;
+    await files.close();
   });
 });

@@ -9,6 +9,7 @@ import type { IndexMethods } from '../workers/index-protocol';
 import type { FolderSizeMethods } from './folder-size-worker';
 import type { ArchiveEntryText, PreviewMethods } from '../workers/preview-worker';
 import { entry } from './filesystem';
+import { fileCoordination } from './file-coordination';
 import { assertLocalPath } from './local-path';
 import { spotlightTagged } from '../search/spotlight';
 import { parseFileQuery } from '../../domain/search/query';
@@ -316,7 +317,16 @@ export class FileServices {
   async sqlite(file: string, request: SQLiteRequest, signal?: AbortSignal): Promise<SQLiteReply> {
     await this.requireLocal([file]);
     const revision = this.accessRevision;
-    const reply = await this.previews.call('sqlite', [file, request], signal);
+    const reply = await fileCoordination.run(
+      [{ path: file, mode: 'read' }],
+      async (coordinated) => {
+        const active =
+          signal && coordinated ? AbortSignal.any([signal, coordinated]) : (signal ?? coordinated);
+        active?.throwIfAborted();
+        return this.previews.call('sqlite', [fileCoordination.path(file), request], active);
+      },
+      signal,
+    );
     if (revision !== this.accessRevision)
       throw new Error('File access changed. Read the database again.');
     await this.requireLocal([file]);

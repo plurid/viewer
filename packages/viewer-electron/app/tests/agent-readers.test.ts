@@ -3,6 +3,7 @@
  * client folder grants.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { generateKeyPairSync } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -15,7 +16,7 @@ import { AgentRequests } from '../src/desktop/agents/agent-requests';
 import type { FileServices } from '../src/desktop/files/file-services';
 import type { ActionPlanner } from '../src/desktop/actions/planner';
 import { readSQLite } from '../src/desktop/previews/sqlite';
-import { Archives } from '../src/desktop/previews/archives';
+import { Archives, readArchiveEntryText } from '../src/desktop/previews/archives';
 import type { SQLiteRequest } from '../src/domain/previews/data/sqlite';
 
 vi.mock('../src/desktop/files/file-coordination', () => ({
@@ -63,19 +64,8 @@ async function createBroker(capabilities: ('metadata' | 'content')[]) {
     sqlite: (file: string, request: SQLiteRequest, signal?: AbortSignal) =>
       readSQLite(file, request, { signal }),
     archiveList: (file: string) => archives.list(file),
-    archiveReadText: async (file: string, name: string, maxBytes: number) => {
-      const data = await archives.read(file, name);
-      if (data.subarray(0, 8192).includes(0))
-        throw new Error(
-          'This archive entry is binary; read_archive_entry returns UTF-8 text only.',
-        );
-      const slice = data.subarray(0, maxBytes);
-      return {
-        text: slice.toString('utf8'),
-        size: data.length,
-        truncated: data.length > maxBytes,
-      };
-    },
+    archiveReadText: (file: string, name: string, maxBytes: number) =>
+      readArchiveEntryText(archives, file, name, maxBytes),
   } as unknown as FileServices;
   const requests = new AgentRequests(
     dataPath,
@@ -162,9 +152,13 @@ describe('SQLite and archive agent read tools', () => {
     const { call } = await createBroker(['metadata', 'content']);
     const tables = (await call('read_sqlite', { path: dbPath })) as {
       kind: string;
+      version: { size: number; modified: number };
       objects: { name: string; kind: string; definition: string }[];
     };
     expect(tables.kind).toBe('tables');
+    expect(tables.version).toEqual(
+      expect.objectContaining({ size: expect.any(Number), modified: expect.any(Number) }),
+    );
     expect(tables.objects.map((object) => object.name)).toEqual(['item_view', 'items']);
     expect(tables.objects.find((object) => object.name === 'items')?.definition).toContain(
       'CREATE TABLE items',
@@ -176,8 +170,14 @@ describe('SQLite and archive agent read tools', () => {
       table: 'items',
       offset: 1,
       limit: 1,
-    })) as { kind: string; rows: { kind: string; text?: string }[][]; more: boolean };
+    })) as {
+      kind: string;
+      version: { size: number; modified: number };
+      rows: { kind: string; text?: string }[][];
+      more: boolean;
+    };
     expect(page.kind).toBe('rows');
+    expect(page.version).toEqual(tables.version);
     expect(page.rows).toHaveLength(1);
     expect(page.rows[0]![1]).toMatchObject({ kind: 'text', text: 'Beta' });
     expect(page.more).toBe(true);
@@ -198,9 +198,20 @@ describe('SQLite and archive agent read tools', () => {
     const zipPath = path.join(granted, 'bundle.zip');
     const tarPath = path.join(granted, 'bundle.tar');
     const outsideZip = path.join(outside, 'secret.zip');
+    const pemKey = generateKeyPairSync('ec', { namedCurve: 'P-256' })
+      .privateKey.export({ type: 'pkcs8', format: 'pem' })
+      .toString();
+    const opensshKey =
+      '-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\n-----END OPENSSH PRIVATE KEY-----\n';
     const zipBytes = zipSync({
       'notes/readme.txt': strToU8('Hello from archive! '.repeat(20)),
+      'notes/utf8.txt': strToU8('a😀b'),
+      'notes/accent.txt': strToU8('héllo'),
       'bin/blob.bin': new Uint8Array([0, 1, 2, 3, 4]),
+      'bin/control.bin': new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]),
+      'bin/bad-utf8.bin': new Uint8Array([0x80, 0x81, 0xfe, 0xff]),
+      'keys/server.key': strToU8(pemKey),
+      'keys/id_ed25519': strToU8(opensshKey),
     });
     await writeFile(zipPath, zipBytes);
     await writeFile(outsideZip, zipBytes);
@@ -212,7 +223,7 @@ describe('SQLite and archive agent read tools', () => {
       totalEntries: number;
       nextOffset?: number;
     };
-    expect(listedZip.totalEntries).toBe(2);
+    expect(listedZip.totalEntries).toBe(8);
     expect(listedZip.entries).toHaveLength(1);
     expect(listedZip.nextOffset).toBe(1);
 
@@ -230,6 +241,25 @@ describe('SQLite and archive agent read tools', () => {
     expect(readText.truncated).toBe(true);
     expect(readText.size).toBe(400);
 
+    // Mid-character UTF-8 truncation trims cleanly without U+FFFD replacement corruption.
+    const emojiCut = (await call('read_archive_entry', {
+      path: zipPath,
+      entry: 'notes/utf8.txt',
+      maxBytes: 3,
+    })) as { text: string; truncated: boolean };
+    expect(emojiCut.text).toBe('a');
+    expect(emojiCut.truncated).toBe(true);
+    expect(emojiCut.text).not.toContain('\ufffd');
+
+    const accentCut = (await call('read_archive_entry', {
+      path: zipPath,
+      entry: 'notes/accent.txt',
+      maxBytes: 2,
+    })) as { text: string; truncated: boolean };
+    expect(accentCut.text).toBe('h');
+    expect(accentCut.truncated).toBe(true);
+    expect(accentCut.text).not.toContain('\ufffd');
+
     const readTarText = (await call('read_archive_entry', {
       path: tarPath,
       entry: 'doc.txt',
@@ -237,13 +267,25 @@ describe('SQLite and archive agent read tools', () => {
     expect(readTarText.text).toBe('TAR text entry');
     expect(readTarText.truncated).toBe(false);
 
-    // Unsafe traversal paths and binary entries are refused.
+    // Unsafe traversal paths, binaries, invalid UTF-8, and private keys are refused.
     await expect(
       call('read_archive_entry', { path: zipPath, entry: '../escape.txt' }),
     ).rejects.toThrow();
     await expect(
       call('read_archive_entry', { path: zipPath, entry: 'bin/blob.bin' }),
     ).rejects.toThrow(/binary/i);
+    await expect(
+      call('read_archive_entry', { path: zipPath, entry: 'bin/control.bin' }),
+    ).rejects.toThrow(/binary/i);
+    await expect(
+      call('read_archive_entry', { path: zipPath, entry: 'bin/bad-utf8.bin' }),
+    ).rejects.toThrow(/UTF-8/i);
+    await expect(
+      call('read_archive_entry', { path: zipPath, entry: 'keys/server.key' }),
+    ).rejects.toThrow(/private key/i);
+    await expect(
+      call('read_archive_entry', { path: zipPath, entry: 'keys/id_ed25519' }),
+    ).rejects.toThrow(/private key/i);
     await expect(call('list_archive', { path: outsideZip })).rejects.toThrow(/authorized folders/i);
 
     const metadataOnly = await createBroker(['metadata']);

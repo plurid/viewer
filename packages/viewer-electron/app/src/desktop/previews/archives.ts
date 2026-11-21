@@ -11,6 +11,8 @@ import type { GzipLimits } from '../../domain/files/containers';
 import { formatBytes } from '../../domain/files/entries';
 import { fileCoordination } from '../files/file-coordination';
 import { imageDimensions } from './image-dimensions';
+import { holdsPrivateKey, keyLimits } from '../../domain/previews/keys/certificates';
+import { readKeyFile } from './inspected';
 
 const ENTRY_LIMIT = 32_000_000;
 const INDEX_LIMIT = 20000;
@@ -578,4 +580,71 @@ export class Archives {
 export async function archiveFingerprint(file: string): Promise<string> {
   const info = await stat(file);
   return `${file}:${versionIdentity(info)}:${info.ctimeMs}:${info.mtimeMs}:${info.size}`;
+}
+
+export interface ArchiveEntryText {
+  text: string;
+  size: number;
+  truncated: boolean;
+}
+
+const maxArchiveEntryTextBytes = 262_144;
+const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+const privateKeyHeader = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY[A-Z0-9 ]*-----/;
+
+/** Trims a trailing incomplete UTF-8 multi-byte sequence when slicing raw bytes at `limit`. */
+function utf8PrefixEnd(bytes: Uint8Array, limit: number): number {
+  if (limit >= bytes.length) return bytes.length;
+  let start = limit - 1;
+  let continuations = 0;
+  while (start >= 0 && continuations < 3 && (bytes[start]! & 0xc0) === 0x80) {
+    start--;
+    continuations++;
+  }
+  if (start < 0) return limit;
+  const lead = bytes[start]!;
+  if ((lead & 0x80) === 0) return limit;
+  const expected =
+    (lead & 0xe0) === 0xc0 ? 2 : (lead & 0xf0) === 0xe0 ? 3 : (lead & 0xf8) === 0xf0 ? 4 : 1;
+  return start + expected > limit ? start : limit;
+}
+
+/** Reads bounded UTF-8 text from one archive entry, rejecting binaries, invalid UTF-8, and private
+ * keys using Viewer's shared key inspection rules. */
+export async function readArchiveEntryText(
+  archives: Archives,
+  file: string,
+  name: string,
+  maxBytes: number,
+): Promise<ArchiveEntryText> {
+  const limit = Math.max(1, Math.min(maxBytes, maxArchiveEntryTextBytes));
+  const data = await archives.read(file, name);
+  const end = utf8PrefixEnd(data, limit);
+  const prefix = data.subarray(0, end);
+  const sample = prefix.subarray(0, 8192);
+  const controlBytes = [...sample].filter((byte) => byte < 9 || (byte > 13 && byte < 32)).length;
+  if (sample.includes(0) || (sample.length > 0 && controlBytes > sample.length / 20))
+    throw new Error('This archive entry is binary; read_archive_entry returns UTF-8 text only.');
+  let text: string;
+  try {
+    text = utf8Decoder.decode(prefix);
+  } catch {
+    throw new Error('This archive entry is not valid UTF-8 text.');
+  }
+  const keySample = data.length <= keyLimits.bytes ? data : data.subarray(0, keyLimits.bytes);
+  const hasPrivateKey =
+    privateKeyHeader.test(text) ||
+    holdsPrivateKey(readKeyFile(keySample)) ||
+    (data.length > keyLimits.bytes &&
+      data.includes('-----BEGIN ') &&
+      privateKeyHeader.test(data.toString('latin1')));
+  if (hasPrivateKey)
+    throw new Error(
+      'This archive entry holds a private key and cannot be read through read_archive_entry.',
+    );
+  return {
+    text,
+    size: data.length,
+    truncated: end < data.length,
+  };
 }
