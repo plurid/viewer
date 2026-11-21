@@ -821,9 +821,16 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
             (file, signal, format) =>
               extractDocument(file, { signal, format, message: request.message }),
           );
-        const { requestID, ...worksheet } = request;
-        return resources.documentRead(args[0] as string, requestID, (file, signal, format) =>
-          extractDocument(file, { signal, worksheet, format }),
+        if ('fromRow' in request) {
+          const { requestID, ...worksheet } = request;
+          return resources.documentRead(args[0] as string, requestID, (file, signal, format) =>
+            extractDocument(file, { signal, worksheet, format }),
+          );
+        }
+        return resources.documentRead(
+          args[0] as string,
+          request.requestID,
+          (file, signal, format) => extractDocument(file, { signal, format }),
         );
       }
       return extractDocument(resources.documentSource(args[0] as string), {

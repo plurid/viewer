@@ -289,7 +289,6 @@ ipcRenderer.on(
     );
   },
 );
-contextBridge.exposeInMainWorld('viewerNative', Object.freeze(api));
 contextBridge.exposeInMainWorld(
   'viewerDispatch',
   Object.freeze({
@@ -298,3 +297,4 @@ contextBridge.exposeInMainWorld(
     },
   }),
 );
+contextBridge.exposeInMainWorld('viewerNative', Object.freeze(api));

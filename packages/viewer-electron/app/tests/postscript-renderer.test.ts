@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { open, readFile, writeFile, realpath, readdir, stat, symlink } from 'node:fs/promises';
 import path from 'node:path';
+import { fileStat } from '../src/desktop/files/stats';
 import type * as Coordination from '../src/desktop/files/file-coordination';
 import type * as Processes from 'node:child_process';
 import { DerivedPreviews } from '../src/desktop/previews/derived';
@@ -465,7 +466,7 @@ if (process.argv.slice(2).includes('-h')) {
     });
     const variant = await renderer.variant();
     const handle = await open(source, 'r');
-    const info = await stat(source);
+    const info = await fileStat(handle);
     const controller = new AbortController();
     let settled = false;
     const outcome = renderer

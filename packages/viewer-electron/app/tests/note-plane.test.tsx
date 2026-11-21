@@ -70,9 +70,9 @@ beforeEach(() => {
     id: '00000000-0000-4000-8000-000000000001',
     kind: 'note',
     title: 'Shared note',
+    directory: '/fixtures',
     text: 'original text',
     revision: 1,
-    created: 1,
     updated: 1,
   };
   Object.assign(window, { viewer });
@@ -103,7 +103,8 @@ describe('NotePlane Source editing', () => {
     await cmView(view.container);
     stored = { ...stored, text: 'saved from View B', revision: 2, updated: 2 };
     await act(async () => {
-      for (const listener of listeners) listener({ type: 'note-changed', id: stored.id });
+      for (const listener of listeners)
+        listener({ type: 'note-changed', id: stored.id, revision: 2 });
     });
     await waitFor(() => expect(noteSession(pane.id)?.document.revision).toBe(2));
     await flushNote(pane.id);

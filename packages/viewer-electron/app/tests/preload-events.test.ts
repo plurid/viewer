@@ -5,11 +5,15 @@ import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
 import { schemas, settingsEvents, methodWindows } from '../src/desktop/ipc/schemas';
 import { sampleDefinition } from './workspace-definition-fixtures';
 
-const bridge = vi.hoisted(() => ({ api: undefined as ViewerAPI | undefined }));
+const bridge = vi.hoisted(() => ({
+  api: undefined as ViewerAPI | undefined,
+  exposed: {} as Record<string, unknown>,
+}));
 const ipc = Object.assign(new EventEmitter(), { invoke: vi.fn() });
 vi.mock('electron', () => ({
   contextBridge: {
-    exposeInMainWorld: (_name: string, api: ViewerAPI) => {
+    exposeInMainWorld: (name: string, api: ViewerAPI) => {
+      bridge.exposed[name] = api;
       bridge.api = api;
     },
   },
@@ -160,4 +164,27 @@ it('forwards bounded visit save metadata and returns the acknowledged totals acr
       },
     ]).success,
   ).toBe(false);
+});
+
+it('tags IPC requests with the active viewerDispatch ID and omits it once cleared', async () => {
+  await import('../src/preload');
+  const dispatch = bridge.exposed.viewerDispatch as { set(id: string | undefined): void };
+  expect(Object.isFrozen(dispatch)).toBe(true);
+  ipc.invoke.mockResolvedValue({ ok: true, value: { commands: [] } });
+  dispatch.set('dispatch-42');
+  try {
+    await bridge.api!.declaredCommands('/projects/sample');
+    expect(ipc.invoke).toHaveBeenLastCalledWith(
+      'viewer:request',
+      'declaredCommands',
+      ['/projects/sample'],
+      'dispatch-42',
+    );
+  } finally {
+    dispatch.set(undefined);
+  }
+  await bridge.api!.declaredCommands('/projects/sample');
+  expect(ipc.invoke).toHaveBeenLastCalledWith('viewer:request', 'declaredCommands', [
+    '/projects/sample',
+  ]);
 });

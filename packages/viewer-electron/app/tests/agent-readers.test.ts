@@ -82,6 +82,7 @@ async function createBroker(capabilities: ('metadata' | 'content')[]) {
     settings,
     () => {},
     async () => {},
+    { read: () => ({ cwd: granted, output: '' }) },
   );
   const broker = new AgentBroker(
     dataPath,

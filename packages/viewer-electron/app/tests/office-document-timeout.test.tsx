@@ -8,6 +8,7 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import { useOfficeDocument } from '../src/renderer/previews/useOfficeDocument';
 import OfficePreview from '../src/renderer/previews/modules/OfficePreview';
 import type { PreviewContext } from '../src/renderer/previews/contracts';
+import type { DocumentRequest } from '../src/domain/previews/documents/requests';
 import { documentRequestSchema } from '../src/domain/previews/documents/requests';
 import { createResourceHandlers } from '../src/desktop/ipc/resource-handlers';
 import { initialize } from '../src/renderer/state/store';
@@ -24,7 +25,7 @@ function Probe({ context }: { context: PreviewContext }) {
 
 it('cancels a timed-out Word document read by requestID without releasing the preview resource lease', async () => {
   vi.useFakeTimers();
-  const document = vi.fn(() => new Promise<never>(() => {}));
+  const document = vi.fn((_id: string, _request?: DocumentRequest) => new Promise<never>(() => {}));
   const cancelDocument = vi.fn(async () => {});
   const release = vi.fn(async () => {});
   const context = {
@@ -41,8 +42,9 @@ it('cancels a timed-out Word document read by requestID without releasing the pr
   } as unknown as PreviewContext;
   const view = render(<Probe context={context} />);
   expect(document).toHaveBeenCalledTimes(1);
-  const request = document.mock.calls[0]![1];
+  const request = document.mock.calls[0]?.[1];
   expect(request).toEqual({ requestID: expect.any(String) });
+  if (!request) throw new Error('Expected a document request.');
   const parsed = documentRequestSchema.parse(request);
   expect(parsed).toEqual({ requestID: request.requestID });
   expect('fromRow' in parsed).toBe(false);

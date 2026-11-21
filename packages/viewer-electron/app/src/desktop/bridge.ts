@@ -2110,9 +2110,9 @@ export class Desktop {
         );
       }, 25000);
       timer.unref();
-      this.issuedDispatches.set(id, window.webContents.id);
-      if (this.issuedDispatches.size > 1000)
-        this.issuedDispatches.delete(this.issuedDispatches.keys().next().value!);
+      const issued = (this.issuedDispatches ??= new Map());
+      issued.set(id, window.webContents.id);
+      if (issued.size > 1000) issued.delete(issued.keys().next().value!);
       this.agentCommands.set(id, {
         owner: window.webContents.id,
         command: payload.type === 'agent-command' ? payload.command : 'task-workflow',
