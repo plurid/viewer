@@ -37,7 +37,7 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
-  const microphones = useMicrophones();
+  const microphones = useMicrophones(status?.microphone);
   const sequence = useRef(0);
   const refresh = useCallback(async () => {
     const id = ++sequence.current;
@@ -50,6 +50,10 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
   }, []);
   useEffect(() => {
     void refresh();
+    const onFocus = () => {
+      void refresh();
+    };
+    window.addEventListener('focus', onFocus);
     const stop = window.viewer.onEvent((event) => {
       if (event.type === 'speech-changed') {
         void refresh();
@@ -58,6 +62,7 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
     const pending = sequence;
     return () => {
       pending.current++;
+      window.removeEventListener('focus', onFocus);
       stop();
     };
   }, [refresh]);
@@ -97,8 +102,10 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
           (provider) =>
             provider.id === status.preferences.providerID && provider.hasKey && provider.allowed,
         )
-      : !!status.models.selected && status.models.runtime.recognitionAvailable;
+      : status.models.models.some((item) => item.selected && item.installed) &&
+        status.models.runtime.recognitionAvailable;
   const model = (item: SpeechModel & { installed: boolean; selected: boolean }) => {
+    const activeSelected = item.selected && item.installed;
     const record = status.models.records.findLast((record) => record.model === item.id);
     const task = active.find((task) => task.model === item.id);
     const latest = status.setup.findLast((task) => task.model === item.id);
@@ -112,7 +119,7 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
           </strong>
           <span>
             {formatBytes(item.bytes)} ·{' '}
-            {item.selected ? 'Selected' : item.installed ? 'Installed' : 'Not installed'}
+            {activeSelected ? 'Selected' : item.installed ? 'Installed' : 'Not installed'}
           </span>
         </div>
         <p className="settings-note">{descriptions[item.id]}</p>
@@ -150,7 +157,7 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
             <>
               <button
                 type="button"
-                disabled={busy || item.selected}
+                disabled={busy || activeSelected}
                 onClick={() =>
                   void request({
                     kind: 'setup',
@@ -159,7 +166,7 @@ export function SpeechSettings({ shortcut = defaultShortcuts.dictate! }: { short
                   })
                 }
               >
-                {item.selected ? 'Selected' : item.installed ? 'Use Model' : 'Download and Use'}
+                {activeSelected ? 'Selected' : item.installed ? 'Use Model' : 'Download and Use'}
               </button>
               {!item.installed && (
                 <button

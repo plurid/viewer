@@ -3,7 +3,7 @@ import { remapKnownFolders } from '../explorer/folder-availability';
 import { remapSessions } from '../workspace/sessions';
 import { pathMapper, type FileChange } from '../../domain/files/changes';
 import { getState, replaceState, update } from './core';
-import { pendingPreferences, schedulePreferences } from './preferences';
+import { pendingPreferences, queuePreference, schedulePreferences } from './preferences';
 import type { DiffSource } from '../../domain/comparison/diff';
 import { requestRefresh } from './refresh';
 import { remapFolderVisits } from '../../domain/files/folder-visits';
@@ -95,7 +95,7 @@ export function receiveFileChanges(changes: FileChange[], historyRevision?: numb
   );
   for (const key of ['labels', 'locations', 'hidden'] as const)
     if (JSON.stringify(getState().saved.ui.sidebar[key]) !== JSON.stringify(saved.ui.sidebar[key]))
-      pendingPreferences.set('ui.sidebar.' + key, getState().saved.ui.sidebar[key]);
+      queuePreference('ui.sidebar.' + key, getState().saved.ui.sidebar[key]);
   schedulePreferences();
   const folders = Object.fromEntries(
     Object.entries(getState().settings.settings.folders).map(([path, value]) => [map(path), value]),

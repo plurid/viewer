@@ -1,3 +1,4 @@
+import { writeSync } from 'node:fs';
 import type { LaunchRequest } from '../../domain/workspaces/launch';
 import type { WorkspaceQueryResult } from '../../domain/workspaces/definitions/query';
 import { resolveWorkspaceQuery } from '../../domain/workspaces/definitions/query';
@@ -47,4 +48,39 @@ export async function routeWorkspaceLaunch<Window>(
     target: ports.current ?? (await ports.create()),
     request: { ...request, workspacePicker: result.query },
   };
+}
+
+export interface SecondaryInstanceExitHost {
+  writeError(text: string): void;
+  exit(code: number): void;
+  quit(): void;
+}
+
+/** Writes synchronously to stderr before an immediate `app.exit(1)` so piped stderr is not lost. */
+export function writeStderrSync(text: string): void {
+  try {
+    writeSync(2, text);
+  } catch {
+    process.stderr.write(text);
+  }
+}
+
+/** Secondary instances with invalid launch arguments report the failure on stderr and exit 1. */
+export function exitSecondaryInstance(
+  launchError: string | undefined,
+  host: SecondaryInstanceExitHost,
+): void {
+  if (launchError) {
+    host.writeError(launchError + '\n');
+    host.exit(1);
+    return;
+  }
+  host.quit();
+}
+
+/** Extracts an invalid-launch error forwarded in Electron's single-instance payload. */
+export function secondaryLaunchError(additionalData: unknown): string | undefined {
+  if (!additionalData || typeof additionalData !== 'object') return undefined;
+  const error = (additionalData as { error?: unknown }).error;
+  return typeof error === 'string' && error.trim() ? error : undefined;
 }

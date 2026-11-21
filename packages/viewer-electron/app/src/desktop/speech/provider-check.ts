@@ -125,7 +125,15 @@ export class SpeechProviderChecks {
             'This model is not listed for the saved key. Edit its model ID or check account access, then retry.',
           );
     } catch (error) {
-      if (signal.aborted) throw providerAbort(signal);
+      if (signal.aborted) {
+        const abort = providerAbort(signal);
+        if (abort.name === 'TimeoutError')
+          return result(
+            'connection-error',
+            'The check timed out. Check your connection and endpoint, then retry.',
+          );
+        throw abort;
+      }
       if (error instanceof CheckHTTPError) {
         const status = error.status;
         if (status === 401 || status === 403)

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { realpath } from 'node:fs/promises';
+import { lstat, realpath } from 'node:fs/promises';
 import { z } from 'zod';
 import { DocumentStore } from '../persistence/document-store';
 import type { TrashReceipt } from '../native/macos-files';
@@ -44,9 +44,17 @@ async function existingParent(file: string): Promise<string> {
   try {
     return await realpath(file);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || path.dirname(file) === file)
-      throw error;
-    return path.join(await existingParent(path.dirname(file)), path.basename(file));
+    const code = (error as NodeJS.ErrnoException).code;
+    if (path.dirname(file) === file) throw error;
+    if (code === 'ENOENT')
+      return path.join(await existingParent(path.dirname(file)), path.basename(file));
+    // A self-referencing link entry itself can be inspected or trashed without escaping its folder.
+    if (code === 'ELOOP') {
+      const info = await lstat(file).catch(() => null);
+      if (info?.isSymbolicLink())
+        return path.join(await existingParent(path.dirname(file)), path.basename(file));
+    }
+    throw error;
   }
 }
 
@@ -208,8 +216,11 @@ export class FileAccess {
         .filter((grant) => (grant.directory ? containsPath(grant.path, file) : grant.path === file))
         .sort((a, b) => b.path.length - a.path.length);
       let allowed = false;
+      let actual: string | undefined;
+      let accessError: NodeJS.ErrnoException | undefined;
       for (const grant of candidates) {
         let active = this.active.get(grant.path);
+        let root: string;
         try {
           if (!active) {
             const stop = this.native!.start(grant.bookmark);
@@ -220,8 +231,8 @@ export class FileAccess {
             };
             active = scope;
             void scope.root.then(
-              (root) => {
-                scope.resolved = root;
+              (resolved) => {
+                scope.resolved = resolved;
               },
               () => {},
             );
@@ -229,24 +240,44 @@ export class FileAccess {
             void active.root.catch(() => {});
             this.active.set(grant.path, active);
           }
-          const [root, actual] = await Promise.all([active.root, existingParent(file)]);
-          // Canonical filesystem reads can outlive revocation. A released scope
-          // cannot approve the old caller after the temporary deny has cleared.
-          if (this.active.get(grant.path) !== active) continue;
-          if (grant.directory ? containsPath(root, actual) : root === actual) {
-            allowed = true;
-            break;
-          }
+          root = await active.root;
         } catch {
           if (active && this.active.get(grant.path) === active) {
             this.active.delete(grant.path);
             active.stop();
           }
+          continue;
+        }
+        // Resolve the target outside the scope catch so ELOOP/ENOTDIR/EPERM/EACCES never tears
+        // down a live grant. Retry EPERM/EACCES under broader candidate grants in case a symlink
+        // inside a child grant points into an unstarted parent grant.
+        if (actual === undefined) {
+          try {
+            actual = await existingParent(file);
+            accessError = undefined;
+          } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+            if (code === 'EPERM' || code === 'EACCES') {
+              accessError = error as NodeJS.ErrnoException;
+              continue;
+            }
+            throw error;
+          }
+        }
+        // Canonical filesystem reads can outlive revocation. A released scope
+        // cannot approve the old caller after the temporary deny has cleared.
+        if (this.active.get(grant.path) !== active) continue;
+        if (grant.directory ? containsPath(root, actual) : root === actual) {
+          allowed = true;
+          break;
         }
       }
       if (this.closed) throw new Error('Folder access has closed.');
       if (this.blocked(file)) throw new FileAccessRequired(file);
-      if (!allowed) throw new FileAccessRequired(file);
+      if (!allowed) {
+        if (accessError) throw accessError;
+        throw new FileAccessRequired(file);
+      }
     }
   }
   historyScopeRoot(file: string): string | undefined {

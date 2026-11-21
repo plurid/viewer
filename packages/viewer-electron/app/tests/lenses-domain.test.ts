@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { FileEntry } from '../src/domain/contracts';
+import { normalize } from '../src/domain/search/name-score';
 import {
   applyLensOps,
   diffLensOps,
@@ -157,6 +158,38 @@ describe('lens edits', () => {
     expect(restored.members).toContainEqual({ name: 'Acme', group: 'gbbbbb', at: [0, 0] });
     expect(restored.members).toContainEqual({ name: 'Eon', group: 'gaaaaa' });
   });
+  it('applies simultaneous member swaps and shifts without overwriting entries', () => {
+    const pages = lens({
+      groups: [group('gaaaaa', 'One'), group('gbbbbb', 'Two')],
+      members: [
+        { name: 'Page 1.png', group: 'gaaaaa', at: [0, 0] },
+        { name: 'Page 2.png', group: 'gbbbbb', at: [8, 0] },
+        { name: 'Page 3.png', at: [16, 0] },
+      ],
+    });
+    const shifted = applyLensOps(pages, [
+      { kind: 'rename-member', from: 'Page 1.png', to: 'Page 2.png' },
+      { kind: 'rename-member', from: 'Page 2.png', to: 'Page 3.png' },
+      { kind: 'rename-member', from: 'Page 3.png', to: 'Page 4.png' },
+    ]).lens;
+    expect(shifted.members.toSorted((a, b) => a.name.localeCompare(b.name))).toEqual([
+      { name: 'Page 2.png', group: 'gaaaaa', at: [0, 0] },
+      { name: 'Page 3.png', group: 'gbbbbb', at: [8, 0] },
+      { name: 'Page 4.png', at: [16, 0] },
+    ]);
+    const swapped = applyLensOps(base, [
+      { kind: 'rename-member', from: 'Acme', to: 'Borel' },
+      { kind: 'rename-member', from: 'Borel', to: 'Acme' },
+    ]).lens;
+    expect(swapped.members.toSorted((a, b) => a.name.localeCompare(b.name))).toEqual([
+      { name: 'Acme', group: 'gaaaaa' },
+      { name: 'Borel', group: 'gbbbbb', at: [0, 0] },
+    ]);
+    const replaced = applyLensOps(base, [
+      { kind: 'rename-member', from: 'Acme', to: 'Borel' },
+    ]).lens;
+    expect(replaced.members).toEqual([{ name: 'Borel', group: 'gbbbbb', at: [0, 0] }]);
+  });
 });
 
 describe('lens matching', () => {
@@ -267,5 +300,23 @@ describe('glob', () => {
     const started = performance.now();
     expect(matchGlob('*a'.repeat(100) + '*b', 'a'.repeat(255))).toBe(false);
     expect(performance.now() - started).toBeLessThan(200);
+  });
+  it('folds case independently of the runtime locale in globs, member matching and name normalization', () => {
+    const original = String.prototype.toLocaleLowerCase;
+    const spy = vi.spyOn(String.prototype, 'toLocaleLowerCase').mockImplementation(function (
+      this: string,
+    ) {
+      return original.call(this, 'tr');
+    });
+    try {
+      expect(matchGlob('img*', 'IMG_0001.JPG')).toBe(true);
+      expect(matchGlob('IMG*', 'img_0001.jpg')).toBe(true);
+      expect(matchLensMembers([{ name: 'img.jpg' }], ['IMG.JPG']).renames).toEqual([
+        { from: 'img.jpg', to: 'IMG.JPG' },
+      ]);
+      expect(normalize('IMG_0001')).toBe('img_0001');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

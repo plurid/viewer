@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import {
-  methodWindows,
-  schemas,
-  settingsEvents,
-  type ApiHandlers,
-} from '../src/desktop/ipc/schemas';
+import type { ApiHandlers } from '../src/desktop/ipc/schemas';
+import { methodWindows, schemas, settingsEvents } from '../src/desktop/ipc/schemas';
 import { Desktop } from '../src/desktop/bridge';
+import type { DesktopEvent } from '../src/domain/contracts';
 import { paneTypes } from '../src/domain/contracts';
+import type { SessionKeys } from '../src/domain/preferences/session-keys';
+import { createCommandLineHandlers } from '../src/desktop/ipc/command-line-handlers';
+import { createMediaHandlers } from '../src/desktop/ipc/media-handlers';
 import { createPasteboardHandlers } from '../src/desktop/ipc/pasteboard-handlers';
 import { createLicenseHandlers } from '../src/desktop/ipc/license-handlers';
 
@@ -206,6 +206,181 @@ describe('IPC method table', () => {
     expect(settingsEvents).toContain('model-permission');
     expect(settingsEvents).not.toContain('open');
   });
+  it('forwards session-keys events to Settings windows when temporary bindings change', () => {
+    expect(settingsEvents).toContain('session-keys');
+    const desktop = Object.create(Desktop.prototype) as Desktop;
+    const viewerSent: DesktopEvent[] = [];
+    const settingsSent: DesktopEvent[] = [];
+    const makeWindow = (id: number, sent: DesktopEvent[]) => ({
+      isDestroyed: () => false,
+      webContents: {
+        id,
+        isDestroyed: () => false,
+        send: (_channel: string, event: DesktopEvent) => sent.push(event),
+      },
+    });
+    Reflect.set(
+      desktop,
+      'windows',
+      new Map([
+        [1, { window: makeWindow(1, viewerSent), originID: 'o-1', role: 'viewer' }],
+        [2, { window: makeWindow(2, settingsSent), originID: 'o-2', role: 'settings' }],
+      ]),
+    );
+    Reflect.set(desktop, 'options', {});
+    let current: SessionKeys = {
+      bindings: [{ table: 'prefix', keys: ['x'], line: 'refresh' }],
+      aliases: [],
+    };
+    const handlers = createCommandLineHandlers({
+      settings: { snapshot: vi.fn(), patch: vi.fn() },
+      credentials: { ids: () => [] },
+      providers: { generate: vi.fn() },
+      sessionKeys: () => current,
+      setSessionKeys: (keys) => {
+        current = keys;
+      },
+      emit: (event) => desktop.emit(event),
+    });
+    handlers.sessionKeysDiscard([], 2);
+    expect(viewerSent.some((event) => event.type === 'session-keys')).toBe(true);
+    expect(settingsSent.some((event) => event.type === 'session-keys')).toBe(true);
+  });
+  it('checks fileAccess.require before touching disk in imageInspect and pdfInspect', async () => {
+    const requireAccess = vi.fn(async () => {
+      throw Object.assign(new Error('Folder access required.'), { code: 'FILE_ACCESS_REQUIRED' });
+    });
+    const inspectImage = vi.fn();
+    const pdfInspect = vi.fn();
+    const handlers = createMediaHandlers({
+      browsers: { request: vi.fn() },
+      documents: { request: vi.fn() },
+      optimization: { request: vi.fn() },
+      transforms: { inspectImage, pdfInspect },
+      resources: { grantBytes: vi.fn() },
+      fileAccess: {
+        scoped: true,
+        remember: vi.fn(),
+        allowOnce: vi.fn(),
+        require: requireAccess,
+      },
+      window: () => undefined,
+    });
+    const missing = '/nonexistent-viewer-path-for-access-check/photo.png';
+    await expect(handlers.imageInspect([missing], 1)).rejects.toMatchObject({
+      code: 'FILE_ACCESS_REQUIRED',
+    });
+    await expect(handlers.pdfInspect([missing], 1)).rejects.toMatchObject({
+      code: 'FILE_ACCESS_REQUIRED',
+    });
+    expect(requireAccess).toHaveBeenCalledTimes(2);
+    expect(inspectImage).not.toHaveBeenCalled();
+    expect(pdfInspect).not.toHaveBeenCalled();
+  });
+  it('bounds canvas complete-action patch size, key length, reserved keys and workflow bindings', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    const base = {
+      kind: 'complete-action' as const,
+      id,
+      frameID: id,
+      runID: id,
+    };
+    expect(
+      schemas.canvas.safeParse([{ ...base, output: { result: 'ok', patch: { count: 1 } } }])
+        .success,
+    ).toBe(true);
+    expect(
+      schemas.canvas.safeParse([
+        { ...base, output: { result: 'ok', patch: { big: 'x'.repeat(130_000) } } },
+      ]).success,
+    ).toBe(false);
+    expect(
+      schemas.canvas.safeParse([
+        { ...base, output: { result: 'ok', patch: { ['k'.repeat(201)]: 1 } } },
+      ]).success,
+    ).toBe(false);
+    const reservedPatch = JSON.parse('{"__proto__":{"polluted":true}}') as Record<string, unknown>;
+    expect(
+      schemas.canvas.safeParse([{ ...base, output: { result: 'ok', patch: reservedPatch } }])
+        .success,
+    ).toBe(false);
+    expect(
+      schemas.canvas.safeParse([
+        { ...base, output: { result: 'ok', patch: { constructor: 'bad' } } },
+      ]).success,
+    ).toBe(false);
+    const workflowContext = {
+      workspaceID: 'w',
+      rootID: 'r',
+      paneID: 'p',
+      sources: [],
+      actor: 'user' as const,
+    };
+    expect(
+      schemas.workflow.safeParse([
+        {
+          kind: 'start',
+          file: '/fixtures/flow.json',
+          revision: '1',
+          bindings: { k0: '/fixtures/item-0' },
+          context: workflowContext,
+        },
+      ]).success,
+    ).toBe(true);
+    const tooManyBindings = Object.fromEntries(
+      Array.from({ length: 65 }, (_, index) => [`k${index}`, `/fixtures/item-${index}`]),
+    );
+    expect(
+      schemas.workflow.safeParse([
+        {
+          kind: 'start',
+          file: '/fixtures/flow.json',
+          revision: '1',
+          bindings: tooManyBindings,
+          context: workflowContext,
+        },
+      ]).success,
+    ).toBe(false);
+
+    const workspace = {
+      id: 'ws-1',
+      name: 'Main',
+      panes: [],
+      roots: [],
+      arrangement: {},
+    };
+    const validState = {
+      version: 13 as const,
+      workspaces: [workspace],
+      activeWorkspace: 'ws-1',
+      favorites: [],
+      recents: [],
+      look: 'dark' as const,
+    };
+    expect(schemas.save.safeParse([validState]).success).toBe(true);
+    const oversizedArrangement = Object.fromEntries(
+      Array.from({ length: 201 }, (_, index) => [`k${index}`, 'v']),
+    );
+    expect(
+      schemas.save.safeParse([
+        { ...validState, workspaces: [{ ...workspace, arrangement: oversizedArrangement }] },
+      ]).success,
+    ).toBe(false);
+    const oversizedPreviewStates = Object.fromEntries(
+      Array.from({ length: 2001 }, (_, index) => [`ws-1:p${index}`, {}]),
+    );
+    expect(
+      schemas.save.safeParse([{ ...validState, previewStates: oversizedPreviewStates }]).success,
+    ).toBe(false);
+    const oversizedProfile = Object.fromEntries(
+      Array.from({ length: 201 }, (_, index) => [`ui.key${index}`, true]),
+    );
+    expect(
+      schemas.save.safeParse([
+        { ...validState, profile: { id: 'p1', previous: oversizedProfile } },
+      ]).success,
+    ).toBe(false);
+  });
 });
 describe('the workspace snapshot agents read (2026-10-23)', () => {
   it.each(Object.values(paneTypes))(
@@ -402,5 +577,83 @@ describe('desktop-issued per-request agent dispatch IDs', () => {
       { kind: 'duplicate', sources: ['/Granted/a.txt'] },
       'agent',
     );
+  });
+
+  it('retains actor agent past the 25-second timeout when a late tagged IPC call arrives', async () => {
+    vi.useFakeTimers();
+    try {
+      const desktop = Object.create(Desktop.prototype) as Desktop;
+      const sent: { id?: string; type?: string }[] = [];
+      const windowStub = {
+        isDestroyed: () => false,
+        webContents: {
+          id: 7,
+          isDestroyed: () => false,
+          send: (_channel: string, event: { id?: string; type?: string }) => sent.push(event),
+        },
+      };
+      const operationsStart = vi.fn(() => 'job-1');
+      Reflect.set(desktop, 'windows', new Map([[7, { role: 'viewer', window: windowStub }]]));
+      Reflect.set(desktop, 'agentCommands', new Map());
+      Reflect.set(desktop, 'issuedDispatches', new Map());
+      Reflect.set(desktop, 'requestDispatch', new AsyncLocalStorage());
+      Reflect.set(desktop, 'activity', { within: (_ctx: unknown, work: () => unknown) => work() });
+      Reflect.set(desktop, 'operations', {
+        start: operationsStart,
+        load: vi.fn(),
+        all: vi.fn(() => []),
+        dismiss: vi.fn(),
+        cancel: vi.fn(),
+        resolve: vi.fn(),
+        undo: vi.fn(),
+        redo: vi.fn(),
+      });
+      Reflect.set(desktop, 'fabrication', { rememberOperation: vi.fn(async () => {}) });
+      Reflect.set(desktop, 'options', { openSettings: vi.fn() });
+      Reflect.set(desktop, 'settings', { snapshot: vi.fn() });
+
+      const dispatchAgentEvent = Reflect.get(desktop, 'dispatchAgentEvent') as (
+        owner: number,
+        payload: unknown,
+      ) => Promise<void>;
+      const call = Reflect.get(desktop, 'call') as (
+        method: string,
+        args: unknown,
+        senderID: number,
+        dispatchID?: unknown,
+      ) => unknown;
+
+      const pending = dispatchAgentEvent.call(desktop, 7, {
+        type: 'agent-command',
+        command: 'duplicate',
+        target: {
+          workspaceID: 'w',
+          rootID: 'r',
+          paneID: 'p',
+          directory: '/Granted',
+          selection: [],
+        },
+      });
+      const issuedID = sent.find((event) => event.type === 'agent-command')?.id;
+      expect(typeof issuedID).toBe('string');
+
+      const settled = pending.catch((error) => error);
+      await vi.advanceTimersByTimeAsync(25_001);
+      expect(await settled).toBeInstanceOf(Error);
+
+      await call.call(
+        desktop,
+        'operate',
+        [{ kind: 'duplicate', sources: ['/Granted/a.txt'] }],
+        7,
+        issuedID,
+      );
+      expect(operationsStart).toHaveBeenLastCalledWith(
+        { kind: 'duplicate', sources: ['/Granted/a.txt'] },
+        'agent',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

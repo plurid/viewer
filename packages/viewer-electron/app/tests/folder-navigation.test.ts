@@ -59,7 +59,7 @@ describe('native folder navigation recovery', () => {
     chooseFolder.mockResolvedValue('/Volumes/Work');
     const destination = target();
     await openWorkspacePath('/Volumes', destination, controller);
-    expect(chooseFolder).toHaveBeenCalledExactlyOnceWith('/Volumes');
+    expect(chooseFolder).toHaveBeenCalledExactlyOnceWith('/Volumes', true);
     expect(stat.mock.calls).toEqual([['/Volumes'], ['/Volumes/Work']]);
     expect(activeWorkspace().panes[0].path).toBe('/Volumes/Work');
     expect(controller.focusPane).toHaveBeenCalledWith(destination.paneID);

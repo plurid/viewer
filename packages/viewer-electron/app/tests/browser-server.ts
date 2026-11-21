@@ -922,6 +922,7 @@ async function invoke(method: ApiMethod, args: unknown[]): Promise<unknown> {
     case 'fileAccessList':
       return [];
     case 'fileAccessRevoke':
+    case 'fileAccessPrivacySettings':
     case 'volumeEject':
       throw new Error(
         'Native volume and permission changes are only available in the installed app.',

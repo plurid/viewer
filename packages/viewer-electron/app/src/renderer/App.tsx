@@ -89,7 +89,7 @@ import { CommandRegistry, type CommandContext } from './commands/registry';
 import { windowCommands } from './commands/window';
 import { CommandPalette } from './commands/CommandPalette';
 import type { PaletteMode } from './commands/palette-modes';
-import type { LineHost } from './command-line/host';
+import type { LineAgentDispatch, LineHost } from './command-line/host';
 import { runLine, type LineResult } from './command-line/run';
 import { receiveSessionKeys } from './keys/session';
 import { editable, textEditFor } from './commands/editing';
@@ -324,7 +324,9 @@ function AppWindow() {
     };
   }, [controller]);
   // the command line's runner, for sequences' steps with words: set once the line host is
-  const lineRunRef = useRef<(text: string) => Promise<LineResult>>(async () => ({ ok: false }));
+  const lineRunRef = useRef<(text: string, agent?: LineAgentDispatch) => Promise<LineResult>>(
+    async () => ({ ok: false }),
+  );
   useCommandSource(
     'window',
     {
@@ -336,7 +338,7 @@ function AppWindow() {
           (id, context) => registry.invoke(id, { paneID: context.paneID, context }),
           terminalName,
           () => registry.context(getState().activePane) || windowContext(),
-          (text) => lineRunRef.current(text),
+          (text, agent) => lineRunRef.current(text, agent),
           {
             showServers: () => setWindowDialog({ type: 'servers' }),
             showNotes: () => setWindowDialog({ type: 'notes' }),
@@ -431,7 +433,21 @@ function AppWindow() {
     return registry.list({ ids: [...ids], scope: 'window', paneID: context.paneID, context })[0];
   };
   /** Runs a command where it belongs; false when nothing ran (a line stops there). */
-  const invoke = async (id: string, remember = true): Promise<boolean> => {
+  const invoke = async (
+    id: string,
+    remember = true,
+    agent?: LineAgentDispatch,
+  ): Promise<boolean> => {
+    if (agent?.deadline !== undefined && Date.now() > agent.deadline)
+      throw new Error('The agent action timed out before finishing.');
+    const withAgent = (context: CommandContext): CommandContext =>
+      agent
+        ? {
+            ...context,
+            ...(agent.id ? { agentDispatchID: agent.id } : {}),
+            ...(agent.deadline !== undefined ? { agentDispatchDeadline: agent.deadline } : {}),
+          }
+        : context;
     // Edit menu Undo, Redo and Select All reach a CodeMirror editor, which `webContents` does not
     if (routeToEditor(id, getState().activePane)) return true;
     // ⌘E in Quick Preview edits the text file it shows, as its plane
@@ -444,28 +460,32 @@ function AppWindow() {
       // and in a document's preview it finds in the document, as Preview's ⌘F does
       const find = !overlayOpen() && previewCommand(previewFindIDs);
       if (find) {
-        await registry.run(find, false);
+        await registry.run({ ...find, context: withAgent(find.context) }, false);
         return true;
       }
     }
     if (
       document.activeElement?.closest('.terminal-plane') &&
-      (await terminalEditing(getState().activePane, id))
+      (await withAgentDispatch(agent?.id, () => terminalEditing(getState().activePane, id)))
     )
       return true;
     const edit = textEditFor(id, editable(document.activeElement));
     if (edit) {
-      await window.viewer.textEdit(edit);
+      await withAgentDispatch(agent?.id, () => window.viewer.textEdit(edit));
       return true;
     }
     if (editable(document.activeElement) && explorerCommandIDs.has(id)) return false;
     if (overlayOpen() && !['palette', 'settings'].includes(id)) return false;
     const context = registry.context(getState().activePane) || windowContext();
-    if (id === 'paste' || id === 'paste-move') await refreshClipboard();
+    if (id === 'paste' || id === 'paste-move') {
+      await withAgentDispatch(agent?.id, () => refreshClipboard());
+      if (agent?.deadline !== undefined && Date.now() > agent.deadline)
+        throw new Error('The agent action timed out before finishing.');
+    }
     return registry.invoke(id, {
       paneID: context.paneID,
       scope: 'window',
-      context: { ...context, clipboard: getState().clipboard },
+      context: withAgent({ ...context, clipboard: getState().clipboard }),
       remember,
     });
   };
@@ -476,7 +496,7 @@ function AppWindow() {
   // THE COMMAND LINE: what a line runs against, and running one from the palette
   const lineHost = useMemo<LineHost>(
     () => ({
-      invoke: (id, remember) => invokeRef.current(id, remember),
+      invoke: (id, remember, agent) => invokeRef.current(id, remember, agent),
       registry,
       workspace: controller,
       context: () => registry.context(getState().activePane) || windowContext(),
@@ -501,7 +521,7 @@ function AppWindow() {
   };
   // the prefix, root and leader keys and the modes (keys/sequences.ts): before App's own key handler
   useKeySequences(runLines);
-  lineRunRef.current = (text) => runLine(text, lineHost);
+  lineRunRef.current = (text, agent) => runLine(text, agent ? { ...lineHost, agent } : lineHost);
   const runFromPalette = (text: string, model = false) => {
     recordLine(text);
     setPalette(null);
@@ -732,7 +752,14 @@ function AppWindow() {
             return;
           }
           if (event.navigation) {
-            void executeAgentNavigation(event.navigation, target, controller, switchTo, event.id)
+            void executeAgentNavigation(
+              event.navigation,
+              target,
+              controller,
+              switchTo,
+              event.id,
+              event.deadline,
+            )
               .then(() => finish())
               .catch((error: Error) => {
                 report(error);
@@ -750,7 +777,14 @@ function AppWindow() {
           void (
             command
               ? registry.run(
-                  { ...command, context: { ...command.context, agentDispatchID: event.id } },
+                  {
+                    ...command,
+                    context: {
+                      ...command.context,
+                      agentDispatchID: event.id,
+                      agentDispatchDeadline: event.deadline,
+                    },
+                  },
                   false,
                 )
               : Promise.resolve(false)

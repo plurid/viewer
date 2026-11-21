@@ -45,7 +45,15 @@ import {
   uuid,
 } from './core';
 import { folderPane } from './panes';
-import { adapters, closedPanes, flushState, resetPersistence } from './persistence';
+import {
+  adapters,
+  closedPanes,
+  flushState,
+  mergeSharedFavorites,
+  mergeSharedLineHistory,
+  resetPersistence,
+  resetSharedLists,
+} from './persistence';
 import { resetPreferences } from './preferences';
 import { scopedPresentation } from './folder-presentation';
 import { stopTour } from '../workspace/tour';
@@ -117,6 +125,7 @@ export function initialize(bootstrap: Bootstrap): void {
     bootstrap.folderHistoryRevision,
     bootstrap.folderClearRevision,
   );
+  resetSharedLists(saved.favorites, saved.lineHistory);
   resetKnownFolders(bootstrap.checkedFolders);
   saved.workspaceVisits = mergeWorkspaceVisits(saved.workspaces, saved.workspaceVisits, {
     [active.id]: Date.now(),
@@ -191,6 +200,8 @@ export function receiveWorkspaces(
   const active = activeWorkspace();
   const workspaces = saved.workspaces.map((space) => (space.id === active.id ? active : space));
   if (!workspaces.some((space) => space.id === active.id)) workspaces.push(active);
+  const favorites = mergeSharedFavorites(current.saved.favorites, saved.favorites);
+  const lineHistory = mergeSharedLineHistory(current.saved.lineHistory, saved.lineHistory);
   const workspaceVisits = mergeWorkspaceVisits(
     workspaces,
     current.saved.workspaceVisits,
@@ -200,10 +211,10 @@ export function receiveWorkspaces(
   const unchanged =
     JSON.stringify([
       workspaces,
-      saved.favorites,
+      favorites,
       recents,
       visits,
-      saved.lineHistory,
+      lineHistory,
       workspaceVisits,
       saved.openWindows,
     ]) ===
@@ -228,10 +239,10 @@ export function receiveWorkspaces(
       workspaces,
       workspaceVisits,
       openWindows: saved.openWindows,
-      favorites: saved.favorites,
+      favorites,
       recents,
       visits,
-      lineHistory: saved.lineHistory,
+      lineHistory,
     },
   });
 }
@@ -361,10 +372,10 @@ export async function deleteWorkspace(id: string): Promise<void> {
     adapters.set(replacement, new Map());
   }
   // A replacement exists when the last workspace is deleted, so one always remains.
-  const active =
-    getState().saved.activeWorkspace === id
-      ? workspaces[Math.min(index, workspaces.length - 1)]!
-      : activeWorkspace();
+  const deletingActive = getState().saved.activeWorkspace === id;
+  const active = deletingActive
+    ? workspaces[Math.min(index, workspaces.length - 1)]!
+    : activeWorkspace();
   update(
     {
       ...getState(),
@@ -372,12 +383,18 @@ export async function deleteWorkspace(id: string): Promise<void> {
         ...getState().saved,
         workspaces,
         activeWorkspace: active.id,
-        workspaceVisits: mergeWorkspaceVisits(workspaces, getState().saved.workspaceVisits, {
-          [active.id]: Date.now(),
-        }),
+        workspaceVisits: mergeWorkspaceVisits(
+          workspaces,
+          getState().saved.workspaceVisits,
+          deletingActive ? { [active.id]: Date.now() } : undefined,
+        ),
       },
-      activePane: active.activePane || active.panes[0]?.id || '',
-      quickPreview: null,
+      ...(deletingActive
+        ? {
+            activePane: active.activePane || active.panes[0]?.id || '',
+            quickPreview: null,
+          }
+        : {}),
       deletedWorkspace: { workspace, index, replacement },
     },
     true,

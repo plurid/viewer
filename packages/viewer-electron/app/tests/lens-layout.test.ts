@@ -118,6 +118,18 @@ describe('map layout', () => {
     expect(right.x).toBeGreaterThan(first.x);
     expect(nearestTile(map, first.entry.path, 'up')).toBeUndefined();
   });
+  it('lays out large folders in linear time and past 125,000 items without overflowing the stack', () => {
+    const started = performance.now();
+    const medium = layout(base, names(50_000));
+    const elapsed = performance.now() - started;
+    expect(medium.tiles).toHaveLength(50_000);
+    expect(elapsed).toBeLessThan(1500);
+    const large = layout(base, names(130_000));
+    expect(large.tiles).toHaveLength(130_000);
+    expect(large.height).toBeGreaterThan(0);
+    expect(large.tiles[0]).toMatchObject({ x: 0, y: 0 });
+    expect(large.tiles[8]).toMatchObject({ x: 0, y: 96 });
+  });
 });
 describe('dropping tiles (2026-10-20)', () => {
   it('places a drop beyond a bare map’s tiles on the map, and finds no group in a grouped map’s gaps', () => {

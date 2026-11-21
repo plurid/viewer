@@ -12,6 +12,7 @@ import { HostedTranscription, speechWAV } from '../src/desktop/speech/transcript
 import { SpeechProviders } from '../src/desktop/speech/providers';
 import { SpeechProviderChecks } from '../src/desktop/speech/provider-check';
 import { Credentials } from '../src/desktop/models/providers';
+import { DocumentStore } from '../src/desktop/persistence/document-store';
 import { temporaryRoot } from '../tools/temporary';
 import { Speech } from '../src/desktop/speech/service';
 
@@ -189,7 +190,10 @@ it('cannot send a late check after key revocation while credentials are pending'
 });
 describe('hosted speech wire protocols', () => {
   it('persists consent revocation before a failed credential change, including after restart', async () => {
-    const f = await fixture();
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({ data: [{ id: f.provider.model }] }),
+    );
+    const f = await fixture(fetcher);
     await f.key();
     await f.allow();
     vi.spyOn(f.credentials, 'set').mockRejectedValueOnce(
@@ -206,6 +210,57 @@ describe('hosted speech wire protocols', () => {
     managers.push(restarted);
     expect((await restarted.status()).providers[0]?.allowed).toBe(false);
     await expect(restarted.prepare(f.provider.id, 'en')).rejects.toThrow('Allow this');
+
+    // Because revocation was persisted, checks and re-consent succeed on the same instance.
+    await expect(f.manager.check(f.provider.id)).resolves.toBeUndefined();
+    expect((await f.manager.status()).providers[0]?.check?.outcome).toBe('available');
+    await expect(f.allow()).resolves.toBeUndefined();
+    expect((await f.manager.status()).providers[0]?.allowed).toBe(true);
+
+    // If durable consent revocation itself fails to write, the provider stays blocked.
+    const saveSpy = vi
+      .spyOn(DocumentStore.prototype, 'save')
+      .mockRejectedValueOnce(new Error('Disk full'));
+    try {
+      await expect(
+        f.manager.request({ kind: 'provider-key', id: f.provider.id, key: 'another' }),
+      ).rejects.toThrow('Disk full');
+      expect((await f.manager.status()).providers[0]?.allowed).toBe(false);
+      await expect(f.manager.prepare(f.provider.id, 'en')).rejects.toThrow('Allow this');
+      await expect(f.manager.check(f.provider.id)).rejects.toThrow('Allow this');
+    } finally {
+      saveSpy.mockRestore();
+    }
+  });
+  it('stores a connection-error check result on 15s timeout while explicit abort still throws AbortError', async () => {
+    vi.useFakeTimers();
+    try {
+      const stalled = vi.fn<typeof fetch>(
+        (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), {
+              once: true,
+            });
+          }),
+      );
+      const f = await fixture(stalled);
+      await f.key();
+      const timed = f.manager.check(f.provider.id);
+      await vi.advanceTimersByTimeAsync(15_000);
+      await expect(timed).resolves.toBeUndefined();
+      expect((await f.manager.status()).providers[0]?.check).toMatchObject({
+        outcome: 'connection-error',
+        detail: 'The check timed out. Check your connection and endpoint, then retry.',
+      });
+
+      const controller = new AbortController();
+      const aborted = f.manager.check(f.provider.id, controller.signal);
+      controller.abort();
+      await expect(aborted).rejects.toMatchObject({ name: 'AbortError' });
+      expect((await f.manager.status()).providers[0]?.check).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it('encodes bounded WAV with explicit mono PCM metadata', () => {
     const wav = speechWAV(pcm),

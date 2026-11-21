@@ -345,17 +345,18 @@ export class SpeechModels {
   }
   async selectedFile() {
     const state = await this.state();
-    const record = state.records.find(
-      (item) => item.model === state.selected && item.status === 'ready',
-    );
-    if (!record || !(await this.usable(record)))
-      throw new Error('Choose an installed speech model in Settings → Speech.');
-    const model = this.model(record.model);
-    return {
-      file: path.join(await this.folder(false), record.file),
-      model: model.id,
-      recordID: record.id,
-    };
+    for (let index = state.records.length - 1; index >= 0; index--) {
+      const record = state.records[index]!;
+      if (record.model !== state.selected || record.status !== 'ready') continue;
+      if (!(await this.usable(record))) continue;
+      const model = this.model(record.model);
+      return {
+        file: path.join(await this.folder(false), record.file),
+        model: model.id,
+        recordID: record.id,
+      };
+    }
+    throw new Error('Choose an installed speech model in Settings → Speech.');
   }
   async validateSelection(recordID: string): Promise<void> {
     const record = (await this.state()).records.find((item) => item.id === recordID);

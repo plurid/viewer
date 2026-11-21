@@ -62,6 +62,7 @@ import { assertLocalPath } from '../files/local-path';
 
 interface Grant {
   dispose?(): void;
+  owner?: number;
   resource: Resource;
   authority?: string;
   root?: string;
@@ -106,7 +107,8 @@ export class Resources {
   /** Background work for a preview stops when the preview releases its resource. */
   private aborts = new Map<string, AbortController>();
   private work = new PreviewWork();
-  private pending = new Map<string, AbortController>();
+  private pending = new Map<string, { owner?: number; abort: AbortController }>();
+  private inFlight = new Set<{ owner?: number; abort: AbortController }>();
   private documentRequests = new Map<string, { resource: string; abort: AbortController }>();
   readonly archives = new Archives();
   constructor(
@@ -131,17 +133,19 @@ export class Resources {
       cache: DerivedPreviews;
     },
   ) {}
-  grant(file: string, requestID?: string): Promise<Resource> {
+  grant(file: string, requestID?: string, owner?: number): Promise<Resource> {
     if (requestID && this.pending.has(requestID))
       return Promise.reject(new Error('This preview request is already running.'));
     const abort = new AbortController();
-    if (requestID) this.pending.set(requestID, abort);
+    const flight = { owner, abort };
+    this.inFlight.add(flight);
+    if (requestID) this.pending.set(requestID, flight);
     let owned: Resource | undefined;
     return this.work
       .track(
         [file],
         async (scope) => {
-          owned = await this.grantFile(file, scope);
+          owned = await this.grantFile(file, scope, owner);
           return owned;
         },
         abort.signal,
@@ -158,44 +162,60 @@ export class Resources {
         throw error;
       })
       .finally(() => {
+        this.inFlight.delete(flight);
         if (requestID) this.pending.delete(requestID);
       });
   }
   /** Immutable repository bytes are readable resources, never editable filesystem files. */
-  async grantBytes(authority: string, name: string, data: Buffer): Promise<Resource> {
-    assertLocalPath(authority);
-    await this.access([authority]);
-    if (this.grants.size >= 256) throw new Error('Close some previews before opening more files.');
-    const held = [...this.grants.values()].reduce(
-      (size, grant) => size + (grant.data?.length ?? 0),
-      0,
-    );
-    if (data.length > 64 * 1024 * 1024 || held + data.length > 128 * 1024 * 1024)
-      throw new Error('Too many comparisons are open. Close one before opening another.');
-    const id = randomUUID();
-    const resource: Resource = {
-      id,
-      url: `viewer-resource://${id}/asset/${encodeURIComponent(path.basename(name))}`,
-      dimensions: imageDimensions(data),
-      entry: {
-        path: path.join(authority, name),
-        name: path.basename(name),
-        parent: authority,
-        extension: path.extname(name).slice(1).toLowerCase(),
-        kind: 'file',
-        directory: false,
-        size: data.length,
-        modified: 0,
-        created: 0,
-        hidden: false,
-        mime: lookup(name) || 'application/octet-stream',
-        identity: id,
-      },
-    };
-    this.grants.set(id, { resource, authority, data, archiveChildren: new Set() });
-    return resource;
+  async grantBytes(
+    authority: string,
+    name: string,
+    data: Buffer,
+    owner?: number,
+  ): Promise<Resource> {
+    const abort = new AbortController();
+    const flight = { owner, abort };
+    this.inFlight.add(flight);
+    try {
+      abort.signal.throwIfAborted();
+      assertLocalPath(authority);
+      await this.access([authority]);
+      abort.signal.throwIfAborted();
+      if (this.grants.size >= 256)
+        throw new Error('Close some previews before opening more files.');
+      const held = [...this.grants.values()].reduce(
+        (size, grant) => size + (grant.data?.length ?? 0),
+        0,
+      );
+      if (data.length > 64 * 1024 * 1024 || held + data.length > 128 * 1024 * 1024)
+        throw new Error('Too many comparisons are open. Close one before opening another.');
+      const id = randomUUID();
+      const resource: Resource = {
+        id,
+        url: `viewer-resource://${id}/asset/${encodeURIComponent(path.basename(name))}`,
+        dimensions: imageDimensions(data),
+        entry: {
+          path: path.join(authority, name),
+          name: path.basename(name),
+          parent: authority,
+          extension: path.extname(name).slice(1).toLowerCase(),
+          kind: 'file',
+          directory: false,
+          size: data.length,
+          modified: 0,
+          created: 0,
+          hidden: false,
+          mime: lookup(name) || 'application/octet-stream',
+          identity: id,
+        },
+      };
+      this.grants.set(id, { owner, resource, authority, data, archiveChildren: new Set() });
+      return resource;
+    } finally {
+      this.inFlight.delete(flight);
+    }
   }
-  private async grantFile(file: string, scope: PreviewScope): Promise<Resource> {
+  private async grantFile(file: string, scope: PreviewScope, owner?: number): Promise<Resource> {
     assertLocalPath(file);
     scope.check();
     await this.access([file]);
@@ -211,12 +231,16 @@ export class Resources {
         signal?.throwIfAborted();
         await this.access([fileCoordination.path(actual)]);
         scope.check();
-        return this.grantCoordinated(file, scope);
+        return this.grantCoordinated(file, scope, owner);
       },
       scope.signal,
     );
   }
-  private async grantCoordinated(file: string, scope: PreviewScope): Promise<Resource> {
+  private async grantCoordinated(
+    file: string,
+    scope: PreviewScope,
+    owner?: number,
+  ): Promise<Resource> {
     await this.access([file]);
     scope.check();
     if (this.grants.size >= 256) throw new Error('Close some previews before opening more files.');
@@ -261,6 +285,7 @@ export class Resources {
     scope.check();
     if (this.grants.size >= 256) throw new Error('Close some previews before opening more files.');
     this.grants.set(id, {
+      owner,
       resource,
       authority: actual,
       file: actual,
@@ -317,22 +342,43 @@ export class Resources {
     }
   }
   /** Aborted when the resource is released, so a closed preview's extraction stops. */
-  signal(id: string): AbortSignal {
-    this.get(id);
+  signal(id: string, owner?: number): AbortSignal {
+    this.get(id, owner);
     let abort = this.aborts.get(id);
     if (!abort) this.aborts.set(id, (abort = new AbortController()));
     return abort.signal;
   }
-  release(id: string): void {
-    this.pending.get(id)?.abort(new Error('Preview closed.'));
+  release(id: string, owner?: number): boolean {
+    const pending = this.pending.get(id);
+    const grant = this.grants.get(id);
+    if (
+      owner !== undefined &&
+      ((grant && grant.owner !== owner) || (!grant && pending && pending.owner !== owner))
+    )
+      return false;
+    pending?.abort.abort(new Error('Preview closed.'));
     this.aborts.get(id)?.abort();
     this.aborts.delete(id);
     for (const stream of this.streams.get(id)?.keys() ?? []) stream.destroy();
-    const grant = this.grants.get(id);
     grant?.dispose?.();
     if (grant?.file) this.archives.release(grant.file);
     for (const child of grant?.archiveChildren ?? []) this.release(child);
     this.grants.delete(id);
+    return true;
+  }
+  /** Releases every preview lease and pending grant owned by a closing or reloading window. */
+  stopOwner(owner: number): string[] {
+    for (const flight of this.inFlight)
+      if (flight.owner === owner) flight.abort.abort(new Error('Preview closed.'));
+    for (const pending of this.pending.values())
+      if (pending.owner === owner) pending.abort.abort(new Error('Preview closed.'));
+    const released: string[] = [];
+    for (const [id, grant] of [...this.grants]) {
+      if (grant.owner !== owner) continue;
+      released.push(id);
+      this.release(id);
+    }
+    return released;
   }
   private paths(id: string): string[] {
     const grant = this.grants.get(id);
@@ -387,9 +433,10 @@ export class Resources {
       .map((stream) => new Promise<void>((resolve) => stream.once('close', resolve)));
     await Promise.allSettled([...closed, this.work.drain()]);
   }
-  private get(id: string): Grant {
+  private get(id: string, owner?: number): Grant {
     const grant = this.grants.get(id);
-    if (!grant) throw new Error('This preview resource has expired.');
+    if (!grant || (owner !== undefined && grant.owner !== owner))
+      throw new Error('This preview resource has expired.');
     return grant;
   }
   async close(): Promise<void> {
@@ -401,16 +448,16 @@ export class Resources {
     await this.postscript?.cache.close();
   }
   /** The file behind a previewed PDF; entries inside archives are not files to print. */
-  async printableFile(id: string): Promise<string> {
-    const grant = this.get(id);
+  async printableFile(id: string, owner?: number): Promise<string> {
+    const grant = this.get(id, owner);
     if (!grant.file || grant.resource.entry.extension !== 'pdf')
       throw new Error('Only PDF files on disk can be printed.');
     await this.access([grant.file]);
     return grant.file;
   }
   /** The file a preview shows, to edit where it is: a link's target, never an archive entry. */
-  editableFile(id: string): string {
-    const grant = this.get(id);
+  editableFile(id: string, owner?: number): string {
+    const grant = this.get(id, owner);
     if (!grant.file || grant.data)
       throw new Error(
         'This preview shows an entry inside an archive, which is not edited in place.',
@@ -418,8 +465,8 @@ export class Resources {
     if (grant.bundle) throw new Error('A document package is edited in its own app.');
     return grant.file;
   }
-  documentSource(id: string): string {
-    const grant = this.get(id);
+  documentSource(id: string, owner?: number): string {
+    const grant = this.get(id, owner);
     if (!grant.file) throw new Error('Viewer can’t open a document inside this file here.');
     // a package's saved picture is all Viewer reads of it
     if (grant.bundle) throw new Error('Viewer reads only the saved picture of a document package.');
@@ -431,16 +478,17 @@ export class Resources {
     id: string,
     requestID: string,
     read: (file: string, signal: AbortSignal, format: string) => Promise<T>,
+    owner?: number,
   ): Promise<T> {
-    const file = this.documentSource(id);
-    const grant = this.get(id);
+    const file = this.documentSource(id, owner);
+    const grant = this.get(id, owner);
     if (this.documentRequests.has(requestID))
       throw new Error('This document request is already running.');
     if (this.documentRequests.size >= 32)
       throw new Error('Too many document pages are opening. Try again.');
     const request = { resource: id, abort: new AbortController() };
     this.documentRequests.set(requestID, request);
-    const sourceSignal = this.signal(id);
+    const sourceSignal = this.signal(id, owner);
     return this.work
       .track(
         this.paths(id),
@@ -450,7 +498,7 @@ export class Resources {
           if (grant.format) await this.unchanged(grant);
           const value = await read(file, signal, grantExtension(grant));
           signal.throwIfAborted();
-          this.documentSource(id);
+          this.documentSource(id, owner);
           scope.check();
           return value;
         },
@@ -462,8 +510,8 @@ export class Resources {
       });
   }
   /** The extension a document is read as, for a read outside `documentRead`. */
-  async documentFormat(id: string): Promise<string> {
-    const grant = this.get(id);
+  async documentFormat(id: string, owner?: number): Promise<string> {
+    const grant = this.get(id, owner);
     if (grant.format) await this.unchanged(grant);
     return grantExtension(grant);
   }
@@ -481,13 +529,14 @@ export class Resources {
    * compound file's directory. Show as asks this for a file whose name does not say its format; the
    * renderer's word is not taken.
    */
-  confirmFormat(id: string, extension: string): Promise<Resource> {
+  async confirmFormat(id: string, extension: string, owner?: number): Promise<Resource> {
+    this.get(id, owner);
     return this.work.track(this.paths(id), () =>
-      this.coordinated(id, () => this.readFormat(id, extension)),
+      this.coordinated(id, () => this.readFormat(id, extension, owner), owner),
     );
   }
-  private async readFormat(id: string, extension: string): Promise<Resource> {
-    const grant = this.get(id);
+  private async readFormat(id: string, extension: string, owner?: number): Promise<Resource> {
+    const grant = this.get(id, owner);
     if (!grant.file || grant.data)
       throw new Error('Only a file on disk can be shown as another format.');
     if (!confirmedFormats.has(extension))
@@ -510,7 +559,7 @@ export class Resources {
     if (!confirms(identifyBytes(head, grant.resource.entry.name, directory), extension))
       throw new Error(`The contents of this file do not match .${extension}.`);
     await this.access([grant.file]);
-    if (this.get(id) !== grant) throw new Error('This preview resource has expired.');
+    if (this.get(id, owner) !== grant) throw new Error('This preview resource has expired.');
     grant.format = { extension, version: fileVersion(info) };
     const { entry } = grant.resource;
     return {
@@ -518,30 +567,37 @@ export class Resources {
       entry: { ...entry, extension, mime: lookup(extension) || entry.mime },
     };
   }
-  cancelDocument(id: string, requestID: string): void {
+  cancelDocument(id: string, requestID: string, owner?: number): void {
+    const grant = this.grants.get(id);
+    if (owner !== undefined && (!grant || grant.owner !== owner)) return;
     const request = this.documentRequests.get(requestID);
     if (request?.resource === id) request.abort.abort(new Error('Reading the page was canceled.'));
   }
-  read(id: string, requested = MAX_READ): Promise<ResourceRead> {
+  async read(id: string, requested = MAX_READ, owner?: number): Promise<ResourceRead> {
+    this.get(id, owner);
     return this.work.track(this.paths(id), () =>
-      this.coordinated(id, () => this.readBounded(id, requested)),
+      this.coordinated(id, () => this.readBounded(id, requested, owner), owner),
     );
   }
-  private async coordinated<T>(id: string, work: () => Promise<T>): Promise<T> {
-    const grant = this.get(id);
+  private async coordinated<T>(id: string, work: () => Promise<T>, owner?: number): Promise<T> {
+    const grant = this.get(id, owner);
     return grant.file
       ? fileCoordination.run([{ path: grant.file, mode: 'read' }], async (signal) => {
           signal?.throwIfAborted();
           await this.access([fileCoordination.path(grant.file!)]);
-          this.get(id);
+          this.get(id, owner);
           return work();
         })
       : work();
   }
-  private async readBounded(id: string, requested = MAX_READ): Promise<ResourceRead> {
-    const grant = this.get(id);
+  private async readBounded(
+    id: string,
+    requested = MAX_READ,
+    owner?: number,
+  ): Promise<ResourceRead> {
+    const grant = this.get(id, owner);
     if (grant.authority) await this.access([grant.authority]);
-    if (this.get(id) !== grant) throw new Error('This preview resource has expired.');
+    if (this.get(id, owner) !== grant) throw new Error('This preview resource has expired.');
     const limit = Math.max(1, Math.min(requested, MAX_READ));
     let buffer: Buffer;
     let size: number;
@@ -580,18 +636,21 @@ export class Resources {
         [...sample].filter((byte) => byte < 9 || (byte > 13 && byte < 32)).length >
           sample.length / 20);
     if (grant.authority) await this.access([grant.authority]);
-    this.get(id);
+    this.get(id, owner);
     return {
       text: binary ? '' : new TextDecoder(encoding).decode(buffer),
       binary,
       truncated: size > limit,
     };
   }
-  archive(id: string) {
-    return this.work.track(this.paths(id), () => this.coordinated(id, () => this.listArchive(id)));
+  async archive(id: string, owner?: number) {
+    this.get(id, owner);
+    return this.work.track(this.paths(id), () =>
+      this.coordinated(id, () => this.listArchive(id, owner), owner),
+    );
   }
-  private async listArchive(id: string) {
-    const grant = this.get(id);
+  private async listArchive(id: string, owner?: number) {
+    const grant = this.get(id, owner);
     if (!grant.file) throw new Error('Nested archives are not supported yet.');
     await this.access([grant.file]);
     const member = gzipMember(grant.resource.entry.name);
@@ -601,39 +660,42 @@ export class Resources {
       : embedded
         ? await embeddedListing(this.archives, grant.file, embedded, !!grant.bundle)
         : await this.archives.list(grant.file);
-    this.get(id);
+    this.get(id, owner);
     return entries;
   }
   /** Tables or a page of rows from the database file this preview was granted. */
-  sqlite(id: string, request: SQLiteRequest): Promise<SQLiteReply> {
+  async sqlite(id: string, request: SQLiteRequest, owner?: number): Promise<SQLiteReply> {
+    this.get(id, owner);
     return this.work.track(this.paths(id), (scope) =>
-      this.coordinated(id, () => this.readDatabase(id, request, scope.signal)),
+      this.coordinated(id, () => this.readDatabase(id, request, scope.signal, owner), owner),
     );
   }
   private async readDatabase(
     id: string,
     request: SQLiteRequest,
     scope: AbortSignal,
+    owner?: number,
   ): Promise<SQLiteReply> {
-    const grant = this.get(id);
+    const grant = this.get(id, owner);
     if (!grant.file || grant.data)
       throw new Error('Databases inside archives and comparisons are not previewed.');
     await this.access([grant.file]);
-    const signal = AbortSignal.any([scope, this.signal(id)]);
+    const signal = AbortSignal.any([scope, this.signal(id, owner)]);
     const reply = await this.database(fileCoordination.path(grant.file), request, signal);
     signal.throwIfAborted();
     await this.access([grant.file]);
     // A preview closed while its database was read cannot receive the rows.
-    if (this.get(id) !== grant) throw new Error('This preview resource has expired.');
+    if (this.get(id, owner) !== grant) throw new Error('This preview resource has expired.');
     return reply;
   }
-  archiveEntry(id: string, name: string): Promise<Resource> {
+  async archiveEntry(id: string, name: string, owner?: number): Promise<Resource> {
+    this.get(id, owner);
     return this.work.track(this.paths(id), () =>
-      this.coordinated(id, () => this.readArchiveEntry(id, name)),
+      this.coordinated(id, () => this.readArchiveEntry(id, name, owner), owner),
     );
   }
-  private async readArchiveEntry(id: string, name: string): Promise<Resource> {
-    const grant = this.get(id);
+  private async readArchiveEntry(id: string, name: string, owner?: number): Promise<Resource> {
+    const grant = this.get(id, owner);
     if (!grant.file) throw new Error('Nested archives are not supported yet.');
     await this.access([grant.file]);
     const bookImage = grantExtension(grant) === 'epub' && epubImagePath(name);
@@ -658,105 +720,141 @@ export class Resources {
       if (!dimensions || dimensions.width * dimensions.height > 64000000)
         throw new Error('This book illustration has unsupported or oversized dimensions.');
     }
-    this.get(id); // A parent closed while its entry was loading cannot leave an orphan grant.
+    this.get(id, owner); // A parent closed while its entry was loading cannot leave an orphan grant.
     return this.dataChild(id, path.basename(name), `${grant.file} → ${name}`, data);
   }
   /** A preview of a file Chromium cannot decode, produced by a private decoder. */
-  rendition(id: string, request?: ImageRenditionRequest): Promise<Resource> {
-    const grant = this.get(id);
+  async rendition(id: string, request?: ImageRenditionRequest, owner?: number): Promise<Resource> {
+    const grant = this.get(id, owner);
     if (cameraRawFormats.includes(grantExtension(grant)))
       return this.derivedRendition(
         id,
         request?.mode ?? 'camera',
         request?.requestID ?? randomUUID(),
+        undefined,
+        owner,
       );
     if (request?.mode === 'raw')
       return Promise.reject(new Error('RAW rendering requires a camera RAW file.'));
-    if (this.images) return this.derivedRendition(id, 'image', request?.requestID ?? randomUUID());
+    if (this.images)
+      return this.derivedRendition(
+        id,
+        'image',
+        request?.requestID ?? randomUUID(),
+        undefined,
+        owner,
+      );
     return this.work.track(this.paths(id), (scope) =>
-      this.coordinated(id, () => this.renderFile(id, scope.signal)),
+      this.coordinated(id, () => this.renderFile(id, scope.signal, owner), owner),
     );
   }
-  videoRendition(id: string, requestID: string): Promise<Resource> {
-    const grant = this.get(id);
+  async videoRendition(id: string, requestID: string, owner?: number): Promise<Resource> {
+    const grant = this.get(id, owner);
     if (!hasDemuxer(grantExtension(grant)))
       return Promise.reject(
         new Error('Choose a supported audio or video file for a compatibility preview.'),
       );
-    return this.derivedRendition(id, 'video', requestID);
+    return this.derivedRendition(id, 'video', requestID, undefined, owner);
   }
-  officeLayout(id: string, request: OfficeLayoutRequest): Promise<Resource> {
-    if (!isOfficeFormat(grantExtension(this.get(id))))
+  async officeLayout(id: string, request: OfficeLayoutRequest, owner?: number): Promise<Resource> {
+    if (!isOfficeFormat(grantExtension(this.get(id, owner))))
       return Promise.reject(
         new Error('Choose a Word, Excel or PowerPoint file for Office layout preview.'),
       );
-    return this.derivedRendition(id, 'office', request.requestID, request.sheet);
+    return this.derivedRendition(id, 'office', request.requestID, request.sheet, owner);
   }
   postscriptStatus() {
     return this.postscript?.renderer.status() ?? Promise.resolve({ kind: 'missing' } as const);
   }
-  renderPostscript(id: string, requestID: string): Promise<Resource> {
-    if (!postscriptFormats.some((extension) => extension === grantExtension(this.get(id))))
+  async renderPostscript(id: string, requestID: string, owner?: number): Promise<Resource> {
+    if (!postscriptFormats.some((extension) => extension === grantExtension(this.get(id, owner))))
       return Promise.reject(new Error('Choose a PostScript, EPS or Illustrator file.'));
     const postscript = this.postscript;
     if (!postscript)
       return Promise.reject(new Error('This build of Viewer can’t render PostScript.'));
-    return this.documentRead(id, requestID, async (file, signal, format) => {
-      const variant = await postscript.renderer.variant();
-      signal.throwIfAborted();
-      const lease = await postscript.cache.read(file, 'postscript', signal, 4096, variant, format);
-      return this.derivedChild(id, lease, signal);
-    });
-  }
-  inspectPostscript(id: string, requestID: string): Promise<PostScriptInspection> {
-    let child: Resource | undefined;
-    return this.documentRead(id, requestID, (file, signal, format) =>
-      this.coordinated(id, async () => {
-        const input = await open(
-          fileCoordination.path(file),
-          constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    return this.documentRead(
+      id,
+      requestID,
+      async (file, signal, format) => {
+        const variant = await postscript.renderer.variant();
+        signal.throwIfAborted();
+        const lease = await postscript.cache.read(
+          file,
+          'postscript',
+          signal,
+          4096,
+          variant,
+          format,
         );
-        try {
-          const info = await fileStat(input);
-          if (!info.isFile()) throw new Error('Choose a regular PostScript file.');
-          const inspected = await readPostScript({ file, handle: input, info }, format, signal);
-          if (
-            fileVersion(info) !== fileVersion(await fileStat(input)) ||
-            fileVersion(info) !== fileVersion(await lstat(file))
-          )
-            throw new Error('This PostScript file changed while opening.');
-          await this.access([file]);
-          signal.throwIfAborted();
-          this.get(id);
-          if (inspected.bitmap) {
-            child = this.dataChild(id, 'embedded-preview.bmp', file, inspected.bitmap);
-          } else if (inspected.header?.tiff && this.images) {
+        return this.derivedChild(id, lease, signal);
+      },
+      owner,
+    );
+  }
+  inspectPostscript(id: string, requestID: string, owner?: number): Promise<PostScriptInspection> {
+    let child: Resource | undefined;
+    return this.documentRead(
+      id,
+      requestID,
+      (file, signal, format) =>
+        this.coordinated(
+          id,
+          async () => {
+            const input = await open(
+              fileCoordination.path(file),
+              constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+            );
             try {
-              const lease = await this.images.read(file, 'image', signal, 4096, 'eps-tiff', format);
-              try {
-                signal.throwIfAborted();
-                child = this.dataChild(id, 'embedded-preview.png', file, lease.value.data);
-                this.get(child.id).dispose = lease.release;
-              } catch (error) {
-                lease.release();
-                throw error;
-              }
-            } catch {
+              const info = await fileStat(input);
+              if (!info.isFile()) throw new Error('Choose a regular PostScript file.');
+              const inspected = await readPostScript({ file, handle: input, info }, format, signal);
+              if (
+                fileVersion(info) !== fileVersion(await fileStat(input)) ||
+                fileVersion(info) !== fileVersion(await lstat(file))
+              )
+                throw new Error('This PostScript file changed while opening.');
+              await this.access([file]);
               signal.throwIfAborted();
-              inspected.document.previewMessage =
-                'The embedded TIFF picture could not be decoded within the preview limits.';
+              this.get(id, owner);
+              if (inspected.bitmap) {
+                child = this.dataChild(id, 'embedded-preview.bmp', file, inspected.bitmap);
+              } else if (inspected.header?.tiff && this.images) {
+                try {
+                  const lease = await this.images.read(
+                    file,
+                    'image',
+                    signal,
+                    4096,
+                    'eps-tiff',
+                    format,
+                  );
+                  try {
+                    signal.throwIfAborted();
+                    child = this.dataChild(id, 'embedded-preview.png', file, lease.value.data);
+                    this.get(child.id).dispose = lease.release;
+                  } catch (error) {
+                    lease.release();
+                    throw error;
+                  }
+                } catch {
+                  signal.throwIfAborted();
+                  inspected.document.previewMessage =
+                    'The embedded TIFF picture could not be decoded within the preview limits.';
+                }
+              }
+              await this.access([file]);
+              signal.throwIfAborted();
+              this.get(id, owner);
+              if (fileVersion(info) !== fileVersion(await lstat(file)))
+                throw new Error('This PostScript file changed while opening.');
+              return { ...inspected.document, preview: child };
+            } finally {
+              await input.close();
             }
-          }
-          await this.access([file]);
-          signal.throwIfAborted();
-          this.get(id);
-          if (fileVersion(info) !== fileVersion(await lstat(file)))
-            throw new Error('This PostScript file changed while opening.');
-          return { ...inspected.document, preview: child };
-        } finally {
-          await input.close();
-        }
-      }),
+          },
+          owner,
+        ),
+      owner,
     ).catch((error: unknown) => {
       if (child) this.release(child.id);
       const code = (error as NodeJS.ErrnoException)?.code;
@@ -770,6 +868,7 @@ export class Resources {
     mode: DerivedMode,
     requestID: string,
     variant?: string,
+    owner?: number,
   ): Promise<Resource> {
     const decoder =
       mode === 'office'
@@ -780,10 +879,15 @@ export class Resources {
             ? this.postscript?.cache
             : this.derived;
     if (!decoder) return Promise.reject(new Error('This build of Viewer can’t decode this file.'));
-    return this.documentRead(id, requestID, async (file, signal, format) => {
-      const lease = await decoder.read(file, mode, signal, 4096, variant, format);
-      return this.derivedChild(id, lease, signal);
-    });
+    return this.documentRead(
+      id,
+      requestID,
+      async (file, signal, format) => {
+        const lease = await decoder.read(file, mode, signal, 4096, variant, format);
+        return this.derivedChild(id, lease, signal);
+      },
+      owner,
+    );
   }
   private derivedChild(id: string, lease: DerivedLease, signal: AbortSignal): Resource {
     try {
@@ -804,13 +908,13 @@ export class Resources {
       throw error;
     }
   }
-  private async renderFile(id: string, scope: AbortSignal): Promise<Resource> {
-    const grant = this.get(id);
+  private async renderFile(id: string, scope: AbortSignal, owner?: number): Promise<Resource> {
+    const grant = this.get(id, owner);
     if (!grant.file) throw new Error('Rendered previews need a file on disk.');
     if (!this.render) throw new Error('This build of Viewer can’t render this preview.');
     await this.access([grant.file]);
     const deadline = new AbortController();
-    const signal = AbortSignal.any([scope, this.signal(id), deadline.signal]);
+    const signal = AbortSignal.any([scope, this.signal(id, owner), deadline.signal]);
     signal.throwIfAborted();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let cancel: () => void = () => {};
@@ -842,7 +946,7 @@ export class Resources {
       signal.removeEventListener('abort', cancel);
     });
     // A preview closed while rendering cannot leave an orphan grant.
-    this.get(id);
+    this.get(id, owner);
     const name = `${safeAssetName(grant.resource.entry.name)}.${extension}`;
     return this.dataChild(id, name, grant.resource.entry.path, data);
   }
@@ -876,6 +980,7 @@ export class Resources {
       },
     };
     this.grants.set(childID, {
+      owner: grant.owner,
       resource,
       data,
       authority: grant.authority,

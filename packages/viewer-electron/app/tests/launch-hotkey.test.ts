@@ -466,12 +466,13 @@ describe('global shortcut window', () => {
   it('registers only on opt-in, preserves a working shortcut on conflict, and restores the normal frame', async () => {
     const window = new WindowPort();
     const shortcuts = { register: vi.fn(() => true), unregister: vi.fn() };
+    const changed = vi.fn();
     const hotkey = new HotkeyWindow(
       shortcuts,
       async () => window,
       () => ({ x: 0, y: 25, width: 1920, height: 1000 }),
       () => false,
-      () => {},
+      changed,
     );
     hotkey.configure(false, 'Alt+Space');
     expect(shortcuts.register).not.toHaveBeenCalled();
@@ -480,6 +481,10 @@ describe('global shortcut window', () => {
     hotkey.configure(true, 'Alt+F1');
     expect(hotkey.snapshot()).toMatchObject({ registered: true, shortcut: 'Alt+Space' });
     expect(hotkey.snapshot().problem).toContain('could not');
+    changed.mockClear();
+    hotkey.configure(true, 'Alt+Space');
+    expect(hotkey.snapshot().problem).toBeUndefined();
+    expect(changed).toHaveBeenCalledOnce();
     const normal = window.getBounds();
     window.fullscreen = true;
     await hotkey.toggle();
@@ -498,5 +503,42 @@ describe('global shortcut window', () => {
     expect(window.visible).toBe(true);
     expect(hotkey.isDropped(window)).toBe(false);
     hotkey.close();
+  });
+
+  it('exits non-zero with stderr output on invalid secondary launch flags and forwards second-instance errors', async () => {
+    const launchModule = await import('../src/desktop/windows/workspace-launch');
+    const exitSecondaryInstance = (
+      launchModule as unknown as {
+        exitSecondaryInstance(
+          launchError: string | undefined,
+          host: { writeError(text: string): void; exit(code: number): void; quit(): void },
+        ): void;
+      }
+    ).exitSecondaryInstance;
+    const secondaryLaunchError = (
+      launchModule as unknown as {
+        secondaryLaunchError(additionalData: unknown): string | undefined;
+      }
+    ).secondaryLaunchError;
+
+    const writeError = vi.fn();
+    const exit = vi.fn();
+    const quit = vi.fn();
+    exitSecondaryInstance('Unknown option: --bogus', { writeError, exit, quit });
+    expect(writeError).toHaveBeenCalledWith('Unknown option: --bogus\n');
+    expect(exit).toHaveBeenCalledExactlyOnceWith(1);
+    expect(quit).not.toHaveBeenCalled();
+
+    writeError.mockClear();
+    exit.mockClear();
+    exitSecondaryInstance(undefined, { writeError, exit, quit });
+    expect(writeError).not.toHaveBeenCalled();
+    expect(exit).not.toHaveBeenCalled();
+    expect(quit).toHaveBeenCalledOnce();
+
+    expect(secondaryLaunchError({ error: 'Unknown option: --bogus' })).toBe(
+      'Unknown option: --bogus',
+    );
+    expect(secondaryLaunchError({ request: { paths: [] } })).toBeUndefined();
   });
 });

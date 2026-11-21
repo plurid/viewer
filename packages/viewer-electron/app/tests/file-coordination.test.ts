@@ -1,11 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, open, realpath, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { FileCoordination } from '../src/desktop/files/file-coordination';
 import type { FileAccessIntent } from '../src/desktop/native/macos-files';
+import { FileCoordination, fileCoordination } from '../src/desktop/files/file-coordination';
+import { contentHash } from '../src/desktop/files/content-hash';
+import { entry } from '../src/desktop/files/filesystem';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+
+const singletonNative = vi.hoisted(() => ({
+  coordinateStart: vi.fn(
+    async (_id: string, intents: FileAccessIntent[], _purpose: string, _nested?: boolean) =>
+      intents.map((intent) => intent.path),
+  ),
+  coordinateCancel: vi.fn((_id: string) => {}),
+  coordinateEnd: vi.fn(async (_id: string) => {}),
+  coordinateSameItem: vi.fn((_original: string, _returned: string) => false),
+}));
+vi.mock('../src/desktop/native/macos-files', () => ({
+  macFiles: () => singletonNative,
+}));
 
 function deferred<T>() {
   let resolve!: (value: T) => void, reject!: (error: unknown) => void;
@@ -231,4 +246,41 @@ describe('coordinated access boundary', () => {
       coordination.acquire([{ path: path.join(root, 'late'), mode: 'read' }]),
     ).rejects.toThrow('closed');
   });
+  it.skipIf(process.platform !== 'darwin')(
+    'aborts contentHash on its next chunk when file coordination quiesces its root',
+    async () => {
+      const file = path.join(root, 'large.bin');
+      await writeFile(file, Buffer.alloc(1024 * 1024, 5));
+      const item = await entry(file);
+      const probe = await open(file, 'r');
+      const proto = Object.getPrototypeOf(probe) as {
+        read: (...args: unknown[]) => Promise<{ bytesRead: number }>;
+      };
+      await probe.close();
+      const originalRead = proto.read;
+      let reads = 0;
+      let quiescing: Promise<void> | undefined;
+      const readSpy = vi.spyOn(proto, 'read').mockImplementation(async function (
+        this: unknown,
+        ...args: unknown[]
+      ) {
+        reads++;
+        const result = await originalRead.apply(this, args);
+        if (reads === 1) {
+          quiescing = fileCoordination.quiesce(root);
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        return result;
+      });
+      try {
+        await expect(
+          contentHash(item, async () => {}, new AbortController().signal),
+        ).rejects.toThrow();
+        await quiescing;
+        expect(reads).toBe(1);
+      } finally {
+        readSpy.mockRestore();
+      }
+    },
+  );
 });

@@ -30,7 +30,7 @@ import { agentCommandID } from '../../domain/agents/safety';
 import { promptLineProblem } from '../../domain/command-line/prompt';
 import type { Providers } from '../models/providers';
 import { ChatDocumentStore } from './documents';
-import { canvasModelMessages } from './model-context';
+import { canvasModelMessages, canvasModelSteps } from './model-context';
 import { absolute, entry, validName } from '../files/filesystem';
 import { Search } from '../search/search';
 import { containsPath } from '../files/containment';
@@ -87,6 +87,7 @@ export class Chats {
   private running = new Map<string, { abort: AbortController; work: Promise<void> }>();
   private writes: Promise<unknown> = Promise.resolve();
   private edits = new Map<string, Promise<void>>();
+  private saveFailures = new Map<string, unknown>();
   private closed = false;
 
   constructor(
@@ -118,7 +119,13 @@ export class Chats {
       revision: document.revision + 1,
       updated: Date.now(),
     });
-    await this.store(value.id).save(value);
+    try {
+      await this.store(value.id).save(value);
+    } catch (error) {
+      this.saveFailures.set(value.id, error);
+      throw error;
+    }
+    this.saveFailures.delete(value.id);
     this.documents.set(value.id, value);
     const principal = this.principals.get(value.id);
     if (principal) principal.document = value;
@@ -132,7 +139,11 @@ export class Chats {
       .then(async () => {
         await this.save(transform(await this.load(id)));
       });
-    this.edits.set(id, work);
+    const tracked = work.catch(() => {});
+    this.edits.set(id, tracked);
+    void tracked.then(() => {
+      if (this.edits.get(id) === tracked) this.edits.delete(id);
+    });
     return work;
   }
 
@@ -214,7 +225,8 @@ export class Chats {
     if (proposal.target && proposal.kind !== 'configuration')
       await this.authorizeTarget(principal, proposal.target);
     else
-      for (const file of proposal.target?.selection ?? []) await this.authorize(principal, file.path);
+      for (const file of proposal.target?.selection ?? [])
+        await this.authorize(principal, file.path);
   }
 
   private commandAllowed(principal: Principal, id: string): void {
@@ -235,6 +247,9 @@ export class Chats {
       this.principal(request.id, owner);
       this.running.get(request.id)?.abort.abort();
       await this.running.get(request.id)?.work;
+      const current = await this.load(request.id);
+      if (current.status === 'running' && !this.running.has(request.id))
+        await this.settleStatus(request.id, 'stopped');
       return structuredClone(await this.load(request.id));
     }
     const work = this.writes
@@ -305,11 +320,11 @@ export class Chats {
           if (!current)
             this.principals.set(request.id, { ...structuredClone(origin), owner, document });
           if (document.status === 'running' && !this.running.has(request.id)) {
-            await this.edit(request.id, (current) => ({
-              ...current,
-              status: 'stopped',
-              error: 'The previous request was interrupted. Continue when ready.',
-            }));
+            await this.settleStatus(
+              request.id,
+              'stopped',
+              'The previous request was interrupted. Continue when ready.',
+            );
             document = this.documents.get(request.id)!;
           }
           return structuredClone(document);
@@ -554,7 +569,11 @@ export class Chats {
           pairedMessages,
         );
         if (input.canvas?.preview.status === 'error') needsRepair = true;
-        if (Buffer.byteLength(JSON.stringify(input)) > 256 * 1024)
+        const modelSteps = canvasModelSteps(steps, input.canvas);
+        const requestBytes =
+          Buffer.byteLength(JSON.stringify(input)) +
+          (provider.kind === 'meta' ? Buffer.byteLength(JSON.stringify(modelSteps)) : 0);
+        if (requestBytes > 256 * 1024)
           throw new Error(
             'The model context reached its limit. Start a new conversation with the relevant passages.',
           );
@@ -566,7 +585,7 @@ export class Chats {
           signal,
           document.level,
           'user',
-          { tool: 'viewer_step', steps },
+          { tool: 'viewer_step', steps: modelSteps },
         );
         const step = chatStepSchema.parse(raw);
         if (step.kind === 'canvas_write' && needsRepair) {
@@ -609,11 +628,38 @@ export class Chats {
       }
       throw new Error('This request reached its eight-step limit. Continue to inspect further.');
     } catch (error) {
-      await this.edit(id, (current) => ({
-        ...current,
-        status: signal.aborted ? 'stopped' : 'failed',
-        error: errorMessage(error).slice(0, 2000),
-      }));
+      await this.settleStatus(id, signal.aborted ? 'stopped' : 'failed', errorMessage(error));
+    }
+  }
+
+  /** Transitions a conversation out of `running` even near the 4 MiB limit or on a write error. */
+  private async settleStatus(
+    id: string,
+    status: 'stopped' | 'failed',
+    error?: string,
+  ): Promise<void> {
+    const trimmed = error ? error.slice(0, 2000) : undefined;
+    try {
+      await this.edit(id, (current) => ({ ...current, status, error: trimmed }));
+      return;
+    } catch (firstError) {
+      if (trimmed && firstError instanceof z.ZodError) {
+        try {
+          await this.edit(id, (current) => ({ ...current, status, error: undefined }));
+          return;
+        } catch {
+          /* Fall through to unstick in-memory status when even minimal persistence fails. */
+        }
+      }
+    }
+    const current = this.documents.get(id);
+    if (!current) return;
+    const updated: ChatDocument = { ...current, status, error: trimmed };
+    this.documents.set(id, updated);
+    const principal = this.principals.get(id);
+    if (principal) {
+      principal.document = updated;
+      this.ports.changed(principal.owner, structuredClone(updated));
     }
   }
 
@@ -947,6 +993,7 @@ export class Chats {
   async flush(): Promise<void> {
     await this.writes.catch(() => {});
     await Promise.all(this.edits.values());
+    for (const failure of this.saveFailures.values()) throw failure;
     await Promise.all([...this.stores.values()].map((store) => store.flush()));
   }
 

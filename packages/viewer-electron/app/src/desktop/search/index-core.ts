@@ -308,7 +308,6 @@ export class FileIndex {
       if (error instanceof QueryError) throw new Error(error.message);
       throw error;
     }
-    const text = parsed.words.join(' ');
     const { where, params } = this.scope();
     // SQL narrows by what every match has, the terms side by side at the top; the query then
     // decides each row, so OR, -, patterns, tags and created dates read as they do elsewhere
@@ -460,7 +459,9 @@ export class FileIndex {
               .prepare('SELECT version,document FROM source_documents WHERE path=?')
               .get(item.path) as { version: string; document: string } | undefined;
             if (!source || source.version !== JSON.stringify(sourceVersion(item))) return [];
-            return searchEvidence(item, JSON.parse(source.document) as DocumentData, text) ?? [];
+            return (
+              searchEvidence(item, JSON.parse(source.document) as DocumentData, parsed.words) ?? []
+            );
           })
         : undefined;
     return {

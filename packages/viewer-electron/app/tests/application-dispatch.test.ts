@@ -109,6 +109,16 @@ describe('native application menu dispatch', () => {
     expect(hidden).not.toContain('Hide Title Bar');
     // no label joins two actions with a slash, as no Mac menu does
     expect(view().filter((label) => label!.includes(' / '))).toEqual([]);
+    expect(view()).toEqual(
+      expect.arrayContaining([
+        'Show Window Navigation',
+        'Hide Title Bar',
+        'Show Space Toolbar',
+        'Hide Minimap',
+        'Show Viewcube',
+        'Hide Background Grid',
+      ]),
+    );
   });
 
   it('keeps the Store menu free of license and update actions', () => {
@@ -273,7 +283,9 @@ describe('native application menu dispatch', () => {
     const workspace = menuWindow();
     const host = {
       ...menuHost(),
-      isWorkspaceWindow: vi.fn((candidate: ReturnType<typeof menuWindow>) => candidate === workspace),
+      isWorkspaceWindow: vi.fn(
+        (candidate: ReturnType<typeof menuWindow>) => candidate === workspace,
+      ),
     };
     host.focusedWindow.mockReturnValue(workspace);
     await dispatchApplicationCommand('trash', host);
@@ -286,7 +298,9 @@ describe('native application menu dispatch', () => {
     const page = menuWindow();
     const host = {
       ...menuHost(),
-      isWorkspaceWindow: vi.fn((candidate: ReturnType<typeof menuWindow>) => candidate === workspace),
+      isWorkspaceWindow: vi.fn(
+        (candidate: ReturnType<typeof menuWindow>) => candidate === workspace,
+      ),
     };
     host.settingsWindow.mockReturnValue(settings);
     host.focusedWindow.mockReturnValue(page);

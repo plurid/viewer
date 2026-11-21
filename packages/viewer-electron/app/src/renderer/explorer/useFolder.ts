@@ -156,23 +156,29 @@ export function useFolder(path: string) {
           clearTimeout(timer);
           timer = setTimeout(() => load(path), 80);
         };
-        // An ancestor's watch fires for any change in it (a .DS_Store or shell history
-        // write in Home). Re-list only when this folder itself moved or was replaced.
-        const ancestorChanged = () =>
+        // Re-list on ancestor changes or window focus only when this folder moved, was replaced or
+        // changed availability (FSEvents drops unmount and external directory rename events).
+        const checkFolder = () => {
+          if (stopped || value.state.loading) return;
           void window.viewer.stat(path).then(
             (entry) => {
               if (stopped) return;
-              if (value.identity !== undefined && entry.identity !== value.identity) refresh();
+              if (
+                value.state.unavailable ||
+                (value.identity !== undefined && entry.identity !== value.identity)
+              )
+                refresh();
               value.identity = entry.identity;
             },
             () => {
-              if (!stopped) refresh();
+              if (!stopped && !value.state.unavailable) refresh();
             },
           );
+        };
         const off = window.viewer.onEvent((event) => {
           if (event.type === 'folder-changed') {
             if (event.path === path) refresh();
-            else if (path.startsWith(event.path.replace(/\/$/, '') + '/')) ancestorChanged();
+            else if (path.startsWith(event.path.replace(/\/$/, '') + '/')) checkFolder();
           }
           if (event.type === 'watch-error' && event.path === path) {
             watchFailed = true;
@@ -186,6 +192,7 @@ export function useFolder(path: string) {
             notify(value);
           }
         });
+        window.addEventListener('focus', checkFolder);
         void startWatch();
         void window.viewer.stat(path).then(
           (entry) => {
@@ -203,6 +210,7 @@ export function useFolder(path: string) {
           stopped = true;
           value.refresh = undefined;
           off();
+          window.removeEventListener('focus', checkFolder);
           clearTimeout(timer);
           stopRefresh();
           void window.viewer.unwatch(subscriber);

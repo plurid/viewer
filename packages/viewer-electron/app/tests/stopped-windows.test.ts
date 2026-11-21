@@ -2,12 +2,18 @@
  * A window whose renderer crashed, or hung past its grace, saves nothing more. Closing it, a backup
  * and Quit go ahead with what it saved last, never asking a dead renderer and never timing out.
  */
+import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import type { BrowserWindow } from 'electron';
 import { Desktop } from '../src/desktop/bridge';
+import { createSettingHandlers } from '../src/desktop/ipc/setting-handlers';
 import { WindowFlushRequests } from '../src/desktop/windows/flush-requests';
 
 vi.mock('electron', () => ({ ipcMain: { removeHandler: vi.fn() } }));
+vi.mock('../src/desktop/native/window-dialogs', () => ({
+  attachWindowDialogs: vi.fn(),
+  WindowDialogs: class {},
+}));
 
 function window(id: number) {
   const send = vi.fn();
@@ -30,7 +36,7 @@ function fixture() {
     'windows',
     new Map([
       [1, { window: workspace.window, role: 'viewer', ready: true, paths: [], launches: [] }],
-      [2, { window: settings.window, role: 'settings', paths: [], launches: [] }],
+      [2, { window: settings.window, role: 'settings', ready: true, paths: [], launches: [] }],
     ]),
   );
   for (const name of ['storage', 'settings', 'buffers', 'notes', 'fabrication'])
@@ -109,5 +115,90 @@ describe('a stopped window', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('skips flushing Settings before settingsGet marks it ready, flushes once ready, and clears ready on reload', async () => {
+    const desktop = Object.create(Desktop.prototype) as Desktop;
+    const flushes = new WindowFlushRequests();
+    const settingsFlush = vi.fn(async () => {});
+    const send = vi.fn();
+    const wc = Object.assign(new EventEmitter(), {
+      id: 9,
+      isDestroyed: () => false,
+      send,
+    });
+    const settingsWin = Object.assign(new EventEmitter(), {
+      isDestroyed: () => false,
+      webContents: wc,
+    }) as unknown as BrowserWindow;
+    const noopOwner = { stopOwner: vi.fn(), ownerClosed: vi.fn() };
+    Object.assign(desktop, {
+      home: '/fixtures',
+      windows: new Map(),
+      flushes,
+      options: {},
+      settings: {
+        load: vi.fn(async () => {}),
+        snapshot: vi.fn(() => ({ revision: 0, settings: {}, ui: {}, look: 'dark' })),
+        flush: settingsFlush,
+      },
+      speech: { ...noopOwner, allowsMicrophone: () => false, stopRecording: vi.fn() },
+      fabrication: noopOwner,
+      remote: noopOwner,
+      taskRequests: noopOwner,
+      personTaskWorkflows: noopOwner,
+      watchers: { stopOwner: vi.fn(async () => {}) },
+      resources: { stopOwner: vi.fn(() => []) },
+      gitResources: new Set(),
+    });
+    desktop.attach(settingsWin, 'settings');
+    const windows = Reflect.get(desktop, 'windows') as Map<
+      number,
+      { role: string; ready?: boolean }
+    >;
+    const handlers = createSettingHandlers({
+      settings: Reflect.get(desktop, 'settings'),
+      credentials: { load: vi.fn(async () => {}), ids: () => [] },
+      backups: { request: vi.fn() },
+      fileAccess: {
+        scoped: false,
+        remember: vi.fn(),
+        allowOnce: vi.fn(),
+        require: vi.fn(),
+      },
+      window: () => settingsWin,
+      isSettings: (owner) => windows.get(owner)?.role === 'settings',
+      markSettingsReady: (owner) => {
+        const record = windows.get(owner);
+        if (record?.role === 'settings') record.ready = true;
+      },
+    });
+
+    // Before Settings calls settingsGet, flushSettings skips the renderer round-trip.
+    await desktop.flushSettings(settingsWin);
+    expect(sentFlushes(send)).toBe(0);
+    expect(settingsFlush).toHaveBeenCalledTimes(1);
+
+    // settingsGet marks Settings ready, so flushSettings requests a flush from it.
+    await handlers.settingsGet([], 9);
+    const saving = desktop.flushSettings(settingsWin);
+    await vi.waitFor(() => expect(sentFlushes(send)).toBe(1));
+    const event = send.mock.calls.at(-1)?.[1] as { token: string };
+    flushes.acknowledge(event.token, 9, { ok: true });
+    await expect(saving).resolves.toBeUndefined();
+    expect(settingsFlush).toHaveBeenCalledTimes(2);
+
+    // Top-level navigation clears ready until the reloaded renderer calls settingsGet again.
+    wc.emit('did-start-navigation', {}, 'viewer-app://app/settings', false, true);
+    await desktop.flushSettings(settingsWin);
+    expect(sentFlushes(send)).toBe(1);
+    expect(settingsFlush).toHaveBeenCalledTimes(3);
+
+    // render-process-gone also clears ready.
+    await handlers.settingsGet([], 9);
+    wc.emit('render-process-gone');
+    await desktop.flushSettings(settingsWin);
+    expect(sentFlushes(send)).toBe(1);
+    expect(settingsFlush).toHaveBeenCalledTimes(4);
   });
 });

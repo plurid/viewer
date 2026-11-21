@@ -20,6 +20,7 @@ interface Slot {
 export class FolderHistoryChecks {
   private pool = new FolderCheckPool();
   private slots: Slot[] = [];
+  private closed = false;
   private epoch = 0;
   private blocked = new Map<string, number>();
   private checked = new Map<string, CheckedFolder>();
@@ -64,6 +65,7 @@ export class FolderHistoryChecks {
   }
 
   check = async (path: string): Promise<CheckedFolder> => {
+    if (this.closed) return { directory: false, unavailable: true };
     const epoch = this.epoch;
     const volume = folderVolume(path);
     if (volume && (this.blocked.get(volume) ?? 0) > Date.now())
@@ -75,14 +77,18 @@ export class FolderHistoryChecks {
     try {
       value = await this.metadata(path);
     } catch (error) {
-      if (epoch !== this.epoch) return { directory: false, unavailable: true };
+      if (this.closed || epoch !== this.epoch) return { directory: false, unavailable: true };
       if (!(error instanceof FolderCheckTimeout)) return { directory: false, unavailable: true };
       if (volume) this.blocked.set(volume, Date.now() + 30_000);
       return { directory: false, unavailable: true, timedOut: true };
     }
     // Completed absence must stay hidden when Store access later becomes dormant.
     const missing = value.missing && !value.directory;
-    if (epoch !== this.epoch || (scope && !missing && (!value.path || !scope.allows(value.path))))
+    if (
+      this.closed ||
+      epoch !== this.epoch ||
+      (scope && !missing && (!value.path || !scope.allows(value.path)))
+    )
       return { directory: false, unavailable: true };
     if (epoch === this.epoch) {
       this.checked.set(path, value);
@@ -95,7 +101,16 @@ export class FolderHistoryChecks {
     return this.pool.run(path, (file) => this.read(file), new AbortController().signal);
   }
 
+  private retire(slot: Slot, terminate: boolean): void {
+    const resolve = slot.resolve;
+    slot.resolve = undefined;
+    this.slots = this.slots.filter((item) => item !== slot);
+    resolve?.({ directory: false, unavailable: true });
+    if (terminate) void slot.worker.thread?.terminate();
+  }
+
   private read(path: string): Promise<CheckedFolder> {
+    if (this.closed) return Promise.resolve({ directory: false, unavailable: true });
     let slot = this.slots.find((item) => !item.resolve);
     if (!slot) {
       if (this.slots.length >= folderCheckOutstandingLimit)
@@ -109,12 +124,10 @@ export class FolderHistoryChecks {
         resolve?.(value);
       });
       created.worker.thread?.on('error', () => {
-        created.resolve?.({ directory: false, unavailable: true });
-        created.resolve = undefined;
+        this.retire(created, true);
       });
       created.worker.exit(() => {
-        created.resolve?.({ directory: false, unavailable: true });
-        this.slots = this.slots.filter((item) => item !== created);
+        this.retire(created, false);
       });
       this.slots.push(created);
       slot = created;
@@ -122,13 +135,27 @@ export class FolderHistoryChecks {
     const target = slot;
     return new Promise((resolve) => {
       target.resolve = resolve;
-      target.worker.postMessage(path);
+      try {
+        target.worker.postMessage(path);
+      } catch {
+        this.retire(target, true);
+      }
     });
   }
 
-  close(): void {
+  close(): Promise<void> {
+    this.closed = true;
     this.clear();
-    for (const slot of this.slots) void slot.worker.thread?.terminate();
+    const slots = this.slots;
+    this.slots = [];
+    for (const slot of slots) {
+      const resolve = slot.resolve;
+      slot.resolve = undefined;
+      resolve?.({ directory: false, unavailable: true });
+    }
+    return Promise.allSettled(
+      slots.map((slot) => Promise.resolve(slot.worker.thread?.terminate())),
+    ).then(() => undefined);
   }
 }
 

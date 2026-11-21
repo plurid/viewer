@@ -128,4 +128,26 @@ describe('speech catalog checks', () => {
     controller.abort();
     await expect(work).rejects.toMatchObject({ name: 'AbortError' });
   });
+  it('returns a connection-error check result when a check times out', async () => {
+    const controller = new AbortController();
+    const request = vi.fn<typeof fetch>(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), {
+            once: true,
+          });
+        }),
+    );
+    const work = new SpeechProviderChecks(request).check(
+      provider('openai'),
+      secret,
+      controller.signal,
+    );
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+    controller.abort(new DOMException('The check timed out.', 'TimeoutError'));
+    await expect(work).resolves.toMatchObject({
+      outcome: 'connection-error',
+      detail: 'The check timed out. Check your connection and endpoint, then retry.',
+    });
+  });
 });

@@ -117,7 +117,7 @@ export class MediaDocuments {
         }
         return request.kind === 'waveform'
           ? { peaks: value as number[], duration: source.info.duration }
-          : this.resources.grantBytes(source.path, 'frame.png', value as Buffer);
+          : this.resources.grantBytes(source.path, 'frame.png', value as Buffer, owner);
       } finally {
         this.previews.delete(request.requestID);
       }

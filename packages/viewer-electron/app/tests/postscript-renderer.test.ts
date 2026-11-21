@@ -522,6 +522,7 @@ if (process.argv.slice(2).includes('-h')) {
 describe('desktop authority boundary', () => {
   it('refuses the real render IPC route during an agent dispatch', async () => {
     const f = await fixture();
+    const owned = await f.service.grant(f.source, undefined, 2);
     const handler = createResourceHandlers({
       resources: f.service,
       thumbnails: { get: vi.fn() },
@@ -532,13 +533,13 @@ describe('desktop authority boundary', () => {
       warmOffice: vi.fn(),
       isAgent: (owner) => owner === 1,
     }).renderPostscript;
-    expect(() => handler([f.granted.id, 'agent-render'], 1)).toThrow('never to agents');
+    expect(() => handler([owned.id, 'agent-render'], 1)).toThrow('never to agents');
     expect(await f.calls()).toEqual([]);
-    await handler([f.granted.id, 'human-render'], 2);
+    await handler([owned.id, 'human-render'], 2);
     expect(await f.calls()).toHaveLength(2);
     expect(methodWindows.renderPostscript).toBe('viewer');
     expect(
-      schemas.renderPostscript.safeParse([f.granted.id, 'render', { actor: 'user' }]).success,
+      schemas.renderPostscript.safeParse([owned.id, 'render', { actor: 'user' }]).success,
     ).toBe(false);
   });
   it('has no custom executable setting and restores ordinary preview configuration for agents', () => {

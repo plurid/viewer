@@ -4,11 +4,24 @@ import path from 'node:path';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const forked = vi.hoisted(() => [] as { worker: string; args: string[] }[]);
+const forkDetails = vi.hoisted(
+  () =>
+    [] as {
+      options?: Record<string, unknown>;
+      stderr: {
+        pipe: ReturnType<typeof vi.fn>;
+        on: ReturnType<typeof vi.fn>;
+        resume: ReturnType<typeof vi.fn>;
+      };
+    }[],
+);
 vi.mock('electron', () => ({
   utilityProcess: {
-    fork: (worker: string, args: string[]) => {
+    fork: (worker: string, args: string[], options?: Record<string, unknown>) => {
+      const stderr = { pipe: vi.fn(), on: vi.fn(), resume: vi.fn() };
       forked.push({ worker, args });
-      return { stderr: null, on: () => {}, once: () => {}, postMessage: () => {} };
+      forkDetails.push({ options, stderr });
+      return { stderr, on: () => {}, once: () => {}, postMessage: () => {} };
     },
   },
 }));
@@ -79,5 +92,44 @@ describe('launching a worker', () => {
     setAssetRoot(true, '/Source/app');
     launchWorker(file, 'Viewer test worker');
     expect(forked.at(-1)!.args).toEqual([]);
+  });
+
+  it('ignores worker stdout and drains unread stderr when no diagnostics sink is attached', async () => {
+    const noisy = `
+const { parentPort } = require('node:worker_threads');
+parentPort.on('message', (request) => {
+  process.stdout.write('a'.repeat(131072));
+  process.stderr.write('b'.repeat(131072));
+  parentPort.postMessage({ id: request.id, value: 'done' });
+});
+`;
+    const file = path.join(root, 'noisy.cjs');
+    await writeFile(file, noisy);
+    launchWorker(file, 'Viewer test worker');
+    const detail = forkDetails.at(-1)!;
+    expect(detail.options).toMatchObject({ stdio: ['ignore', 'ignore', 'pipe'] });
+    expect(detail.stderr.resume).toHaveBeenCalledOnce();
+
+    const launched = launchWorker<{ id: string; value: string }>(
+      file,
+      'Viewer test worker',
+      'thread',
+    );
+    try {
+      const reply = new Promise<string>((resolve) => {
+        launched.message((message) => {
+          if (message.id === 'ping') resolve(message.value);
+        });
+      });
+      launched.postMessage({ id: 'ping' });
+      expect(await reply).toBe('done');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(launched.thread!.stdout?.readableLength ?? 0).toBe(0);
+      expect(launched.thread!.stderr?.readableLength ?? 0).toBe(0);
+      if (launched.thread!.stdout) expect(launched.thread!.stdout.readableFlowing).toBe(true);
+      if (launched.thread!.stderr) expect(launched.thread!.stderr.readableFlowing).toBe(true);
+    } finally {
+      await launched.thread?.terminate();
+    }
   });
 });

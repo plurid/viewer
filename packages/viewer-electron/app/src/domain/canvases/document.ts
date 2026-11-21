@@ -1,25 +1,24 @@
 import { z } from 'zod';
 import { canvasSourcesSchema } from './sources';
 import { canvasResultSchema } from './results';
-import { canvasActionsSchema, canvasActionInputSchema, canvasActionOutputSchema } from './actions';
+import {
+  canvasActionsSchema,
+  canvasActionInputSchema,
+  canvasActionOutputSchema,
+  canvasStateLimit,
+  canvasStateSchema,
+} from './actions';
 import type { CanvasActionRun } from './actions';
 
+export { canvasStateSchema };
 export const canvasLimits = {
   html: 512_000,
-  state: 128_000,
+  state: canvasStateLimit,
   history: 16,
   assets: 24,
   assetBytes: 32 * 1024 * 1024,
   totalAssetBytes: 96 * 1024 * 1024,
 } as const;
-export const canvasStateSchema = z
-  .record(z.string().min(1).max(200), z.json())
-  .refine(
-    (value) =>
-      new TextEncoder().encode(JSON.stringify(value)).length <= canvasLimits.state &&
-      !Object.keys(value).some((key) => ['__proto__', 'constructor', 'prototype'].includes(key)),
-    'Canvas state exceeds its limit or contains a reserved key.',
-  );
 export const canvasAssetSchema = z
   .object({
     id: z.uuid(),

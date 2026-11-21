@@ -192,6 +192,87 @@ describe('model provider presets and adapters', () => {
       asking.forProvider({ ...provider, endpoint: 'https://collector.example' }),
     ).rejects.toThrow('changed after its API key');
   });
+  it('refuses stale endpoint-binding approval after the key is replaced or cleared', async () => {
+    let resolveConfirm!: (value: boolean) => void;
+    let notifyOpened!: () => void;
+    const opened = new Promise<void>((resolve) => {
+      notifyOpened = resolve;
+    });
+    const confirm = vi.fn(() => {
+      notifyOpened();
+      return new Promise<boolean>((resolve) => {
+        resolveConfirm = resolve;
+      });
+    });
+    const decrypt = vi.fn(async (value: Buffer) => value.toString());
+    const asking = new Credentials(root, async (value) => Buffer.from(value), decrypt, confirm);
+    const firstEndpoint = {
+      ...newModelProvider('local', 'rebind'),
+      endpoint: 'http://127.0.0.1:11434/v1',
+      model: 'fixture-model',
+    };
+    const secondEndpoint = {
+      ...firstEndpoint,
+      endpoint: 'http://127.0.0.1:11435/v1',
+    };
+    await asking.set(firstEndpoint.id, 'first-key');
+    const pending = asking.forProvider(firstEndpoint);
+    await opened;
+    await asking.set(secondEndpoint.id, 'second-key', providerBinding(secondEndpoint));
+    resolveConfirm(true);
+    await expect(pending).rejects.toThrow('changed');
+    expect(decrypt).not.toHaveBeenCalled();
+    expect(await asking.forProvider(secondEndpoint)).toBe('second-key');
+    await expect(asking.forProvider(firstEndpoint)).rejects.toThrow('changed after its API key');
+
+    // Clearing the key while confirmation is open also refuses without binding or decrypting.
+    let resolveClearConfirm!: (value: boolean) => void;
+    let notifyClearOpened!: () => void;
+    const clearOpened = new Promise<void>((resolve) => {
+      notifyClearOpened = resolve;
+    });
+    confirm.mockImplementationOnce(() => {
+      notifyClearOpened();
+      return new Promise<boolean>((resolve) => {
+        resolveClearConfirm = resolve;
+      });
+    });
+    decrypt.mockClear();
+    await asking.set('cleared', 'old-key');
+    const clearedProvider = { ...firstEndpoint, id: 'cleared' };
+    const pendingCleared = asking.forProvider(clearedProvider);
+    await clearOpened;
+    await asking.set('cleared', '');
+    resolveClearConfirm(true);
+    await expect(pendingCleared).rejects.toThrow('changed');
+    expect(decrypt).not.toHaveBeenCalled();
+    expect(await asking.forProvider(clearedProvider)).toBe('');
+  });
+  it('prunes removed provider credentials and bindings while keeping retained keys intact', async () => {
+    const provider = { ...newModelProvider('openai', 'removed-provider'), model: 'fixture-model' };
+    const kept = { ...newModelProvider('openai', 'kept-provider'), model: 'fixture-model' };
+    await credentials.set(provider.id, 'removed-secret', providerBinding(provider));
+    await credentials.set(kept.id, 'kept-secret', providerBinding(kept));
+    await credentials.set('viewer-fal-reconstruction', 'fal-secret');
+
+    expect(await credentials.prune(new Set([kept.id, 'viewer-fal-reconstruction']))).toBe(true);
+    expect(credentials.ids()).not.toContain(provider.id);
+    expect(credentials.ids()).toContain(kept.id);
+    expect(credentials.ids()).toContain('viewer-fal-reconstruction');
+    expect(await credentials.forProvider(provider)).toBe('');
+    expect(await credentials.forProvider(kept)).toBe('kept-secret');
+    expect(await credentials.get('viewer-fal-reconstruction')).toBe('fal-secret');
+    expect(await credentials.prune(new Set([kept.id, 'viewer-fal-reconstruction']))).toBe(false);
+
+    // Re-adding the removed ID later cannot reuse the pruned binding or secret.
+    const reopened = new Credentials(
+      root,
+      async (value) => Buffer.from(value),
+      async (value) => value.toString(),
+    );
+    expect(await reopened.forProvider(provider)).toBe('');
+    expect(await reopened.get('viewer-fal-reconstruction')).toBe('fal-secret');
+  });
   it.each(newKinds)(
     'uses the documented %s transport, output mode and stored-key authentication',
     async (kind) => {

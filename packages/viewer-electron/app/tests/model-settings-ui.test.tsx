@@ -214,3 +214,36 @@ it('names the SAM model only for a local server, and leaves it out when cleared'
   const [cleared] = save.mock.calls[1]![0](saved)[0]!.value as (typeof local)[];
   expect(cleared).not.toHaveProperty('segmentation');
 });
+
+it('clears a provider API key when removing a model provider', () => {
+  const settings = defaultSettings('/fixtures');
+  settings.providers = [
+    { ...newModelProvider('gemini', 'one'), name: 'Research', model: 'a-complete-model-name' },
+    { ...newModelProvider('local', 'two'), name: 'Local work', model: 'local-model' },
+  ];
+  settings.prompts.providerID = 'two';
+  const snapshot: SettingsSnapshot = {
+    revision: 1,
+    settings,
+    ui: normalizePreferences(),
+    look: 'dark',
+    credentials: ['one'],
+  };
+  const services = {
+    providerModels: vi.fn(async () => []),
+    providerCredential: vi.fn(async () => {}),
+    providerPermissionGet: vi.fn(async () => null),
+    providerPermissionAgents: vi.fn(async () => {}),
+    onEvent: () => () => {},
+  };
+  Object.assign(window, { viewer: services });
+  const save = vi.fn<(change: SettingsChange) => void>();
+  render(<ModelSettings snapshot={snapshot} save={save} error={vi.fn()} />);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove Research' }));
+
+  expect(services.providerCredential).toHaveBeenCalledExactlyOnceWith('one', '');
+  expect(save.mock.calls[0]![0](snapshot)).toEqual([
+    { path: 'settings.providers', value: [settings.providers[1]] },
+  ]);
+});

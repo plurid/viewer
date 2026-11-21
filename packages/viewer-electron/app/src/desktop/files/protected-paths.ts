@@ -72,7 +72,9 @@ export class ProtectedPaths {
     // so a disk or a network share could be moved whole.
     const parent = path.dirname(file);
     if (info.isDirectory() && parent !== file) {
-      const outer = await lstat(parent).catch(() => null);
+      // Follow a symbolic link parent so folders inside a linked folder on another disk compare
+      // against that folder's device rather than the link's own device.
+      const outer = await stat(parent).catch(() => null);
       if (outer && !sameDevice(outer, info))
         throw new Error(`${file} is the root of a mounted volume, so it cannot be ${action}.`);
     }

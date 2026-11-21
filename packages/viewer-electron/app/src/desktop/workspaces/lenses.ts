@@ -222,7 +222,7 @@ export class Lenses {
       }
     }
   }
-  async list(folder: string): Promise<LensFolder> {
+  private async readFolder(folder: string): Promise<LensFolder> {
     await this.access([folder]);
     const where = await this.location(folder);
     const result: LensFolder = {
@@ -237,6 +237,10 @@ export class Lenses {
     result.lenses.sort(
       (a, b) => a.lens.order - b.lens.order || a.lens.name.localeCompare(b.lens.name),
     );
+    return result;
+  }
+  async list(folder: string): Promise<LensFolder> {
+    const result = await this.readFolder(folder);
     if (!result.lenses.length) return result;
     await this.heal(folder, result);
     const state = await this.load();
@@ -564,24 +568,38 @@ export class Lenses {
       );
       if (moved) await this.prepareLocal(map(folder)).catch(() => {});
     }
+    const renamesByFolder = new Map<string, { from: string; to: string }[]>();
     for (const change of changes) {
       const parent = path.dirname(change.source),
         from = path.basename(change.source),
         to = path.basename(change.destination);
       if (path.dirname(change.destination) !== parent || from === to) continue;
       if (!isLensChildName(from) || !isLensChildName(to)) continue;
+      const targetParent = map(parent);
+      const list = renamesByFolder.get(targetParent) ?? [];
+      list.push({ from, to });
+      renamesByFolder.set(targetParent, list);
+    }
+    for (const [parent, batch] of renamesByFolder) {
+      // Apply a folder's batch renames together so swaps and shifts keep their identities and places.
+      const renameMap = new Map(batch.map(({ from, to }) => [from, to]));
+      const targets = new Set(renameMap.values());
       const record = state.folders.find((item) => item.path === parent);
-      if (record)
-        record.hints = record.hints.map(([name, identity]) => [
-          name === from ? to : name,
-          identity,
-        ]);
-      const folder = await this.list(parent).catch(() => null);
+      if (record) {
+        const nextHints = new Map<string, string>();
+        for (const [name, identity] of record.hints) {
+          const target = renameMap.get(name);
+          if (target !== undefined) nextHints.set(target, identity);
+          else if (!targets.has(name)) nextHints.set(name, identity);
+        }
+        record.hints = [...nextHints];
+      }
+      const folder = await this.readFolder(parent).catch(() => null);
+      const sources = new Set(batch.map(({ from }) => from));
+      const ops: LensOp[] = batch.map(({ from, to }) => ({ kind: 'rename-member', from, to }));
       for (const document of folder?.lenses ?? [])
-        if (document.writable && document.lens.members.some((member) => member.name === from))
-          await this.update(parent, document, [{ kind: 'rename-member', from, to }]).catch(
-            () => {},
-          );
+        if (document.writable && document.lens.members.some((member) => sources.has(member.name)))
+          await this.update(parent, document, ops).catch(() => {});
     }
     this.persist();
   }

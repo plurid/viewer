@@ -195,7 +195,7 @@ it('extracts paged worksheets for .xlsm/.xltx/.xltm and serves embedded images f
         file,
         swap(fidelityWord(image), officeContentTypes.docx, officeContentTypes[extension]),
       );
-      const grant = await resources.grant(file);
+      const grant = await resources.grant(file, undefined, 1);
       const embedded = await handlers.officeImage(
         [grant.id, 'word/media/study.png', `req-${extension}`],
         1,

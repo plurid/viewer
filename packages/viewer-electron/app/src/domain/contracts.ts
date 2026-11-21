@@ -1,4 +1,5 @@
 import type { CheckedFolder } from './files/folder-checks';
+import type { PrivacySettingsPane } from './files/access';
 import type { RemoteRequest, RemoteReply, RemoteConnectionSnapshot } from './remote/contracts';
 import type { WorkspaceDefinitionSource } from './workspaces/definitions/schema';
 import type { DeclaredCommandsReply } from './terminals/declared-commands';
@@ -979,7 +980,7 @@ export interface ViewerAPI {
     revision: string,
     patch: FileInformationPatch,
   ): Promise<FileInformation>;
-  chooseFolder(defaultPath?: string): Promise<string | null>;
+  chooseFolder(defaultPath?: string, native?: boolean): Promise<string | null>;
   reveal(path: string): Promise<void>;
   openExternal(path: string): Promise<void>;
   /** Opens a web or email address in the person's browser or mail app; other schemes are refused. */
@@ -1035,7 +1036,7 @@ export interface ViewerAPI {
   save(state: SavedState, visitSave?: FolderVisitSave): Promise<FolderVisitReply | void>;
   folderHistory(): Promise<FolderVisitReply>;
   folderCheck(path: string): Promise<CheckedFolder>;
-  flushed(token: string, result?: FlushResult): Promise<void>;
+  flushed(token: string, result: FlushResult): Promise<void>;
   clipboardWrite(paths: string[], cut: boolean): Promise<void>;
   clipboardWriteText(text: string): Promise<void>;
   copyPaths(paths: string[]): Promise<void>;
@@ -1061,6 +1062,8 @@ export interface ViewerAPI {
     }[]
   >;
   fileAccessRevoke(path: string): Promise<void>;
+  /** Opens macOS Privacy & Security settings when macOS still refuses a folder after choosing it. */
+  fileAccessPrivacySettings(pane?: PrivacySettingsPane): Promise<void>;
   textEdit(command: TextEditCommand): Promise<void>;
   /** Opens a previewed text file for editing where it is, or says why it cannot be. */
   textOpen(resourceID: string): Promise<TextOpening>;

@@ -321,40 +321,51 @@ export class SettingsService {
       .then(async () => {
         await this.load();
         await this.readChanges();
-        if (this.store.diagnostics.length) throw new Error(this.store.diagnostics[0]);
-        const next = structuredClone(this.document);
-        const absent: string[][] = [];
-        for (const patch of patches) {
-          const keys = patchKeys(patch);
-          // Record macro saves a command sequence from the workspace: checked once the result is known
-          const macros = keys[0] === 'settings' && keys[1] === 'customActions';
-          if (scope === 'workspace' && !workspaceMayPatch(keys) && !macros)
-            throw new Error('Change this setting in Settings.');
-          if (
-            [...this.fields].some(
-              ([field, changed]) => changed > revision && overlaps(JSON.parse(field), keys),
+        if (this.store.diagnostics.length)
+          throw Object.assign(new Error(this.store.diagnostics[0]), { code: 'SETTINGS_INVALID' });
+        let parsed: ReturnType<typeof validated>;
+        try {
+          const next = structuredClone(this.document);
+          const absent: string[][] = [];
+          for (const patch of patches) {
+            const keys = patchKeys(patch);
+            // Record macro saves a command sequence from the workspace: checked once the result is known
+            const macros = keys[0] === 'settings' && keys[1] === 'customActions';
+            if (scope === 'workspace' && !workspaceMayPatch(keys) && !macros)
+              throw new Error('Change this setting in Settings.');
+            if (
+              [...this.fields].some(
+                ([field, changed]) => changed > revision && overlaps(JSON.parse(field), keys),
+              )
             )
+              throw Object.assign(
+                new Error(
+                  'This setting changed in another window or config.jsonc. Review its current value.',
+                ),
+                { code: 'SETTINGS_CONFLICT' },
+              );
+            if (applyPatch(next as unknown as Record<string, unknown>, keys, patch.value))
+              absent.push(keys);
+          }
+          const { revision: _revision, ...config } = next;
+          parsed = validated(config, absent);
+          validateCustomProfiles(parsed.settings.profiles, this.document.settings.profiles);
+          if (
+            scope === 'workspace' &&
+            !sequencesOnly(this.document.settings.customActions, parsed.settings.customActions)
           )
-            throw new Error(
-              'This setting changed in another window or config.jsonc. Review its current value.',
-            );
-          if (applyPatch(next as unknown as Record<string, unknown>, keys, patch.value))
-            absent.push(keys);
+            throw new Error('Change this setting in Settings.');
+          // a whole browsing section from the workspace keeps the person's Trash confirmation
+          if (
+            scope === 'workspace' &&
+            parsed.settings.browsing.confirmTrash !== this.document.settings.browsing.confirmTrash
+          )
+            throw new Error('Change this setting in Settings.');
+        } catch (error) {
+          if (error && typeof error === 'object' && !(error as { code?: unknown }).code)
+            Object.assign(error, { code: 'SETTINGS_INVALID' });
+          throw error;
         }
-        const { revision: _revision, ...config } = next;
-        const parsed = validated(config, absent);
-        validateCustomProfiles(parsed.settings.profiles, this.document.settings.profiles);
-        if (
-          scope === 'workspace' &&
-          !sequencesOnly(this.document.settings.customActions, parsed.settings.customActions)
-        )
-          throw new Error('Change this setting in Settings.');
-        // a whole browsing section from the workspace keeps the person's Trash confirmation
-        if (
-          scope === 'workspace' &&
-          parsed.settings.browsing.confirmTrash !== this.document.settings.browsing.confirmTrash
-        )
-          throw new Error('Change this setting in Settings.');
         await this.store.write(parsed);
         this.document = { ...parsed, revision: this.document.revision + 1 };
         for (const patch of patches)
@@ -477,11 +488,24 @@ export class SettingsService {
     await this.flush();
     const map = pathMapper(changes);
     const snapshot = this.snapshot();
+    const patches: SettingsPatch[] = [];
     const folders = Object.fromEntries(
       Object.entries(snapshot.settings.folders).map(([folder, value]) => [map(folder), value]),
     );
     if (JSON.stringify(folders) !== JSON.stringify(snapshot.settings.folders))
-      await this.patch([{ path: 'settings.folders', value: folders }], snapshot.revision);
+      patches.push({ path: 'settings.folders', value: folders });
+    const locations = snapshot.ui.sidebar.locations.map(map);
+    if (JSON.stringify(locations) !== JSON.stringify(snapshot.ui.sidebar.locations))
+      patches.push({ path: 'ui.sidebar.locations', value: locations });
+    const hidden = snapshot.ui.sidebar.hidden.map(map);
+    if (JSON.stringify(hidden) !== JSON.stringify(snapshot.ui.sidebar.hidden))
+      patches.push({ path: 'ui.sidebar.hidden', value: hidden });
+    const labels = Object.fromEntries(
+      Object.entries(snapshot.ui.sidebar.labels).map(([folder, label]) => [map(folder), label]),
+    );
+    if (JSON.stringify(labels) !== JSON.stringify(snapshot.ui.sidebar.labels))
+      patches.push({ path: 'ui.sidebar.labels', value: labels });
+    if (patches.length) await this.patch(patches, snapshot.revision);
   }
   async seedFolders(panes: Pane[]): Promise<void> {
     await this.load();

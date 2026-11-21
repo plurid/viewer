@@ -172,6 +172,8 @@ describe('lens names follow the items', () => {
       { kind: 'place', name: 'Acme', group: null, at: [0, 0] },
       { kind: 'place', name: 'Borel', group: null },
     ]);
+    await rename(path.join(folder, 'Acme'), path.join(folder, 'Acme Corp'));
+    await rename(path.join(folder, 'Borel'), path.join(root, 'Borel'));
     await lenses.remap([
       { source: path.join(folder, 'Acme'), destination: path.join(folder, 'Acme Corp') },
       { source: path.join(folder, 'Borel'), destination: path.join(root, 'Borel') },
@@ -217,5 +219,45 @@ describe('lens names follow the items', () => {
     const created = await lenses.create(folder, 'By year');
     await lenses.collapse(created.lens.id, ['gaaaaa']);
     expect((await lenses.list(folder)).collapsed).toEqual({ [created.lens.id]: ['gaaaaa'] });
+  });
+  it('remaps swapped and shifted batch renames simultaneously in lenses and hints', async () => {
+    for (const name of ['Page 1.png', 'Page 2.png', 'Page 3.png'])
+      await writeFile(path.join(folder, name), name);
+    await lenses.create(folder, 'Pages', [
+      { kind: 'set-group', group: { id: 'gaaaaa', name: 'One', order: 0 } },
+      { kind: 'set-group', group: { id: 'gbbbbb', name: 'Two', order: 1 } },
+      { kind: 'place', name: 'Page 1.png', group: 'gaaaaa', at: [0, 0] },
+      { kind: 'place', name: 'Page 2.png', group: 'gbbbbb', at: [8, 0] },
+      { kind: 'place', name: 'Page 3.png', group: null, at: [16, 0] },
+      { kind: 'place', name: 'Acme', group: 'gaaaaa', at: [24, 0] },
+      { kind: 'place', name: 'Borel', group: 'gbbbbb', at: [32, 0] },
+    ]);
+    // Populate remembered identities before the batch rename runs.
+    await lenses.list(folder);
+    await rename(path.join(folder, 'Page 3.png'), path.join(folder, 'Page 4.png'));
+    await rename(path.join(folder, 'Page 2.png'), path.join(folder, 'Page 3.png'));
+    await rename(path.join(folder, 'Page 1.png'), path.join(folder, 'Page 2.png'));
+    await lenses.remap([
+      { source: path.join(folder, 'Page 1.png'), destination: path.join(folder, 'Page 2.png') },
+      { source: path.join(folder, 'Page 2.png'), destination: path.join(folder, 'Page 3.png') },
+      { source: path.join(folder, 'Page 3.png'), destination: path.join(folder, 'Page 4.png') },
+    ]);
+    const shifted = only(await lenses.list(folder)).lens.members;
+    expect(shifted).toContainEqual({ name: 'Page 2.png', group: 'gaaaaa', at: [0, 0] });
+    expect(shifted).toContainEqual({ name: 'Page 3.png', group: 'gbbbbb', at: [8, 0] });
+    expect(shifted).toContainEqual({ name: 'Page 4.png', at: [16, 0] });
+
+    await rename(path.join(folder, 'Acme'), path.join(folder, 'SwapTemp'));
+    await rename(path.join(folder, 'Borel'), path.join(folder, 'Acme'));
+    await rename(path.join(folder, 'SwapTemp'), path.join(folder, 'Borel'));
+    await lenses.remap([
+      { source: path.join(folder, 'Acme'), destination: path.join(folder, 'Borel') },
+      { source: path.join(folder, 'Borel'), destination: path.join(folder, 'Acme') },
+    ]);
+    // Rename externally before list so exact names cannot mask a stale or colliding remapped hint.
+    await rename(path.join(folder, 'Borel'), path.join(folder, 'Borel External'));
+    const swapped = only(await lenses.list(folder)).lens.members;
+    expect(swapped).toContainEqual({ name: 'Borel External', group: 'gaaaaa', at: [24, 0] });
+    expect(swapped).toContainEqual({ name: 'Acme', group: 'gbbbbb', at: [32, 0] });
   });
 });

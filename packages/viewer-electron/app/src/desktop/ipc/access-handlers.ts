@@ -1,5 +1,6 @@
 import { shell, type BrowserWindow } from 'electron';
 import type { DesktopEvent } from '../../domain/contracts';
+import type { PrivacySettingsPane } from '../../domain/files/access';
 import { serverAddress } from '../../domain/files/volumes';
 import type { ApiHandlers } from './schemas';
 import type { FileAccess } from '../files/file-access';
@@ -14,6 +15,7 @@ type AccessHandlers = Pick<
   ApiHandlers,
   | 'fileAccessList'
   | 'fileAccessRevoke'
+  | 'fileAccessPrivacySettings'
   | 'volumesList'
   | 'volumeEject'
   | 'connectServer'
@@ -45,6 +47,30 @@ interface AccessPorts {
   quiesceRoot(root: string): Promise<void>;
   refreshIndex(): Promise<void>;
   emit(event: DesktopEvent): void;
+  isAgent?(owner: number): boolean;
+  openURL?(url: string): Promise<void>;
+}
+
+/** Fixed macOS System Settings destinations for Privacy & Security folder permissions. */
+export function privacySettingsURLs(pane: PrivacySettingsPane = 'files'): readonly [string, string] {
+  return [
+    pane === 'all-files'
+      ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'
+      : 'x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders',
+    'x-apple.systempreferences:com.apple.preference.security',
+  ];
+}
+
+export async function openPrivacySettings(
+  pane: PrivacySettingsPane = 'files',
+  open: (url: string) => Promise<void> = (url) => shell.openExternal(url),
+): Promise<void> {
+  const [specific, general] = privacySettingsURLs(pane);
+  try {
+    await open(specific);
+  } catch {
+    await open(general);
+  }
 }
 
 /** Revoking a folder and ejecting its volume stop its services through one list, `quiesceRoot`. */
@@ -64,6 +90,14 @@ export function createAccessHandlers(ports: AccessPorts): AccessHandlers {
         await ports.refreshIndex();
       });
       ports.emit({ type: 'file-access', path: root, resources });
+    },
+    fileAccessPrivacySettings: async ([pane], owner) => {
+      if (ports.isAgent?.(owner))
+        throw new Error('Privacy settings are available only to the person.');
+      if (process.platform !== 'darwin')
+        throw new Error('Privacy settings are available only on macOS.');
+      // Fixed System Settings link only; it never grants access or changes scopes.
+      await openPrivacySettings(pane, ports.openURL);
     },
     volumesList: () => (process.platform === 'darwin' ? macFiles().volumes() : []),
     volumeEject: async ([root]) => {
@@ -91,7 +125,7 @@ export function createAccessHandlers(ports: AccessPorts): AccessHandlers {
     trashList: ([folderID]) => ports.trash.list(folderID),
     trashConfirmation: ([revision], owner) =>
       ports.trash.confirmation(ports.requireWindow(owner), revision),
-    trashPreview: ([itemID]) => ports.trash.preview(itemID),
+    trashPreview: ([itemID], owner) => ports.trash.preview(itemID, owner),
     trashCopyPaths: ([itemIDs]) => ports.trash.copyPaths(itemIDs),
     trashRestore: async ([itemIDs, destination], owner) => {
       // the folder is chosen before the operations queue is held: a panel left open blocked it

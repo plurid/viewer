@@ -33,7 +33,8 @@ interface FilePorts {
   fileAccess: Pick<FileAccess, 'require'>;
   files: Pick<FileServices, 'inspect' | 'sizeStart' | 'sizeGet' | 'sizeCancel'>;
   information: Pick<FileInformationService, 'get' | 'update'>;
-  watchers: Pick<Watchers, 'add' | 'remove'>;
+  watchers: Pick<Watchers, 'add' | 'remove'> & { ownerGeneration?(owner: number): number };
+  ownerAlive?(owner: number): boolean;
 }
 
 /** Every path a window names is checked against the granted folders before it is used. */
@@ -76,17 +77,28 @@ export function createFileHandlers(ports: FilePorts): FileHandlers {
     folderSizeStart: ([paths]) => ports.files.sizeStart(paths),
     folderSizeGet: ([id]) => ports.files.sizeGet(id),
     folderSizeCancel: ([id]) => ports.files.sizeCancel(id),
-    watch: async ([folder, subscriber]) => {
+    watch: async ([folder, subscriber], owner) => {
+      const generation = ports.watchers.ownerGeneration?.(owner);
+      const stale = () =>
+        ports.ownerAlive?.(owner) === false ||
+        ports.watchers.ownerGeneration?.(owner) !== generation;
+      if (stale()) return;
       await ports.fileAccess.require([folder]);
-      await ports.watchers.add(folder, subscriber);
+      if (stale()) return;
+      await ports.watchers.add(folder, subscriber, owner);
+      if (stale()) {
+        await ports.watchers.remove(subscriber, owner);
+        return;
+      }
       // access revoked while the watch attached: detach it again
       try {
         await ports.fileAccess.require([folder]);
       } catch (error) {
-        await ports.watchers.remove(subscriber);
+        await ports.watchers.remove(subscriber, owner);
         throw error;
       }
+      if (stale()) await ports.watchers.remove(subscriber, owner);
     },
-    unwatch: ([subscriber]) => ports.watchers.remove(subscriber),
+    unwatch: ([subscriber], owner) => ports.watchers.remove(subscriber, owner),
   };
 }

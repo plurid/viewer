@@ -339,8 +339,17 @@ export class PersonalBackups {
       let backup: Backup;
       if (request.kind === 'prepare-export') {
         await this.host.flush();
-        const state = await this.host.state();
-        if (!state) throw new Error('Save a workspace before making a backup.');
+        const stored = await this.host.state();
+        if (!stored) throw new Error('Save a workspace before making a backup.');
+        const state =
+          request.workspaceID && request.layout
+            ? {
+                ...stored,
+                workspaces: stored.workspaces.map((space) =>
+                  space.id === request.workspaceID ? { ...space, layout: request.layout } : space,
+                ),
+              }
+            : stored;
         const documents = await this.readDocuments();
         const canvasAssets = await readCanvasBackupAssets(
           this.root,

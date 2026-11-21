@@ -281,6 +281,37 @@ describe.runIf(process.platform === 'darwin')('copying files', () => {
   );
 
   it.each(['native', 'unsupported'] as const)(
+    'copies and duplicates a locked folder and preserves its lock and Undo proof (%s)',
+    async (mode) => {
+      native.mode = mode;
+      const folder = path.join(root, 'LockedFolder');
+      await mkdir(folder);
+      await writeFile(path.join(folder, 'note.txt'), 'sealed inside', { flag: 'wx' });
+      await setLocked(folder, true);
+      const target = path.join(destination, 'LockedFolder');
+      const duplicate = path.join(root, 'LockedFolder copy');
+      try {
+        const job = await copied([folder]);
+        expect(job.status, JSON.stringify(job.errors)).toBe('completed');
+        expect(await readFile(path.join(target, 'note.txt'), 'utf8')).toBe('sealed inside');
+        expect(await isLocked(target)).toBe(true);
+        expect(await operations.matchesOutput(job.id, target)).toBe(true);
+        const dupID = operations.start({ kind: 'duplicate', sources: [folder] });
+        await operations.drained();
+        const dup = operations.all().find((item) => item.id === dupID)!;
+        expect(dup.status, JSON.stringify(dup.errors)).toBe('completed');
+        expect(await readFile(path.join(duplicate, 'note.txt'), 'utf8')).toBe('sealed inside');
+        expect(await isLocked(duplicate)).toBe(true);
+        expect(await operations.matchesOutput(dup.id, duplicate)).toBe(true);
+      } finally {
+        await setLocked(folder, false).catch(() => {});
+        await setLocked(target, false).catch(() => {});
+        await setLocked(duplicate, false).catch(() => {});
+      }
+    },
+  );
+
+  it.each(['native', 'unsupported'] as const)(
     'copies a read-only 0444 locked file with extended attributes and keeps its Undo proof (%s)',
     async (mode) => {
       native.mode = mode;

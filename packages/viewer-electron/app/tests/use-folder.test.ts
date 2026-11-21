@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@testing-library/react';
 import type { FileEntry } from '../src/domain/contracts';
 import { refreshFolder, reloadFolder, useFolder } from '../src/renderer/explorer/useFolder';
 
@@ -35,6 +35,7 @@ beforeEach(() => {
   Object.assign(window, { viewer });
 });
 afterEach(() => {
+  cleanup();
   vi.useRealTimers();
 });
 const settle = async () => {
@@ -120,5 +121,43 @@ describe('a folder listing', () => {
       "This folder won't update by itself: Viewer can't watch it for changes.",
     );
     expect(result.current.unavailable).toBe(false);
+  });
+
+  it('clears rows when window focus detects a folder became unavailable or changed identity', async () => {
+    const path = `/fixtures/folder-${++folder}`;
+    viewer.list.mockResolvedValueOnce({ entries: [entry('a'), entry('b')] });
+    viewer.stat.mockResolvedValue({ identity: '1:folder' });
+    const view = renderHook(() => useFolder(path));
+    await settle();
+    expect(view.result.current.entries.map((item) => item.name)).toEqual(['a', 'b']);
+
+    // Unchanged identity on focus does not re-list.
+    viewer.list.mockClear();
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await settle();
+    expect(viewer.list).not.toHaveBeenCalled();
+
+    // Replaced folder identity on focus reloads the new listing.
+    viewer.stat.mockResolvedValueOnce({ identity: '1:replaced' });
+    viewer.list.mockResolvedValueOnce({ entries: [entry('c')] });
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await settle();
+    expect(view.result.current.entries.map((item) => item.name)).toEqual(['c']);
+
+    // Missing or ejected folder on focus clears rows and marks it unavailable.
+    viewer.stat.mockRejectedValueOnce(failure('No such folder', 'ENOENT'));
+    viewer.list.mockRejectedValueOnce(failure('No such folder', 'ENOENT'));
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await settle();
+    expect(view.result.current.entries).toEqual([]);
+    expect(view.result.current.unavailable).toBe(true);
+    expect(view.result.current.errorCode).toBe('ENOENT');
+    view.unmount();
   });
 });

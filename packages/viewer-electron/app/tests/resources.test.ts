@@ -525,3 +525,39 @@ describe('editing a previewed file (2026-10-23)', () => {
     expect(() => resources.editableFile(child.id)).toThrow('archive');
   });
 });
+describe('window-owned preview resource leases', () => {
+  it('binds leases to their requesting window, rejects cross-window use and releases all leases on stopOwner', async () => {
+    const file = path.join(root, 'Report.pdf');
+    await writeFile(file, '%PDF-1.4\nhello');
+    const archive = path.join(root, 'bundle.zip');
+    await writeFile(archive, zipSync({ 'inside.txt': strToU8('inside') }));
+
+    const first = await resources.grant(file, undefined, 1);
+    const firstBytes = await resources.grantBytes(root, 'diff.txt', Buffer.from('a'), 1);
+    const firstArchive = await resources.grant(archive, undefined, 1);
+    const firstChild = await resources.archiveEntry(firstArchive.id, 'inside.txt', 1);
+    const second = await resources.grant(file, undefined, 2);
+
+    // Window 2 cannot read, print, edit or release Window 1's leases or archive children.
+    await expect(resources.read(first.id, undefined, 2)).rejects.toThrow('expired');
+    await expect(resources.read(firstChild.id, undefined, 2)).rejects.toThrow('expired');
+    await expect(resources.printableFile(first.id, 2)).rejects.toThrow('expired');
+    expect(() => resources.editableFile(first.id, 2)).toThrow('expired');
+    expect(resources.release(first.id, 2)).toBe(false);
+    expect((await resources.read(first.id, undefined, 1)).text).toContain('%PDF-1.4');
+
+    // Releasing Window 1 frees all of Window 1's leases (and pending grants) while keeping Window 2's alive.
+    for (let index = 0; index < 251; index++) {
+      await resources.grantBytes(root, `fill-${index}.txt`, Buffer.from('x'), 1);
+    }
+    const released = resources.stopOwner(1);
+    expect(released).toContain(first.id);
+    expect(released).toContain(firstBytes.id);
+    await expect(resources.read(first.id, undefined, 1)).rejects.toThrow('expired');
+    await expect(resources.read(firstChild.id, undefined, 1)).rejects.toThrow('expired');
+    expect((await resources.read(second.id, undefined, 2)).text).toContain('%PDF-1.4');
+    await expect(
+      resources.grantBytes(root, 'fresh.txt', Buffer.from('ok'), 2),
+    ).resolves.toMatchObject({ entry: { name: 'fresh.txt' } });
+  });
+});

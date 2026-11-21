@@ -65,26 +65,48 @@ const overlaps = (a: LensRect, b: LensRect) =>
 /** Cell occupancy for one region's content; stored places block the cells they touch. */
 class Cells {
   private rows: Uint8Array[] = [];
+  private filled: number[] = [];
+  /** The lowest row that still has at least one free cell, so sequential placements stay linear. */
+  private firstOpenRow = 0;
   constructor(readonly columns: number) {}
   private row(index: number) {
-    while (this.rows.length <= index) this.rows.push(new Uint8Array(this.columns));
+    while (this.rows.length <= index) {
+      this.rows.push(new Uint8Array(this.columns));
+      this.filled.push(0);
+    }
     return this.rows[index]!;
+  }
+  private mark(y: number, left: number, right: number) {
+    const row = this.row(y);
+    let count = this.filled[y]!;
+    for (let x = left; x <= right; x++)
+      if (!row[x]) {
+        row[x] = 1;
+        count++;
+      }
+    this.filled[y] = count;
+  }
+  private advanceOpenRow() {
+    while (
+      this.firstOpenRow < this.filled.length &&
+      this.filled[this.firstOpenRow] === this.columns
+    )
+      this.firstOpenRow++;
   }
   block(rect: LensRect) {
     const left = Math.max(0, Math.floor(rect[0] / mapCell.width)),
       right = Math.min(this.columns - 1, Math.ceil((rect[0] + rect[2]) / mapCell.width) - 1),
       top = Math.max(0, Math.floor(rect[1] / mapCell.height)),
       bottom = Math.ceil((rect[1] + rect[3]) / mapCell.height) - 1;
-    for (let y = top; y <= bottom; y++) {
-      const row = this.row(y);
-      for (let x = left; x <= right; x++) row[x] = 1;
-    }
+    for (let y = top; y <= bottom; y++) this.mark(y, left, right);
   }
   /** Claims the first free span of cells, row by row, and returns its map position. */
   take(width: number, height: number): [number, number] {
     const columns = Math.min(Math.ceil(width / mapCell.width), this.columns),
       rows = Math.ceil(height / mapCell.height);
-    for (let y = 0; ; y++)
+    this.advanceOpenRow();
+    for (let y = this.firstOpenRow; ; y++) {
+      if (y < this.filled.length && this.columns - this.filled[y]! < columns) continue;
       for (let x = 0; x + columns <= this.columns; x++) {
         let free = true;
         for (let dy = 0; dy < rows && free; dy++) {
@@ -92,10 +114,12 @@ class Cells {
           for (let dx = 0; dx < columns && free; dx++) if (row[x + dx]) free = false;
         }
         if (free) {
-          for (let dy = 0; dy < rows; dy++) this.row(y + dy).fill(1, x, x + columns);
+          for (let dy = 0; dy < rows; dy++) this.mark(y + dy, x, x + columns - 1);
+          this.advanceOpenRow();
           return [x * mapCell.width, y * mapCell.height];
         }
       }
+    }
   }
 }
 
@@ -160,16 +184,12 @@ export function layoutLens(lens: Lens, resolved: ResolvedLens): MapLayout {
       if (at) placed.push({ entry, at: [Math.max(0, at[0]), Math.max(0, at[1])] });
       else loose.push(entry);
     }
-    const contentWidth =
-      fixed ??
-      Math.ceil(
-        Math.max(
-          fit(bare ? Math.max(6, autoColumns(entries.length)) : autoColumns(entries.length)) *
-            mapCell.width,
-          ...nested.map((box) => (box.rect ? box.rect[0] : 0) + box.width),
-          ...placed.map(({ at }) => at[0] + mapTile.width),
-        ) / mapGrid,
-      ) * mapGrid;
+    let widest =
+      fit(bare ? Math.max(6, autoColumns(entries.length)) : autoColumns(entries.length)) *
+      mapCell.width;
+    for (const box of nested) widest = Math.max(widest, (box.rect ? box.rect[0] : 0) + box.width);
+    for (const { at } of placed) widest = Math.max(widest, at[0] + mapTile.width);
+    const contentWidth = fixed ?? Math.ceil(widest / mapGrid) * mapGrid;
     const cells = new Cells(Math.max(1, Math.floor(contentWidth / mapCell.width)));
     const childPlaces: Measured['children'] = [];
     const tiles: Measured['tiles'] = [];
@@ -192,11 +212,11 @@ export function layoutLens(lens: Lens, resolved: ResolvedLens): MapLayout {
       const [x, y] = cells.take(mapTile.width, mapTile.height);
       tiles.push({ entry, x, y, manual: false });
     }
-    const contentHeight = Math.max(
-      mapCell.height,
-      ...childPlaces.map((child) => child.y + child.region.height),
-      ...tiles.map((tile) => tile.y + mapTile.height),
-    );
+    // Loops avoid spreading large tile arrays into Math.max, which overflows the call stack.
+    let contentHeight: number = mapCell.height;
+    for (const child of childPlaces)
+      contentHeight = Math.max(contentHeight, child.y + child.region.height);
+    for (const tile of tiles) contentHeight = Math.max(contentHeight, tile.y + mapTile.height);
     return {
       id,
       name,
@@ -217,9 +237,10 @@ export function layoutLens(lens: Lens, resolved: ResolvedLens): MapLayout {
     ),
     measure(null, unsortedName(lens), 0, null, lens.unsorted?.rect),
   ];
-  const cells = new Cells(
-    Math.max(rootColumns, ...roots.map((box) => Math.ceil(box.width / mapCell.width) + 1)),
-  );
+  let totalColumns = rootColumns;
+  for (const box of roots)
+    totalColumns = Math.max(totalColumns, Math.ceil(box.width / mapCell.width) + 1);
+  const cells = new Cells(totalColumns);
   const places: { region: Measured; x: number; y: number }[] = [];
   for (const box of roots)
     if (box.rect) {
@@ -267,11 +288,17 @@ export function layoutLens(lens: Lens, resolved: ResolvedLens): MapLayout {
       flatten(child.region, contentX + child.x, contentY + child.y, contentX, contentY);
   };
   for (const { region, x, y } of places) flatten(region, x, y, 0, 0);
+  let width = 0;
+  let height = 0;
+  for (const region of regions) {
+    width = Math.max(width, region.x + region.width);
+    height = Math.max(height, region.y + region.height);
+  }
   return {
     regions,
     tiles,
-    width: Math.max(0, ...regions.map((region) => region.x + region.width)),
-    height: Math.max(0, ...regions.map((region) => region.y + region.height)),
+    width,
+    height,
     byPath: new Map(tiles.map((tile) => [tile.entry.path, tile])),
   };
 }

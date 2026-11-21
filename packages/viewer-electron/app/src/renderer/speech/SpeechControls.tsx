@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { defaultShortcuts, matchesShortcut } from '../../domain/preferences/shortcuts';
+import { matchesShortcut, resolvedShortcut } from '../../domain/preferences/shortcuts';
 import { activeWorkspace, useViewer } from '../state/store';
 import { SpokenRequest } from '../command-line/SpokenRequest';
 import { onWindowEvent } from '../app/window-events';
@@ -10,9 +10,7 @@ import { onWindowEvent } from '../app/window-events';
  * replaces the last.
  */
 export function SpeechControls({ onEdit }: { onEdit(text: string): void }) {
-  const shortcut = useViewer(
-    (state) => state.settings.settings.shortcuts.dictate ?? defaultShortcuts.dictate!,
-  );
+  const shortcut = useViewer((state) => resolvedShortcut(state.settings.settings, 'dictate'));
   const target = useViewer((state) => {
     const space = activeWorkspace(state);
     const pane = space.panes.find((pane) => pane.id === state.activePane);
@@ -25,7 +23,7 @@ export function SpeechControls({ onEdit }: { onEdit(text: string): void }) {
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
       if (!matchesShortcut(shortcut, event) || event.isComposing) return;
-      if (document.querySelector('dialog[open]:not(.speech-dialog)')) return;
+      if (document.querySelector('dialog[open]')) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       if (event.repeat || holding.current) return;

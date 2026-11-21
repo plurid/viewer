@@ -34,7 +34,7 @@ export function FilePermissions({ error }: { error(message: string): void }) {
   const choose = async (path?: string) => {
     setBusy(path || 'choose');
     try {
-      await window.viewer.chooseFolder(path);
+      await window.viewer.chooseFolder(path, true);
       await load();
     } catch (value) {
       error(errorMessage(value));

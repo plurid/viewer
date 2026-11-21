@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { ApplicationSettings } from '../../domain/services';
 import type { UIPreferences } from '../../domain/contracts';
 import { accelerator, resolvedShortcut, shortcutFor } from '../../domain/preferences/shortcuts';
+import { normalizePreferences } from '../../domain/preferences/ui';
 import { planeAlignments, planeSizePresets } from '../../domain/workspaces/plane-layout';
 import type { InstalledRelease } from '../../domain/updates/feed';
 import { installedRelease } from './about';
@@ -38,9 +39,9 @@ export function menuChrome(ui: UIPreferences | undefined): MenuChrome | undefine
     }
   );
 }
+const defaultChrome = menuChrome(normalizePreferences())!;
 // a Mac menu says what choosing the item does: Hide Sidebar while it shows, Show Sidebar while not
-const showOrHide = (shown: boolean | undefined, name: string) =>
-  `${shown === false ? 'Show' : 'Hide'} ${name}`;
+const showOrHide = (shown: boolean, name: string) => `${shown ? 'Hide' : 'Show'} ${name}`;
 
 /**
  * Build native menus from the same command IDs and shortcuts as the renderer. `quit` learns
@@ -252,33 +253,33 @@ export function installApplicationMenu(
             click: command('go-to'),
           },
           {
-            label: showOrHide(chrome?.windowNavigation, 'Window Navigation'),
+            label: showOrHide((chrome ?? defaultChrome).windowNavigation, 'Window Navigation'),
             accelerator: keyOf('toggle-sidebar'),
             click: command('toggle-sidebar'),
           },
           {
-            label: showOrHide(chrome?.titleBar, 'Title Bar'),
+            label: showOrHide((chrome ?? defaultChrome).titleBar, 'Title Bar'),
             accelerator: keyOf('toggle-titlebar'),
             click: command('toggle-titlebar'),
           },
           // every setting is a command: the space's own chrome, here too
           {
-            label: showOrHide(chrome?.spaceToolbar, 'Space Toolbar'),
+            label: showOrHide((chrome ?? defaultChrome).spaceToolbar, 'Space Toolbar'),
             accelerator: keyOf('setting.ui.space.toolbar'),
             click: command('setting.ui.space.toolbar'),
           },
           {
-            label: showOrHide(chrome?.minimap, 'Minimap'),
+            label: showOrHide((chrome ?? defaultChrome).minimap, 'Minimap'),
             accelerator: keyOf('setting.ui.space.minimap'),
             click: command('setting.ui.space.minimap'),
           },
           {
-            label: showOrHide(chrome?.viewcube, 'Viewcube'),
+            label: showOrHide((chrome ?? defaultChrome).viewcube, 'Viewcube'),
             accelerator: keyOf('setting.ui.space.viewcube'),
             click: command('setting.ui.space.viewcube'),
           },
           {
-            label: showOrHide(chrome?.grid, 'Background Grid'),
+            label: showOrHide((chrome ?? defaultChrome).grid, 'Background Grid'),
             accelerator: keyOf('setting.ui.space.grid'),
             click: command('setting.ui.space.grid'),
           },

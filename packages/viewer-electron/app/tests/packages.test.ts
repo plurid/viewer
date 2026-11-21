@@ -97,6 +97,40 @@ describe('an application is one item', () => {
     expect(fileGroup(app, 'kind')).toBe('Applications');
     expect(fileGroup(folder, 'kind')).toBe('Folders');
   });
+  it('sorts by displayed Kind label rather than raw extension', () => {
+    const files = [
+      entry('notes.doc', false),
+      entry('part.dxf', false),
+      entry('a.js', false),
+      entry('b.json', false),
+      entry('c.jsx', false),
+    ];
+    const folders = [entry('v1.2', true), entry('site.com', true)];
+    const byKind = sortEntries([...files, ...folders], 'kind', false);
+    expect(byKind.map((item) => item.name)).toEqual([
+      'site.com',
+      'v1.2',
+      'part.dxf',
+      'a.js',
+      'c.jsx',
+      'b.json',
+      'notes.doc',
+    ]);
+    expect(byKind.slice(2).map((item) => kindLabel(item))).toEqual([
+      'DXF drawing',
+      'JavaScript source',
+      'JavaScript source',
+      'JSON document',
+      'Word document',
+    ]);
+    expect(sortEntries(files, 'extension', false).map((item) => item.name)).toEqual([
+      'notes.doc',
+      'part.dxf',
+      'a.js',
+      'b.json',
+      'c.jsx',
+    ]);
+  });
   it('shows no disclosure, takes no drop and reads as an application in a list', () => {
     const props = {
       select: vi.fn(),

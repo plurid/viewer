@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Speech } from '../src/desktop/speech/service';
-import { speechMediaAllowed } from '../src/desktop/speech/media-policy';
+import { speechMediaAllowed, speechMediaCheckAllowed } from '../src/desktop/speech/media-policy';
+import { SpeechRuntime } from '../src/desktop/speech/runtime';
 import { PCMEncoder } from '../src/domain/speech/pcm';
 import {
   pcmEnergy,
@@ -239,6 +240,43 @@ describe('microphone and PCM boundaries', () => {
     ])
       expect(speechMediaAllowed({ ...allowed, ...change })).toBe(false);
   });
+  it('allows audio device enumeration only in granted Settings while keeping capture denied', async () => {
+    const f = await fixture();
+    expect(f.speech.allowsMicrophone(2)).toBe(false);
+    expect(f.speech.allowsMicrophoneEnumeration(2)).toBe(true);
+    expect(f.speech.allowsMicrophoneEnumeration(1)).toBe(false);
+    expect(f.speech.allowsMicrophoneEnumeration(0)).toBe(false);
+
+    f.ports.microphone = () => 'not-determined' as never;
+    expect(f.speech.allowsMicrophoneEnumeration(2)).toBe(false);
+    f.ports.microphone = () => 'denied' as never;
+    expect(f.speech.allowsMicrophoneEnumeration(2)).toBe(false);
+    f.ports.microphone = () => 'granted';
+    expect(f.speech.allowsMicrophoneEnumeration(2)).toBe(true);
+    await f.speech.close();
+    expect(f.speech.allowsMicrophoneEnumeration(2)).toBe(false);
+
+    const check = {
+      permission: 'media',
+      mainFrame: true,
+      trusted: true,
+      active: false,
+      settingsEnumeration: true,
+      media: ['audio'],
+    };
+    expect(speechMediaCheckAllowed(check)).toBe(true);
+    expect(speechMediaAllowed({ ...check })).toBe(false);
+    for (const change of [
+      { permission: 'camera' },
+      { mainFrame: false },
+      { trusted: false },
+      { settingsEnumeration: false },
+      { media: [] },
+      { media: ['video'] },
+      { media: ['audio', 'video'] },
+    ])
+      expect(speechMediaCheckAllowed({ ...check, ...change })).toBe(false);
+  });
   it('bounds IPC to one minute, complete samples and generated session IDs', () => {
     const valid = { kind: 'transcribe', id: randomUUID(), pcm };
     expect(speechRequestSchema.safeParse(valid).success).toBe(true);
@@ -262,5 +300,17 @@ describe('microphone and PCM boundaries', () => {
       -32768, 32767, 0,
     ]);
     expect(() => new PCMEncoder(0)).toThrow('sample rate');
+  });
+  it('reports the documented non-macOS platform message from SpeechRuntime.status()', async () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+    try {
+      expect(await new SpeechRuntime('/unused').status()).toEqual({
+        name: 'whisper.cpp',
+        recognitionAvailable: false,
+        reason: 'Local speech has not been bundled for this platform.',
+      });
+    } finally {
+      platform.mockRestore();
+    }
   });
 });

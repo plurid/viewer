@@ -202,14 +202,17 @@ export async function closeDefinedWorkspace(
       problem: reply.problem ?? 'the file that keeps its planes can’t be read',
     };
   if (reply.kind !== 'closed') throw new Error('The workspace could not be closed.');
+  const closingActive = id === before.saved.activeWorkspace;
   const workspaces = before.saved.workspaces.filter((item) => item.id !== id);
-  let replacement = workspaces
-    .filter((item) => !before.saved.openWindows?.includes(item.id))
-    .sort(
-      (a, b) =>
-        (before.saved.workspaceVisits?.[b.id] ?? 0) - (before.saved.workspaceVisits?.[a.id] ?? 0),
-    )[0];
-  if (id !== before.saved.activeWorkspace) replacement = activeWorkspace();
+  let replacement = closingActive
+    ? workspaces
+        .filter((item) => !before.saved.openWindows?.includes(item.id))
+        .sort(
+          (a, b) =>
+            (before.saved.workspaceVisits?.[b.id] ?? 0) -
+            (before.saved.workspaceVisits?.[a.id] ?? 0),
+        )[0]
+    : activeWorkspace();
   if (!replacement) {
     const settings = effectiveWindowSettings(before);
     const pane = folderPane(
@@ -228,10 +231,12 @@ export async function closeDefinedWorkspace(
   savePatch({
     workspaces,
     activeWorkspace: replacement.id,
-    profile: undefined,
-    workspaceVisits: mergeWorkspaceVisits(workspaces, before.saved.workspaceVisits, {
-      [replacement.id]: Date.now(),
-    }),
+    ...(closingActive ? { profile: undefined } : {}),
+    workspaceVisits: mergeWorkspaceVisits(
+      workspaces,
+      before.saved.workspaceVisits,
+      closingActive ? { [replacement.id]: Date.now() } : undefined,
+    ),
     previewStates: Object.fromEntries(
       Object.entries(before.saved.previewStates ?? {}).filter(([key]) => !key.startsWith(id + ':')),
     ),
@@ -239,16 +244,22 @@ export async function closeDefinedWorkspace(
       Object.entries(before.saved.previewHistory ?? {}).filter(([key]) => key !== id),
     ),
   });
-  update({
-    ...getState(),
-    activePane: replacement.activePane ?? replacement.panes[0]?.id ?? '',
-    quickPreview: null,
-  });
+  if (closingActive)
+    update({
+      ...getState(),
+      activePane: replacement.activePane ?? replacement.panes[0]?.id ?? '',
+      quickPreview: null,
+    });
   try {
     await flushState(false);
   } catch (error) {
     savePatch(before.saved);
-    update({ ...getState(), activePane: before.activePane });
+    if (closingActive)
+      update({
+        ...getState(),
+        activePane: before.activePane,
+        quickPreview: before.quickPreview,
+      });
     if (!before.saved.workspaces.some((space) => space.id === replacement.id))
       adapters.delete(replacement.id);
     throw error;

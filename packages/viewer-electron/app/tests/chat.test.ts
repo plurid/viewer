@@ -239,9 +239,72 @@ describe('quoted conversations and canvases', () => {
       const paired = generate.mock.calls.at(-1)![7].steps;
       expect(paired).toHaveLength(1);
       expect(paired[0].arguments.kind).toBe('canvas_read');
-      expect(paired[0].result).toBe(currentTool.text);
+      expect(JSON.parse(paired[0].result)).toMatchObject({
+        id: branch.canvasID,
+        revision: 0,
+        html: { $viewerContext: '#/canvas/html' },
+        state: { $viewerContext: '#/canvas/state' },
+      });
+      expect(
+        Buffer.byteLength(JSON.stringify(input)) + Buffer.byteLength(JSON.stringify(paired)),
+      ).toBeLessThan(256 * 1024);
     },
   );
+
+  it('bounds Meta paired steps within 256 KiB and deduplicates canvas snapshots in steps', async () => {
+    const settings = ports.settings();
+    settings.providers = [{ ...provider, kind: 'meta' }];
+    ports.settings = () => settings;
+    const canvases = new Canvases(path.join(root, 'private'), { changed() {} });
+    ports.canvases = canvases;
+
+    // 110 KiB canvas_write followed by canvas_read fits under 256 KiB once step results deduplicate HTML.
+    const conversation = await create();
+    await chat.request({ kind: 'canvas', id: conversation.id }, 1);
+    const mediumHTML = '<!doctype html><html><body>' + 'x'.repeat(110_000) + '</body></html>';
+    const captured: { input: unknown; steps: { arguments: ChatStep; result: string }[] }[] = [];
+    generate.mockImplementation((_p, _i, input, _s, _sig, _l, _a, options) => {
+      captured.push({
+        input: structuredClone(input),
+        steps: structuredClone(options?.steps ?? []),
+      });
+      if (captured.length === 1)
+        return Promise.resolve(
+          step('canvas_write', { text: mediumHTML, query: 'Big Canvas', commandID: '0' }),
+        );
+      if (captured.length === 2) return Promise.resolve(step('canvas_read'));
+      return Promise.resolve(step('reply', { text: 'Done.' }));
+    });
+    await send(conversation.id);
+    const okResult = await settled(conversation.id);
+    expect(okResult.status, okResult.error).toBe('idle');
+    expect(captured).toHaveLength(3);
+    const round3 = captured[2]!;
+    expect(
+      Buffer.byteLength(JSON.stringify(round3.input)) +
+        Buffer.byteLength(JSON.stringify(round3.steps)),
+    ).toBeLessThanOrEqual(256 * 1024);
+    expect(round3.steps[1]!.result).not.toContain(mediumHTML);
+    expect(JSON.parse(round3.steps[1]!.result).html).toEqual({
+      $viewerContext: '#/canvas/html',
+    });
+
+    // When input plus Meta paired steps exceeds 256 KiB, the turn stops before calling generate.
+    const oversized = await create();
+    await chat.request({ kind: 'canvas', id: oversized.id }, 1);
+    const largeHTML = '<!doctype html><html><body>' + 'y'.repeat(140_000) + '</body></html>';
+    generate.mockReset();
+    generate
+      .mockResolvedValueOnce(
+        step('canvas_write', { text: largeHTML, query: 'Huge Canvas', commandID: '0' }),
+      )
+      .mockResolvedValueOnce(step('reply', { text: 'Should not be called.' }));
+    await send(oversized.id);
+    const overResult = await settled(oversized.id);
+    expect(overResult.status).toBe('failed');
+    expect(overResult.error).toContain('model context reached its limit');
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
 
   it('preserves changed historical values, check failures and ordinary file evidence', () => {
     const repeated = 'Measured data. '.repeat(200);
@@ -742,6 +805,94 @@ describe('read-only Chat', () => {
     expect(
       document(await chat.request({ kind: 'open', id: conversation.id }, 1, origin)).draft,
     ).toBe('Recovered');
+  });
+
+  it('does not poison flush after a chat schema validation failure', async () => {
+    const files: string[] = [];
+    for (let index = 0; index < 101; index++) {
+      const file = path.join(root, 'context', `item-${index}.txt`);
+      await writeFile(file, String(index));
+      files.push(file);
+    }
+    const conversation = document(
+      await chat.request({ kind: 'create', paths: files.slice(0, 100) }, 1, origin),
+    );
+    await expect(
+      chat.request({ kind: 'attach', id: conversation.id, paths: [files[100]!] }, 1),
+    ).rejects.toThrow();
+    chat.retain(1, new Set());
+    await expect(chat.flush()).resolves.toBeUndefined();
+  });
+
+  it('transitions out of running and stays openable when respond catch hits 4 MiB or a disk error', async () => {
+    // 1. Conversation near the 4 MiB budget: adding a long error message exceeds 4 MiB.
+    const nearLimit = await create();
+    await chat.close();
+    const fillMessage = (index: number, text: string) => ({
+      id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      role: 'assistant' as const,
+      text,
+      at: index + 1,
+    });
+    const fullChunk = 'a'.repeat(131_000);
+    const baseMessages = Array.from({ length: 31 }, (_, index) => fillMessage(index, fullChunk));
+    const draftDoc: ChatDocument = { ...nearLimit, messages: [...baseMessages] };
+    const baseSize = Buffer.byteLength(JSON.stringify(draftDoc));
+    const targetBudget = 4 * 1024 * 1024 - 140;
+    const fillerLength =
+      targetBudget - baseSize - Buffer.byteLength(JSON.stringify(fillMessage(31, ''))) - 1;
+    const stored: ChatDocument = {
+      ...draftDoc,
+      messages: [...baseMessages, fillMessage(31, 'b'.repeat(fillerLength))],
+    };
+    const file = path.join(root, 'private', 'chat-documents', nearLimit.id + '.json');
+    await new ChatDocumentStore(file).save(stored);
+    chat = new Chats(path.join(root, 'private'), ports);
+    await chat.request({ kind: 'open', id: nearLimit.id }, 1, origin);
+
+    generate.mockRejectedValueOnce(new Error('Provider failure: ' + 'z'.repeat(600)));
+    await chat.request({ kind: 'send', id: nearLimit.id, text: 'Hi', providerID: provider.id }, 1);
+    const failed = await settled(nearLimit.id);
+    expect(failed.status).toBe('failed');
+
+    // Reopening a near-4-MiB document that was left running also recovers without hitting 4 MiB.
+    await chat.close();
+    await new ChatDocumentStore(file).save({ ...failed, status: 'running', error: undefined });
+    chat = new Chats(path.join(root, 'private'), ports);
+    const reopened = document(await chat.request({ kind: 'open', id: nearLimit.id }, 1, origin));
+    expect(reopened.status).toBe('stopped');
+
+    // 2. Transient disk write failure inside respond catch still unsticks status from running.
+    const updates: ChatDocument[] = [];
+    ports.changed = (_owner, doc) => {
+      updates.push(doc);
+    };
+    const conversation = await create();
+    const realSave = ChatDocumentStore.prototype.save;
+    let calls = 0;
+    const saveSpy = vi.spyOn(ChatDocumentStore.prototype, 'save').mockImplementation(function (
+      this: ChatDocumentStore,
+      doc: ChatDocument,
+    ) {
+      calls += 1;
+      if (calls === 2) return Promise.reject(new Error('Disk full'));
+      return realSave.call(this, doc);
+    });
+    try {
+      generate.mockRejectedValueOnce(new Error('Upstream timeout'));
+      await send(conversation.id);
+      await vi.waitFor(() => {
+        expect(updates.at(-1)?.status).toBe('failed');
+      });
+      const current = document(
+        await chat.request({ kind: 'open', id: conversation.id }, 1, origin),
+      );
+      expect(current.status).toBe('failed');
+    } finally {
+      saveSpy.mockRestore();
+    }
+    // Recover durable state so afterEach chat.close() succeeds cleanly.
+    await chat.request({ kind: 'draft', id: conversation.id, text: 'Ok', revision: 1 }, 1);
   });
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(

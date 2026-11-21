@@ -61,9 +61,12 @@ export function launchWorker<Message = Reply>(
       stderr: true,
       argv: assetRootArguments(),
     });
+    // Worker stdout is never consumed; drain it and unread stderr so streams never fill.
+    child.stdout?.resume();
     if (process.env.VIEWER_RENDER_TEST === '1') child.stderr?.pipe(process.stderr);
     const output = diagnostics?.output(name);
     if (output) child.stderr?.on('data', output);
+    if (process.env.VIEWER_RENDER_TEST !== '1' && !output) child.stderr?.resume();
     return {
       thread: child,
       postMessage: (value) => child.postMessage(value),
@@ -76,11 +79,12 @@ export function launchWorker<Message = Reply>(
   }
   const child = utilityProcess.fork(worker, assetRootArguments(), {
     serviceName: name,
-    stdio: 'pipe',
+    stdio: ['ignore', 'ignore', 'pipe'],
   });
   if (process.env.VIEWER_RENDER_TEST === '1') child.stderr?.pipe(process.stderr);
   const output = diagnostics?.output(name);
   if (output) child.stderr?.on('data', output);
+  if (process.env.VIEWER_RENDER_TEST !== '1' && !output) child.stderr?.resume();
   return {
     process: child,
     postMessage: (value) => child.postMessage(value),

@@ -308,6 +308,14 @@ export class Speech {
       this.ports.human(owner)
     );
   }
+  allowsMicrophoneEnumeration(owner: number): boolean {
+    return (
+      !this.closed &&
+      this.ports.settings(owner) &&
+      this.ports.human(owner) &&
+      this.ports.microphone() === 'granted'
+    );
+  }
   stopRecording(owner: number): void {
     this.cancelSession(owner);
   }

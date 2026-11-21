@@ -86,7 +86,13 @@ export class HotkeyWindow {
       this.changed(this.snapshot());
       return;
     }
-    if (this.status.registered && this.status.shortcut === shortcut) return;
+    if (this.status.registered && this.status.shortcut === shortcut) {
+      if (this.status.problem) {
+        this.status = { registered: true, shortcut };
+        this.changed(this.snapshot());
+      }
+      return;
+    }
     let registered = false;
     const binding = {};
     try {

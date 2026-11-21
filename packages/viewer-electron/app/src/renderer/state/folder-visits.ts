@@ -93,6 +93,19 @@ export class FolderVisitSync {
     this.pendingRestored = mergeFolderVisits(this.pendingRestored, visits, Date.now());
   }
 
+  /** Cancels an unsent clear locally (returning true), or queues restore when clear was already sent. */
+  cancelOrRestore(visits: FolderVisits, restoredPaths: readonly string[] = []): boolean {
+    if (this.pendingClear && !this.inFlight?.changes.clear) {
+      this.pendingClear = false;
+      const keep = new Set(restoredPaths);
+      this.forgotten = this.forgotten.filter((path) => !keep.has(path));
+      this.pendingRestored = {};
+      return true;
+    }
+    this.restore(visits);
+    return false;
+  }
+
   get clearing(): boolean {
     return this.pendingClear || !!this.inFlight?.changes.clear;
   }

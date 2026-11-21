@@ -50,6 +50,7 @@ export class ModelPermissions {
   private writes: Promise<void> = Promise.resolve();
   private blocked = new Map<string, number>();
   private agentBlocked = new Map<string, number>();
+  private levelRevisions = new Map<string, number>();
   private revision = 0;
   private closed = false;
   private active = new Map<AbortController, ActiveRequest>();
@@ -85,9 +86,13 @@ export class ModelPermissions {
   private block(id: string) {
     const revision = ++this.revision;
     this.blocked.set(id, revision);
+    this.levelRevisions.set(id, revision);
     for (const [controller, { provider }] of this.active)
       if (provider.id === id) controller.abort();
     return revision;
+  }
+  revisionOf(providerID: string): number {
+    return this.levelRevisions.get(providerID) ?? 0;
   }
   async get(provider: ModelProvider): Promise<ModelDataPermission | null> {
     await this.load();
@@ -132,7 +137,12 @@ export class ModelPermissions {
     return work;
   }
   /** Lets actions agents start send the approved data too, or no longer. */
-  allowAgents(provider: ModelProvider, allow: boolean): Promise<void> {
+  allowAgents(
+    provider: ModelProvider,
+    allow: boolean,
+    expectedLevel?: ModelDataLevel,
+    expectedRevision?: number,
+  ): Promise<void> {
     if (this.closed || !this.current(provider))
       return Promise.reject(new ModelPermissionRequired());
     const revision = ++this.revision;
@@ -144,14 +154,34 @@ export class ModelPermissions {
       .catch(() => {})
       .then(async () => {
         await this.load();
-        if (this.closed || !this.current(provider)) throw new ModelPermissionRequired();
+        if (this.closed || !this.current(provider)) {
+          if (allow && this.agentBlocked.get(provider.id) === revision)
+            this.agentBlocked.delete(provider.id);
+          throw new ModelPermissionRequired();
+        }
         const existing = this.permissions.find(
           (item) =>
             item.providerID === provider.id &&
             item.kind === provider.kind &&
             item.endpoint === modelEndpoint(provider),
         );
-        if (!existing) throw new ModelPermissionRequired();
+        if (!existing) {
+          if (allow && this.agentBlocked.get(provider.id) === revision)
+            this.agentBlocked.delete(provider.id);
+          throw new ModelPermissionRequired();
+        }
+        if (
+          allow &&
+          ((expectedLevel !== undefined && existing.level !== expectedLevel) ||
+            (expectedRevision !== undefined &&
+              (this.levelRevisions.get(provider.id) ?? 0) !== expectedRevision))
+        ) {
+          if (this.agentBlocked.get(provider.id) === revision)
+            this.agentBlocked.delete(provider.id);
+          throw new Error(
+            'This provider’s data permission changed while agent access was being reviewed. Review it again.',
+          );
+        }
         const document = schema.parse({
           version: 1,
           permissions: this.permissions.map((item) =>

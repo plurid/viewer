@@ -393,6 +393,15 @@ export class Desktop {
       this.speech.allowsMicrophone(owner)
     );
   }
+  speechMicrophoneEnumerationAllowed(owner: number): boolean {
+    const window = this.windows.get(owner)?.window;
+    return (
+      !!window &&
+      !window.isDestroyed() &&
+      this.allowedURL(window.webContents.getURL()) &&
+      this.speech.allowsMicrophoneEnumeration(owner)
+    );
+  }
   /** A new window starts from general preferences, without another window's profile overlay. */
   createWorkspace(): string {
     return this.workspaceSessions.create(this.initialFolder());
@@ -498,7 +507,7 @@ export class Desktop {
     this.trash = new Trash(this.home, this.fileAccess, {
       homeOnly: options.qaRuntime === true,
       origins: () => this.operations.trashOrigins(),
-      preview: (file) => this.resources.grant(file),
+      preview: (file, owner) => this.resources.grant(file, undefined, owner),
       release: (id) => this.resources.release(id),
       changed: (source, destination) => {
         emit({ type: 'folder-changed', path: path.dirname(source) });
@@ -604,7 +613,7 @@ export class Desktop {
         // On the defaults, which stand in for an unreadable config.jsonc and its last valid copy,
         // or before config.jsonc is read, the providers are not the person's: reconciling deleted
         // every model-data approval. Approvals wait for a readable file.
-        if (this.settings.isLoaded() && snapshot.config?.fallback !== 'defaults')
+        if (this.settings.isLoaded() && snapshot.config?.fallback !== 'defaults') {
           void this.modelPermissions.reconcile().catch(() =>
             emit({
               type: 'service-error',
@@ -613,6 +622,24 @@ export class Desktop {
                 'Model data access was stopped, but the permission change could not be saved. Try again in Settings → Models.',
             }),
           );
+          const retain = new Set([
+            reconstructionCredentialID,
+            ...snapshot.settings.providers.map((provider) => provider.id),
+          ]);
+          void this.credentials
+            .prune(retain)
+            .then((changed) => {
+              if (changed) this.settings.announce();
+            })
+            .catch(() =>
+              emit({
+                type: 'service-error',
+                service: 'models',
+                message:
+                  'A removed provider’s API key could not be cleared. Clear it again in Settings → Models.',
+              }),
+            );
+        }
         emit({ type: 'settings', snapshot: { ...snapshot, credentials: this.credentials.ids() } });
         // config.jsonc narrows the approved access at once; it cannot widen it
         void this.agents.access
@@ -1387,8 +1414,7 @@ export class Desktop {
           kind === 'export'
             ? await saveOnce(this.fileAccess, window, {
                 title: 'Save personal backup',
-                defaultPath:
-                  'Viewer-' + new Date().toISOString().slice(0, 10) + '.viewer-backup.json',
+                defaultPath: 'Viewer-' + localDateStamp() + '.viewer-backup.json',
               })
             : await openOnce(this.fileAccess, window, {
                 title: 'Open personal backup',
@@ -1770,17 +1796,24 @@ export class Desktop {
     window.on('blur', () => {
       if (this.speech.allowsMicrophone(sender)) this.speech.stopRecording(sender);
     });
-    window.webContents.on('render-process-gone', () => this.speech.stopOwner(sender));
-    window.webContents.on('did-start-navigation', () => this.speech.stopOwner(sender));
-    window.webContents.on('render-process-gone', () => this.fabrication.stopOwner(sender));
-    window.webContents.on('did-start-navigation', () => this.fabrication.stopOwner(sender));
-    const stopTaskOwner = () => {
+    const releaseOwnerResources = () => {
+      for (const id of this.resources?.stopOwner?.(sender) ?? []) this.gitResources?.delete(id);
+    };
+    const stopForReload = () => {
+      const record = this.windows.get(sender);
+      if (record?.role === 'settings') record.ready = false;
+      this.speech.stopOwner(sender);
+      this.fabrication.stopOwner(sender);
       this.remote?.ownerClosed(sender);
       this.taskRequests.stopOwner(sender);
       this.personTaskWorkflows.stopOwner(sender);
+      void this.watchers?.stopOwner?.(sender).catch((error) => this.diagnoseFailure(error));
+      releaseOwnerResources();
     };
-    window.webContents.on('render-process-gone', stopTaskOwner);
-    window.webContents.on('did-start-navigation', stopTaskOwner);
+    window.webContents.on('render-process-gone', stopForReload);
+    window.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
+      if (mainFrame && !inPlace) stopForReload();
+    });
     window.on('closed', () => {
       this.remote?.ownerClosed(sender);
       this.speech.stopOwner(sender);
@@ -1800,19 +1833,18 @@ export class Desktop {
       this.gitReviews.stopOwner(sender);
       this.terminals.stopOwner(sender);
       this.executions.stopOwner(sender);
+      void this.watchers?.stopOwner?.(sender).catch((error) => this.diagnoseFailure(error));
+      releaseOwnerResources();
       void this.webPreviews.stopOwner(sender).catch((error) => this.diagnoseFailure(error));
       for (const request of this.agentCommands.values())
         if (request.owner === sender)
           request.finish('The workspace closed before completing the action.');
       this.windows.delete(sender);
       if (!this.options.quitting?.()) {
-        this.workspaceSessions.close(sender);
         this.definitions.clearRootSearch(sender);
-        const state = this.workspaceSessions.snapshot();
-        if (state)
-          void this.storage
-            .save(this.withPreferences(state))
-            .catch((error) => this.diagnoseFailure(error));
+        void this.workspaceSessions
+          .closeAndPersist(sender, (state) => this.storage.save(this.withPreferences(state)))
+          .catch((error) => this.diagnoseFailure(error));
       }
       if (this.window === window) {
         this.window = undefined;
@@ -1895,7 +1927,8 @@ export class Desktop {
   }
   async flushSettings(window: BrowserWindow): Promise<void> {
     if (window.isDestroyed()) return;
-    if (!this.windows.get(window.webContents.id)?.stopped)
+    const record = this.windows.get(window.webContents.id);
+    if (record?.ready && !record.stopped)
       await this.flushes.request(window.webContents.id, 'flush-settings', (token) => {
         sendEvent(window.webContents, { type: 'flush-settings', token });
       });
@@ -1960,81 +1993,93 @@ export class Desktop {
     return (this.disposal ??= this.disposeServices());
   }
   private async disposeServices(): Promise<void> {
-    await this.remote?.close();
-    await this.chats.close();
-    await this.reconstructions.close();
-    await this.canvases.flush();
-    await this.agentSessions.flush();
-    await this.gitActions.close();
-    await this.gitReviews.close();
-    this.git.close();
-    this.worktrees.close();
-    this.agentTaskWorkflows.close();
-    this.taskRequests.close();
-    this.personTaskWorkflows.close();
-    this.ready = false;
-    this.trash.close();
-    if (process.platform === 'darwin') macFiles().dismissFilePanels();
-    this.settings.close();
-    await this.definitions.close();
-    await this.foundWorkspaces?.close();
-    await this.definedWorkspaces.close();
-    await this.resources.clear();
-    this.comparisons.close();
-    this.duplicates.close();
-    await this.watchRules.close();
-    // Agent cancellation lists workflows and proposals. Keep their owners available
-    // until the transport and any queued configuration change have stopped.
-    const agentShutdown = await Promise.allSettled([
-      this.agentsConfiguration.catch(() => {}).then(() => this.agents.close()),
-    ]);
-    await this.workflows.close();
-    // Cancel the read-only worker before waiting for planners that may be
-    // awaiting extraction. File mutations still drain through their journal.
-    const results = await Promise.allSettled([
-      this.terminals.close(),
-      this.externalTerminals.close(),
-      this.files.close(),
-      Promise.resolve(this.folderChecks?.close()),
-      Promise.resolve(this.definitionRootChecks?.close()),
-      Promise.resolve(this.folderFacts?.close()),
-      this.declaredCommands.close(),
-      this.actions.close(),
-      this.watchers.close(),
-      this.operations.close(),
-      this.buffers.close(),
-      this.notes.close(),
-      this.modelPermissions.close(),
-      this.speechModels.close(),
-      this.speech.close(),
-      Promise.resolve(this.fabrication.close()),
-      this.search.close(),
-      this.executions.close(),
-      this.resources.close(),
-      this.appIcons.close(),
-      this.webPreviews.close(),
-      Promise.resolve(this.browsers.closeAll()),
-      (this.mediaDocuments.invalidate(), this.transforms.quiesce()),
-      this.optimizationReviews.invalidate(),
-      this.thumbnails.close(),
-      this.information.close(),
-      this.projects.flush(),
-      this.tours.flush(),
-      this.lenses.close(),
-      this.checkpoints.close(),
-      this.operationPlans.close(),
-      this.relationships.close(),
-      fileCoordination.quiesce(),
-    ]);
-    await this.receipts.flush();
-    await this.fileAccess.close();
-    await this.journal.close();
-    for (const request of this.agentCommands.values())
-      request.finish('The application closed before completing the action.');
-    ipcMain.removeHandler('viewer:request');
-    const errors = [...agentShutdown, ...results].flatMap((result) =>
-      result.status === 'rejected' ? [result.reason] : [],
-    );
+    const errors: unknown[] = [];
+    const settle = async (work: () => unknown): Promise<void> => {
+      try {
+        await work();
+      } catch (error) {
+        errors.push(error);
+      }
+    };
+    try {
+      await settle(() => this.remote?.close());
+      await settle(() => this.chats.close());
+      await settle(() => this.reconstructions.close());
+      await settle(() => this.canvases.flush());
+      await settle(() => this.agentSessions.flush());
+      await settle(() => this.gitActions.close());
+      await settle(() => this.gitReviews.close());
+      await settle(() => this.git.close());
+      await settle(() => this.worktrees.close());
+      await settle(() => this.agentTaskWorkflows.close());
+      await settle(() => this.taskRequests.close());
+      await settle(() => this.personTaskWorkflows.close());
+      this.ready = false;
+      await settle(() => this.trash.close());
+      if (process.platform === 'darwin') await settle(() => macFiles().dismissFilePanels());
+      await settle(() => this.settings.close());
+      await settle(() => this.definitions.close());
+      await settle(() => this.foundWorkspaces?.close());
+      await settle(() => this.definedWorkspaces.close());
+      await settle(() => this.resources.clear());
+      await settle(() => this.comparisons.close());
+      await settle(() => this.duplicates.close());
+      await settle(() => this.watchRules.close());
+      // Agent cancellation lists workflows and proposals. Keep their owners available
+      // until the transport and any queued configuration change have stopped.
+      await settle(() => this.agentsConfiguration.catch(() => {}).then(() => this.agents.close()));
+      await settle(() => this.workflows.close());
+      await settle(() => this.folderHistoryPrepared?.clear());
+      // Cancel the read-only worker before waiting for planners that may be
+      // awaiting extraction. File mutations still drain through their journal.
+      const run = (work: () => unknown) => Promise.resolve().then(work);
+      const results = await Promise.allSettled([
+        run(() => this.terminals.close()),
+        run(() => this.externalTerminals.close()),
+        run(() => this.files.close()),
+        run(() => this.folderChecks?.close()),
+        run(() => this.definitionRootChecks?.close()),
+        run(() => this.folderFacts?.close()),
+        run(() => this.declaredCommands.close()),
+        run(() => this.actions.close()),
+        run(() => this.watchers.close()),
+        run(() => this.operations.close()),
+        run(() => this.buffers.close()),
+        run(() => this.notes.close()),
+        run(() => this.modelPermissions.close()),
+        run(() => this.speechModels.close()),
+        run(() => this.speech.close()),
+        run(() => this.fabrication.close()),
+        run(() => this.search.close()),
+        run(() => this.executions.close()),
+        run(() => this.resources.close()),
+        run(() => this.appIcons.close()),
+        run(() => this.webPreviews.close()),
+        run(() => this.browsers.closeAll()),
+        run(() => {
+          this.mediaDocuments.invalidate();
+          return this.transforms.quiesce();
+        }),
+        run(() => this.optimizationReviews.invalidate()),
+        run(() => this.thumbnails.close()),
+        run(() => this.information.close()),
+        run(() => this.projects.flush()),
+        run(() => this.tours.flush()),
+        run(() => this.lenses.close()),
+        run(() => this.checkpoints.close()),
+        run(() => this.operationPlans.close()),
+        run(() => this.relationships.close()),
+        run(() => fileCoordination.quiesce()),
+      ]);
+      for (const result of results) if (result.status === 'rejected') errors.push(result.reason);
+      await settle(() => this.receipts.flush());
+      await settle(() => this.fileAccess.close());
+      await settle(() => this.journal.close());
+    } finally {
+      for (const request of this.agentCommands.values())
+        request.finish('The application closed before completing the action.');
+      ipcMain.removeHandler('viewer:request');
+    }
     if (errors.length) throw new AggregateError(errors, 'Desktop services failed to stop.');
   }
   private gitWindow(owner: number): GitTargetWindow | undefined {
@@ -2441,6 +2486,10 @@ export class Desktop {
         fileAccess: this.fileAccess,
         window: windowOf,
         isSettings,
+        markSettingsReady: (owner) => {
+          const record = this.windows.get(owner);
+          if (record?.role === 'settings') record.ready = true;
+        },
       }),
       ...createCommandLineHandlers({
         settings: this.settings,
@@ -2466,6 +2515,10 @@ export class Desktop {
         files: this.files,
         information: this.information,
         watchers: this.watchers,
+        ownerAlive: (owner) => {
+          const record = this.windows.get(owner);
+          return !!record && !record.window.isDestroyed();
+        },
       }),
       ...createNetworkSharingHandlers({
         available: networkSharingAvailable,
@@ -2502,6 +2555,7 @@ export class Desktop {
         quiesceRoot: (root) => this.quiesceRoot(root),
         refreshIndex: () => this.refreshIndex(),
         emit,
+        isAgent,
       }),
       ...createSearchHandlers({
         files: this.files,
@@ -2569,7 +2623,7 @@ export class Desktop {
           if (!window || window.isDestroyed()) throw new Error('The export window closed.');
           return saveOnce(this.fileAccess, window, {
             title: 'Export Journal',
-            defaultPath: `viewer-journal-${new Date().toISOString().slice(0, 10)}.json`,
+            defaultPath: `viewer-journal-${localDateStamp()}.json`,
             filters: [{ name: 'Journal JSON', extensions: ['json'] }],
           });
         },
@@ -2652,7 +2706,7 @@ export class Desktop {
       speech: ([request], owner) => this.speech.request(request, owner),
       fabrication: ([request], owner) => this.fabrication.request(request, owner),
       createTask: ([input], owner) => this.taskRequests.create(input, owner),
-      chooseFolder: (args, senderID) => this.chooseFolder(senderID, args[0]),
+      chooseFolder: (args, senderID) => this.chooseFolder(senderID, args[0], args[1]),
       // window records, the selected window and pending agent commands stay with the bridge
       reconstructionKey: async ([key]) => {
         await this.credentials.set(reconstructionCredentialID, key);
@@ -2816,6 +2870,11 @@ export class Desktop {
         record.workspaceCatalog = args[2];
         record.planeOwners = args[3];
         record.ready = true;
+        const paths = [
+          ...record.paths.splice(0),
+          ...(this.window?.webContents.id === sender ? (this.openPaths?.splice(0) ?? []) : []),
+        ];
+        if (paths.length) sendEvent(record.window.webContents, { type: 'open', paths });
         for (const request of record.launches.splice(0))
           sendEvent(record.window.webContents, { type: 'launch', request });
         if (this.window?.webContents.id === sender) this.selectWindow(sender);
@@ -2871,4 +2930,12 @@ export class Desktop {
       ? this.requestDispatch.run({ owner: senderID, dispatchID: tag }, run)
       : run();
   }
+}
+
+/** Local calendar YYYY-MM-DD for default export filenames in the person's time zone. */
+export function localDateStamp(date = new Date()): string {
+  const year = String(date.getFullYear()).padStart(4, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }

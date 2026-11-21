@@ -1,7 +1,11 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import type { OperationJob, OperationProgress } from '../src/domain/contracts';
+import type { FolderVisitSave } from '../src/domain/files/folder-visit-changes';
 import type { CommandContext } from '../src/renderer/commands/registry';
-import { setWorkspaceOverride } from '../src/renderer/state/workspaces';
+import { clearRecentFolders, remember, undoClearRecentFolders } from '../src/renderer/state/places';
+import { closeDefinedWorkspace } from '../src/renderer/state/definitions';
+import { savePatch, update } from '../src/renderer/state/core';
+import { receiveWorkspaces, setWorkspaceOverride } from '../src/renderer/state/workspaces';
 import { stateSchema } from '../src/desktop/persistence/storage';
 import { normalizePreferences, reorder, uiPreferencesVersion } from '../src/domain/preferences/ui';
 import { CommandRegistry } from '../src/renderer/commands/registry';
@@ -22,6 +26,8 @@ import {
   receiveJob,
   receiveSettings,
   receiveProgress,
+  rememberLine,
+  removeFavorite,
   setJobs,
   setActivePane,
   updatePane,
@@ -555,6 +561,145 @@ describe('layout-only changes', () => {
     });
     expect(getState().saved.favorites).toEqual([{ path: '/fixtures/one', name: 'One' }]);
   });
+  it('keeps the active workspace profile, pane and Quick Preview intact when closing or deleting an inactive workspace', async () => {
+    const workspaceDefinitions = vi.fn(async () => ({ kind: 'closed' as const }));
+    const terminalCount = vi.fn(async () => 0);
+    Object.assign(window.viewer, { workspaceDefinitions, terminalCount });
+    const activeSpace = activeWorkspace();
+    const secondPane = addPane('/fixtures/second', 'folder', true);
+    setActivePane(secondPane.id);
+    const inactiveOrdinary = {
+      id: 'inactive-ordinary',
+      name: 'Ordinary',
+      panes: [folderPane('/fixtures/ordinary')],
+      roots: [],
+      arrangement: {},
+    };
+    const inactiveDefined = {
+      id: 'inactive-defined',
+      name: 'Defined',
+      definition: { key: 'defined-project', basis: '0'.repeat(64) },
+      panes: [folderPane('/fixtures/defined')],
+      roots: [],
+      arrangement: {},
+    };
+    savePatch({
+      workspaces: [...getState().saved.workspaces, inactiveOrdinary, inactiveDefined],
+      profile: { id: 'focus', previous: {} },
+    });
+    update({
+      ...getState(),
+      quickPreview: {
+        paths: ['/fixtures/file.txt'],
+        index: 0,
+        paneID: secondPane.id,
+        workspaceID: activeSpace.id,
+      },
+    });
+    await flushState(false);
+
+    expect(await closeDefinedWorkspace(inactiveDefined.id)).toBe(true);
+    expect(getState().saved.activeWorkspace).toBe(activeSpace.id);
+    expect(getState().saved.profile).toEqual({ id: 'focus', previous: {} });
+    expect(getState().activePane).toBe(secondPane.id);
+    expect(getState().quickPreview?.paths).toEqual(['/fixtures/file.txt']);
+
+    await deleteWorkspace(inactiveOrdinary.id);
+    expect(getState().saved.activeWorkspace).toBe(activeSpace.id);
+    expect(getState().saved.profile).toEqual({ id: 'focus', previous: {} });
+    expect(getState().activePane).toBe(secondPane.id);
+    expect(getState().quickPreview?.paths).toEqual(['/fixtures/file.txt']);
+  });
+  it('preserves unsaved local favorites and command-line history across peer workspace broadcasts', () => {
+    const seeded = {
+      ...getState().saved,
+      favorites: [
+        { name: 'Keep', path: '/fixtures/keep' },
+        { name: 'Drop', path: '/fixtures/drop' },
+      ],
+      lineHistory: ['initial'],
+    };
+    initialize({ ...getState().bootstrap, state: seeded });
+    addFavorite('/fixtures/local', 'Local');
+    removeFavorite('/fixtures/drop');
+    rememberLine('open /work');
+
+    const peer = {
+      ...seeded,
+      favorites: [
+        { name: 'Keep', path: '/fixtures/keep' },
+        { name: 'Drop', path: '/fixtures/drop' },
+        { name: 'Peer', path: '/fixtures/peer' },
+      ],
+      lineHistory: ['peer-cmd', 'initial'],
+    };
+    receiveWorkspaces(peer);
+    expect(getState().saved.favorites.map((item) => item.path)).toEqual([
+      '/fixtures/keep',
+      '/fixtures/local',
+      '/fixtures/peer',
+    ]);
+    expect(getState().saved.lineHistory).toEqual(['open /work', 'peer-cmd', 'initial']);
+  });
+  it('does not rewind shared list baselines when a peer broadcast arrives during an in-flight save, and keeps cleared lineHistory empty', async () => {
+    let resolveSave!: () => void;
+    let firstSave = true;
+    const saveMock = vi.fn(() => {
+      if (!firstSave) return Promise.resolve();
+      firstSave = false;
+      return new Promise<void>((resolve) => {
+        resolveSave = resolve;
+      });
+    });
+    vi.stubGlobal('window', {
+      dispatchEvent: vi.fn(),
+      viewer: { save: saveMock, operate },
+    });
+    const seeded = {
+      ...getState().saved,
+      favorites: [
+        { name: 'Keep', path: '/fixtures/keep' },
+        { name: 'PeerDrop', path: '/fixtures/peer-drop' },
+      ],
+      lineHistory: ['old-cmd'],
+    };
+    initialize({ ...getState().bootstrap, state: seeded });
+    addFavorite('/fixtures/local', 'Local');
+
+    const flushing = flushState(false);
+    await vi.waitFor(() => expect(saveMock).toHaveBeenCalledOnce());
+
+    // Peer removes PeerDrop and adds PeerNew before our in-flight save() resolves.
+    const mergedFromDesktop = {
+      ...seeded,
+      favorites: [
+        { name: 'Keep', path: '/fixtures/keep' },
+        { name: 'Local', path: '/fixtures/local' },
+        { name: 'PeerNew', path: '/fixtures/peer-new' },
+      ],
+      lineHistory: ['old-cmd'],
+    };
+    receiveWorkspaces(mergedFromDesktop);
+    resolveSave();
+    await flushing;
+
+    // A later peer broadcast must not resurrect PeerDrop or drop PeerNew.
+    receiveWorkspaces({
+      ...mergedFromDesktop,
+      favorites: [...mergedFromDesktop.favorites, { name: 'PeerTwo', path: '/fixtures/peer-two' }],
+    });
+    expect(getState().saved.favorites.map((item) => item.path)).toEqual([
+      '/fixtures/keep',
+      '/fixtures/local',
+      '/fixtures/peer-new',
+      '/fixtures/peer-two',
+    ]);
+
+    // Clearing local lineHistory to [] must not fall back to peer history.
+    savePatch({ lineHistory: [] });
+    receiveWorkspaces({ ...mergedFromDesktop, lineHistory: ['old-cmd'] });
+    expect(getState().saved.lineHistory).toEqual([]);
+  });
 });
 describe('conditional operations', () => {
   it('merges sequenced progress, requests resync for gaps, and rejects stale snapshots', () => {
@@ -626,5 +771,54 @@ describe('conditional operations', () => {
     setOperationsOpen(true, true);
     expect(getState().jobs).toHaveLength(1);
     expect(getState().operationsOpen).toBe(true);
+  });
+  it('cancels an unsent clear on immediate Undo and sequences restore-offers after a sent clear', async () => {
+    const events: string[] = [];
+    const savedVisits: FolderVisitSave[] = [];
+    vi.stubGlobal('window', {
+      dispatchEvent: vi.fn(),
+      viewer: {
+        save: vi.fn(async (_state, visitSave?: FolderVisitSave) => {
+          events.push('save');
+          if (visitSave) savedVisits.push(visitSave);
+        }),
+        workspaceDefinitionFile: vi.fn(async (request: { kind: string }) => {
+          events.push(request.kind);
+          return { revision: 1, definitions: [] };
+        }),
+        operate,
+      },
+    });
+    initialize({
+      home: '/fixtures',
+      platform: 'darwin',
+      state: null,
+      locations: [],
+      openPaths: [],
+    });
+    remember('/work/project');
+    await flushState(false);
+    events.length = 0;
+    savedVisits.length = 0;
+
+    // Immediate Undo before the 400ms save debounce cancels clear/forgotten and skips restore-offers.
+    clearRecentFolders();
+    undoClearRecentFolders();
+    await flushState(false);
+    expect(savedVisits.at(-1)?.clear).toBe(false);
+    expect(savedVisits.at(-1)?.forgotten).toEqual([]);
+    expect(events).not.toContain('restore-offers');
+
+    // Post-flush Undo runs restore-offers after flushing restored visits.
+    events.length = 0;
+    savedVisits.length = 0;
+    clearRecentFolders();
+    await flushState(false);
+    expect(savedVisits.at(-1)?.clear).toBe(true);
+    events.length = 0;
+    undoClearRecentFolders();
+    await vi.waitFor(() => expect(events).toEqual(['save', 'restore-offers']));
+    expect(savedVisits.at(-1)?.clear).toBe(false);
+    expect(Object.keys(savedVisits.at(-1)?.restored ?? {})).toContain('/work/project');
   });
 });

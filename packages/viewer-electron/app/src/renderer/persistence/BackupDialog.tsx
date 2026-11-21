@@ -5,13 +5,7 @@ import { errorMessage } from '../../domain/errors';
 import { formatBytes } from '../../domain/files/entries';
 import { plural } from '../../domain/plural';
 import { Dialog, Loading, PathField } from '../ui/primitives';
-import {
-  activeWorkspace,
-  changeWorkspace,
-  flushState,
-  receiveSettings,
-  announce,
-} from '../state/store';
+import { activeWorkspace, flushState, receiveSettings, announce } from '../state/store';
 import { appendRestoredWorkspaces } from '../state/workspaces';
 import './backup.css';
 
@@ -56,14 +50,19 @@ export function BackupDialog({
     setBusy(true);
     setError('');
     try {
+      let outgoing = request;
       if (request.kind === 'prepare-export') {
-        if (activeWorkspace().panes.length) {
-          const layout = workspace.captureLayout();
-          changeWorkspace((space) => ({ ...space, layout }));
-        }
         await flushState();
+        const active = activeWorkspace();
+        if (active.panes.length) {
+          outgoing = {
+            kind: 'prepare-export',
+            workspaceID: active.id,
+            layout: workspace.captureLayout(),
+          };
+        }
       }
-      const reply = await window.viewer.backup(request);
+      const reply = await window.viewer.backup(outgoing);
       if (!alive.current) {
         if (reply.kind === 'review')
           await window.viewer.backup({ kind: 'release', id: reply.review.id });

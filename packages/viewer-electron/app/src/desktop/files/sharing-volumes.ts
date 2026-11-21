@@ -122,7 +122,7 @@ export class SharingVolumes {
 }
 
 /** Mount notifications need no periodic process, including without the native helper. */
-function watchVolumeChanges(changed: () => void): () => void {
+export function watchVolumeChanges(changed: () => void): () => void {
   if (process.platform !== 'darwin') return () => {};
   try {
     const watcher = watch('/Volumes', { persistent: false }, changed);

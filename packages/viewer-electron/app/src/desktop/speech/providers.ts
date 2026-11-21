@@ -97,6 +97,7 @@ export class SpeechProviders {
   ): Promise<void> {
     if (this.closed) return Promise.reject(new Error('Speech providers are closed.'));
     const revision = this.invalidate(id, clearCheck);
+    let revoked = false;
     const work = this.writes
       .catch(() => {})
       .then(async () => {
@@ -110,13 +111,16 @@ export class SpeechProviders {
           await this.store.save(current);
           this.loaded = Promise.resolve(current);
         }
+        revoked = true;
         const next = documentSchema.parse(await change(structuredClone(current)));
         await this.store.save(next);
         this.loaded = Promise.resolve(next);
-        if (this.blocked.get(id) === revision) this.blocked.delete(id);
       })
-      .finally(() => this.ports.changed());
-    this.writes = work;
+      .finally(() => {
+        if (revoked && !this.closed && this.blocked.get(id) === revision) this.blocked.delete(id);
+        this.ports.changed();
+      });
+    this.writes = work.catch(() => {});
     return work;
   }
   async status(): Promise<SpeechProvidersSnapshot> {
@@ -226,12 +230,14 @@ export class SpeechProviders {
   async check(id: string, outer?: AbortSignal): Promise<void> {
     if (this.closed) throw new Error('Speech providers are closed.');
     this.checking.get(id)?.abort();
-    const controller = new AbortController(),
-      signal = AbortSignal.any([
-        controller.signal,
-        AbortSignal.timeout(15000),
-        ...(outer ? [outer] : []),
-      ]);
+    const controller = new AbortController();
+    const cancelSignal = outer ? AbortSignal.any([controller.signal, outer]) : controller.signal;
+    const timeout = new AbortController();
+    const timer = setTimeout(
+      () => timeout.abort(new DOMException('The check timed out.', 'TimeoutError')),
+      15000,
+    );
+    const signal = AbortSignal.any([cancelSignal, timeout.signal]);
     this.checking.set(id, controller);
     this.active.set(controller, id);
     this.checks.delete(id);
@@ -253,10 +259,11 @@ export class SpeechProviders {
       this.checkIdentity(await waitForProvider(this.state(), signal), lease);
       signal.throwIfAborted();
       const result = await this.checker.check(provider, key, signal);
-      this.checkIdentity(await waitForProvider(this.state(), signal), lease);
-      signal.throwIfAborted();
+      this.checkIdentity(await waitForProvider(this.state(), cancelSignal), lease);
+      if (cancelSignal.aborted) throw providerAbort(cancelSignal);
       this.checks.set(id, result);
     } finally {
+      clearTimeout(timer);
       this.active.delete(controller);
       if (this.checking.get(id) === controller) this.checking.delete(id);
       this.ports.changed();

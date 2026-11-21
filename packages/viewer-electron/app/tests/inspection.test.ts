@@ -108,4 +108,54 @@ describe('source evidence', () => {
     expect(index.query({ query: 'Notes', root, content: true }).evidence).toEqual([]);
     await index.close();
   });
+  it('returns passages for multi-word non-adjacent queries, prefers pages with all words, and supports OR queries', async () => {
+    const notes = path.join(root, 'Notes.txt');
+    const content = 'Invoice number 17\nStatus: paid\nYear: 2024\n';
+    await writeFile(notes, content);
+    const pdf = path.join(root, 'Report.pdf');
+    await writeFile(pdf, 'placeholder');
+    const index = await FileIndex.open(path.join(root, 'multiword.sqlite'));
+    const scope = {
+      ...defaultSettings(root).search,
+      roots: [root],
+      contentRoots: [root],
+      paused: true,
+    };
+    index.configure(scope);
+    const notesItem = await entry(notes);
+    index.put(notesItem, root, Date.now(), content);
+    const pdfItem = await entry(pdf);
+    index.put(pdfItem, root, Date.now(), {
+      path: pdf,
+      metadata: { title: 'Invoice 2024' },
+      text: 'Invoice summary\nInvoice number 17, paid in 2024',
+      evidence: [
+        { source: 'metadata:title', text: 'Invoice 2024' },
+        { source: 'page 1', text: 'Invoice summary', anchor: { kind: 'pdf', page: 1 } },
+        {
+          source: 'page 2',
+          text: 'Invoice number 17, paid in 2024',
+          anchor: { kind: 'pdf', page: 2 },
+        },
+      ],
+      truncated: false,
+    });
+    const multi = index.query({ query: 'invoice 2024', root, content: true });
+    expect(multi.entries.map((item) => item.name).sort()).toEqual(['Notes.txt', 'Report.pdf']);
+    expect(multi.evidence?.find((hit) => hit.path === notes)).toMatchObject({
+      path: notes,
+      anchor: { kind: 'text', line: 1 },
+    });
+    expect(multi.evidence?.find((hit) => hit.path === pdf)).toMatchObject({
+      path: pdf,
+      anchor: { kind: 'pdf', page: 2 },
+    });
+    const orQuery = index.query({ query: '(notes OR other) paid', root, content: true });
+    expect(orQuery.entries.map((item) => item.name)).toEqual(['Notes.txt']);
+    expect(orQuery.evidence?.find((hit) => hit.path === notes)).toMatchObject({
+      path: notes,
+      anchor: { kind: 'text', line: 2 },
+    });
+    await index.close();
+  });
 });

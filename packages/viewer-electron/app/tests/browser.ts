@@ -201,7 +201,10 @@ const api: ViewerAPI = {
   fileInformation: (path) => invoke('fileInformation', path),
   fileInformationUpdate: (path, revision, patch) =>
     invoke('fileInformationUpdate', path, revision, patch),
-  chooseFolder: (defaultPath) => invoke('chooseFolder', defaultPath),
+  chooseFolder: (defaultPath, native) =>
+    native === undefined
+      ? invoke('chooseFolder', defaultPath)
+      : invoke('chooseFolder', defaultPath, native),
   reveal: (path) => invoke('reveal', path),
   openExternal: (path) => invoke('openExternal', path),
   openAddress: (address) => invoke('openAddress', address),
@@ -265,6 +268,8 @@ const api: ViewerAPI = {
   volumeEject: (path) => invoke('volumeEject', path),
   fileAccessList: () => invoke('fileAccessList'),
   fileAccessRevoke: (path) => invoke('fileAccessRevoke', path),
+  fileAccessPrivacySettings: () =>
+    Promise.reject(new Error('Privacy settings require the desktop app.')),
   fileDragStart: async () => {
     throw new Error('Native file dragging is only available in the installed app.');
   },

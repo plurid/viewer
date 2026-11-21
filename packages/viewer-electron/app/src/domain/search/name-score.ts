@@ -2,7 +2,7 @@ import { typoScore } from './approximate';
 
 export const normalize = (value: string) =>
   value
-    .toLocaleLowerCase()
+    .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
 

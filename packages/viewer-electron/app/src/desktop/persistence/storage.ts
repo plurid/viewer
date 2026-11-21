@@ -264,7 +264,10 @@ const savedStateSchema = z
       z.literal(12),
       z.literal(CURRENT_STATE_VERSION),
     ]),
-    previewStates: z.record(id, previewValuesSchema).optional(),
+    previewStates: z
+      .record(id, previewValuesSchema)
+      .refine((states) => Object.keys(states).length <= 2000)
+      .optional(),
     previewHistory: previewHistorySchema.optional(),
     openWindows: z.array(id).max(30).optional(),
     preferencesRevision: z.number().int().min(0).optional(),
@@ -278,7 +281,10 @@ const savedStateSchema = z
               key: definitionKeySchema,
               basis: z.string().regex(/^[0-9a-f]{64}$/),
               source: workspaceDefinitionSourceSchema.optional(),
-              planes: z.record(id, z.number().int().min(-1).max(29)).optional(),
+              planes: z
+                .record(id, z.number().int().min(-1).max(29))
+                .refine((planes) => Object.keys(planes).length <= 200)
+                .optional(),
             })
             .strict()
             .optional(),
@@ -286,7 +292,9 @@ const savedStateSchema = z
           roots: z.array(id).max(200),
           taskAreas: z.array(taskAreaSchema).max(50).optional(),
           activePane: id.optional(),
-          arrangement: z.record(z.string().max(300), z.string().max(4 * 1024 * 1024)),
+          arrangement: z
+            .record(z.string().max(300), z.string().max(4 * 1024 * 1024))
+            .refine((arrangement) => Object.keys(arrangement).length <= 200),
           collections: z.array(collectionSchema).max(200).optional(),
           basket: z.array(basketItemSchema).max(10000).optional(),
           overrides: presentationValuesSchema
@@ -314,8 +322,12 @@ const savedStateSchema = z
               root: localPath,
               revision: z.string().max(200),
               definition: projectDefinitionSchema,
-              bindings: z.record(id, localPath),
-              folders: z.record(localPath, folderOverrideSchema),
+              bindings: z
+                .record(id, localPath)
+                .refine((bindings) => Object.keys(bindings).length <= 100),
+              folders: z
+                .record(localPath, folderOverrideSchema)
+                .refine((folders) => Object.keys(folders).length <= 500),
               dirty: z.boolean(),
             })
             .strict()
@@ -334,7 +346,9 @@ const savedStateSchema = z
     profile: z
       .object({
         id: z.string().max(100),
-        previous: z.record(z.string().max(200), z.json()),
+        previous: z
+          .record(z.string().max(200), z.json())
+          .refine((previous) => Object.keys(previous).length <= 200),
       })
       .strict()
       .optional(),
@@ -344,7 +358,9 @@ const savedStateSchema = z
         z
           .object({
             id: z.string().max(100),
-            previous: z.record(z.string().max(200), z.json()),
+            previous: z
+              .record(z.string().max(200), z.json())
+              .refine((previous) => Object.keys(previous).length <= 200),
           })
           .strict(),
       )

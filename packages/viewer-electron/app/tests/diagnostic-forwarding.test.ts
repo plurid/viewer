@@ -99,7 +99,13 @@ describe('desktop failures keep their structured metadata', () => {
       resources: { clear: vi.fn() },
       optimizationReviews: { stopOwner: vi.fn().mockRejectedValue(failure()) },
       webPreviews: { stopOwner: vi.fn().mockRejectedValue(failure()) },
-      workspaceSessions: { close: vi.fn(), snapshot: () => ({}) },
+      workspaceSessions: {
+        close: vi.fn(),
+        closeAndPersist: vi.fn((_owner: number, write: (state: unknown) => Promise<void>) =>
+          write({}),
+        ),
+        snapshot: () => ({}),
+      },
       withPreferences: (state: unknown) => state,
       storage: { save: vi.fn().mockRejectedValue(failure()) },
     });

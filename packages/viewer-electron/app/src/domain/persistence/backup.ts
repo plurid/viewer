@@ -1,9 +1,16 @@
 import { z } from 'zod';
 import type { SavedState } from '../contracts';
 import type { SettingsSnapshot } from '../services';
+import { layoutSchema } from '../workspaces/project';
 
 export const backupRequestSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('prepare-export') }).strict(),
+  z
+    .object({
+      kind: z.literal('prepare-export'),
+      workspaceID: z.string().min(1).max(200).optional(),
+      layout: layoutSchema.optional(),
+    })
+    .strict(),
   z.object({ kind: z.literal('choose-import') }).strict(),
   z.object({ kind: z.literal('write'), id: z.uuid() }).strict(),
   z

@@ -135,9 +135,9 @@ afterEach(async () => {
   await resources.close();
   await trashTemporary(root);
 });
-const grant = async (name: string, data: Uint8Array) => {
+const grant = async (name: string, data: Uint8Array, owner?: number) => {
   await writeFile(path.join(root, name), data);
-  return resources.grant(path.join(root, name));
+  return resources.grant(path.join(root, name), undefined, owner);
 };
 /** The resource handlers, reading documents as the preview worker does. */
 function handlers() {
@@ -251,7 +251,7 @@ describe('confirming a format from the file’s own bytes', () => {
   });
   it('drops a confirmed format when the file changes', async () => {
     const { document } = handlers();
-    const source = await grant('Field notes.bin', await book());
+    const source = await grant('Field notes.bin', await book(), 1);
     await resources.confirmFormat(source.id, 'epub');
     expect((await document([source.id], 1)).chapters).toHaveLength(2);
     await appendFile(path.join(root, 'Field notes.bin'), 'appended');
@@ -268,20 +268,20 @@ describe('confirming a format from the file’s own bytes', () => {
 describe('readers that choose by extension follow the confirmed format', () => {
   it('extracts a misnamed EPUB, Word document and workbook', async () => {
     const { document } = handlers();
-    const epub = await grant('Field notes.bin', await book());
+    const epub = await grant('Field notes.bin', await book(), 1);
     await expect(document([epub.id], 1)).rejects.toThrow('no text extractor');
     await resources.confirmFormat(epub.id, 'epub');
     const read = await document([epub.id], 1);
     expect(read.metadata.title).toBe('Field notes');
     expect(read.chapters?.map((chapter) => chapter.title)).toEqual(['Look around', 'Keep context']);
 
-    const word = await grant('Materials', office('docx'));
+    const word = await grant('Materials', office('docx'), 1);
     await resources.confirmFormat(word.id, 'docx');
     const words = await document([word.id], 1);
     expect(words.office?.kind).toBe('word');
     expect(words.text).toContain('Field notes: a spatial workbench');
 
-    const workbook = await grant('Materials.zip', office('xlsx'));
+    const workbook = await grant('Materials.zip', office('xlsx'), 1);
     await resources.confirmFormat(workbook.id, 'xlsx');
     const page = await document(schemas.document.parse([workbook.id, { requestID: 'page' }]), 1);
     expect(page.office?.kind).toBe('workbook');

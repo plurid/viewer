@@ -21,6 +21,41 @@ function reference(value: unknown, current: unknown, pointer: string): unknown {
   return value;
 }
 
+function projectCanvasToolResult(text: string, canvas: Record<string, unknown> | null): string {
+  if (!canvas) return text;
+  let result: unknown;
+  try {
+    result = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  if (!record(result) || !Number.isInteger(result.revision)) return text;
+  const snapshot =
+    typeof result.id === 'string' &&
+    typeof result.html === 'string' &&
+    Array.isArray(result.sources) &&
+    Array.isArray(result.assets);
+  const saved = typeof result.canvasID === 'string' && record(result.savedState);
+  if (!snapshot && !saved) return text;
+  const fields: Record<string, string> = {
+    html: 'html',
+    state: 'state',
+    savedState: 'state',
+    defaults: 'defaults',
+    sources: 'sources',
+    assets: 'assets',
+  };
+  const projected = Object.fromEntries(
+    Object.entries(result).map(([key, value]) => [
+      key,
+      fields[key] && canvas[fields[key]] !== undefined
+        ? reference(value, canvas[fields[key]], '#/canvas/' + fields[key])
+        : value,
+    ]),
+  );
+  return JSON.stringify(projected);
+}
+
 export function canvasModelMessages(
   messages: readonly ChatMessage[],
   canvas: Record<string, unknown> | null,
@@ -30,36 +65,17 @@ export function canvasModelMessages(
     .filter((message) => !paired.has(message.id))
     .map((message) => {
       if (!canvas || message.role !== 'tool') return message;
-      let result: unknown;
-      try {
-        result = JSON.parse(message.text);
-      } catch {
-        return message;
-      }
-      if (!record(result) || !Number.isInteger(result.revision)) return message;
-      const snapshot =
-        typeof result.id === 'string' &&
-        typeof result.html === 'string' &&
-        Array.isArray(result.sources) &&
-        Array.isArray(result.assets);
-      const saved = typeof result.canvasID === 'string' && record(result.savedState);
-      if (!snapshot && !saved) return message;
-      const fields: Record<string, string> = {
-        html: 'html',
-        state: 'state',
-        savedState: 'state',
-        defaults: 'defaults',
-        sources: 'sources',
-        assets: 'assets',
-      };
-      const projected = Object.fromEntries(
-        Object.entries(result).map(([key, value]) => [
-          key,
-          fields[key] && canvas[fields[key]] !== undefined
-            ? reference(value, canvas[fields[key]], '#/canvas/' + fields[key])
-            : value,
-        ]),
-      );
-      return { ...message, text: JSON.stringify(projected) };
+      const text = projectCanvasToolResult(message.text, canvas);
+      return text === message.text ? message : { ...message, text };
     });
+}
+
+export function canvasModelSteps<T extends { result: string }>(
+  steps: readonly T[],
+  canvas: Record<string, unknown> | null,
+): T[] {
+  return steps.map((step) => {
+    const result = projectCanvasToolResult(step.result, canvas);
+    return result === step.result ? step : { ...step, result };
+  });
 }

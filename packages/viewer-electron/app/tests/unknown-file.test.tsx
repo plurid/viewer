@@ -312,7 +312,7 @@ describe('a format the desktop service reads by its extension', () => {
    * URL unless given. */
   async function preview(name: string, bytes: Uint8Array, head?: Uint8Array) {
     await writeFile(path.join(root, name), bytes);
-    const resource = await resources.grant(path.join(root, name));
+    const resource = await resources.grant(path.join(root, name), undefined, 1);
     const read = vi.fn((url: string, init?: RequestInit) =>
       resources.response(new Request(url, init)),
     );

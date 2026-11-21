@@ -84,7 +84,7 @@ export function createWindowHandlers(ports: WindowPorts): WindowHandlers {
       else ports.host.diagnose?.(detail.detail, detail);
     },
     flushed: ([token, result], owner) => {
-      ports.flushes.acknowledge(token, owner, result ?? { ok: true });
+      ports.flushes.acknowledge(token, owner, result);
     },
   };
 }

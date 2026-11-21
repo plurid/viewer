@@ -275,7 +275,8 @@ export function applyLensOps(
   const groups = new Map(input.groups.map((group) => [group.id, group]));
   const members = new Map(input.members.map((member) => [member.name, member]));
   let lens: Lens = { ...input };
-  for (const op of ops) {
+  for (let index = 0; index < ops.length; index++) {
+    const op = ops[index]!;
     if (op.kind === 'place') {
       if (op.group !== null && !groups.has(op.group)) {
         dropped.push(`"${op.name}" was not placed; its group was removed.`);
@@ -292,10 +293,19 @@ export function applyLensOps(
       });
     } else if (op.kind === 'forget') members.delete(op.name);
     else if (op.kind === 'rename-member') {
-      const member = members.get(op.from);
-      if (!member || op.from === op.to) continue;
-      members.delete(op.from);
-      members.set(op.to, { ...member, name: op.to });
+      const batch: Extract<LensOp, { kind: 'rename-member' }>[] = [op];
+      while (ops[index + 1]?.kind === 'rename-member') {
+        batch.push(ops[++index] as Extract<LensOp, { kind: 'rename-member' }>);
+      }
+      // Read every source member before writing destinations so swaps and shifts preserve entries.
+      const moved: { from: string; to: string; member: LensMember }[] = [];
+      for (const item of batch) {
+        if (item.from === item.to) continue;
+        const member = members.get(item.from);
+        if (member) moved.push({ from: item.from, to: item.to, member });
+      }
+      for (const { from } of moved) members.delete(from);
+      for (const { to, member } of moved) members.set(to, { ...member, name: to });
     } else if (op.kind === 'set-group') {
       const { group } = op;
       if (group.parent !== undefined) {
@@ -391,7 +401,7 @@ export function diffLensOps(from: Lens, to: Lens): LensOp[] {
 export function matchGlob(pattern: string, name: string): boolean {
   type Token = { kind: 'star' } | { kind: 'one' } | { kind: 'set'; test(c: string): boolean };
   const tokens: Token[] = [];
-  const text = [...pattern.normalize('NFC').toLocaleLowerCase()];
+  const text = [...pattern.normalize('NFC').toLowerCase()];
   for (let index = 0; index < text.length; index++) {
     const c = text[index]!;
     if (c === '*') {
@@ -415,7 +425,7 @@ export function matchGlob(pattern: string, name: string): boolean {
       index = end;
     } else tokens.push({ kind: 'set', test: (value) => value === c });
   }
-  const value = [...name.normalize('NFC').toLocaleLowerCase()];
+  const value = [...name.normalize('NFC').toLowerCase()];
   let t = 0,
     v = 0,
     star = -1,
@@ -469,7 +479,7 @@ export function lensGroupMatches(group: LensGroup, entry: FileEntry): boolean {
     : rules.every((rule) => lensRuleMatches(rule, entry));
 }
 
-const nameKey = (name: string) => name.normalize('NFC').toLocaleLowerCase();
+const nameKey = (name: string) => name.normalize('NFC').toLowerCase();
 /**
  * Pairs a lens's members with the folder's current names. Exact names win; otherwise a single
  * unclaimed name equal after Unicode normalization and case folding, then a single unclaimed

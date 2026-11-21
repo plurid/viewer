@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { SavedState } from '../src/domain/contracts';
 import { WorkspaceSessions } from '../src/desktop/windows/workspace-sessions';
 
 describe('native workspace ownership', () => {
@@ -134,5 +135,91 @@ describe('native workspace ownership', () => {
     expect(sessions.snapshot()?.workspaces[0]?.name).toBe('Original');
     await sessions.persist(1, input, async () => {});
     expect(sessions.snapshot()?.workspaces[0]?.name).toBe('Changed');
+  });
+
+  it('serializes closing a window behind an in-flight peer save so disk and openWindows keep the peer edit', async () => {
+    const sessions = new WorkspaceSessions();
+    const first = sessions.create('/fixtures', 'One');
+    const second = sessions.create('/fixtures', 'Two');
+    sessions.open(1, '/fixtures', first);
+    const secondState = sessions.open(2, '/fixtures', second);
+    const edited: SavedState = {
+      ...structuredClone(secondState),
+      workspaces: secondState.workspaces.map((ws) =>
+        ws.id === second ? { ...ws, name: 'Two Edited' } : ws,
+      ),
+    };
+
+    const written: SavedState[] = [];
+    let releaseFirst!: () => void;
+    let firstStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      firstStarted = resolve;
+    });
+    const write = async (state: SavedState) => {
+      if (written.length === 0) {
+        firstStarted();
+        await new Promise<void>((resolve) => {
+          releaseFirst = resolve;
+        });
+      }
+      written.push(structuredClone(state));
+    };
+
+    const saving = sessions.persist(2, edited, write);
+    await started;
+    const closing = (
+      sessions as unknown as {
+        closeAndPersist(owner: number, writer: (state: SavedState) => Promise<void>): Promise<void>;
+      }
+    ).closeAndPersist(1, write);
+    releaseFirst();
+    await Promise.all([saving, closing]);
+
+    expect(written.at(-1)?.workspaces.find((ws) => ws.id === second)?.name).toBe('Two Edited');
+    expect(written.at(-1)?.openWindows).toEqual([second]);
+    expect(sessions.snapshot()?.openWindows).toEqual([second]);
+  });
+
+  it('still commits saved state and visit clear revision if the saving owner closes mid-write', async () => {
+    const sessions = new WorkspaceSessions();
+    const first = sessions.create('/fixtures', 'One');
+    const second = sessions.create('/fixtures', 'Two');
+    const firstState = sessions.open(1, '/fixtures', first);
+    sessions.open(2, '/fixtures', second);
+    firstState.workspaces = firstState.workspaces.map((ws) =>
+      ws.id === first ? { ...ws, name: 'One Cleared' } : ws,
+    );
+    firstState.visits = {};
+
+    let release!: () => void;
+    let started!: () => void;
+    const writing = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const saving = sessions.persist(
+      1,
+      firstState,
+      async () => {
+        started();
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      },
+      { id: 'clear-1', base: {}, clear: true },
+    );
+    await writing;
+    const closing = (
+      sessions as unknown as {
+        closeAndPersist(owner: number, writer: (state: SavedState) => Promise<void>): Promise<void>;
+      }
+    ).closeAndPersist(1, async () => {});
+    release();
+    await Promise.all([saving, closing]);
+
+    expect(sessions.snapshot()?.workspaces.find((ws) => ws.id === first)?.name).toBe('One Cleared');
+    expect(sessions.snapshot()?.openWindows).toEqual([second]);
+    expect(sessions.folderHistory().clearRevision).toBe(1);
+    expect(sessions.folderHistory().clearID).toBe('clear-1');
   });
 });

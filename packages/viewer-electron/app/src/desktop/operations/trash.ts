@@ -92,7 +92,7 @@ interface TrashServices {
   /** The hidden QA runtime lists only its generated home's Trash, never a mounted volume's. */
   homeOnly?: boolean;
   origins?(): Promise<TrashOrigin[]>;
-  preview?(file: string): Promise<Resource>;
+  preview?(file: string, owner?: number): Promise<Resource>;
   release?(id: string): void;
   changed?(source: string, destination: string): void;
 }
@@ -189,12 +189,12 @@ export class Trash {
     this.#known.clear();
     this.#addedDates.clear();
   }
-  async preview(itemID: string): Promise<Resource> {
+  async preview(itemID: string, owner?: number): Promise<Resource> {
     const item = this.#get(itemID);
     const info = await this.#verify(item);
     if (!info.isFile() || info.isSymbolicLink() || !this.services.preview)
       throw new Error('Only regular files in Trash can be previewed.');
-    const resource = await this.services.preview(item.file);
+    const resource = await this.services.preview(item.file, owner);
     try {
       await this.#verify(item);
       return { ...resource, entry: { ...resource.entry, name: item.item.name } };

@@ -61,7 +61,7 @@ export class OptimizationReviews implements TransformExecutor {
   constructor(
     private directory: string,
     private engine: Engine,
-    private resources: Pick<Resources, 'grant' | 'release'>,
+    private resources: { grant: Resources['grant']; release(id: string, owner?: number): unknown },
     private access: (files: readonly string[]) => Promise<void>,
     private enqueue: (request: OperationRequest) => string,
     private trash: (file: string) => Promise<unknown>,
@@ -203,10 +203,10 @@ export class OptimizationReviews implements TransformExecutor {
     this.clearComparison(owner);
     const abort = new AbortController();
     this.reviews.set(owner, abort);
-    const original = await this.resources.grant(candidate.summary.source.path);
+    const original = await this.resources.grant(candidate.summary.source.path, undefined, owner);
     let optimized: Awaited<ReturnType<Resources['grant']>> | undefined;
     try {
-      optimized = await this.resources.grant(candidate.file);
+      optimized = await this.resources.grant(candidate.file, undefined, owner);
       const pages =
         candidate.summary.format === 'pdf'
           ? (await this.engine.pdfInspect(candidate.file, abort.signal)).pages

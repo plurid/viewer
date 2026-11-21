@@ -49,6 +49,8 @@ it('keeps missing dates and locations at the end in either direction', () => {
 it('extracts original containing folders on every desktop path style', () => {
   expect(originalTrashFolder('/Users/Example/Desktop/Note.txt')).toBe('/Users/Example/Desktop');
   expect(originalTrashFolder('/Note.txt')).toBe('/');
+  expect(originalTrashFolder('/Users/al/Music/AC\\DC')).toBe('/Users/al/Music');
+  expect(originalTrashFolder('/Users/al/Music/AC\\DC/Track.mp3')).toBe('/Users/al/Music/AC\\DC');
   expect(originalTrashFolder('C:\\Users\\Example\\Note.txt')).toBe('C:\\Users\\Example');
   expect(originalTrashFolder('C:\\Note.txt')).toBe('C:\\');
 });

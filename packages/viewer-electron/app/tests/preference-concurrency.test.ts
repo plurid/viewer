@@ -83,7 +83,8 @@ it('retains conflicts for another field changed by a peer during the write', asy
   await conflict;
   expect(service.snapshot().ui.space.toolbar).toBe(false);
   expect(service.snapshot().ui.space.minimap).toBe(false);
-  expect(pendingPreferences.get('ui.space.minimap')).toBe(true);
+  expect(pendingPreferences.has('ui.space.minimap')).toBe(false);
+  expect(getState().saved.ui.space.minimap).toBe(false);
 });
 
 it('rebases an overlapping child edit after its own parent-object write', async () => {
@@ -134,9 +135,10 @@ it('preserves peer sibling conflicts when a queued parent overlaps its own child
     close: false,
     parent: false,
   });
-  expect(pendingPreferences.get('ui.space.headerControls')).toEqual({
-    ...headerControls,
-    close: true,
+  expect(pendingPreferences.has('ui.space.headerControls')).toBe(false);
+  expect(getState().saved.ui.space.headerControls).toMatchObject({
+    close: false,
+    parent: false,
   });
 });
 

@@ -43,10 +43,14 @@ import { applicationCSP } from './desktop/windows/application-csp';
 import { debuggingAllowed } from './desktop/diagnostics/debugging';
 import { HotkeyWindow } from './desktop/windows/hotkey-window';
 import { macFiles } from './desktop/native/macos-files';
+import { setDefaultUserDataDirectory } from './desktop/native/test-removal-policy';
 import { launchRequestSchema, parseLaunch, type LaunchRequest } from './domain/workspaces/launch';
 import {
+  exitSecondaryInstance,
   resolveWorkspaceLaunchQuery,
   routeWorkspaceLaunch,
+  secondaryLaunchError,
+  writeStderrSync,
 } from './desktop/windows/workspace-launch';
 import { askNatively } from './desktop/native/native-confirmation';
 import { saveBeforeClose, type SaveFailureChoice } from './desktop/windows/save-before-close';
@@ -55,10 +59,10 @@ import type { QuitChoice, QuitRetryStep } from './desktop/windows/quit-sequence'
 import { QuitShortcut } from './desktop/windows/quit-shortcut';
 import { sendEvent } from './desktop/ipc/events';
 import { WindowCreationRequests } from './desktop/windows/creation-requests';
-import { isolatedShellHome } from './desktop/windows/test-integration';
+import { isBackgroundTest, isolatedShellHome } from './desktop/windows/test-integration';
 import { isCLIInvocation } from './domain/cli/catalog';
 import { runCLI } from './desktop/cli/run';
-import { speechMediaAllowed } from './desktop/speech/media-policy';
+import { speechMediaAllowed, speechMediaCheckAllowed } from './desktop/speech/media-policy';
 import {
   frameLocationURLs,
   frameNavigationAllowed,
@@ -125,23 +129,9 @@ protocol.registerSchemesAsPrivileged([
 app.setName('Viewer');
 setAssetRoot(app.isPackaged, app.getAppPath());
 performanceMeter.start();
-// Hidden rendering is restricted to QA with an explicitly isolated profile.
 const renderTest = process.env.VIEWER_RENDER_TEST === '1';
-const backgroundTest =
-  renderTest && process.env.VIEWER_BACKGROUND_TEST === '1' && !!process.env.VIEWER_DATA_DIRECTORY;
-if (backgroundTest && process.platform === 'darwin') app.setActivationPolicy('accessory');
-/** The workspace and Settings windows: Viewer's own pages, reaching main only through the preload. */
-const appWebPreferences = (): WebPreferences => ({
-  ...isolatedContent,
-  preload: path.join(__dirname, 'preload.cjs'),
-  webviewTag: false,
-  spellcheck: false,
-  // Functional QA renders without showing windows or taking native focus.
-  // Normal launches retain background throttling and visible windows.
-  offscreen: backgroundTest,
-  backgroundThrottling: !renderTest,
-});
 const defaultUserData = app.getPath('userData');
+setDefaultUserDataDirectory(defaultUserData);
 // An optional, main-process-only profile supports portable installations and isolated QA.
 if (process.env.VIEWER_DATA_DIRECTORY) {
   if (!path.isAbsolute(process.env.VIEWER_DATA_DIRECTORY))
@@ -156,6 +146,25 @@ const resolved = (directory: string) => {
     return path.resolve(directory);
   }
 };
+// Hidden rendering is restricted to QA with an explicitly isolated profile.
+const backgroundTest = isBackgroundTest({
+  renderTest,
+  backgroundTest: process.env.VIEWER_BACKGROUND_TEST === '1',
+  dataDirectory: process.env.VIEWER_DATA_DIRECTORY,
+  defaultDataDirectory: defaultUserData,
+});
+if (backgroundTest && process.platform === 'darwin') app.setActivationPolicy('accessory');
+/** The workspace and Settings windows: Viewer's own pages, reaching main only through the preload. */
+const appWebPreferences = (): WebPreferences => ({
+  ...isolatedContent,
+  preload: path.join(__dirname, 'preload.cjs'),
+  webviewTag: false,
+  spellcheck: false,
+  // Functional QA renders without showing windows or taking native focus.
+  // Normal launches retain background throttling and visible windows.
+  offscreen: backgroundTest,
+  backgroundThrottling: !renderTest,
+});
 const shellCommandHome = headless
   ? undefined
   : isolatedShellHome({
@@ -252,7 +261,12 @@ if (!headless) {
 }
 const ownsInstance =
   headless || app.requestSingleInstanceLock({ request: initialLaunch, error: launchError });
-if (!ownsInstance) app.quit();
+if (!ownsInstance)
+  exitSecondaryInstance(launchError, {
+    writeError: writeStderrSync,
+    exit: (code) => app.exit(code),
+    quit: () => app.quit(),
+  });
 const quit = new QuitSequence({
   pendingOperations: () => desktop?.pendingOperations() ?? 0,
   confirm: confirmQuit,
@@ -778,6 +792,11 @@ async function launch(request: LaunchRequest): Promise<void> {
 
 app.on('second-instance', (_event, _argv, _cwd, additionalData) => {
   if (!quit.accepting()) return;
+  const forwardedError = secondaryLaunchError(additionalData);
+  if (forwardedError) {
+    desktop?.emit({ type: 'service-error', service: 'launch', message: forwardedError });
+    return;
+  }
   const request = launchRequestSchema.safeParse((additionalData as { request?: unknown })?.request);
   if (!request.success) return;
   void launch(request.data).catch((error) =>
@@ -961,11 +980,13 @@ app
       ),
     );
     session.defaultSession.setPermissionCheckHandler((contents, permission, _origin, details) =>
-      speechMediaAllowed({
+      speechMediaCheckAllowed({
         permission,
         mainFrame: details.isMainFrame,
         trusted: !!details.requestingUrl && trusted(details.requestingUrl),
         active: !!contents && !!desktop?.speechMicrophoneAllowed(contents.id),
+        settingsEnumeration:
+          !!contents && !!desktop?.speechMicrophoneEnumerationAllowed(contents.id),
         media: details.mediaType ? [details.mediaType] : [],
       }),
     );

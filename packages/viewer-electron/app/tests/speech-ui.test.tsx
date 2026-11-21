@@ -320,3 +320,108 @@ it('Settings stays read-only until a person changes a choice or starts a test', 
     ).toBe(true),
   );
 });
+it('lists connected microphones once granted and keeps known names across redacted checks', async () => {
+  const listeners: (() => void)[] = [];
+  let devices: Partial<MediaDeviceInfo>[] = [{ kind: 'audioinput', deviceId: '', label: '' }];
+  const enumerateDevices = vi.fn(async () => devices as MediaDeviceInfo[]);
+  Object.defineProperty(navigator, 'mediaDevices', {
+    value: {
+      enumerateDevices,
+      addEventListener: (_event: string, listener: () => void) => listeners.push(listener),
+      removeEventListener: (_event: string, listener: () => void) => {
+        const index = listeners.indexOf(listener);
+        if (index >= 0) listeners.splice(index, 1);
+      },
+    },
+    configurable: true,
+  });
+
+  let currentStatus: SpeechStatus = {
+    ...status,
+    microphone: 'not-determined',
+    preferences: { language: 'auto', microphone: 'usb-mic-1' },
+  };
+  request.mockImplementation(async (value) => (value.kind === 'status' ? currentStatus : null));
+
+  render(<SpeechSettings />);
+  const select = (await screen.findByRole('combobox', {
+    name: 'Speech microphone',
+  })) as HTMLSelectElement;
+  expect([...select.options].map((option) => option.textContent)).toEqual([
+    'System default',
+    'Saved microphone · not connected',
+  ]);
+
+  // Once macOS microphone access is granted, speech-changed refreshes and enumerates devices.
+  devices = [
+    { kind: 'audioinput', deviceId: 'default', label: 'Default' },
+    { kind: 'audioinput', deviceId: 'usb-mic-1', label: 'Studio USB Mic' },
+  ];
+  currentStatus = { ...currentStatus, microphone: 'granted' };
+  act(() => {
+    events.forEach((listener) => listener({ type: 'speech-changed' }));
+  });
+  await waitFor(() =>
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      'System default',
+      'Studio USB Mic',
+    ]),
+  );
+
+  // A subsequent redacted enumeration with empty deviceIds does not wipe known devices.
+  enumerateDevices.mockClear();
+  devices = [{ kind: 'audioinput', deviceId: '', label: '' }];
+  act(() => {
+    listeners.forEach((listener) => listener());
+  });
+  await waitFor(() => expect(enumerateDevices).toHaveBeenCalledOnce());
+  expect([...select.options].map((option) => option.textContent)).toEqual([
+    'System default',
+    'Studio USB Mic',
+  ]);
+});
+it('treats a selected but missing local model as not installed with download enabled and test disabled', async () => {
+  request.mockImplementation(async (value) =>
+    value.kind === 'status'
+      ? {
+          ...status,
+          models: {
+            selected: 'whisper-small',
+            runtime: { name: 'whisper.cpp', recognitionAvailable: true, reason: 'Local' },
+            models: [
+              {
+                id: 'whisper-small',
+                name: 'Whisper Small',
+                bytes: 487_601_967,
+                sha256: 'a'.repeat(64),
+                url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
+                multilingual: true,
+                license: 'MIT',
+                installed: false,
+                selected: true,
+              },
+            ],
+            records: [],
+          },
+        }
+      : null,
+  );
+  render(<SpeechSettings shortcut="" />);
+  const download = (await screen.findByRole('button', {
+    name: 'Download and Use',
+  })) as HTMLButtonElement;
+  expect(download.disabled).toBe(false);
+  expect(screen.getByText(/Not installed/)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Import Weights…' })).toBeTruthy();
+  const testButton = screen.getByRole('button', {
+    name: 'Test Microphone and Transcription',
+  }) as HTMLButtonElement;
+  expect(testButton.disabled).toBe(true);
+  expect(screen.getByText(/Choose a key for Ask Viewer by Voice/)).toBeTruthy();
+});
+it('shows a readable alert when audio capture fails with an empty error message', async () => {
+  audio.capture.mockRejectedValueOnce(new Error(''));
+  render(<DictationDialog destination="Note draft" onClose={() => {}} onUse={() => {}} />);
+  const alert = await screen.findByRole('alert');
+  expect(alert.textContent?.trim().length).toBeGreaterThan(0);
+});

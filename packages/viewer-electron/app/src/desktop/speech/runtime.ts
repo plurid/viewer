@@ -61,9 +61,13 @@ export class SpeechRuntime {
     }));
   }
   async status(): Promise<SpeechRuntimeStatus> {
+    if (process.platform !== 'darwin')
+      return {
+        name: 'whisper.cpp',
+        recognitionAvailable: false,
+        reason: 'Local speech has not been bundled for this platform.',
+      };
     try {
-      if (process.platform !== 'darwin')
-        throw new Error('Local speech has not been bundled for this platform.');
       // Viewer runs on macOS 14 or later, which the engine's 13.3 minimum covers
       await this.verify();
       return {

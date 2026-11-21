@@ -17,17 +17,34 @@ const workers = vi.hoisted(
   () =>
     [] as {
       receive?: (reply: { value: CheckedFolder }) => void;
+      onError?: (error: Error) => void;
+      onExit?: (code: number) => void;
       request?: string;
       postMessage: ReturnType<typeof vi.fn>;
+      terminate: ReturnType<typeof vi.fn>;
     }[],
 );
+const workerControls = vi.hoisted(() => ({
+  failNextSend: undefined as Error | undefined,
+  terminateNext: undefined as (() => Promise<void>) | undefined,
+}));
 vi.mock('../src/desktop/workers/utility-client', () => ({
   launchWorker: vi.fn(() => {
+    const terminateImpl = workerControls.terminateNext;
+    workerControls.terminateNext = undefined;
     const worker: (typeof workers)[number] = {
       postMessage: vi.fn((path: string) => {
+        if (workerControls.failNextSend) {
+          const error = workerControls.failNextSend;
+          workerControls.failNextSend = undefined;
+          throw error;
+        }
         worker.request = path;
         if (!path.startsWith('/Volumes/Sleeping/') && !path.endsWith('/slow'))
           queueMicrotask(() => worker.receive?.({ value: { directory: true, path } }));
+      }),
+      terminate: vi.fn(async () => {
+        if (terminateImpl) await terminateImpl();
       }),
     };
     workers.push(worker);
@@ -36,13 +53,22 @@ vi.mock('../src/desktop/workers/utility-client', () => ({
       message: (listener: typeof worker.receive) => {
         worker.receive = listener;
       },
-      exit: () => {},
-      thread: { terminate: async () => {}, on: () => {} },
+      exit: (listener: (code: number) => void) => {
+        worker.onExit = listener;
+      },
+      thread: {
+        terminate: worker.terminate,
+        on: (event: string, listener: (error: Error) => void) => {
+          if (event === 'error') worker.onError = listener;
+        },
+      },
     };
   }),
 }));
 afterEach(() => {
   workers.length = 0;
+  workerControls.failNextSend = undefined;
+  workerControls.terminateNext = undefined;
   vi.useRealTimers();
 });
 
@@ -333,4 +359,60 @@ it('keeps a checked missing folder hidden when its Store grant stops being activ
     [],
   );
   checks.close();
+});
+
+it('stops spawning workers after close and awaits worker termination', async () => {
+  let finishTerminate!: () => void;
+  workerControls.terminateNext = () =>
+    new Promise<void>((resolve) => {
+      finishTerminate = resolve;
+    });
+  const checks = new FolderHistoryChecks('/fixtures/history-worker.cjs');
+  expect(await checks.check('/fixtures/before-close')).toMatchObject({ directory: true });
+  expect(workers).toHaveLength(1);
+
+  let closed = false;
+  const closing = Promise.resolve(checks.close()).then(() => {
+    closed = true;
+  });
+  await Promise.resolve();
+  expect(closed).toBe(false);
+  expect(await checks.check('/fixtures/after-close')).toEqual({
+    directory: false,
+    unavailable: true,
+  });
+  expect(workers).toHaveLength(1);
+  finishTerminate();
+  await closing;
+  expect(closed).toBe(true);
+});
+
+it('retires an errored thread slot before exit and releases a slot when postMessage throws', async () => {
+  const checks = new FolderHistoryChecks('/fixtures/history-worker.cjs');
+  const slow = checks.check('/fixtures/slow');
+  await vi.waitFor(() => expect(workers).toHaveLength(1));
+  // Thread error fires before exit: the dying slot must be retired immediately.
+  workers[0]!.onError?.(new Error('worker crashed'));
+  expect(await slow).toEqual({ directory: false, unavailable: true });
+  expect(await checks.check('/fixtures/healthy')).toMatchObject({
+    directory: true,
+    path: '/fixtures/healthy',
+  });
+  expect(workers).toHaveLength(2);
+  expect(workers[0]!.postMessage).toHaveBeenCalledTimes(1);
+  await checks.close();
+
+  workers.length = 0;
+  const checksTwo = new FolderHistoryChecks('/fixtures/history-worker.cjs');
+  workerControls.failNextSend = new Error('MessagePort closed');
+  expect(await checksTwo.check('/fixtures/broken')).toEqual({
+    directory: false,
+    unavailable: true,
+  });
+  expect(await checksTwo.check('/fixtures/recovered')).toMatchObject({
+    directory: true,
+    path: '/fixtures/recovered',
+  });
+  expect(workers).toHaveLength(2);
+  await checksTwo.close();
 });

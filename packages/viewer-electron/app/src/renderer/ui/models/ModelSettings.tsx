@@ -232,14 +232,15 @@ export function ModelSettings({
                       : `Remove ${provider.name}`
                   }
                   disabled={!!referencesTo(snapshot.settings, 'provider', provider.id).length}
-                  onClick={() =>
+                  onClick={() => {
+                    if (snapshot.credentials.includes(provider.id)) credential(provider.id, '');
                     save((current) => [
                       {
                         path: 'settings.providers',
                         value: current.settings.providers.filter((item) => item.id !== provider.id),
                       },
-                    ])
-                  }
+                    ]);
+                  }}
                 />
               </div>
               {preset.note && <p className="settings-note">{preset.note}</p>}

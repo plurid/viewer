@@ -5,6 +5,8 @@ import { flushMediaDrafts } from '../media/drafts';
 import { flushChatDrafts } from '../chat/drafts';
 import { flushCanvasWrites } from '../canvases/writes';
 import { flushNotes, trimNoteSessions } from '../notes/sessions';
+import { flushLenses } from './lenses';
+import { sameJSON } from '../../domain/json';
 import { CURRENT_STATE_VERSION, type Pane, type SavedState } from '../../domain/contracts';
 import { previewValuesSchema, type JSONValue } from '../../domain/workspaces/project';
 import { activeWorkspace, getState, replaceState, report, update } from './core';
@@ -45,6 +47,88 @@ export function retainedPaneIDs(): Set<string> {
     ...(getState().deletedWorkspace?.workspace.panes.map((pane) => pane.id) ?? []),
   ]);
 }
+let baselineFavorites: SavedState['favorites'] = [];
+let baselineLineHistory: string[] = [];
+let sharedListsGeneration = 0;
+
+export function resetSharedLists(favorites: SavedState['favorites'], lineHistory?: string[]): void {
+  baselineFavorites = structuredClone(favorites);
+  baselineLineHistory = [...(lineHistory ?? [])];
+  sharedListsGeneration++;
+}
+
+export function mergeSharedFavorites(
+  local: SavedState['favorites'],
+  peer: SavedState['favorites'],
+): SavedState['favorites'] {
+  if (sameJSON(local, baselineFavorites)) {
+    baselineFavorites = structuredClone(peer);
+    sharedListsGeneration++;
+    return peer;
+  }
+  const old = new Set(baselineFavorites.map((item) => item.path));
+  const wanted = new Set(local.map((item) => item.path));
+  const peerPaths = new Set(peer.map((item) => item.path));
+  const removed = new Set([...old].filter((item) => !wanted.has(item)));
+  const seen = new Set<string>();
+  const merged: SavedState['favorites'] = [];
+  for (const item of local) {
+    if ((!old.has(item.path) || peerPaths.has(item.path)) && !seen.has(item.path)) {
+      seen.add(item.path);
+      merged.push(item);
+    }
+  }
+  for (const item of peer) {
+    if (!removed.has(item.path) && !seen.has(item.path)) {
+      seen.add(item.path);
+      merged.push(item);
+    }
+  }
+  baselineFavorites = structuredClone(peer);
+  sharedListsGeneration++;
+  return merged.slice(0, 200);
+}
+
+export function mergeSharedLineHistory(
+  local: string[] | undefined,
+  peer: string[] | undefined,
+): string[] | undefined {
+  if (local === undefined && peer === undefined) {
+    baselineLineHistory = [];
+    sharedListsGeneration++;
+    return undefined;
+  }
+  const localItems = local ?? [];
+  const peerItems = peer ?? [];
+  if (sameJSON(localItems, baselineLineHistory)) {
+    baselineLineHistory = [...peerItems];
+    sharedListsGeneration++;
+    return peer;
+  }
+  const baselineIndex = new Map(baselineLineHistory.map((item, index) => [item, index]));
+  const wanted = new Set(localItems);
+  const removed = new Set(baselineLineHistory.filter((item) => !wanted.has(item)));
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  // Keep unsaved local entries ahead of peer history so debounced saves survive peer broadcasts.
+  for (const [index, item] of localItems.entries()) {
+    const previous = baselineIndex.get(item);
+    if ((previous === undefined || index < previous) && !seen.has(item)) {
+      seen.add(item);
+      merged.push(item);
+    }
+  }
+  for (const item of peerItems) {
+    if (!removed.has(item) && !seen.has(item)) {
+      seen.add(item);
+      merged.push(item);
+    }
+  }
+  baselineLineHistory = [...peerItems];
+  sharedListsGeneration++;
+  return merged.slice(0, 200);
+}
+
 export function resetPersistence(): void {
   clearTimeout(persistTimer);
   pendingEngineFlush = false;
@@ -52,6 +136,9 @@ export function resetPersistence(): void {
   adapters.clear();
   dirtyArrangements.clear();
   closedPanes.clear();
+  baselineFavorites = [];
+  baselineLineHistory = [];
+  sharedListsGeneration++;
 }
 export function storageAdapter(id: string) {
   const map = adapters.get(id) ?? new Map<string, string>();
@@ -98,6 +185,7 @@ async function flushOnce(flushEngine: boolean): Promise<void> {
   await flushMediaDrafts();
   await flushChatDrafts();
   await flushCanvasWrites();
+  await flushLenses();
   // After the engine's synchronous flush: a save it scheduled is covered by this one.
   clearTimeout(persistTimer);
   await flushPreferences();
@@ -119,8 +207,11 @@ async function flushOnce(flushEngine: boolean): Promise<void> {
   };
   replaceState({ ...getState(), saved });
   const visitSave = folderVisitSync.begin(saved.visits ?? {}, saved.recents);
+  const listsGeneration = sharedListsGeneration;
   try {
     let shared = await window.viewer.save(saved, visitSave);
+    if (sharedListsGeneration === listsGeneration)
+      resetSharedLists(saved.favorites, saved.lineHistory);
     if (shared && folderVisitSync.needsRefresh(shared.revision))
       shared = await window.viewer.folderHistory();
     learnFolderAliases(shared?.aliases);

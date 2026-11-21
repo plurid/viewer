@@ -67,30 +67,32 @@ interface ResourcePorts {
  * child lease, released when its read fails. */
 export function createResourceHandlers(ports: ResourcePorts): ResourceHandlers {
   return {
-    resource: ([file, requestID]) => ports.resources.grant(file, requestID),
-    read: ([id, requested]) => ports.resources.read(id, requested),
-    release: async ([id]) => {
+    resource: ([file, requestID], owner) => ports.resources.grant(file, requestID, owner),
+    read: ([id, requested], owner) => ports.resources.read(id, requested, owner),
+    release: async ([id], owner) => {
+      if (ports.resources.release(id, owner) === false) return;
       ports.forgetGitResource(id);
-      ports.resources.release(id);
       await ports.webPreviews.releaseResource(id);
     },
-    archive: ([id]) => ports.resources.archive(id),
-    archiveEntry: ([id, name]) => ports.resources.archiveEntry(id, name),
-    sqlite: ([id, request]) => ports.resources.sqlite(id, request),
-    imageRendition: ([id, request]) => ports.resources.rendition(id, request),
-    videoRendition: ([id, requestID]) => ports.resources.videoRendition(id, requestID),
-    officeLayout: ([id, request]) => ports.resources.officeLayout(id, request),
-    inspectPostscript: ([id, requestID]) => ports.resources.inspectPostscript(id, requestID),
+    archive: ([id], owner) => ports.resources.archive(id, owner),
+    archiveEntry: ([id, name], owner) => ports.resources.archiveEntry(id, name, owner),
+    sqlite: ([id, request], owner) => ports.resources.sqlite(id, request, owner),
+    imageRendition: ([id, request], owner) => ports.resources.rendition(id, request, owner),
+    videoRendition: ([id, requestID], owner) =>
+      ports.resources.videoRendition(id, requestID, owner),
+    officeLayout: ([id, request], owner) => ports.resources.officeLayout(id, request, owner),
+    inspectPostscript: ([id, requestID], owner) =>
+      ports.resources.inspectPostscript(id, requestID, owner),
     postscriptStatus: () => ports.resources.postscriptStatus(),
     renderPostscript: ([id, requestID], owner) => {
       if (!ports.isAgent || ports.isAgent(owner))
         throw new Error('PostScript rendering is available only to the person, never to agents.');
-      return ports.resources.renderPostscript(id, requestID);
+      return ports.resources.renderPostscript(id, requestID, owner);
     },
     officeWarm: async () => ports.warmOffice(),
-    printPDF: async ([id, password]) => {
+    printPDF: async ([id, password], owner) => {
       if (process.platform !== 'darwin') throw new Error('Printing PDFs requires macOS.');
-      const file = await ports.resources.printableFile(id);
+      const file = await ports.resources.printableFile(id, owner);
       macFiles().printPDF(file, password);
     },
     thumbnail: async ([file, size]) => {
@@ -99,62 +101,78 @@ export function createResourceHandlers(ports: ResourcePorts): ResourceHandlers {
       await ports.fileAccess.require([file]);
       return thumbnail;
     },
-    document: async ([id, request]) => {
+    document: async ([id, request], owner) => {
       if (request && 'message' in request) {
         const { message } = request;
-        return ports.resources.documentRead(id, request.requestID, (file, signal, format) =>
-          ports.files.extract(file, signal, true, undefined, format, message),
+        return ports.resources.documentRead(
+          id,
+          request.requestID,
+          (file, signal, format) =>
+            ports.files.extract(file, signal, true, undefined, format, message),
+          owner,
         );
       }
       if (request) {
         if ('fromRow' in request) {
           const { requestID, ...worksheet } = request;
-          return ports.resources.documentRead(id, requestID, (file, signal, format) =>
-            ports.files.extract(file, signal, true, worksheet, format),
+          return ports.resources.documentRead(
+            id,
+            requestID,
+            (file, signal, format) => ports.files.extract(file, signal, true, worksheet, format),
+            owner,
           );
         }
-        return ports.resources.documentRead(id, request.requestID, (file, signal, format) =>
-          ports.files.extract(file, signal, true, undefined, format),
+        return ports.resources.documentRead(
+          id,
+          request.requestID,
+          (file, signal, format) => ports.files.extract(file, signal, true, undefined, format),
+          owner,
         );
       }
-      const file = ports.resources.documentSource(id);
-      const format = await ports.resources.documentFormat(id);
+      const file = ports.resources.documentSource(id, owner);
+      const format = await ports.resources.documentFormat(id, owner);
       const document = await ports.files.extract(
         file,
-        ports.resources.signal(id),
+        ports.resources.signal(id, owner),
         true,
         undefined,
         format,
       );
       // the preview may have been released while it was read
-      ports.resources.documentSource(id);
+      ports.resources.documentSource(id, owner);
       return document;
     },
-    cancelDocument: async ([id, requestID]) => ports.resources.cancelDocument(id, requestID),
-    resourceFormat: ([id, extension]) => ports.resources.confirmFormat(id, extension),
-    officeImage: async ([id, part, requestID]) => {
+    cancelDocument: async ([id, requestID], owner) =>
+      ports.resources.cancelDocument(id, requestID, owner),
+    resourceFormat: ([id, extension], owner) => ports.resources.confirmFormat(id, extension, owner),
+    officeImage: async ([id, part, requestID], owner) => {
       let child: Resource | undefined;
       try {
-        return await ports.resources.documentRead(id, requestID, async (file, signal, format) => {
-          if (!format || !(readsOfficeContent(format) && officeFamily(format) === 'word'))
-            throw new Error('Embedded document images require a supported Word document.');
-          const document = await ports.files.extract(file, signal, true, undefined, format);
-          if (!officeImageParts(document.office).includes(part))
-            throw new Error('This image is not a supported embedded document relationship.');
-          const resource = await ports.resources.archiveEntry(id, part);
-          child = resource;
-          signal.throwIfAborted();
-          if (
-            !['png', 'jpg', 'jpeg'].includes(resource.entry.extension) ||
-            !resource.dimensions ||
-            resource.entry.size > 8 * 1024 * 1024 ||
-            resource.dimensions.width * resource.dimensions.height > 64000000
-          )
-            throw new Error('The embedded image exceeds the supported PNG/JPEG preview bounds.');
-          return resource;
-        });
+        return await ports.resources.documentRead(
+          id,
+          requestID,
+          async (file, signal, format) => {
+            if (!format || !(readsOfficeContent(format) && officeFamily(format) === 'word'))
+              throw new Error('Embedded document images require a supported Word document.');
+            const document = await ports.files.extract(file, signal, true, undefined, format);
+            if (!officeImageParts(document.office).includes(part))
+              throw new Error('This image is not a supported embedded document relationship.');
+            const resource = await ports.resources.archiveEntry(id, part, owner);
+            child = resource;
+            signal.throwIfAborted();
+            if (
+              !['png', 'jpg', 'jpeg'].includes(resource.entry.extension) ||
+              !resource.dimensions ||
+              resource.entry.size > 8 * 1024 * 1024 ||
+              resource.dimensions.width * resource.dimensions.height > 64000000
+            )
+              throw new Error('The embedded image exceeds the supported PNG/JPEG preview bounds.');
+            return resource;
+          },
+          owner,
+        );
       } catch (error) {
-        if (child) ports.resources.release(child.id);
+        if (child) ports.resources.release(child.id, owner);
         throw error;
       }
     },

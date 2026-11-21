@@ -42,10 +42,10 @@ export function createEditingHandlers(ports: EditingPorts): EditingHandlers {
       ports.window(senderID)!.webContents[command]();
       return;
     },
-    textOpen: async (args) => {
+    textOpen: async (args, owner) => {
       let file: string;
       try {
-        file = ports.resources.editableFile(args[0]);
+        file = ports.resources.editableFile(args[0], owner);
       } catch (error) {
         return { editable: false, reason: errorMessage(error) };
       }

@@ -175,74 +175,121 @@ export function sourceVersion(
 export const sameSourceVersion = (a: SourceVersion, b: SourceVersion) =>
   sameTemporalIdentity(a.identity, b.identity) && a.modified === b.modified && a.size === b.size;
 
+interface FoldedText {
+  folded: string;
+  positions: number[];
+}
+const foldValue = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+function foldForMatch(text: string): FoldedText {
+  let folded = '';
+  let offset = 0;
+  const positions: number[] = [];
+  for (const character of text) {
+    const value = foldValue(character);
+    for (let index = 0; index < value.length; index++) positions.push(offset);
+    folded += value;
+    offset += character.length;
+  }
+  return { folded, positions };
+}
+function matchInFolded(
+  text: string,
+  source: FoldedText,
+  query: string,
+): { start: number; end: number } | undefined {
+  const term = foldValue(query.trim());
+  if (!term) return;
+  const match = source.folded.indexOf(term);
+  if (match < 0) return;
+  const start = source.positions[match];
+  const last = source.positions[match + term.length - 1];
+  if (start === undefined || last === undefined) return;
+  const end = last + (text.codePointAt(last)! > 0xffff ? 2 : 1);
+  return { start, end };
+}
 /** Case/diacritic matching keeps a map back to the original passage and offsets. */
 export function originalMatch(
   text: string,
   query: string,
 ): { start: number; end: number } | undefined {
-  const fold = (value: string) =>
-    value
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase();
-  const term = fold(query.trim());
-  if (!term) return;
-  let folded = '',
-    offset = 0;
-  const positions: number[] = [];
-  for (const character of text) {
-    const value = fold(character);
-    for (let index = 0; index < value.length; index++) positions.push(offset);
-    folded += value;
-    offset += character.length;
-  }
-  const match = folded.indexOf(term);
-  if (match < 0) return;
-  const start = positions[match],
-    last = positions[match + term.length - 1];
-  if (start === undefined || last === undefined) return;
-  const end = last + (text.codePointAt(last)! > 0xffff ? 2 : 1);
-  return { start, end };
+  if (!query.trim()) return;
+  return matchInFolded(text, foldForMatch(text), query);
+}
+function resolveEvidenceAnchor(
+  document: DocumentData,
+  evidence: DocumentData['evidence'][number],
+  match: { start: number; end: number },
+): EvidenceAnchor | undefined {
+  if (evidence.anchor) return evidence.anchor;
+  const page = evidence.source.match(/^(?:OCR )?page (\d+)$/);
+  if (page) return { kind: 'pdf', page: Number(page[1]) };
+  if (evidence.source.startsWith('chapter:')) {
+    const chapter =
+      document.chapters?.findIndex((item) => item.title === evidence.source.slice(8)) ?? -1;
+    if (chapter >= 0) return { kind: 'epub', chapter };
+  } else if (evidence.source === 'text')
+    return {
+      kind: 'text',
+      start: match.start,
+      end: match.end,
+      line: evidence.text.slice(0, match.start).split('\n').length,
+    };
 }
 /** How much of the text before a match a search's quote keeps, in characters. */
 export const quoteLead = 90;
 export function searchEvidence(
   entry: FileEntry,
   document: DocumentData,
-  query: string,
+  query: string | readonly string[],
 ): SearchEvidence | undefined {
+  const terms = [
+    ...new Set((typeof query === 'string' ? [query] : query).map((t) => t.trim())),
+  ].filter(Boolean);
+  if (!terms.length) return;
+  let best: { count: number; result: SearchEvidence } | undefined;
   for (const evidence of document.evidence) {
-    const match = originalMatch(evidence.text, query);
-    if (!match) continue;
-    const start = Math.max(0, match.start - quoteLead),
-      end = Math.min(evidence.text.length, match.end + 130);
-    let anchor = evidence.anchor;
-    if (!anchor) {
-      const page = evidence.source.match(/^(?:OCR )?page (\d+)$/);
-      if (page) anchor = { kind: 'pdf', page: Number(page[1]) };
-      else if (evidence.source.startsWith('chapter:')) {
-        const chapter =
-          document.chapters?.findIndex((chapter) => chapter.title === evidence.source.slice(8)) ??
-          -1;
-        if (chapter >= 0) anchor = { kind: 'epub', chapter };
-      } else if (evidence.source === 'text')
-        anchor = {
-          kind: 'text',
-          start: match.start,
-          end: match.end,
-          line: evidence.text.slice(0, match.start).split('\n').length,
-        };
-    }
     // Metadata has no document location. Do not fabricate a page/line for it.
+    if (
+      !evidence.anchor &&
+      !/^(?:OCR )?page (\d+)$/.test(evidence.source) &&
+      !evidence.source.startsWith('chapter:') &&
+      evidence.source !== 'text'
+    )
+      continue;
+    const folded = foldForMatch(evidence.text);
+    let matchedCount = 0;
+    let earliest: { start: number; end: number } | undefined;
+    for (const term of terms) {
+      const hit = matchInFolded(evidence.text, folded, term);
+      if (!hit) continue;
+      matchedCount++;
+      if (!earliest || hit.start < earliest.start) earliest = hit;
+    }
+    if (!earliest) continue;
+    const phrase =
+      terms.length > 1 && matchedCount === terms.length
+        ? matchInFolded(evidence.text, folded, terms.join(' '))
+        : undefined;
+    const match = phrase ?? earliest;
+    const anchor = resolveEvidenceAnchor(document, evidence, match);
     if (!anchor) continue;
-    return {
+    const start = Math.max(0, match.start - quoteLead);
+    const end = Math.min(evidence.text.length, match.end + 130);
+    const result: SearchEvidence = {
       path: entry.path,
       version: sourceVersion(entry),
       anchor,
       quote: evidence.text.slice(start, end),
       coverage: document.truncated || document.coverageReason ? 'partial' : 'complete',
     };
+    if (matchedCount === terms.length) return result;
+    if (!best || matchedCount > best.count) best = { count: matchedCount, result };
   }
+  return best?.result;
 }
 /**
  * The line a text anchor marks in `text`, from 1. A search's quote starts up to `quoteLead`

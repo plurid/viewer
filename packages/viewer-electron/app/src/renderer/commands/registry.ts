@@ -11,6 +11,8 @@ export interface CommandContext {
   invocation?: CommandInvocation;
   /** Desktop-issued dispatch ID echoed only for IPC calls started by an agent command. */
   agentDispatchID?: string;
+  /** Wall-clock deadline after which an agent command must stop starting further steps. */
+  agentDispatchDeadline?: number;
   scope: CommandScope;
   workspaceID: string;
   rootID?: string;
@@ -342,6 +344,8 @@ export class CommandRegistry {
   ): Promise<void> {
     if (definition.humanOnly && context.invocation === 'custom-action')
       throw new Error('This action cannot run from a custom action. Choose it directly.');
+    if (context.agentDispatchDeadline !== undefined && Date.now() > context.agentDispatchDeadline)
+      throw new Error('The agent action timed out before finishing.');
     await withAgentDispatch(context.agentDispatchID, () =>
       definition.run(
         definition.id.startsWith('custom.') ? { ...context, invocation: 'custom-action' } : context,

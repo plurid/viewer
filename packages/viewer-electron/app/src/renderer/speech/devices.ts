@@ -8,21 +8,25 @@ const subscribe = (listener: () => void) => {
     listeners.delete(listener);
   };
 };
-/** Keep labels learned during active capture; closed-session permissions deliberately stay denied. */
+/** Keep labels learned during active capture; empty IDs mean enumeration was redacted. */
 export async function readMicrophones(): Promise<void> {
   const devices = await navigator.mediaDevices?.enumerateDevices();
   if (!devices) return;
-  microphones = devices
-    .filter((item) => item.kind === 'audioinput')
-    .slice(0, 100)
-    .map((item) =>
-      item.label
-        ? item
-        : (microphones.find((known) => known.deviceId === item.deviceId && known.label) ?? item),
-    );
+  const audioInputs = devices.filter((item) => item.kind === 'audioinput').slice(0, 100);
+  if (
+    audioInputs.length > 0 &&
+    audioInputs.every((item) => !item.deviceId) &&
+    microphones.some((item) => item.deviceId)
+  )
+    return;
+  microphones = audioInputs.map((item) =>
+    item.label
+      ? item
+      : (microphones.find((known) => known.deviceId === item.deviceId && known.label) ?? item),
+  );
   for (const listener of listeners) listener();
 }
-export function useMicrophones(): readonly MediaDeviceInfo[] {
+export function useMicrophones(refreshKey?: unknown): readonly MediaDeviceInfo[] {
   useEffect(() => {
     const read = () => {
       void readMicrophones().catch(() => {});
@@ -30,6 +34,6 @@ export function useMicrophones(): readonly MediaDeviceInfo[] {
     read();
     navigator.mediaDevices?.addEventListener('devicechange', read);
     return () => navigator.mediaDevices?.removeEventListener('devicechange', read);
-  }, []);
+  }, [refreshKey]);
   return useSyncExternalStore(subscribe, () => microphones);
 }

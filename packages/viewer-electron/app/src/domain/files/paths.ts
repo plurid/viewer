@@ -14,6 +14,11 @@ export function pathContains(root: string, file: string): boolean {
   if (hasRemoteLocationScheme(root) || hasRemoteLocationScheme(file))
     return remoteContains(root, file);
   if (file === root) return true;
+  // Backslashes are ordinary filename characters on POSIX paths.
+  if (root.startsWith('/') && !root.startsWith('//')) {
+    const base = root.replace(/\/+$/, '');
+    return file.startsWith(base + '/');
+  }
   const base = root.replace(/[\\/]+$/, '');
   return file.startsWith(base + '/') || file.startsWith(base + '\\');
 }
@@ -21,12 +26,16 @@ export function pathContains(root: string, file: string): boolean {
 /** Root through the current folder, retaining drive and network-share roots. */
 export function pathAncestry(path: string): string[] {
   if (hasRemoteLocationScheme(path)) return remoteAncestry(path);
-  const prefix = path.match(/^([A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+|[\\/])/);
+  const prefix = path.match(/^([A-Za-z]:[\\/]|(?:\/\/|\\\\)[^\\/]+[\\/][^\\/]+|[\\/])/);
   if (!prefix) return [path];
   const root = prefix[0];
-  const separator = path.includes('\\') ? '\\' : '/';
+  const posix = root === '/';
+  const separator = posix ? '/' : path.includes('\\') ? '\\' : '/';
   const trail = [root];
-  for (const part of path.slice(root.length).split(/[\\/]/).filter(Boolean)) {
+  for (const part of path
+    .slice(root.length)
+    .split(posix ? '/' : /[\\/]/)
+    .filter(Boolean)) {
     const parent = trail.at(-1)!;
     trail.push(parent + (parent.endsWith(separator) ? '' : separator) + part);
   }

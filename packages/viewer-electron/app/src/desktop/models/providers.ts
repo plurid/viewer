@@ -166,6 +166,39 @@ export class Credentials {
     this.writes = write;
     return write;
   }
+  /** Removes stored keys and bindings whose IDs are not in `retain`. */
+  prune(retain: ReadonlySet<string>): Promise<boolean> {
+    const write = this.writes
+      .catch(() => {})
+      .then(async () => {
+        await this.load();
+        let removed = false;
+        const next = { ...this.values };
+        const bindings = { ...this.bindings };
+        for (const id of Object.keys(next)) {
+          if (retain.has(id)) continue;
+          delete next[id];
+          delete bindings[id];
+          removed = true;
+        }
+        for (const id of Object.keys(bindings)) {
+          if (retain.has(id)) continue;
+          delete bindings[id];
+          removed = true;
+        }
+        if (!removed) return false;
+        await this.store.save(next);
+        this.values = next;
+        await this.bindingStore.save(bindings);
+        this.bindings = bindings;
+        return true;
+      });
+    this.writes = write.then(
+      () => {},
+      () => {},
+    );
+    return write;
+  }
   /**
    * A key is sent only to the provider type and endpoint it was entered for. A key saved before keys
    * were tied to an endpoint is tied once the person allows it, naming the endpoint: it was tied,
@@ -173,7 +206,8 @@ export class Credentials {
    */
   async forProvider(provider: ModelProvider): Promise<string> {
     await this.load();
-    if (!this.values[provider.id]) return '';
+    const ciphertext = this.values[provider.id];
+    if (!ciphertext) return '';
     const expected = providerBinding(provider);
     const bound = this.bindings[provider.id];
     if (bound && bound !== expected)
@@ -194,16 +228,31 @@ export class Credentials {
         throw new Error(
           'This provider’s API key was saved before keys were tied to an endpoint. Allow it for this endpoint, or enter the key again in Settings.',
         );
-      if (this.bindings[provider.id] === expected) return this.get(provider.id);
       const write = this.writes
         .catch(() => {})
         .then(async () => {
-          const bindings = { ...this.bindings, [provider.id]: expected };
-          await this.bindingStore.save(bindings);
-          this.bindings = bindings;
+          if (this.values[provider.id] !== ciphertext)
+            throw new Error(
+              'This provider’s API key changed while its endpoint was being confirmed. Try again.',
+            );
+          const current = this.bindings[provider.id];
+          if (current && current !== expected)
+            throw new Error(
+              'This provider’s type or endpoint changed after its API key was saved. Enter the key again in Settings to use it there.',
+            );
+          if (!current) {
+            const bindings = { ...this.bindings, [provider.id]: expected };
+            await this.bindingStore.save(bindings);
+            this.bindings = bindings;
+          }
         });
       this.writes = write;
       await write;
+      if (this.values[provider.id] !== ciphertext || this.bindings[provider.id] !== expected)
+        throw new Error(
+          'This provider’s API key changed while its endpoint was being confirmed. Try again.',
+        );
+      return this.decrypt(Buffer.from(ciphertext, 'base64'));
     }
     return this.get(provider.id);
   }

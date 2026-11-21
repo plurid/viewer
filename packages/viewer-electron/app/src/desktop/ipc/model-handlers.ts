@@ -5,6 +5,7 @@ import type { ApiHandlers } from './schemas';
 import type { SettingsService } from '../preferences/settings';
 import { providerBinding, type Credentials, type Providers } from '../models/providers';
 import type { ModelPermissions } from '../models/model-permissions';
+import { ModelPermissionRequired } from '../models/model-permissions';
 import { confirmNatively } from '../native/native-confirmation';
 import type { FileAccess } from '../files/file-access';
 import { guessFile } from '../models/file-guess';
@@ -94,6 +95,8 @@ export function createModelHandlers(ports: ModelPorts): ModelHandlers {
           'The provider endpoint changed. Review its new address before allowing data access.',
         );
       const permission = await ports.modelPermissions.get(provider);
+      const permissionRevision = ports.modelPermissions.revisionOf(provider.id);
+      if (allow && !permission) throw new ModelPermissionRequired();
       if (
         allow &&
         permission &&
@@ -105,7 +108,12 @@ export function createModelHandlers(ports: ModelPorts): ModelHandlers {
         ))
       )
         throw new Error('Agent access to model data was not allowed.');
-      await ports.modelPermissions.allowAgents(provider, allow);
+      await ports.modelPermissions.allowAgents(
+        provider,
+        allow,
+        allow ? permission?.level : undefined,
+        allow ? permissionRevision : undefined,
+      );
       ports.emit({ type: 'model-permission', providerID: provider.id });
     },
     // asked for from a preview Viewer cannot show; an answer that takes longer is not waited for

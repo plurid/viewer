@@ -25,9 +25,9 @@ interface Subscription {
   request?: Promise<void>;
   dirty: boolean;
   stop?: () => void;
-  /** Edits waiting to be sent, and whether a save is under way, by lens file. */
+  /** Edits waiting to be sent, and in-flight saves, by lens file. */
   pending: Map<string, LensOp[]>;
-  sending: Set<string>;
+  sending: Map<string, Promise<void>>;
 }
 const folders = new Map<string, Subscription>();
 const empty: LensView = { data: null, loading: true, error: '' };
@@ -39,7 +39,7 @@ function subscription(folder: string): Subscription {
       listeners: new Set(),
       dirty: false,
       pending: new Map(),
-      sending: new Set(),
+      sending: new Map(),
     };
     folders.set(folder, value);
   }
@@ -168,13 +168,15 @@ function replace(value: Subscription, document: LensDocument) {
   };
   notify(value);
 }
-function send(folder: string, file: string): void {
+function send(folder: string, file: string): Promise<void> {
   const value = subscription(folder);
+  const existing = value.sending.get(file);
+  if (existing) return existing;
   const ops = value.pending.get(file);
-  if (!ops?.length || value.sending.has(file)) return;
+  if (!ops?.length) return Promise.resolve();
   value.pending.delete(file);
-  value.sending.add(file);
-  void window.viewer
+  let failure: unknown;
+  const work = window.viewer
     .lens({ kind: 'apply', folder, file, ops })
     .then((reply) => {
       const { document, dropped } = reply as LensApplied;
@@ -182,14 +184,22 @@ function send(folder: string, file: string): void {
       if (dropped.length) report(new Error(dropped.join(' ')));
     })
     .catch((error: unknown) => {
+      failure = error;
       report(error);
-      load(folder);
+      if (value.listeners.size) load(folder);
     })
     .finally(() => {
       value.sending.delete(file);
-      if (value.pending.get(file)?.length) send(folder, file);
-      else if (!value.listeners.size && !value.sending.size) folders.delete(folder);
+      if (value.pending.get(file)?.length) void send(folder, file);
+      else if (!value.listeners.size && !value.sending.size && !value.pending.size)
+        folders.delete(folder);
     });
+  const tracked = work.then(() => {
+    if (failure !== undefined) throw failure;
+  });
+  value.sending.set(file, tracked);
+  void tracked.catch(() => {});
+  return tracked;
 }
 let sendTimer: ReturnType<typeof setTimeout> | undefined;
 const queued = new Set<string>();
@@ -202,10 +212,32 @@ function queue(folder: string, file: string, ops: readonly LensOp[]) {
   sendTimer = setTimeout(() => {
     for (const key of queued) {
       const [target, document] = JSON.parse(key) as [string, string];
-      send(target, document);
+      void send(target, document);
     }
     queued.clear();
   }, 120);
+}
+/** Drains queued and in-flight lens edits before window close, Quit or backup. */
+export async function flushLenses(): Promise<void> {
+  clearTimeout(sendTimer);
+  sendTimer = undefined;
+  let firstError: unknown;
+  for (;;) {
+    for (const key of [...queued]) {
+      queued.delete(key);
+      const [target, document] = JSON.parse(key) as [string, string];
+      void send(target, document);
+    }
+    for (const [folder, value] of [...folders]) {
+      for (const file of [...value.pending.keys()]) void send(folder, file);
+    }
+    const active = [...folders.values()].flatMap((value) => [...value.sending.values()]);
+    if (!active.length) break;
+    const settled = await Promise.allSettled(active);
+    for (const result of settled)
+      if (result.status === 'rejected' && firstError === undefined) firstError = result.reason;
+  }
+  if (firstError !== undefined) throw firstError;
 }
 
 interface HistoryEntry {

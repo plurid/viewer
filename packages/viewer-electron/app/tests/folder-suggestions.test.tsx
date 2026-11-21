@@ -54,7 +54,12 @@ import {
 } from '../src/renderer/state/places';
 import { receiveFileChanges } from '../src/renderer/state/file-changes';
 import { flushState } from '../src/renderer/state/persistence';
-import { folderCheckTimeout, checkFolderCandidates } from '../src/domain/files/folder-checks';
+import {
+  FolderCheckPool,
+  FolderCheckTimeout,
+  folderCheckTimeout,
+  checkFolderCandidates,
+} from '../src/domain/files/folder-checks';
 import { catalogCommands } from '../src/renderer/commands/window-commands/catalog';
 import { navigationCommands } from '../src/renderer/commands/window-commands/navigation';
 import { windowScopes } from '../src/renderer/commands/window-commands/scope';
@@ -556,6 +561,60 @@ describe('bounded existence checks', () => {
     });
     expect(await existingFolders(['/a', '/b', '/c'], check, controller.signal)).toEqual([]);
     expect(check).toHaveBeenCalledOnce();
+  });
+
+  it('does not fail a new query when an earlier query for the same folder was canceled', async () => {
+    const pool = new FolderCheckPool({ timeout: false });
+    let finishFirst!: (value: { directory: boolean }) => void;
+    const firstCheck = vi.fn(
+      () =>
+        new Promise<{ directory: boolean }>((resolve) => {
+          finishFirst = resolve;
+        }),
+    );
+    const firstAbort = new AbortController();
+    const first = checkFolderCandidates(['/fixtures/Documents'], firstCheck, firstAbort.signal, {
+      pool,
+    });
+    await waitFor(() => expect(firstCheck).toHaveBeenCalledOnce());
+    firstAbort.abort();
+    expect(await first).toEqual([]);
+
+    const onIncomplete = vi.fn();
+    const secondCheck = vi.fn(async () => ({ directory: true }));
+    const second = checkFolderCandidates(
+      ['/fixtures/Documents'],
+      secondCheck,
+      new AbortController().signal,
+      { pool, onIncomplete },
+    );
+    finishFirst({ directory: true });
+    expect(await second).toEqual(['/fixtures/Documents']);
+    expect(onIncomplete).not.toHaveBeenCalled();
+
+    // Timed-out reads must still fail fast rather than blocking a second caller.
+    vi.useFakeTimers();
+    try {
+      const timedPool = new FolderCheckPool();
+      const hanging = new Promise<{ directory: boolean }>(() => {});
+      const timedFirst = timedPool.run(
+        '/Volumes/Asleep',
+        () => hanging,
+        new AbortController().signal,
+      );
+      const firstRejection = expect(timedFirst).rejects.toBeInstanceOf(FolderCheckTimeout);
+      await vi.advanceTimersByTimeAsync(folderCheckTimeout);
+      await firstRejection;
+      await expect(
+        timedPool.run(
+          '/Volumes/Asleep',
+          async () => ({ directory: true }),
+          new AbortController().signal,
+        ),
+      ).rejects.toBeInstanceOf(FolderCheckTimeout);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

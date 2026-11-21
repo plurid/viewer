@@ -55,12 +55,28 @@ export class FolderCheckPool {
     const generation = this.generation;
     while (!signal.aborted && generation === this.generation) {
       const existing = this.running.get(path);
-      if (existing) {
-        if (existing.abandoned) throw existing.failure ?? new FolderCheckBusy();
-        return existing.work;
-      }
       const active = [...this.running.values()].filter((task) => !task.abandoned).length;
-      if (active < folderCheckConcurrency && this.running.size < folderCheckOutstandingLimit) {
+      if (existing) {
+        if (!existing.abandoned) {
+          try {
+            return await existing.work;
+          } catch (error) {
+            if (
+              error instanceof FolderCheckCancelled &&
+              !signal.aborted &&
+              generation === this.generation
+            )
+              continue;
+            throw error;
+          }
+        }
+        // Only timeouts fail fast on repeat callers; a canceled earlier query waits to rerun.
+        if (!(existing.failure instanceof FolderCheckCancelled))
+          throw existing.failure ?? new FolderCheckBusy();
+      } else if (
+        active < folderCheckConcurrency &&
+        this.running.size < folderCheckOutstandingLimit
+      ) {
         const task = {
           work: undefined as unknown as Promise<CheckedFolder>,
           abandoned: false,

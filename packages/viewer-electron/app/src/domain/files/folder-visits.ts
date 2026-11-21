@@ -40,6 +40,9 @@ function ancestors(visits: FolderVisits): ReadonlySet<string> {
 }
 
 export function folderPath(path: string): string {
+  // Backslashes are ordinary filename characters on POSIX paths.
+  if (path.startsWith('/') && !path.startsWith('//'))
+    return path.replace(/\/+$/, () => (/^\/+$/.test(path) ? '/' : ''));
   return path.replace(/[\\/]+$/, (slashes) =>
     /^[\\/]+$/.test(path) || /^[a-z]:[\\/]+$/i.test(path) ? slashes[0]! : '',
   );

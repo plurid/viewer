@@ -32,12 +32,14 @@ interface SettingPorts {
   fileAccess: DialogAccess;
   window(owner: number): BrowserWindow | undefined;
   isSettings(owner: number): boolean;
+  markSettingsReady?(owner: number): void;
 }
 
 /** Outside Settings, a patch is limited to what a workspace window may change. */
 export function createSettingHandlers(ports: SettingPorts): SettingHandlers {
   return {
-    settingsGet: async () => {
+    settingsGet: async (_args, owner) => {
+      ports.markSettingsReady?.(owner);
       await ports.settings.load();
       await ports.credentials.load();
       return ports.settings.snapshot(ports.credentials.ids());

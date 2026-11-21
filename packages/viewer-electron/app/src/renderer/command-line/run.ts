@@ -8,7 +8,8 @@ import {
   verbNames,
 } from '../../domain/command-line/verbs';
 import { errorMessage } from '../../domain/errors';
-import { Stopped, type LineHost } from './host';
+import { Stopped, type LineAgentDispatch, type LineHost } from './host';
+import { withAgentDispatch } from '../app/agent-dispatch';
 import { OperationCancelled } from '../operations/outcome';
 import { withArguments } from '../../domain/command-line/lex';
 import { sessionKeys } from '../keys/session';
@@ -29,6 +30,10 @@ export interface LineResult {
   message?: string;
   /** Where in the line, for an error found before running. */
   at?: number;
+}
+function checkAgentDeadline(agent?: LineAgentDispatch): void {
+  if (agent?.deadline !== undefined && Date.now() > agent.deadline)
+    throw new Error('The agent action timed out before finishing.');
 }
 /**
  * The person's commands: sequences named in Settings (`command`), and this session's
@@ -62,7 +67,12 @@ export function planLine(text: string, host: LineHost, depth = 0): PlannedStep[]
       return {
         step,
         label: name.verb.help,
-        run: (live) => run({ step, ...bound, bang: step.bang }, live),
+        run: (live) => {
+          checkAgentDeadline(live.agent);
+          return withAgentDispatch(live.agent?.id, () =>
+            run({ step, ...bound, bang: step.bang }, live),
+          );
+        },
       };
     }
     if (name.kind === 'user') {
@@ -94,7 +104,8 @@ export function planLine(text: string, host: LineHost, depth = 0): PlannedStep[]
           const messages: string[] = [];
           for (const inner of planned)
             for (let time = 0; time < (inner.step.count ?? 1); time++) {
-              const message = await inner.run(live);
+              checkAgentDeadline(live.agent);
+              const message = await withAgentDispatch(live.agent?.id, () => inner.run(live));
               if (message) messages.push(message);
             }
           return messages.join('  ') || undefined;
@@ -121,7 +132,8 @@ export function planLine(text: string, host: LineHost, depth = 0): PlannedStep[]
       step,
       label,
       run: async (live) => {
-        if (!(await live.invoke(name.id, false)))
+        checkAgentDeadline(live.agent);
+        if (!(await live.invoke(name.id, false, live.agent)))
           throw new Error(`“${label}” is not available here.`);
       },
     };
@@ -149,11 +161,19 @@ export async function runLine(text: string, host: LineHost, model = false): Prom
     if (error instanceof LineError) return { ok: false, message: error.message, at: error.at };
     throw error;
   }
+  const liveHost: LineHost = host.agent?.id
+    ? {
+        ...host,
+        newWorkspace: (name) => withAgentDispatch(host.agent?.id, () => host.newWorkspace(name)),
+        switchWorkspace: (id) => withAgentDispatch(host.agent?.id, () => host.switchWorkspace(id)),
+      }
+    : host;
   const messages: string[] = [];
   for (const item of planned)
     for (let time = 0; time < (item.step.count ?? 1); time++) {
       try {
-        const message = await item.run(host);
+        checkAgentDeadline(host.agent);
+        const message = await withAgentDispatch(host.agent?.id, () => item.run(liveHost));
         if (message) messages.push(message);
       } catch (error) {
         if (error instanceof Stopped || error instanceof OperationCancelled) return { ok: false };

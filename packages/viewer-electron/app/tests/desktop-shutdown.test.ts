@@ -184,4 +184,30 @@ describe('desktop shutdown ownership', () => {
       quiesce.mockRestore();
     }
   });
+
+  it('still closes agents, workers, stores, fileAccess and journal when an early store flush rejects', async () => {
+    const f = fixture();
+    const quiesce = vi.spyOn(fileCoordination, 'quiesce').mockResolvedValue();
+    const { ipcMain } = await import('electron');
+    const removeHandler = vi.mocked(ipcMain.removeHandler);
+    removeHandler.mockClear();
+    vi.spyOn(f.desktop.canvases, 'flush').mockRejectedValue(new Error('Disk full'));
+    const agentsClose = vi.spyOn(f.broker, 'close');
+    try {
+      await expect(f.desktop.dispose()).rejects.toMatchObject({
+        name: 'AggregateError',
+        message: 'Desktop services failed to stop.',
+        errors: [expect.objectContaining({ message: 'Disk full' })],
+      });
+      expect(agentsClose).toHaveBeenCalledOnce();
+      expect(f.files.close).toHaveBeenCalledOnce();
+      expect(f.desktop.notes.close).toHaveBeenCalledOnce();
+      expect(f.desktop.receipts.flush).toHaveBeenCalledOnce();
+      expect(f.desktop.fileAccess.close).toHaveBeenCalledOnce();
+      expect(f.desktop.journal.close).toHaveBeenCalledOnce();
+      expect(removeHandler).toHaveBeenCalledWith('viewer:request');
+    } finally {
+      quiesce.mockRestore();
+    }
+  });
 });

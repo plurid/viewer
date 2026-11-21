@@ -26,6 +26,7 @@ import {
 } from '../../domain/operations/export-presets';
 import { sendWindowEvent } from '../app/window-events';
 import { withAgentDispatch } from '../app/agent-dispatch';
+import type { LineAgentDispatch } from '../command-line/host';
 export { captureTarget } from './target';
 export interface ProgramTools {
   showTasks?(target?: ReturnType<typeof captureTarget>): void;
@@ -47,22 +48,31 @@ export function programCommands(
   /** The context as it is now: a sequence's later steps act where the earlier ones left it. */
   live?: () => CommandContext,
   /** A step with words (`vs ~/Documents`), run by the command line. */
-  line?: (text: string) => Promise<{ ok: boolean; message?: string }>,
+  line?: (text: string, agent?: LineAgentDispatch) => Promise<{ ok: boolean; message?: string }>,
   tools: ProgramTools = {},
 ): CommandDefinition[] {
   const { showServers, newBrowser, imageTools, optimizeFiles, pdfTools } = tools;
+  const agentDispatch = (context: CommandContext): LineAgentDispatch | undefined =>
+    context.agentDispatchID || context.agentDispatchDeadline !== undefined
+      ? {
+          ...(context.agentDispatchID ? { id: context.agentDispatchID } : {}),
+          ...(context.agentDispatchDeadline !== undefined
+            ? { deadline: context.agentDispatchDeadline }
+            : {}),
+        }
+      : undefined;
   const customInvoke = (id: string, context: CommandContext) => {
     if (id === 'network-sharing')
       throw new Error('Network sharing cannot run from a custom action. Choose it directly.');
     return invoke(id, context);
   };
-  const customLine = async (text: string) => {
+  const customLine = async (text: string, agent?: LineAgentDispatch) => {
     for (const step of parseCommandLine(text)) {
       const name = resolveName(step.name);
       if (name.kind === 'id' && name.id === 'network-sharing')
         throw new Error('Network sharing cannot run from a custom action. Choose it directly.');
     }
-    return line ? line(text) : { ok: false, message: 'Command line unavailable.' };
+    return line ? line(text, agent) : { ok: false, message: 'Command line unavailable.' };
   };
   const folder = (context: CommandContext) => !!context.directory || !!context.folder;
   const target = (context: CommandContext) => {
@@ -349,6 +359,11 @@ export function programCommands(
             const values = await requestParameters(action.name, actionInputs(action, actions));
             if (!values) return;
             for (const [index, step] of executor.steps.entries()) {
+              if (
+                context.agentDispatchDeadline !== undefined &&
+                Date.now() > context.agentDispatchDeadline
+              )
+                throw new Error('The agent action timed out before finishing.');
               if (activeWorkspace().id !== captured.workspaceID)
                 throw new Error('The workspace changed. The workflow stopped.');
               if (
@@ -372,8 +387,11 @@ export function programCommands(
                     executeAction(child, captured, values),
                   );
                 } else {
+                  const agent = agentDispatch(context);
                   const result = line
-                    ? await customLine(step.line)
+                    ? await withAgentDispatch(context.agentDispatchID, () =>
+                        customLine(step.line, agent),
+                      )
                     : { ok: false, message: 'Command line unavailable.' };
                   if (!result.ok) throw new Error(result.message || 'Command did not finish.');
                 }
@@ -387,12 +405,20 @@ export function programCommands(
           }
           if (executor.kind === 'sequence') {
             for (const [index, command] of executor.commands.entries()) {
+              if (
+                context.agentDispatchDeadline !== undefined &&
+                Date.now() > context.agentDispatchDeadline
+              )
+                throw new Error('The agent action timed out before finishing.');
               if (command.startsWith('custom.'))
                 throw new Error('Custom actions cannot call another custom action.');
               if (!plainCommandID(command)) {
                 // run from a menu or a key, a named sequence has no words: $1… are empty
                 const text = withArguments(command, [], executor.command ?? action.name);
-                const result = line ? await customLine(text) : { ok: false };
+                const agent = agentDispatch(context);
+                const result = line
+                  ? await withAgentDispatch(context.agentDispatchID, () => customLine(text, agent))
+                  : { ok: false };
                 if (!result.ok)
                   throw new Error(
                     `“${action.name}” stopped at “${command}”${result.message ? `: ${result.message}` : '.'}`,
@@ -400,9 +426,18 @@ export function programCommands(
                 continue;
               }
               const step = index ? (live?.() ?? context) : context;
-              const tagged = context.agentDispatchID
-                ? { ...step, agentDispatchID: context.agentDispatchID }
-                : step;
+              const tagged =
+                context.agentDispatchID || context.agentDispatchDeadline !== undefined
+                  ? {
+                      ...step,
+                      ...(context.agentDispatchID
+                        ? { agentDispatchID: context.agentDispatchID }
+                        : {}),
+                      ...(context.agentDispatchDeadline !== undefined
+                        ? { agentDispatchDeadline: context.agentDispatchDeadline }
+                        : {}),
+                    }
+                  : step;
               if ((await customInvoke(command, tagged)) === false)
                 throw new Error(
                   `“${action.name}” stopped at “${command}”, which is not a command available here.`,

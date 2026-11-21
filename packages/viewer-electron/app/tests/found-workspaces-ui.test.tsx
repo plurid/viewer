@@ -598,7 +598,13 @@ describe('Clear Recent Folders and dismissed offers', () => {
     const workspaceDefinitionFile = vi.fn(async () => catalogOf([], 9));
     Object.assign(window, { viewer: { workspaceDefinitionFile, save: vi.fn() } });
     initialize({ home, platform: 'darwin', state: null, openPaths: [], locations: [] });
+    // Immediate pre-flush Undo cancels locally without contacting desktop.
     clearRecentFolders();
+    undoClearRecentFolders();
+    expect(workspaceDefinitionFile).not.toHaveBeenCalled();
+    // Once Clear has flushed to desktop, Undo restores dismissed offers.
+    clearRecentFolders();
+    await flushState(false);
     expect(workspaceDefinitionFile).not.toHaveBeenCalled();
     undoClearRecentFolders();
     await waitFor(() =>

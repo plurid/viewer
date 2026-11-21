@@ -59,4 +59,35 @@ describe('local files', () => {
     await chmod(root, 0);
     await expect(list(root)).rejects.toMatchObject({ code: 'EACCES' });
   });
+  it('gives collation-equal names a deterministic order that reverses when descending', () => {
+    const make = (name: string) => ({
+      path: `/fixtures/${name}`,
+      parent: '/fixtures',
+      name,
+      directory: false,
+      kind: 'file' as const,
+      extension: name.split('.').pop() ?? '',
+      size: 10,
+      created: 0,
+      modified: 0,
+      hidden: false,
+      mime: 'application/octet-stream',
+      identity: name,
+    });
+    for (const [first, second] of [
+      ['1.png', '01.png'],
+      ['a.txt', 'A.txt'],
+      ['resume.pdf', 'résumé.pdf'],
+    ]) {
+      const a = make(first);
+      const b = make(second);
+      const ascFromAB = sortEntries([a, b], 'name', false).map((item) => item.name);
+      const ascFromBA = sortEntries([b, a], 'name', false).map((item) => item.name);
+      const descFromAB = sortEntries([a, b], 'name', true).map((item) => item.name);
+      const descFromBA = sortEntries([b, a], 'name', true).map((item) => item.name);
+      expect(ascFromAB).toEqual(ascFromBA);
+      expect(descFromAB).toEqual(descFromBA);
+      expect(descFromAB).toEqual([...ascFromAB].reverse());
+    }
+  });
 });

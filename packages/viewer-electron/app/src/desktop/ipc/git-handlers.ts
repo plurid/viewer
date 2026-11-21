@@ -63,9 +63,14 @@ export function createGitHandlers(ports: GitPorts): GitHandlers {
         ),
       );
     },
-    gitResource: async ([source]) => {
+    gitResource: async ([source], owner) => {
       const bytes = await ports.reader.blob(source);
-      const resource = await ports.resources.grantBytes(source.repository, source.path, bytes);
+      const resource = await ports.resources.grantBytes(
+        source.repository,
+        source.path,
+        bytes,
+        owner,
+      );
       ports.retainResource(resource.id);
       return resource;
     },

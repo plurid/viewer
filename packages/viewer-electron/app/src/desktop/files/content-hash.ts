@@ -20,7 +20,13 @@ export async function contentHash(
   await access([item.path]);
   return fileCoordination.run(
     [{ path: item.path, mode: 'read' }],
-    async () => {
+    async (coordinated) => {
+      // Quiescing for Eject or Revoke aborts the claim's signal while the caller's stays active.
+      const checkAborted = () => {
+        signal.throwIfAborted();
+        coordinated?.throwIfAborted();
+      };
+      checkAborted();
       const handle = await open(
         fileCoordination.path(item.path),
         constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
@@ -33,7 +39,7 @@ export async function contentHash(
           end = Math.min(info.size, limit);
         let offset = 0;
         while (offset < end) {
-          signal.throwIfAborted();
+          checkAborted();
           const { bytesRead } = await handle.read(
             buffer,
             0,
@@ -44,6 +50,7 @@ export async function contentHash(
           hash.update(buffer.subarray(0, bytesRead));
           offset += bytesRead;
         }
+        checkAborted();
         const after = await handle.stat();
         if (
           info.mtimeMs !== after.mtimeMs ||
@@ -52,6 +59,7 @@ export async function contentHash(
         )
           throw new Error('The file changed during hashing.');
         await access([item.path]);
+        checkAborted();
         if (!sameSourceVersion(sourceVersion(item), sourceVersion(await entry(item.path))))
           throw new Error('The file changed since it was listed. Run the check again.');
         return hash.digest('hex');

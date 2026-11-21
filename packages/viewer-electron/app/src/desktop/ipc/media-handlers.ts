@@ -29,15 +29,18 @@ export function createMediaHandlers(ports: MediaPorts): MediaHandlers {
     browser: ([request], owner) => ports.browsers.request(owner, request),
     media: ([request], owner) => ports.documents.request(request, owner),
     optimization: ([request], owner) => ports.optimization.request(request, owner),
-    imageInspect: async ([file]) => {
+    imageInspect: async ([file], owner) => {
+      await ports.fileAccess.require([file]);
       const before = sourceVersion(await entry(file));
       const value = await ports.transforms.inspectImage(file);
+      await ports.fileAccess.require([file]);
       if (!sameSourceVersion(before, sourceVersion(await entry(file))))
         throw new Error('The image changed while being read. Try again.');
       const preview = await ports.resources.grantBytes(
         file,
         'image-preview.png',
         Buffer.from(value.preview),
+        owner,
       );
       return { width: value.width, height: value.height, alpha: value.alpha, preview };
     },
@@ -45,6 +48,7 @@ export function createMediaHandlers(ports: MediaPorts): MediaHandlers {
       await ports.fileAccess.require([file]);
       const version = sourceVersion(await entry(file));
       const value = await ports.transforms.pdfInspect(file);
+      await ports.fileAccess.require([file]);
       if (!sameSourceVersion(version, sourceVersion(await entry(file))))
         throw new Error('The PDF changed while being read. Inspect it again.');
       return { ...value, version };

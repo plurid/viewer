@@ -10,6 +10,7 @@ import { reorder } from '../../domain/preferences/ui';
 import { getState, savePatch, report, update } from './core';
 import { changePreferences } from './preferences';
 import { folderVisitSync } from './folder-visits';
+import { flushState } from './persistence';
 import { knowFolder, forgetKnownFolders } from '../explorer/folder-availability';
 
 export function addFavorite(path: string, name: string, before?: string): void {
@@ -110,15 +111,20 @@ export function undoClearRecentFolders(): void {
       last: Math.max(visit.last, current[path]?.last ?? 0),
     };
   }
+  const cancelled = folderVisitSync.cancelOrRestore(recovery.visits, [
+    ...recovery.recents,
+    ...Object.keys(recovery.visits),
+  ]);
   savePatch({
     recents: [...new Set([...getState().saved.recents, ...recovery.recents])].slice(0, 50),
     visits: boundFolderVisits(restored, Date.now(), Object.keys(current)),
   });
-  // the workspace offers Clear stopped hiding hide again; every window hears the catalog's change
-  void Promise.resolve()
-    .then(() => window.viewer.workspaceDefinitionFile({ kind: 'restore-offers' }))
-    .catch(report);
   dismissFolderRecovery();
+  // When Clear already reached desktop, wait for the clear/restore save barrier before restoring offers.
+  if (!cancelled)
+    void flushState(false)
+      .then(() => window.viewer.workspaceDefinitionFile?.({ kind: 'restore-offers' }))
+      .catch(report);
 }
 
 export function offerToForgetFolder(path: string): void {

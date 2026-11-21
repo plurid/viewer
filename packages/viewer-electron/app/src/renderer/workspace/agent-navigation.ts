@@ -14,7 +14,13 @@ export async function executeAgentNavigation(
   controller: WorkspaceController,
   switchTo: (id: string) => Promise<void>,
   dispatchID?: string,
+  deadline?: number,
 ): Promise<void> {
+  const checkDeadline = () => {
+    if (deadline !== undefined && Date.now() > deadline)
+      throw new Error('The agent action timed out before finishing.');
+  };
+  checkDeadline();
   const origin = () => {
     const space = activeWorkspace();
     const pane = space.panes.find((pane) => pane.id === target.paneID);
@@ -77,10 +83,12 @@ export async function executeAgentNavigation(
       destination.panes.filter((pane) => pane.type === 'terminal').map((pane) => pane.id),
     );
     await withAgentDispatch(dispatchID, () => switchTo(destination.id));
+    checkDeadline();
     return;
   }
   if (request.kind === 'open-path') {
     const entry = await withAgentDispatch(dispatchID, () => window.viewer.stat(request.path));
+    checkDeadline();
     origin();
     if (!pane && request.placement === 'linked') throw new Error('Focus a files plane first.');
     if (request.placement === 'current' && entry.directory && pane?.type === 'folder') {
@@ -92,7 +100,9 @@ export async function executeAgentNavigation(
   if (pane?.type !== 'folder') throw new Error('Focus a files plane before selecting files.');
   const entries = [];
   for (const expected of request.files) {
+    checkDeadline();
     const actual = await withAgentDispatch(dispatchID, () => window.viewer.stat(expected.path));
+    checkDeadline();
     origin();
     if (!sameCapturedItem(actual, expected) || actual.parent !== expected.parent)
       throw new Error(

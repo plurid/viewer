@@ -160,3 +160,22 @@ it('caps worklet output even while the UI thread does not consume messages', asy
   processor.port.onmessage({ data: 'finish' });
   expect(messages.at(-1)).toBe('finished');
 });
+it('translates empty-message OverconstrainedError and NotFoundError from getUserMedia', async () => {
+  const overconstrained = Object.assign(new Error(''), { name: 'OverconstrainedError' });
+  media.mockRejectedValueOnce(overconstrained);
+  await expect(captureAudio({ ...options(), microphone: 'unplugged-mic' })).rejects.toThrow(
+    /not connected.*Settings/i,
+  );
+
+  const notFound = Object.assign(new Error(''), { name: 'NotFoundError' });
+  media.mockRejectedValueOnce(notFound);
+  await expect(captureAudio(options())).rejects.toThrow(/No microphone.*Settings/i);
+
+  const denied = Object.assign(new Error(''), { name: 'NotAllowedError' });
+  media.mockRejectedValueOnce(denied);
+  await expect(captureAudio(options())).rejects.toThrow(/Microphone access is denied/i);
+
+  const busy = Object.assign(new Error(''), { name: 'NotReadableError' });
+  media.mockRejectedValueOnce(busy);
+  await expect(captureAudio(options())).rejects.toThrow(/could not be opened/i);
+});

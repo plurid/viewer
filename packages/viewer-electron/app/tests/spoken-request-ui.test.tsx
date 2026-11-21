@@ -492,3 +492,52 @@ it('the live run offers Muse Spark the check’s commands as the app does', () =
     jobFolderCommands.filter((command) => command.id.startsWith('check-')).map((item) => item.id),
   );
 });
+
+it('yields Ctrl+Shift+Space when the person reassigned it to another binding', () => {
+  const { settings } = getState();
+  update({
+    ...getState(),
+    settings: {
+      ...settings,
+      settings: {
+        ...settings.settings,
+        shortcuts: { ...settings.settings.shortcuts, palette: 'Ctrl+Shift+Space' },
+      },
+    },
+  });
+  window_();
+  const event = new KeyboardEvent('keydown', {
+    key: ' ',
+    code: 'Space',
+    ctrlKey: true,
+    shiftKey: true,
+    cancelable: true,
+  });
+  window.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(false);
+  expect(speech).not.toHaveBeenCalled();
+  expect(screen.queryByRole('complementary', { name: 'Ask Viewer by voice' })).toBeNull();
+});
+
+it('ignores the dictate shortcut while a modal DictationDialog is open', () => {
+  window_();
+  const dialog = document.createElement('dialog');
+  dialog.className = 'speech-dialog';
+  dialog.setAttribute('open', '');
+  document.body.append(dialog);
+  try {
+    const event = new KeyboardEvent('keydown', {
+      key: ' ',
+      code: 'Space',
+      ctrlKey: true,
+      shiftKey: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(speech).not.toHaveBeenCalled();
+    expect(screen.queryByRole('complementary', { name: 'Ask Viewer by voice' })).toBeNull();
+  } finally {
+    dialog.remove();
+  }
+});

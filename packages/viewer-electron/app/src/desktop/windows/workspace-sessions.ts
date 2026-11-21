@@ -335,6 +335,22 @@ export class WorkspaceSessions {
       this.current.openWindows = [...this.sessions.values()].map((session) => session.workspaceID);
   }
 
+  /** Releases ownership immediately and serializes the resulting openWindows save behind in-flight writes. */
+  closeAndPersist(owner: number, write: (state: SavedState) => Promise<void>): Promise<void> {
+    this.close(owner);
+    const work = this.writes
+      .catch(() => {})
+      .then(async () => {
+        if (!this.current) return;
+        this.current.openWindows = [...this.sessions.values()].map(
+          (session) => session.workspaceID,
+        );
+        await write(structuredClone(this.current));
+      });
+    this.writes = work;
+    return work;
+  }
+
   /** Publish the merge only after its durable write succeeds. All window saves share this queue. */
   persist(
     owner: number,
@@ -374,42 +390,43 @@ export class WorkspaceSessions {
     visitSave?: FolderVisitSave,
   ): void {
     const session = this.sessions.get(owner);
-    if (!session) return;
-    for (const space of session.baseline.workspaces) {
-      const key = space.definition?.key;
-      if (
-        key &&
-        !merged.workspaces.some((item) => item.definition?.key === key) &&
-        this.definitionOwner(key) === owner
-      )
-        this.definitionReservations.delete(key);
+    if (session) {
+      for (const space of session.baseline.workspaces) {
+        const key = space.definition?.key;
+        if (
+          key &&
+          !merged.workspaces.some((item) => item.definition?.key === key) &&
+          this.definitionOwner(key) === owner
+        )
+          this.definitionReservations.delete(key);
+      }
+      session.workspaceID = input.activeWorkspace;
+      session.baseline = structuredClone({
+        ...input,
+        workspaces: rekeyFoundLinks(
+          input.workspaces,
+          [...this.definitionRemaps].map(([from, to]) => ({ from, to })),
+        ),
+      });
+      // The old workspace is flushed before building, so only a committed key releases its reservation.
+      for (const space of input.workspaces) {
+        const key = space.definition?.key;
+        if (key && this.definitionOwner(key) === owner) this.definitionReservations.delete(key);
+      }
+      const revision = visitSave?.revision ?? session.historyRevision;
+      session.origins = new Map(
+        Object.keys(input.visits ?? {}).map((path) => {
+          const mapped = this.historyChanges.needsRefresh(revision)
+            ? (session.origins.get(path) ?? path)
+            : this.historyChanges.path(path, revision);
+          return [path, this.aliases[mapped] ?? mapped];
+        }),
+      );
+      session.historyKeys = Object.fromEntries(
+        [...session.origins.values()].map((path) => [path, { count: 1, last: 0 }]),
+      );
+      session.historyRevision = this.historyRevision;
     }
-    session.workspaceID = input.activeWorkspace;
-    session.baseline = structuredClone({
-      ...input,
-      workspaces: rekeyFoundLinks(
-        input.workspaces,
-        [...this.definitionRemaps].map(([from, to]) => ({ from, to })),
-      ),
-    });
-    // The old workspace is flushed before building, so only a committed key releases its reservation.
-    for (const space of input.workspaces) {
-      const key = space.definition?.key;
-      if (key && this.definitionOwner(key) === owner) this.definitionReservations.delete(key);
-    }
-    const revision = visitSave?.revision ?? session.historyRevision;
-    session.origins = new Map(
-      Object.keys(input.visits ?? {}).map((path) => {
-        const mapped = this.historyChanges.needsRefresh(revision)
-          ? (session.origins.get(path) ?? path)
-          : this.historyChanges.path(path, revision);
-        return [path, this.aliases[mapped] ?? mapped];
-      }),
-    );
-    session.historyKeys = Object.fromEntries(
-      [...session.origins.values()].map((path) => [path, { count: 1, last: 0 }]),
-    );
-    session.historyRevision = this.historyRevision;
     if (visitSave?.clear) {
       this.clearRevision++;
       this.clearID = visitSave.id;
@@ -417,6 +434,8 @@ export class WorkspaceSessions {
       this.aliasTargets = {};
       this.historyFiles.clear();
     }
+    // Recompute openWindows from live sessions so a peer closing mid-write is never revived.
+    merged.openWindows = [...this.sessions.values()].map((item) => item.workspaceID);
     this.current = merged;
   }
 

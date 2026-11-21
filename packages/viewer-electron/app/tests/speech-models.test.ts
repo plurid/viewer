@@ -93,6 +93,19 @@ describe('managed speech-model weights', () => {
         await expect(restored.request({ kind: 'use', model: model.id }, 'changed')).rejects.toThrow(
           'verify',
         );
+        // Re-importing or re-downloading verified weights restores selectedFile() past the broken record.
+        const freshSource = path.join(f.root, 'reimport.bin');
+        await writeFile(freshSource, bytes);
+        await restored.request(
+          { kind: 'import', model: model.id, source: freshSource },
+          'reimport',
+        );
+        const recovered = await restored.status();
+        expect(recovered.models[0]).toMatchObject({ installed: true, selected: true });
+        expect(recovered.records).toHaveLength(2);
+        const chosen = await restored.selectedFile();
+        expect(chosen.recordID).toBe(recovered.records[1]!.id);
+        expect(chosen.file).toBe(path.join(f.profile, 'speech-models', recovered.records[1]!.file));
       } finally {
         await restored.close();
       }

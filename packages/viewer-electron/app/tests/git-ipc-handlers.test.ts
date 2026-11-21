@@ -205,6 +205,7 @@ describe('Git IPC ownership', () => {
       root,
       'readme.txt',
       Buffer.from('committed bytes'),
+      17,
     );
     expect(view.retainResource).toHaveBeenCalledExactlyOnceWith(view.resource.id);
   });

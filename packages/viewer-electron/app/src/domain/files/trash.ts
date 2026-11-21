@@ -86,6 +86,12 @@ export function sortTrashItems(
   });
 }
 export function originalTrashFolder(file: string): string {
+  // Backslashes are ordinary filename characters on POSIX paths.
+  if (file.startsWith('/') && !file.startsWith('//')) {
+    const clean = file.replace(/\/+$/, '');
+    const index = clean.lastIndexOf('/');
+    return index <= 0 ? '/' : clean.slice(0, index);
+  }
   const clean = file.replace(/[/\\]+$/, '');
   const index = Math.max(clean.lastIndexOf('/'), clean.lastIndexOf('\\'));
   return index <= 0

@@ -85,6 +85,35 @@ describe('private model data authority', () => {
       permissions.run(provider, 'names', signal(), async () => 'secret', 'agent'),
     ).rejects.toThrow('agents');
   });
+  it('refuses stale agent approval when the provider data level or approval revision changed', async () => {
+    await permissions.set(provider, 'names');
+    const before = permissions.revisionOf(provider.id);
+    await permissions.set(provider, 'images');
+    await expect(permissions.allowAgents(provider, true, 'names')).rejects.toThrow('changed');
+    expect((await permissions.get(provider))?.agents).toBeFalsy();
+    await expect(
+      permissions.run(provider, 'names', signal(), async () => 'secret', 'agent'),
+    ).rejects.toThrow('agents');
+
+    // Re-approving the same level also invalidates a confirmation opened before that write.
+    await permissions.set(provider, 'names');
+    await expect(permissions.allowAgents(provider, true, 'names', before)).rejects.toThrow(
+      'changed',
+    );
+    expect((await permissions.get(provider))?.agents).toBeFalsy();
+
+    // A rejected stale approval must not disturb a newer valid agent approval on the new level.
+    await permissions.set(provider, 'images');
+    const currentRevision = permissions.revisionOf(provider.id);
+    await permissions.allowAgents(provider, true, 'images', currentRevision);
+    await expect(permissions.allowAgents(provider, true, 'names', before)).rejects.toThrow(
+      'changed',
+    );
+    expect((await permissions.get(provider))?.agents).toBe(true);
+    expect(
+      await permissions.run(provider, 'images', signal(), async () => 'allowed', 'agent'),
+    ).toBe('allowed');
+  });
   it('requires approval for each requested data level', async () => {
     await permissions.set(provider, 'names');
     expect(await permissions.run(provider, 'names', signal(), async () => 'allowed')).toBe(

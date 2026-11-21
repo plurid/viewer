@@ -33,6 +33,7 @@ import type { CustomAction } from '../../../domain/automation/actions';
 import { useTheme, useThemeVariables } from '../theme';
 import { settingsDiscovery } from './discovery';
 import { SpeechSettings } from '../../speech/SpeechSettings';
+import { resolvedShortcut } from '../../../domain/preferences/shortcuts';
 import { errorMessage } from '../../../domain/errors';
 import { PathHome } from '../PathLabel';
 
@@ -301,7 +302,7 @@ export function SettingsWindow() {
           {!query && category === 'Models' && (
             <ModelSettings snapshot={snapshot} save={enqueue} error={setError} />
           )}
-          {page === 'Speech' && <SpeechSettings shortcut={settings.shortcuts.dictate} />}
+          {page === 'Speech' && <SpeechSettings shortcut={resolvedShortcut(settings, 'dictate')} />}
           {page === 'Browsing' && <FolderOverrideSettings snapshot={snapshot} save={patches} />}
           {!query && category === 'Terminals' && (
             <TerminalSettings snapshot={snapshot} save={enqueue} />

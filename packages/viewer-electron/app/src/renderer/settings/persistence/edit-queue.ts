@@ -9,7 +9,16 @@ interface SettingsWriter {
   error(message: string): void;
 }
 
-/** Failed intents remain queued; only their successful durable write advances the queue. */
+const rejectedEditCodes = new Set(['SETTINGS_INVALID', 'SETTINGS_CONFLICT']);
+
+function isRejectedEdit(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = (error as { code?: unknown }).code;
+  if (typeof code === 'string' && rejectedEditCodes.has(code)) return true;
+  return (error as { name?: unknown }).name === 'ZodError';
+}
+
+/** Failed I/O intents remain queued; rejected validation or conflict intents clear so later edits and close proceed. */
 export class SettingsEditQueue {
   private readonly pending: SettingsChange[] = [];
   private writing?: Promise<void>;
@@ -29,10 +38,15 @@ export class SettingsEditQueue {
         while (this.pending.length) {
           const snapshot = this.writer.current();
           if (!snapshot) throw new Error('Settings have not finished loading.');
-          const patches = this.pending[0]!(snapshot);
-          if (patches.length)
-            this.writer.accept(await this.writer.write(patches, snapshot.revision));
-          this.pending.shift();
+          try {
+            const patches = this.pending[0]!(snapshot);
+            if (patches.length)
+              this.writer.accept(await this.writer.write(patches, snapshot.revision));
+            this.pending.shift();
+          } catch (error) {
+            if (isRejectedEdit(error)) this.pending.shift();
+            throw error;
+          }
         }
       })
       .catch(async (error) => {

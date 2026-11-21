@@ -9,6 +9,7 @@ import { provisionFormats } from '../previews/data/provision';
 import { shortcutFormats } from '../previews/data/shortcuts';
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+const codeUnits = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 type CapturedItem = Pick<FileEntry, 'identity' | 'kind' | 'created' | 'modified' | 'size'>;
 /** Captured authority never accepts the unreadable-entry convenience used by selection refresh. */
 export function sameCapturedItem(current: CapturedItem, captured: CapturedItem): boolean {
@@ -116,10 +117,17 @@ export function entryOrder(
     const value =
       key === 'name'
         ? collator.compare(a.name, b.name)
-        : key === 'kind' || key === 'extension'
-          ? collator.compare(a.extension, b.extension)
-          : a[key] - b[key];
-    return (value || collator.compare(a.name, b.name)) * (descending ? -1 : 1);
+        : key === 'kind'
+          ? collator.compare(kindLabel(a), kindLabel(b))
+          : key === 'extension'
+            ? collator.compare(a.extension, b.extension)
+            : a[key] - b[key];
+    return (
+      (value ||
+        collator.compare(a.name, b.name) ||
+        codeUnits(a.name, b.name) ||
+        codeUnits(a.path, b.path)) * (descending ? -1 : 1)
+    );
   };
 }
 /** How many digits a size keeps: one decimal, or every byte for a threshold a rounded figure could

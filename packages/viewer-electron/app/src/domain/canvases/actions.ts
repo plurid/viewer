@@ -48,6 +48,34 @@ export const canvasInvocationSchema = z
     stateRevision: z.number().int().nonnegative(),
   })
   .strict();
+export const canvasStateLimit = 128_000;
+const reservedCanvasKeys = new Set(['__proto__', 'constructor', 'prototype']);
+const canvasStateRecord = z
+  .record(
+    z
+      .string()
+      .min(1)
+      .max(200)
+      .refine(
+        (key) => !reservedCanvasKeys.has(key),
+        'Canvas state exceeds its limit or contains a reserved key.',
+      ),
+    z.json(),
+  )
+  .refine(
+    (value) => new TextEncoder().encode(JSON.stringify(value)).length <= canvasStateLimit,
+    'Canvas state exceeds its limit or contains a reserved key.',
+  );
+export const canvasStateSchema = z
+  .custom<Record<string, unknown>>(
+    (value) =>
+      !!value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      !Object.keys(value).some((key) => reservedCanvasKeys.has(key)),
+    'Canvas state exceeds its limit or contains a reserved key.',
+  )
+  .pipe(canvasStateRecord);
 export const canvasActionOutputSchema = z
   .object({
     result: z
@@ -56,7 +84,7 @@ export const canvasActionOutputSchema = z
         (v) => new TextEncoder().encode(JSON.stringify(v)).length <= 32000,
         'Action results must fit within 32 KB.',
       ),
-    patch: z.record(z.string(), z.json()).optional(),
+    patch: canvasStateSchema.optional(),
   })
   .strict();
 export type CanvasActionOutput = z.infer<typeof canvasActionOutputSchema>;

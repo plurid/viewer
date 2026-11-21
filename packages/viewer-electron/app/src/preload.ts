@@ -176,7 +176,10 @@ const api: ViewerAPI = {
   fileInformation: (file) => invoke('fileInformation', file),
   fileInformationUpdate: (file, revision, patch) =>
     invoke('fileInformationUpdate', file, revision, patch),
-  chooseFolder: (defaultPath) => invoke('chooseFolder', defaultPath),
+  chooseFolder: (defaultPath, native) =>
+    native === undefined
+      ? invoke('chooseFolder', defaultPath)
+      : invoke('chooseFolder', defaultPath, native),
   reveal: (file) => invoke('reveal', file),
   openExternal: (file) => invoke('openExternal', file),
   openAddress: (address) => invoke('openAddress', address),
@@ -221,8 +224,7 @@ const api: ViewerAPI = {
   save: (state, visitSave) => invoke('save', state, visitSave),
   folderHistory: () => invoke('folderHistory'),
   folderCheck: (path) => invoke('folderCheck', path),
-  flushed: (token, result) =>
-    result === undefined ? invoke('flushed', token) : invoke('flushed', token, result),
+  flushed: (token, result) => invoke('flushed', token, result),
   clipboardWrite: (files, cut) => invoke('clipboardWrite', files, cut),
   clipboardWriteText: (text) => invoke('clipboardWriteText', text),
   copyPaths: (files) => invoke('copyPaths', files),
@@ -241,6 +243,10 @@ const api: ViewerAPI = {
   volumeEject: (path) => invoke('volumeEject', path),
   fileAccessList: () => invoke('fileAccessList'),
   fileAccessRevoke: (path) => invoke('fileAccessRevoke', path),
+  fileAccessPrivacySettings: (pane) =>
+    pane === undefined
+      ? invoke('fileAccessPrivacySettings')
+      : invoke('fileAccessPrivacySettings', pane),
   textEdit: (command) => invoke('textEdit', command),
   textOpen: (resourceID) => invoke('textOpen', resourceID),
   textSave: (file, text, expected, session, bom) =>

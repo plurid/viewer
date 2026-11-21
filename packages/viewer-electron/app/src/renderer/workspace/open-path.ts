@@ -26,7 +26,7 @@ export async function openWorkspacePath(
   } catch (error) {
     if (!target?.directory || !needsFolderAccess((error as { code?: string }).code)) throw error;
     if (!current()) return false;
-    const selected = await window.viewer.chooseFolder(path);
+    const selected = await window.viewer.chooseFolder(path, true);
     if (!selected || !current()) return false;
     entry = await window.viewer.stat(selected);
     requestRefresh();

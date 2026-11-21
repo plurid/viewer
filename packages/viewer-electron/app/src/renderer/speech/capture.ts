@@ -13,19 +13,50 @@ interface CaptureOptions {
   limit(): void;
   failed(message: string): void;
 }
+function microphoneStartError(error: unknown, chosenMicrophone: string): Error {
+  const name = error instanceof Error ? error.name : '';
+  if (name === 'OverconstrainedError')
+    return new Error(
+      'The chosen microphone is not connected. Pick another in Settings → Speech, then try again.',
+    );
+  if (name === 'NotFoundError')
+    return new Error(
+      chosenMicrophone
+        ? 'The chosen microphone is not connected. Pick another in Settings → Speech, then try again.'
+        : 'No microphone was found. Connect a microphone or pick one in Settings → Speech, then try again.',
+    );
+  if (name === 'NotAllowedError' || name === 'SecurityError')
+    return new Error(
+      'Microphone access is denied. Allow Viewer in System Settings → Privacy & Security → Microphone, then try again.',
+    );
+  if (name === 'NotReadableError' || name === 'AbortError')
+    return new Error(
+      'The microphone could not be opened. Check whether another app is using it or pick another in Settings → Speech.',
+    );
+  if (error instanceof Error && error.message.trim()) return error;
+  return new Error(
+    'The microphone could not be started. Check your microphone in Settings → Speech and try again.',
+  );
+}
 /** The capture owns every track and audio node, including a stream arriving after cancellation. */
 export async function captureAudio(options: CaptureOptions): Promise<AudioCapture> {
   const { signal } = options;
   signal.throwIfAborted();
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      channelCount: 1,
-      echoCancellation: true,
-      noiseSuppression: true,
-      ...(options.microphone ? { deviceId: { exact: options.microphone } } : {}),
-    },
-    video: false,
-  });
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        ...(options.microphone ? { deviceId: { exact: options.microphone } } : {}),
+      },
+      video: false,
+    });
+  } catch (error) {
+    if (signal.aborted) throw error;
+    throw microphoneStartError(error, options.microphone);
+  }
   void readMicrophones().catch(() => {});
   if (signal.aborted) {
     stream.getTracks().forEach((track) => track.stop());

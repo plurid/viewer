@@ -470,7 +470,9 @@ export const schemas = {
           kind: z.literal('start'),
           file: localPath,
           revision: z.string().max(100),
-          bindings: z.record(z.string().max(100), localPath),
+          bindings: z
+            .record(z.string().max(100), localPath)
+            .refine((value) => Object.keys(value).length <= 64, 'Too many workflow bindings.'),
           context: contextSchema,
         })
         .strict(),
@@ -848,7 +850,7 @@ export const schemas = {
     ]),
   ]),
   fileInformationUpdate: z.tuple([localPath, z.string().min(1).max(200), informationPatchSchema]),
-  chooseFolder: z.tuple([localPath.optional()]),
+  chooseFolder: z.tuple([localPath.optional(), z.boolean().optional()]),
   reveal: z.tuple([localPath]),
   openExternal: z.tuple([localPath]),
   openAddress: z.tuple([z.string().min(1).max(8192)]),
@@ -939,7 +941,7 @@ export const schemas = {
       .strict()
       .optional(),
   ]),
-  flushed: z.tuple([id, flushResultSchema.optional()]),
+  flushed: z.tuple([id, flushResultSchema]),
   clipboardWrite: z.tuple([z.array(localPath).max(10000), z.boolean()]),
   clipboardWriteText: z.tuple([z.string().max(16 * 1024 * 1024)]),
   copyPaths: z.tuple([z.array(localPath).min(1).max(10000)]),
@@ -973,6 +975,7 @@ export const schemas = {
   volumeEject: z.tuple([localPath]),
   fileAccessList: z.tuple([]),
   fileAccessRevoke: z.tuple([localPath]),
+  fileAccessPrivacySettings: z.tuple([z.enum(['files', 'all-files']).optional()]),
   textEdit: z.tuple([z.enum(['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'])]),
   textOpen: z.tuple([id]),
   textSave: z.tuple([localPath, editedText, textVersionSchema, id, z.boolean()]),
@@ -996,6 +999,7 @@ export const settingsEvents: readonly DesktopEvent['type'][] = [
   'dialog',
   'speech-changed',
   'settings',
+  'session-keys',
   'index',
   'service-error',
   'model-permission',
@@ -1202,6 +1206,7 @@ export const methodWindows = {
   volumeEject: 'viewer',
   fileAccessList: 'both',
   fileAccessRevoke: 'settings',
+  fileAccessPrivacySettings: 'both',
   textEdit: 'both',
   textOpen: 'viewer',
   textSave: 'viewer',

@@ -466,7 +466,7 @@ describe('SQLite resource leases', () => {
       warmOffice: vi.fn(),
     });
     await expect(handlers.sqlite(['resource', { kind: 'tables' }], 1)).resolves.toBe(reply);
-    expect(sqlite).toHaveBeenCalledWith('resource', { kind: 'tables' });
+    expect(sqlite).toHaveBeenCalledWith('resource', { kind: 'tables' }, 1);
   });
 });
 

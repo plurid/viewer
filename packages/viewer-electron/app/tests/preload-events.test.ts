@@ -222,4 +222,5 @@ it('forwards failed flushed() results through preload so save barriers reject in
   await bridge.api!.flushed(token, failed);
   expect(ipc.invoke).toHaveBeenLastCalledWith('viewer:request', 'flushed', [token, failed]);
   await expect(barrier).rejects.toThrow('Disk full');
+  expect(schemas.flushed.safeParse([token]).success).toBe(false);
 });

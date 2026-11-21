@@ -30,7 +30,10 @@ export function useDictation() {
   const fail = useCallback(
     (message: string) => {
       cancel();
-      setError(message);
+      setError(
+        message.trim() ||
+          'Recording could not start. Check your microphone in Settings → Speech and try again.',
+      );
       setPhase('failed');
     },
     [cancel],

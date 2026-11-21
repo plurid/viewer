@@ -4,7 +4,8 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import type { FileEntry } from '../src/domain/contracts';
 import { getState, savePatch } from '../src/renderer/state/core';
 import { initialize } from '../src/renderer/state/workspaces';
-import { pathAncestry } from '../src/domain/files/paths';
+import { pathAncestry, pathContains } from '../src/domain/files/paths';
+import { folderPath } from '../src/domain/files/folder-visits';
 import { useColumnNavigation } from '../src/renderer/explorer/column-navigation';
 import { FileSelection } from '../src/renderer/explorer/selection';
 import {
@@ -50,10 +51,20 @@ function mount() {
 it.each([
   ['/', ['/']],
   ['/Projects/Models', ['/', '/Projects', '/Projects/Models']],
+  ['/Projects/AC\\DC', ['/', '/Projects', '/Projects/AC\\DC']],
+  ['/Projects/AC\\DC/Songs', ['/', '/Projects', '/Projects/AC\\DC', '/Projects/AC\\DC/Songs']],
+  ['/\\dir/child', ['/', '/\\dir', '/\\dir/child']],
   ['C:\\Projects\\Models', ['C:\\', 'C:\\Projects', 'C:\\Projects\\Models']],
   ['//server/share/Models', ['//server/share', '//server/share/Models']],
+  ['\\\\server\\share\\Models', ['\\\\server\\share', '\\\\server\\share\\Models']],
 ])('retains the filesystem root for %s', (path, expected) => {
   expect(pathAncestry(path as string)).toEqual(expected);
+});
+it('keeps trailing backslashes intact in POSIX folder paths and containment checks', () => {
+  expect(folderPath('/Projects/end\\')).toBe('/Projects/end\\');
+  expect(folderPath('/Projects/end\\/')).toBe('/Projects/end\\');
+  expect(pathContains('/Projects/end\\', '/Projects/end\\other')).toBe(false);
+  expect(pathContains('/Projects/end\\', '/Projects/end\\/child')).toBe(true);
 });
 it('starts at the current folder with its ancestors, and can branch from an ancestor', () => {
   const { result, session } = mount();

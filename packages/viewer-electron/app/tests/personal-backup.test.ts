@@ -632,3 +632,39 @@ it('restores checks as inspectable copies, remaps stack identities, and never re
     'private document is missing',
   );
 });
+
+it('embeds a prepared workspace layout into the exported backup without mutating live state', async () => {
+  const root = await temporaryRoot('viewer-backup-layout-');
+  const archive = path.join(root, 'layout-backup.json');
+  const state = saved(root);
+  const space = state.workspaces[0]!;
+  expect(space.layout).toBeUndefined();
+  const capturedLayout = {
+    placements: [
+      {
+        id: space.panes[0]!.id,
+        location: { translateX: 12, translateY: 34, translateZ: 0, rotateX: 0, rotateY: 0 },
+        width: 720,
+        height: 480,
+        show: true,
+      },
+    ],
+  };
+  const backups = new PersonalBackups(root, {
+    flush: async () => {},
+    state: async () => state,
+    settings: () => snapshot(root),
+    apply: async () => snapshot(root),
+    choose: async () => archive,
+  });
+  const pending = review(
+    await backups.request(
+      { kind: 'prepare-export', workspaceID: space.id, layout: capturedLayout },
+      1,
+    ),
+  );
+  await backups.request({ kind: 'write', id: pending.id }, 1);
+  const bundle = backupSchema.parse(JSON.parse(await readFile(archive, 'utf8')));
+  expect(bundle.state.workspaces[0]?.layout).toEqual(capturedLayout);
+  expect(state.workspaces[0]?.layout).toBeUndefined();
+});

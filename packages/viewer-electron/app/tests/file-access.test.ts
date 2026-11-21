@@ -1,4 +1,5 @@
-import { mkdir, readFile, rename, stat, symlink, writeFile } from 'node:fs/promises';
+import { chmodSync } from 'node:fs';
+import { chmod, mkdir, readFile, rename, stat, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileAccess } from '../src/desktop/files/file-access';
@@ -323,5 +324,80 @@ describe('native folder access', () => {
       code: 'ENOENT',
     });
     expect(start).not.toHaveBeenCalled();
+  });
+  it('allows a looping link inside a granted folder and preserves the folder scope on unresolvable paths', async () => {
+    await access.remember(folder, true, 'folder-bookmark');
+    await access.require([folder]);
+    expect(start).toHaveBeenCalledTimes(1);
+    const loop = path.join(folder, 'loop');
+    await symlink('loop', loop);
+    const file = path.join(folder, 'note.txt');
+    await writeFile(file, 'content');
+
+    await expect(access.require([loop])).resolves.toBeUndefined();
+    expect(stops[0]).not.toHaveBeenCalled();
+    await expect(access.require([path.join(loop, 'child')])).rejects.toMatchObject({
+      code: 'ELOOP',
+    });
+    expect(stops[0]).not.toHaveBeenCalled();
+    await expect(access.require([path.join(file, 'child')])).rejects.toMatchObject({
+      code: 'ENOTDIR',
+    });
+    expect(stops[0]).not.toHaveBeenCalled();
+    await expect(access.require([folder])).resolves.toBeUndefined();
+    expect(start).toHaveBeenCalledTimes(1);
+
+    // A looping link reached through an escaping directory link must still be refused.
+    await symlink(other, path.join(folder, 'escape'));
+    const escapedLoop = path.join(other, 'other-loop');
+    await symlink('other-loop', escapedLoop);
+    await expect(access.require([path.join(folder, 'escape', 'other-loop')])).rejects.toMatchObject(
+      { code: 'FILE_ACCESS_REQUIRED' },
+    );
+    expect(stops[0]).not.toHaveBeenCalled();
+  });
+  it('tries broader candidate grants when a symlink inside a child grant fails realpath with EACCES/EPERM', async () => {
+    const parent = path.join(root, 'parent');
+    const child = path.join(parent, 'child');
+    const sibling = path.join(parent, 'sibling');
+    const target = path.join(sibling, 'doc.txt');
+    const link = path.join(child, 'to-sibling');
+    const blocked = path.join(child, 'blocked');
+    await mkdir(parent);
+    await mkdir(child);
+    await mkdir(sibling);
+    await mkdir(blocked);
+    await writeFile(target, 'shared');
+    await writeFile(path.join(blocked, 'secret.txt'), 'sealed');
+    await symlink(target, link);
+
+    try {
+      await chmod(sibling, 0o000);
+      await chmod(blocked, 0o000);
+      start.mockImplementation((bookmark: string) => {
+        if (bookmark === 'parent-bookmark') chmodSync(sibling, 0o700);
+        const stop = vi.fn();
+        stops.push(stop);
+        return stop;
+      });
+      await access.remember(child, true, 'child-bookmark');
+      await access.remember(parent, true, 'parent-bookmark');
+      await access.require([child]);
+      expect(start).toHaveBeenCalledExactlyOnceWith('child-bookmark');
+
+      await expect(access.require([link])).resolves.toBeUndefined();
+      expect(start).toHaveBeenCalledTimes(2);
+      expect(start).toHaveBeenLastCalledWith('parent-bookmark');
+      expect(stops[0]).not.toHaveBeenCalled();
+
+      await expect(access.require([path.join(blocked, 'secret.txt')])).rejects.toMatchObject({
+        code: 'EACCES',
+      });
+      expect(stops[0]).not.toHaveBeenCalled();
+      expect(stops[1]).not.toHaveBeenCalled();
+    } finally {
+      await chmod(sibling, 0o700).catch(() => {});
+      await chmod(blocked, 0o700).catch(() => {});
+    }
   });
 });
