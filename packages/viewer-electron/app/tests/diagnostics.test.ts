@@ -10,6 +10,7 @@ import {
   recordConsoleErrors,
   redactSecrets,
 } from '../src/desktop/diagnostics/failures';
+import { shellQuote } from '../src/desktop/terminals/terminal-launch';
 import { UtilityClient, reportWorkers } from '../src/desktop/workers/utility-client';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 import { boundedText, boundedTextTail } from '../src/domain/diagnostics/text';
@@ -45,8 +46,109 @@ describe('diagnostic log', () => {
     expect(lines).toHaveLength(1);
     expect(JSON.parse(lines[0]).detail).toHaveLength(5000);
   });
+  it('rotates multibyte records by their UTF-8 byte size', async () => {
+    const limit = 20000;
+    const log = new DiagnosticLog(path.join(root, 'multibyte.log'), limit);
+    const prior = JSON.stringify({ detail: '試験文'.repeat(500) }) + '\n';
+    await writeFile(log.file, prior.repeat(12), { flag: 'wx' });
+    const newest = '試験文'.repeat(500) + ' latest';
+    await log.record('renderer-error', newest);
+    const bytes = await readFile(log.file);
+    expect(bytes.length).toBeLessThanOrEqual(limit / 2);
+    const entries = bytes
+      .toString('utf8')
+      .trimEnd()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(entries.at(-1)?.detail).toBe(newest);
+  });
 });
 describe('what the log keeps', () => {
+  it.each([
+    ['--password ,EXAMPLE_ONLY --json', '--password [redacted] --json'],
+    ['--db-password=,SAMPLE_ONLY --json', '--db-password=[redacted] --json'],
+    ['--client-secret=;SAMPLE_ONLY', '--client-secret=[redacted]'],
+    ['--custom-api-key ,SAMPLE_ONLY', '--custom-api-key [redacted]'],
+    ['DB_PASSWORD=,SAMPLE_ONLY run', 'DB_PASSWORD=[redacted] run'],
+    ['export client_secret=;SAMPLE_ONLY', 'export client_secret=[redacted]'],
+    ['DB_PASSWORD= "SAMPLE ONLY"', 'DB_PASSWORD= [redacted]'],
+    ["DB_PASSWORD=  'SAMPLE\nSECOND LINE'", 'DB_PASSWORD=  [redacted]'],
+    ['configuration DB_PASSWORD= SAMPLE ONLY', 'configuration DB_PASSWORD= [redacted]'],
+    ['export DB_PASSWORD=  ,FIRST SECOND', 'export DB_PASSWORD=  [redacted]'],
+    ['password =  sample value\nnext diagnostic', 'password =  [redacted]\nnext diagnostic'],
+    ['env DB_PASSWORD= viewer --version', 'env DB_PASSWORD= viewer --version'],
+    ['env MODE=test DB_PASSWORD= viewer --version', 'env MODE=test DB_PASSWORD= viewer --version'],
+    [
+      'env viewer configuration DB_PASSWORD= SAMPLE ONLY',
+      'env viewer configuration DB_PASSWORD= [redacted]',
+    ],
+    [
+      'exec /usr/bin/env AUTHORIZATION= viewer --version',
+      'exec /usr/bin/env AUTHORIZATION= viewer --version',
+    ],
+    ['DB_PASSWORD= viewer --version', 'DB_PASSWORD= [redacted]'],
+    ['--db-password= sync', '--db-password= sync'],
+    ['--db-password= -v', '--db-password= -v'],
+    ['--authorization= -v', '--authorization= -v'],
+    ['AUTHORIZATION= viewer --version', 'AUTHORIZATION= [redacted]'],
+    [`"--client-secret" "SAMPLE ONLY" --json`, `"--client-secret" [redacted] --json`],
+    [`'--db-password=two words' --json`, `'--db-password=[redacted]' --json`],
+    ['--db-password= --json', '--db-password= --json'],
+    ['?db-password=&page=2', '?db-password=&page=2'],
+    ['{"password":\r\n   "SAMPLE_ONLY","ok":true}', '{"password":\r\n   [redacted],"ok":true}'],
+    ['{"client_secret"\n :\n "SAMPLE\\"ONLY"}', '{"client_secret"\n :\n [redacted]}'],
+    ['{"Cookie":\n "SAMPLE_ONLY", "ok":true}', '{"Cookie":\n [redacted], "ok":true}'],
+    ['{"token":\n 1234,"ok":true}', '{"token":\n [redacted],"ok":true}'],
+    ['{"token":\n {"value":["SAMPLE_ONLY}"]},"ok":true}', '{"token":\n [redacted],"ok":true}'],
+    ['{"token":\n ["SAMPLE_ONLY",{"id":1}],"ok":true}', '{"token":\n [redacted],"ok":true}'],
+    ['--token=;EXAMPLE_ONLY', '--token=[redacted]'],
+    ['-u a,b&EXAMPLE_ONLY', '-u [redacted]'],
+    ['--password prefix" EXAMPLE_ONLY" --json', '--password [redacted] --json'],
+    ['--password prefix\\ EXAMPLE_ONLY --json', '--password [redacted] --json'],
+    [
+      'https://test.invalid/?token=,EXAMPLE_ONLY&page=2',
+      'https://test.invalid/?token=[redacted]&page=2',
+    ],
+    ['Authorization:\n    at nextFrame', 'Authorization:\n    at nextFrame'],
+    ['Cookie:  \r\nnext diagnostic line', 'Cookie:  \r\nnext diagnostic line'],
+    [
+      'https://test.invalid/?authorization=%12&page=3',
+      'https://test.invalid/?authorization=[redacted]&page=3',
+    ],
+  ])('uses credential boundaries at log ingress for %s', async (message, expected) => {
+    const log = new DiagnosticLog(path.join(root, 'ingress.log'));
+    await log.record('main-error', message);
+    expect(JSON.parse(await readFile(log.file, 'utf8')).detail).toBe(expected);
+  });
+  it.each([
+    'https://api.example.invalid/query?token=&page=2\n    at fetchData',
+    '(password=) retry available',
+    '--token= --json',
+  ])('preserves the suffix after an empty credential value (%s)', (text) => {
+    expect(redactSecrets(text)).toBe(text);
+  });
+  it.each(['--db-password', '--client-secret', '--api-key', '-u'])(
+    'redacts a separate value after the launcher quotes the option %s',
+    async (option) => {
+      const log = new DiagnosticLog(path.join(root, 'quoted-command.log'));
+      for (const secret of [',SAMPLE ONLY', "SAMPLE's value", 'SAMPLE\\']) {
+        const args = ['viewer', option, secret, 'show status', '-v'];
+        await log.record('main-error', args.map(shellQuote).join(' '));
+      }
+      const lines = (await readFile(log.file, 'utf8')).trimEnd().split('\n');
+      expect(lines.map((line) => JSON.parse(line).detail)).toEqual(
+        Array(3).fill(
+          [
+            shellQuote('viewer'),
+            shellQuote(option),
+            '[redacted]',
+            shellQuote('show status'),
+            shellQuote('-v'),
+          ].join(' '),
+        ),
+      );
+    },
+  );
   it('cuts every diagnostic boundary without leaving a surrogate half', async () => {
     for (const limit of [500, 1000, 2000, 8000]) {
       const text = 'x'.repeat(limit - 1) + '😀';
@@ -132,6 +234,138 @@ describe('what the log keeps', () => {
     expect(record.mock.calls[0]![0]).toMatch(/^First Error: one/);
   });
 
+  it.each([2000, 2001, 12000])(
+    'resumes bracketed warnings and JSON after a %i-character worker line',
+    (length) => {
+      const records: string[] = [];
+      const worker = new WorkerOutput(
+        'Preview',
+        (detail) => records.push(detail),
+        new DiagnosticBudget(),
+      );
+      for (const part of [
+        'x'.repeat(length - 1),
+        'x\n',
+        '[warning] decoder unavailable\n',
+        '[info] retry complete\n',
+        '{"status":"ready"}\n',
+      ])
+        worker.write(part);
+      expect(records.slice(1)).toEqual([
+        'Preview: [warning] decoder unavailable',
+        'Preview: [info] retry complete',
+        'Preview: {"status":"ready"}',
+      ]);
+      if (length > 2000) expect(records[0]).toBe('Preview: [Long worker line omitted]');
+    },
+  );
+
+  it.each([
+    "'viewer' 'public-secret' '--db-password' 'first\nSAMPLE_ONLY'",
+    "'viewer' '--old-token' '--db-password' 'first\nSAMPLE_ONLY'",
+    '"--db-password" "first\nSAMPLE_ONLY"',
+    "trace '--db-pass\x1b[31mword' 'first\nSAMPLE_ONLY'",
+    "trace '--db-pass[31mword' 'first\nSAMPLE_ONLY'",
+    "'--db-password=first\nSAMPLE_ONLY'",
+    "DB_PASSWORD= 'first\nSAMPLE_ONLY'",
+    "--db-password prefix'first\nSAMPLE_ONLY'",
+    '-u first\\\nSAMPLE_ONLY',
+  ])('resumes a complete worker record after the quoted credential in %j', (command) => {
+    for (const padding of ['', 'x'.repeat(2500) + ' ']) {
+      const records: string[] = [];
+      const worker = new WorkerOutput(
+        'Preview',
+        (detail) => records.push(detail),
+        new DiagnosticBudget(),
+      );
+      for (const ch of padding + command + '\n[warning] recovered\n{"status":"ready"}\n')
+        worker.write(ch);
+      expect(records.join('\n')).not.toContain('SAMPLE_ONLY');
+      expect(records.slice(-2)).toEqual([
+        'Preview: [warning] recovered',
+        'Preview: {"status":"ready"}',
+      ]);
+    }
+  });
+
+  it.each(["password wasn't configured", 'parse error at [offset'])(
+    'recovers after an overlong plain-language warning containing %j',
+    (warning) => {
+      const rows: string[] = [];
+      const worker = new WorkerOutput('Preview', (row) => rows.push(row), new DiagnosticBudget());
+      worker.write(
+        'x'.repeat(2001) + ' ' + warning + '\n[warning] recovered\n{"status":"ready"}\n',
+      );
+      expect(rows.slice(1)).toEqual([
+        'Preview: [warning] recovered',
+        'Preview: {"status":"ready"}',
+      ]);
+    },
+  );
+
+  it('preserves credential context in the discarded portion of a long worker line', () => {
+    const records: string[] = [];
+    const worker = new WorkerOutput(
+      'Preview',
+      (detail) => records.push(detail),
+      new DiagnosticBudget(),
+    );
+    const command = ['viewer', '--db-password', "first's [value\nSAMPLE_FIVE\nlast secret", 'done']
+      .map(shellQuote)
+      .join(' ');
+    const stderr =
+      'x'.repeat(9000) +
+      ' ' +
+      command +
+      '\n[warning] recovered\n' +
+      'x'.repeat(10000) +
+      ' {"password":\n  ["SAMPLE_SIX"]}\n{"status":"ready"}\n';
+    for (let offset = 0; offset < stderr.length; offset += 7)
+      worker.write(stderr.slice(offset, offset + 7));
+    expect(records.join('\n')).not.toMatch(/SAMPLE|last secret/);
+    expect(records).toContain('Preview: [warning] recovered');
+    expect(records.at(-1)).toBe('Preview: {"status":"ready"}');
+  });
+
+  it('tracks quoted worker values when the budget skips their opening and closing lines', () => {
+    let now = 0;
+    const rows: string[] = [];
+    const worker = new WorkerOutput(
+      'Preview',
+      (row) => rows.push(row),
+      new DiagnosticBudget(1, 100, () => now),
+    );
+    worker.write("ordinary message\n'--db-password' 'first\n");
+    now = 100;
+    worker.write("SAMPLE_ONLY\nlast'\n");
+    now = 200;
+    worker.write('[warning] resumed\n');
+    expect(rows).toEqual([
+      'Preview: ordinary message',
+      'Preview (1 earlier line left out): [Worker continuation omitted]',
+      'Preview (1 earlier line left out): [warning] resumed',
+    ]);
+  });
+
+  it('tracks a JSON member across a worker line skipped by the rate limit', () => {
+    let now = 0;
+    const records: string[] = [];
+    const output = new WorkerOutput(
+      'Preview',
+      (detail) => records.push(detail),
+      new DiagnosticBudget(1, 1000, () => now),
+    );
+    output.write('ordinary message\n{"password":\n');
+    now = 1000;
+    output.write('  "SAMPLE_ONLY"}\n');
+    now = 2000;
+    output.write('{"status":"ready"}\n');
+    expect(records).toEqual([
+      'Preview: ordinary message',
+      'Preview (1 earlier line left out): [Worker continuation omitted]',
+      'Preview: {"status":"ready"}',
+    ]);
+  });
   it('records worker stderr line by line, saying how many lines a full budget left out', () => {
     let now = 0;
     const record = vi.fn();

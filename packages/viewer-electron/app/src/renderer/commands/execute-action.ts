@@ -23,7 +23,7 @@ export async function executeAction(
     const supplied = Object.fromEntries(
       (action.inputs ?? []).map((input) => [input.name, values[input.name] ?? input.initial ?? '']),
     );
-    id = await window.viewer.customExecute(action.id, target, supplied);
+    id = await window.viewer.customExecute(action.id, target, supplied, action);
     const listed = (await window.viewer.executionList()).find((task) => task.id === id);
     const known = received.get(id) ?? listed;
     const task =

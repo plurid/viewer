@@ -1,9 +1,9 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { KeySequence, keyName, type KeymapBinding } from '../../domain/preferences/keymap';
-import { matchesShortcut } from '../../domain/preferences/shortcuts';
+import { canStartKeyBinding, matchesShortcut } from '../../domain/preferences/shortcuts';
 import { editable } from '../commands/editing';
 import { overlayOpen } from '../ui/modal';
-import { report } from '../state/store';
+import { getState, report } from '../state/store';
 import { effectiveKeymap } from './session';
 
 /** What which-key shows: the keys pressed so far and the chord they reached. */
@@ -12,6 +12,7 @@ export interface SequenceView {
   /** Shown once a sequence has waited a moment: a quick typist sees nothing. */
   shown: boolean;
   keys: readonly string[];
+  lead?: string;
   node?: KeymapBinding;
   /** `?`: every binding, until the next key. */
   help?: boolean;
@@ -84,7 +85,9 @@ export function useKeySequences(
     });
     let ending: ReturnType<typeof setTimeout> | undefined;
     let showing: ReturnType<typeof setTimeout> | undefined;
+    let lead: string | undefined;
     const end = () => {
+      lead = undefined;
       clearTimeout(ending);
       clearTimeout(showing);
       sequence.cancel();
@@ -115,7 +118,7 @@ export function useKeySequences(
     const wait = (timeout: number, whichKey: boolean) => {
       clearTimeout(ending);
       ending = setTimeout(end, timeout);
-      const next = { active: true, keys: sequence.pressed(), node: sequence.current() };
+      const next = { active: true, lead, keys: sequence.pressed(), node: sequence.current() };
       publish({ ...next, shown: view.shown });
       if (whichKey && !view.shown) {
         clearTimeout(showing);
@@ -166,20 +169,30 @@ export function useKeySequences(
       if (!sequence.active()) {
         if (event.repeat || overlayOpen()) return;
         const name = keyName(event);
-        // a key with no prefix (tmux's bind -n)
-        const root = name ? leaf(keymap.root[name]) : undefined;
-        if (root && allowed) {
+        if (!name) return;
+        const settings = getState().settings.settings;
+        const root = allowed ? keymap.root[name] : undefined;
+        const leader = !terminal && !field && name === keymap.leader;
+        const canStart = (root || leader) && canStartKeyBinding(name, event, settings);
+        if (root && canStart) {
           consume(event);
-          void Promise.resolve()
-            .then(() => runRef.current(root, 1))
-            .catch(report);
+          const commands = leaf(root);
+          if (commands) {
+            void Promise.resolve()
+              .then(() => runRef.current(commands, 1))
+              .catch(report);
+          } else {
+            lead = undefined;
+            sequence.start(performance.now(), name);
+            wait(keymap.timeout, keymap.whichKey);
+          }
           return;
         }
-        const prefix = !!keymap.prefix && matchesShortcut(keymap.prefix, event);
-        const leader = !prefix && !!keymap.leader && !terminal && !field && name === keymap.leader;
-        if (!prefix && !leader) return;
+        const prefix = !!keymap.prefix && matchesShortcut(keymap.prefix, event, settings);
+        if (!prefix && !(leader && canStart)) return;
         if (prefix && !allowed) return;
         consume(event);
+        lead = prefix ? keymap.prefix : keymap.leader;
         sequence.start(performance.now());
         wait(keymap.timeout, keymap.whichKey);
         return;
@@ -188,7 +201,12 @@ export function useKeySequences(
       // a modifier alone waits for its key
       if (!name) return;
       consume(event);
-      if (!sequence.pressed().length && keymap.prefix && matchesShortcut(keymap.prefix, event)) {
+      if (
+        !sequence.pressed().length &&
+        lead === keymap.prefix &&
+        keymap.prefix &&
+        matchesShortcut(keymap.prefix, event, getState().settings.settings)
+      ) {
         end();
         sendPrefix(target, keymap.prefix);
         return;
@@ -203,6 +221,7 @@ export function useKeySequences(
         publish({
           active: true,
           shown: true,
+          lead,
           keys: [...pressed, name],
           message: 'No action for this key',
         });

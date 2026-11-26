@@ -219,3 +219,16 @@ describe('set', () => {
     expect(settingText(settingByName('color')!, '')).toBe('color=auto');
   });
 });
+import { lineCompletions } from '../src/renderer/command-line/complete';
+
+it.each(['e %/', 'cd %:h/'])('offers no completion without a current path for %s', (line) => {
+  expect(
+    lineCompletions(line, {
+      commands: [],
+      family: () => [],
+      workspaces: [],
+      value: () => undefined,
+      places: { home: '/fixtures', folder: '/fixtures' },
+    }),
+  ).toEqual({ completions: [] });
+});

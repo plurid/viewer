@@ -6,11 +6,12 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from '@testing-library/react';
+import { captureTemplate } from '../src/domain/workspaces/layout-templates';
 import { builtInProfiles, profilePaths } from '../src/domain/preferences/profiles';
 import { headerPresets } from '../src/domain/preferences/header';
 import { defaultShortcuts } from '../src/domain/preferences/shortcuts';
 import { agentCommandID } from '../src/domain/agents/safety';
-import { profileSchema } from '../src/desktop/preferences/settings-schema';
+import { profileSchema, settingsSchema } from '../src/desktop/preferences/settings-schema';
 import { windowCommands } from '../src/renderer/commands/window';
 import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
 import type { CommandContext } from '../src/renderer/commands/registry';
@@ -23,7 +24,7 @@ import {
 import { effectiveWindowSettings, effectiveWindowUI } from '../src/renderer/state/effective-ui';
 import { changeWorkspace, replaceState, savePatch } from '../src/renderer/state/core';
 import { folderPresentation } from '../src/renderer/state/presentation';
-import { applyProfile } from '../src/renderer/commands/window-commands/profiles';
+import { applyProfile, captureProfile } from '../src/renderer/commands/window-commands/profiles';
 
 const settingsPatch = vi.fn(async () => getState().settings);
 beforeEach(() => {
@@ -196,4 +197,20 @@ describe('profiles', () => {
       expect(agentCommandID(id, [])).toBe(id);
     expect(() => agentCommandID('profile.mine', [])).toThrow();
   });
+});
+
+it('accepts the longest profile and template names in settings', () => {
+  const name = 'x'.repeat(100);
+  const space = activeWorkspace();
+  const layout = captureTemplate(name, space.panes, space.roots, '/fixtures', {
+    layout: 'tiled',
+    main: 0.5,
+  });
+  expect(
+    settingsSchema.parse({
+      ...getState().settings.settings,
+      profiles: [captureProfile(name)],
+      layouts: [layout],
+    }),
+  ).toMatchObject({ profiles: [{ name }], layouts: [{ name }] });
 });

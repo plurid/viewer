@@ -1,3 +1,5 @@
+import { slugID } from '../ids';
+import { canonicalKey } from './keymap';
 import type { Keymap, KeymapBinding } from './keymap';
 import type { CustomAction } from '../automation/actions';
 
@@ -22,24 +24,43 @@ export interface SessionKeys {
   aliases: SessionAlias[];
 }
 export const emptySessionKeys: SessionKeys = { bindings: [], aliases: [] };
+function equivalentKeys(table: Record<string, KeymapBinding>, key: string): string[] {
+  const canonical = canonicalKey(key) ?? key;
+  return Object.keys(table).filter((written) => (canonicalKey(written) ?? written) === canonical);
+}
 /** A table with a binding set at `keys`, or removed with `null`; chords are made as needed. */
 function place(
   table: Record<string, KeymapBinding>,
   keys: readonly string[],
   line: string | null,
 ): void {
+  const parents: { table: Record<string, KeymapBinding>; key: string; shadowed: boolean }[] = [];
   let node = table;
-  for (const key of keys.slice(0, -1)) {
+  for (const written of keys.slice(0, -1)) {
+    const matches = equivalentKeys(node, written);
+    const key = matches.at(-1) ?? written;
     const next = node[key];
     if (next === undefined || typeof next === 'string' || Array.isArray(next)) {
       if (line === null) return;
       node[key] = {};
     }
+    parents.push({ table: node, key, shadowed: matches.length > 1 });
     node = node[key] as Record<string, KeymapBinding>;
   }
   const last = keys.at(-1)!;
-  if (line === null) delete node[last];
-  else node[last] = line;
+  const matches = equivalentKeys(node, last);
+  if (line !== null) {
+    node[matches.at(-1) ?? last] = line;
+    return;
+  }
+  if (!matches.length) return;
+  for (const key of matches) delete node[key];
+  for (const parent of parents.reverse()) {
+    // An empty winning branch keeps an older spelling from becoming active again.
+    if (parent.shadowed || Object.keys(node).length) break;
+    node = parent.table;
+    delete node[parent.key];
+  }
 }
 /** The keymap with the session's bindings over it, in order: a later one wins. */
 export function withSessionKeys(keymap: Keymap, session: SessionKeys): Keymap {
@@ -59,10 +80,12 @@ export function withSessionKeys(keymap: Keymap, session: SessionKeys): Keymap {
     place(table, binding.keys, binding.line);
     if (binding.table === 'prefix' && binding.keys.length === 1) {
       const [key] = binding.keys as [string];
-      const repeating = next.repeat.includes(key);
+      const canonical = canonicalKey(key) ?? key;
+      const matches = (written: string) => (canonicalKey(written) ?? written) === canonical;
+      const repeating = next.repeat.some(matches);
       if (binding.repeat && binding.line !== null && !repeating) next.repeat.push(key);
       else if ((!binding.repeat || binding.line === null) && repeating)
-        next.repeat = next.repeat.filter((item) => item !== key);
+        next.repeat = next.repeat.filter((item) => !matches(item));
     }
   }
   return next;
@@ -101,7 +124,12 @@ export function keepAliases(
       continue;
     }
     next.push({
-      id: `command-${name.toLowerCase()}-${now.toString(36)}`,
+      id: slugID(
+        'command-' + name,
+        'command',
+        next.map((action) => action.id),
+        now,
+      ),
       name,
       aliases: ['command'],
       icon: 'command',

@@ -74,7 +74,8 @@ enter a valid replacement in **Settings → License** or choose **Remove License
 ## Update Viewer
 
 Viewer looks for a newer version once a day when it opens. When there is one, it says which version
-is available and what changed.
+is available and what changed. If Viewer cannot show the notice or save your response, a later daily
+check can offer that release again.
 
 1. Choose **Download**. Your browser downloads the new disk image. If you choose **Later**, the
    daily check does not show that version again; **Viewer → Check for Updates…** still does.
@@ -87,7 +88,8 @@ latest version, or when it could not reach the update server.
 
 To stop the daily check, turn off **Settings → Privacy → Check for updates when Viewer opens**. The
 check downloads a small signed file and sends nothing about your files. Viewer ignores an update
-that is not signed by its publisher, and says so when a newer version needs a newer macOS.
+that is not signed by its publisher or is older than a release it has already verified. It says when
+a newer version needs a newer macOS.
 
 The Mac App Store edition has no **Check for Updates…** item: the App Store updates it.
 

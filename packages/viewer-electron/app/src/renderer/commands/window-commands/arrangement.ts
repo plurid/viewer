@@ -4,16 +4,20 @@ import type { CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
 import { activeWorkspace, getState } from '../../state/store';
 import { effectiveWindowSettings } from '../../state/effective-ui';
-import { shortcutFor, shortcutGlyphs, withShortcut } from '../../../domain/preferences/shortcuts';
+import {
+  resolvedShortcut,
+  shortcutGlyphs,
+  withShortcut,
+} from '../../../domain/preferences/shortcuts';
 
 /** Why Overview is missing here, in words that name the way back. */
 export function overviewUnavailable(docked: boolean): string {
-  const shortcuts = effectiveWindowSettings(getState()).shortcuts;
+  const settings = effectiveWindowSettings(getState());
   if (docked)
-    return `A docked plane fills the window. Choose ${withShortcut('Reveal Space', shortcutGlyphs(shortcutFor(shortcuts, 'dock')))} first.`;
+    return `A docked plane fills the window. Choose ${withShortcut('Reveal Space', shortcutGlyphs(resolvedShortcut(settings, 'dock')))} first.`;
   const space = activeWorkspace();
   if (!space.panes.length && !space.roots.length) return 'Open a plane first.';
-  return `Choose Overview in ${withShortcut('Commands', shortcutGlyphs(shortcutFor(shortcuts, 'palette')))}.`;
+  return `Choose Overview in ${withShortcut('Commands', shortcutGlyphs(resolvedShortcut(settings, 'palette')))}.`;
 }
 
 /** Framing, docking, closing and arranging planes in space. */

@@ -66,7 +66,7 @@ export function reportFailure(
   const code = knownErrorCode(entry.code, errno);
   const result: ReportFailure = { name, code, frames: [], outside: 0 };
   const stack = boundedText(typeof entry.stack === 'string' ? entry.stack : '');
-  for (const raw of stack.split('\n')) {
+  for (const raw of stack.split(/\r\n?|\n/)) {
     const frame = raw.trimStart();
     if (!frame.startsWith('at ')) continue;
     let location = frame.slice(3);

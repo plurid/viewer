@@ -19,6 +19,28 @@ const values: ReportPrivateValue[] = [
 ];
 
 describe('optional message redaction', () => {
+  it.each([
+    ["file='Project Notes'", '<quoted text>'],
+    ["open('Project Notes')", '<quoted text>'],
+    ['open(file=“Project Notes”)', '<quoted text>'],
+    ['stat: Project Notes\n/Users/zoe/end', '~/…'],
+    ['Project Notes\n/Applications/Viewer.app/Private.js', '<path>/…/…/….js'],
+    ['read Project Notes\n/People/Home With Spaces/end', 'read ~/…'],
+    ["open Parents'/secret.txt", 'open <path>/…/….txt'],
+    ['open Sample Folder!/secret.txt', 'open <path>/…/….txt'],
+    ["open 'Parents' Sample Folder'", 'open <quoted text>'],
+    ['open "2026" Sample File.txt"', 'open <quoted text>'],
+    ['Private Name!/secret.txt', '<path>/…/….txt'],
+    ['open Private Name /leaf.txt', 'open <path>/….txt'],
+    ['open Private "Name/leaf.txt"', 'open <path>/…/….txt'],
+  ])('hides an ambiguous first component or basename in %s', (message, expected) => {
+    expect(redactReport(message, values)).toBe(expected);
+  });
+  it('omits a private relative prefix before a frame-shaped filename', () => {
+    const message = 'Project Notes\n    at Private Name (/Applications/Viewer.app/Private.js:1:2)';
+    expect(redactReport(message, values)).not.toMatch(/Project|Notes|Private|Name/);
+  });
+
   it('leaves ordinary text without private values unchanged', () => {
     const text = 'The operation failed. Please try again.';
     expect(redactReport(text, values)).toBe(text);
@@ -96,6 +118,71 @@ describe('optional message redaction', () => {
     const result = redactReport('open /Users/zoe/Documents/x.pdf failed, pin 4821.hunter2', values);
     expect(result).toBe('open ~/…/….pdf');
     expect(result).not.toContain('hunter2');
+  });
+
+  it('hides every component of adversarial names in each recognized path form', () => {
+    const quotes = [
+      ["'", "'"],
+      ['"', '"'],
+      ['\x60', '\x60'],
+      ['‘', '’'],
+      ['“', '”'],
+      ['«', '»'],
+    ];
+    const letters = 'Z9 漢字 Café 2048';
+    const names = [
+      letters,
+      "Parents' Confidential Records",
+      "2026's Confidential Budget",
+      '12" Secret Blueprint',
+      '2026',
+      '!?[]{}.,;@#%+=' + quotes.flat().join(''),
+      'Private\n    at Another Private Name',
+    ];
+    for (const quote of new Set(quotes.flat())) {
+      for (let index = 0; index <= letters.length; index++) {
+        names.push(letters.slice(0, index) + quote + letters.slice(index));
+      }
+    }
+    for (const name of names) {
+      const relative = name + '/' + name + '.pdf';
+      const absolute = home + '/' + relative;
+      const messages = [
+        absolute,
+        '/private' + absolute,
+        '/System/Volumes/Data' + absolute,
+        '~/' + relative,
+        '$HOME/' + relative,
+        '\x24{HOME}/' + relative,
+        'C:/Projects/' + relative,
+        'C:\\Projects\\' + relative.replaceAll('/', '\\'),
+        '/Volumes/Sample Disk/' + relative,
+        home + '/Library/Application Support/Viewer/' + relative,
+        './Projects/' + relative,
+        relative,
+        'Projects/' + relative,
+        'file://' + absolute,
+        encodeURIComponent(absolute),
+        'getaddrinfo ENOTFOUND ' + absolute,
+        'https://private.example/' + relative,
+        'private.example/' + relative,
+        'data:text/plain,' + relative,
+        "'/Applications/Viewer.app/" + relative + "'",
+        '<Viewer>/' + relative,
+        ...quotes.flatMap(([open, close]) => [
+          open + absolute + close,
+          open + relative + close,
+          open + absolute + close + ' private tail',
+          open + absolute,
+        ]),
+      ];
+      for (const message of messages) {
+        const excerpt = redactReport('open ' + message, values);
+        expect(excerpt, JSON.stringify(message)).toMatch(
+          /^open (?:getaddrinfo ENOTFOUND )?(?:(?:~|\.?<path>|<Viewer data>|\/Volumes\/<volume>)(?:\/…)*(?:\.pdf)?|<address>|<data>|<token>|\[Encoded text omitted\])$/,
+        );
+      }
+    }
   });
 
   it('keeps bundle code names, only fixed data folders and no named lens', () => {

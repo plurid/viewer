@@ -5,6 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   canonicalBindings,
+  canonicalKeymap,
   canonicalKey,
   defaultKeymap,
   KeySequence,
@@ -162,4 +163,32 @@ describe('the keymap’s warnings', () => {
     ]);
     expect(referenceIssues(defaultSettings('/fixtures'))).toEqual([]);
   });
+});
+
+it('edits the effective spelling and keeps shadowed branches dormant after unbinding', () => {
+  const original: Keymap = {
+    ...keymap,
+    root: { 'M-h': { z: 'palette' }, 'Alt+h': { '<CR>': 'refresh' }, '<F8>': 'palette' },
+    bindings: { 'C-x': 'refresh' },
+    repeat: ['C-x'],
+    modes: { edit: { bindings: { 'M-h': 'palette' } } },
+  };
+  const updated = withSessionKeys(original, {
+    aliases: [],
+    bindings: [
+      { table: 'root', keys: ['<M-h>', 'Enter'], line: null },
+      { table: 'prefix', keys: ['Ctrl+x'], line: 'frame-all' },
+      { table: 'edit', keys: ['Alt+h'], line: 'frame-all' },
+    ],
+  });
+  expect(updated.root).toEqual({ 'M-h': { z: 'palette' }, 'Alt+h': {}, '<F8>': 'palette' });
+  expect(canonicalKeymap(updated).root).toEqual({ F8: 'palette' });
+  expect(updated.bindings).toEqual({ 'C-x': 'frame-all' });
+  expect(updated.repeat).toEqual([]);
+  expect(updated.modes.edit?.bindings).toEqual({ 'M-h': 'frame-all' });
+  const rebound = withSessionKeys(updated, {
+    aliases: [],
+    bindings: [{ table: 'root', keys: ['Alt+h', 'x'], line: 'refresh' }],
+  });
+  expect(canonicalKeymap(rebound).root).toEqual({ 'Alt+h': { x: 'refresh' }, F8: 'palette' });
 });

@@ -3,7 +3,7 @@ import { memo, useMemo } from 'react';
 import type { FileEntry } from '../../domain/contracts';
 import { firstRunStepsLeft } from '../../domain/preferences/first-run';
 import { keyGlyphs } from '../../domain/preferences/keymap';
-import { defaultShortcuts } from '../../domain/preferences/shortcuts';
+import { resolvedShortcut } from '../../domain/preferences/shortcuts';
 import type { FolderInsight, InsightID, WorkspaceInsight } from '../../domain/suggestions/insights';
 import { folderInsights, insightLimit } from '../../domain/suggestions/insights';
 import { offeredDefinition } from '../../domain/workspaces/offer';
@@ -15,7 +15,7 @@ import {
   setActivePane,
   useViewer,
 } from '../state/store';
-import { effectiveWindowUI } from '../state/effective-ui';
+import { effectiveWindowUI, effectiveWindowSettings } from '../state/effective-ui';
 import { useCommandRevision, useCommands } from '../commands/context';
 import type { CommandRegistry, ResolvedCommand } from '../commands/registry';
 import { dismissOffer, useWorkspaceOffer } from '../workspace/workspace-offer';
@@ -99,11 +99,9 @@ function useFirstRunTips(paneID: string): ReactNode {
     (state) => activeWorkspace(state).panes.find((pane) => pane.type === 'folder')?.id === paneID,
   );
   // a cleared shortcut leaves no key to name
-  const palette = useViewer(
-    (state) => state.settings.settings.shortcuts.palette ?? defaultShortcuts.palette,
-  );
-  const frameAll = useViewer(
-    (state) => state.settings.settings.shortcuts['frame-all'] ?? defaultShortcuts['frame-all'],
+  const palette = useViewer((state) => resolvedShortcut(effectiveWindowSettings(state), 'palette'));
+  const frameAll = useViewer((state) =>
+    resolvedShortcut(effectiveWindowSettings(state), 'frame-all'),
   );
   const multiple = useViewer((state) => activeWorkspace(state).panes.length > 1);
   const dragging = useViewer((state) => {

@@ -173,24 +173,24 @@ describe('typed page code', () => {
   });
 });
 
-describe('sandboxed preload', () => {
-  const preload = readFileSync('src/preload.ts', 'utf8');
+describe.each(['src/preload.ts', 'src/report-preload.ts'])('sandboxed preload %s', (filePath) => {
+  const preload = readFileSync(filePath, 'utf8');
 
   it('refuses Node built-ins and the globals Electron 45 removed from sandboxed preloads', async () => {
     const [result] = await eslint.lintText(
       "import { readFileSync as read } from 'node:fs';\n" +
         preload +
-        "\nexport const probe = [Buffer.byteLength('x'), setImmediate, clearImmediate, read];\n",
-      { filePath: 'src/preload.ts' },
+        "\nexport const probe = [Buffer.byteLength('x'), setImmediate, clearImmediate, require, process, read];\n",
+      { filePath },
     );
     const rules = result?.messages.map((message) => message.message) ?? [];
     expect(rules).toContainEqual(expect.stringContaining('can require only electron'));
-    for (const name of ['Buffer', 'setImmediate', 'clearImmediate'])
+    for (const name of ['Buffer', 'setImmediate', 'clearImmediate', 'require', 'process'])
       expect(rules).toContainEqual(expect.stringContaining(`have no ${name} since Electron 45`));
   });
 
   it('accepts the preload as it is', async () => {
-    const [result] = await eslint.lintText(preload, { filePath: 'src/preload.ts' });
+    const [result] = await eslint.lintText(preload, { filePath });
     expect(result?.messages).toEqual([]);
   });
 });

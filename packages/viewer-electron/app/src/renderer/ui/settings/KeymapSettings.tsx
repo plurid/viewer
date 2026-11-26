@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   bindingRows,
   bindingsFrom,
@@ -12,7 +12,8 @@ import {
 } from '../../../domain/preferences/keymap';
 import { defaultShortcuts, shortcutOwner } from '../../../domain/preferences/shortcuts';
 import { settingCatalog } from '../../../domain/preferences/catalog';
-import { report } from '../../state/store';
+import { errorMessage } from '../../../domain/errors';
+import { useConfirmation } from './ConfirmAction';
 import { useSessionKeys } from '../../keys/session';
 import { ChoiceButton } from '../ChoiceMenu';
 import { Field } from './SettingField';
@@ -27,7 +28,7 @@ const linesFrom = (text: string) => (text.trim() ? [text.trim()] : []);
 const tableName = (table: string) =>
   table === 'prefix' ? 'Prefix' : table === 'root' ? 'No prefix' : `Mode ${table}`;
 /** The keys of this session, from `:bind` and `:unbind`: kept in config.jsonc, or let go. */
-function SessionBindings() {
+function SessionBindings({ error }: Pick<SettingsEditor, 'error'>) {
   const session = useSessionKeys();
   if (!session.bindings.length && !session.aliases.length) return null;
   return (
@@ -53,11 +54,17 @@ function SessionBindings() {
       <div className="settings-actions">
         <button
           className="primary"
-          onClick={() => void window.viewer.sessionKeysKeep().catch(report)}
+          onClick={() =>
+            void window.viewer.sessionKeysKeep().catch((failure) => error(errorMessage(failure)))
+          }
         >
           Keep
         </button>
-        <button onClick={() => void window.viewer.sessionKeysDiscard().catch(report)}>
+        <button
+          onClick={() =>
+            void window.viewer.sessionKeysDiscard().catch((failure) => error(errorMessage(failure)))
+          }
+        >
           Discard
         </button>
       </div>
@@ -69,10 +76,14 @@ function SessionBindings() {
  * no prefix, and modes. Each key is recorded by pressing it; what it runs is a line.
  */
 export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
+  const confirmation = useConfirmation();
   const { snapshot, patch, error } = editor;
   const keymap: Keymap = upgradeKeymap({ ...defaultKeymap, ...snapshot.settings.keymap });
   const [table, setTable] = useState('prefix');
   const [draft, setDraft] = useState({ keys: '', line: '' });
+  const pendingDraft = useRef<{ draft: typeof draft; table: string; revision: number } | undefined>(
+    undefined,
+  );
   const [modeName, setModeName] = useState('');
   const modes = keymap.modes ?? {};
   const shown = table === 'prefix' || table === 'root' || modes[table] ? table : 'prefix';
@@ -83,10 +94,23 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
         ? (keymap.root ?? {})
         : modes[shown]!.bindings;
   const rows = bindingRows(bindings);
+  useEffect(() => {
+    if (
+      pendingDraft.current?.draft === draft &&
+      pendingDraft.current.table === shown &&
+      pendingDraft.current.revision < snapshot.revision &&
+      rows.some(
+        (row) => row.keys.join(' ') === draft.keys && lineText(row.commands) === draft.line.trim(),
+      )
+    ) {
+      pendingDraft.current = undefined;
+      setDraft({ keys: '', line: '' });
+    }
+  }, [rows, draft, shown, snapshot.revision]);
   // a whole keymap each time, whatever the snapshot held
   const save = (next: Partial<Keymap>) => patch('settings.keymap', { ...keymap, ...next });
   const saveRows = (next: BindingRow[]) => {
-    if (shown === 'root' && next.some((row) => !row.keys.every(rootKey))) {
+    if (shown === 'root' && next.some((row) => !rootKey(row.keys[0] ?? ''))) {
       error('A key without the prefix needs ⌃, ⌥ or ⌘, or is an F-key.');
       return;
     }
@@ -172,7 +196,7 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
           onCommit={(repeatTime) => save({ repeatTime })}
         />
       </label>
-      <SessionBindings />
+      <SessionBindings error={error} />
       <div className="settings-row">
         <span>Keys</span>
         <ChoiceButton
@@ -266,8 +290,8 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
             type="button"
             disabled={!keysFrom(draft.keys).length || !linesFrom(draft.line).length}
             onClick={() => {
+              pendingDraft.current = { draft, table: shown, revision: snapshot.revision };
               saveRows([...rows, { keys: keysFrom(draft.keys), commands: linesFrom(draft.line) }]);
-              setDraft({ keys: '', line: '' });
             }}
           >
             Add
@@ -293,16 +317,41 @@ export function KeymapSettings({ editor }: { editor: SettingsEditor }) {
         </button>
         {shown !== 'prefix' && shown !== 'root' && (
           <button
-            onClick={() => {
-              const { [shown]: _removed, ...rest } = modes;
-              save({ modes: rest });
-              setTable('prefix');
-            }}
+            className="danger"
+            onClick={() =>
+              confirmation.ask({
+                title: 'Remove Mode “' + shown + '”?',
+                detail: 'The mode and its key bindings will be removed.',
+                action: 'Remove Mode',
+                run: () => {
+                  editor.save(({ settings }) => {
+                    const current = settings.keymap;
+                    if (!current.modes?.[shown]) return [];
+                    const { [shown]: _removed, ...remaining } = current.modes;
+                    return [{ path: 'settings.keymap', value: { ...current, modes: remaining } }];
+                  });
+                  setTable('prefix');
+                },
+              })
+            }
           >
             Remove Mode “{shown}”
           </button>
         )}
-        <button onClick={() => patch('settings.keymap', defaultKeymap)}>Reset Prefix Keys</button>
+        <button
+          className="danger"
+          onClick={() =>
+            confirmation.ask({
+              title: 'Reset Prefix Keys?',
+              detail: 'The prefix, leader, key tables and modes will return to their defaults.',
+              action: 'Reset',
+              run: () => patch('settings.keymap', defaultKeymap),
+            })
+          }
+        >
+          Reset Prefix Keys
+        </button>
+        {confirmation.dialog}
       </div>
     </>
   );

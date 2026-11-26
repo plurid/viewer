@@ -6,6 +6,7 @@ function paths(context: CommandContext): string[] {
   if (context.scope === 'preview') return context.path ? [context.path] : [];
   if (!['window', 'files', 'folder'].includes(context.scope)) return [];
   if (context.selection.length) return context.selection.map((entry) => entry.path);
+  if (context.subject) return [context.subject.path];
   return context.folder && context.directory ? [context.directory] : [];
 }
 export const copyPathCommand: CommandDefinition = {

@@ -1,5 +1,6 @@
 import type { CommandContext, CommandDefinition } from '../registry';
 import type { WindowScopes } from './scope';
+import { toolFiles } from '../target';
 import { browsable } from '../../../domain/files/entries';
 import { knownRepository } from '../../git/status';
 
@@ -39,14 +40,16 @@ export function comparisonCommands({
       icon: 'chat',
       aliases: ['conversation', 'ask', 'model'],
       when: paneScope,
-      run: (context) =>
-        actions.workspace.newChat(
-          context.selection.length
-            ? context.selection.map((file) => file.path)
+      run: (context) => {
+        const files = toolFiles(context);
+        return actions.workspace.newChat(
+          files.length
+            ? files.map((file) => file.path)
             : context.directory
               ? [context.directory]
               : [],
-        ),
+        );
+      },
     },
     {
       id: 'explore-folder',

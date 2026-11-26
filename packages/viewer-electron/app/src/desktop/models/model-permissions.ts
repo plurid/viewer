@@ -9,7 +9,7 @@ import {
   type ModelDataLevel,
   type ModelDataPermission,
 } from '../../domain/models/permissions';
-import { DocumentStore } from '../persistence/document-store';
+import { PermissionStore } from '../persistence/permission-store';
 
 const schema = z
   .object({
@@ -44,7 +44,7 @@ export class ModelPermissionRequired extends Error {
 
 /** Private approvals, never derived from configuration, keys or an agent request. */
 export class ModelPermissions {
-  private store: DocumentStore<z.infer<typeof schema>>;
+  private store: PermissionStore<z.infer<typeof schema>>;
   private permissions: ModelDataPermission[] = [];
   private loading?: Promise<void>;
   private writes: Promise<void> = Promise.resolve();
@@ -59,21 +59,21 @@ export class ModelPermissions {
     dataPath: string,
     private providers: () => readonly ModelProvider[],
   ) {
-    this.store = new DocumentStore(path.join(dataPath, 'model-permissions-v1.json'), (value) =>
+    this.store = new PermissionStore(path.join(dataPath, 'model-permissions-v1.json'), (value) =>
       schema.parse(value),
     );
     for (const provider of providers())
       this.known.set(provider.id, provider.kind + ':' + modelEndpoint(provider));
   }
   private load() {
-    return (this.loading ??= this.store
-      .load()
-      .then((value) => {
-        this.permissions = value?.permissions ?? [];
-      })
-      .catch(() => {
-        this.permissions = [];
-      }));
+    return (this.loading ??= this.store.load().then((value) => {
+      this.permissions = value?.permissions ?? [];
+    }));
+  }
+  private async prepareEdit() {
+    await this.load();
+    const published = await this.store.settlePublished();
+    if (published) this.permissions = published.permissions;
   }
   private current(provider: ModelProvider) {
     const current = this.providers().find((item) => item.id === provider.id);
@@ -116,7 +116,7 @@ export class ModelPermissions {
     const work = this.writes
       .catch(() => {})
       .then(async () => {
-        await this.load();
+        await this.prepareEdit();
         const permissions = this.permissions.filter((item) => item.providerID !== provider.id);
         if (level) {
           if (this.closed || !this.current(provider)) throw new ModelPermissionRequired();
@@ -153,7 +153,7 @@ export class ModelPermissions {
     const work = this.writes
       .catch(() => {})
       .then(async () => {
-        await this.load();
+        await this.prepareEdit();
         if (this.closed || !this.current(provider)) {
           if (allow && this.agentBlocked.get(provider.id) === revision)
             this.agentBlocked.delete(provider.id);
@@ -223,7 +223,7 @@ export class ModelPermissions {
     const work = this.writes
       .catch(() => {})
       .then(async () => {
-        await this.load();
+        await this.prepareEdit();
         const permissions = this.permissions.filter(
           (item) =>
             !removed.has(item.providerID) &&

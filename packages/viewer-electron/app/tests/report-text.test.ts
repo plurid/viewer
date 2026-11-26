@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { reportFailure } from '../src/domain/diagnostics/report-failure';
 import { redactReport } from '../src/domain/diagnostics/report-redaction';
 import { redactSecrets } from '../src/desktop/diagnostics/failures';
 import { readFile } from 'node:fs/promises';
@@ -153,18 +154,20 @@ describe('readable optional report text', () => {
     expect(redactReport(input, values)).toBe(expected);
   });
 
-  it.each(['\n', '\r\n'])(
-    'keeps frame coordinates and their closing parenthesis (%j)',
-    (separator) => {
-      const input =
-        'Error: stopped' +
-        separator +
-        '    at FolderService.list (/Applications/Viewer.app/Contents/main.js:12:76)';
-      expect(redactReport(input, values)).toBe(
-        'Error: stopped\n    at <address> (<Viewer>/Contents/main.js:12:76)',
-      );
-    },
-  );
+  it.each(['\n', '\r\n'])('retains coordinates only from a recorded stack (%j)', (separator) => {
+    const frame = '    at FolderService.list (/Applications/Viewer.app/Contents/main.js:12:76)';
+    const input = 'Error: stopped' + separator + frame;
+    expect(redactReport(input, values)).toBe('<path>/…/…/…/…/…');
+    expect(reportFailure({ detail: input }, '/Applications/Viewer.app').frames).toEqual([]);
+    expect(
+      reportFailure({ detail: input, stack: frame + separator }, '/Applications/Viewer.app').frames,
+    ).toEqual([{ path: 'Contents/main.js', line: 12, column: 76 }]);
+  });
+
+  it('reduces a bare bundle path with unverified coordinates', () => {
+    const input = '/Applications/Viewer.app/Contents/Private.js:12:76';
+    expect(redactReport(input, values)).toBe('<path>/…/…/…/…');
+  });
 
   it.each(['12:04:00', '00:00:00', '23:59:59.123', '12:76'])(
     'does not mistake a time or line and column for an address (%s)',

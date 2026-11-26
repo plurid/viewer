@@ -1,3 +1,4 @@
+import { useConfirmation } from './ConfirmAction';
 import { normalizePreferences } from '../../../domain/preferences/ui';
 import type { SettingsEditor } from './editor';
 import { useEffect, useState } from 'react';
@@ -8,6 +9,7 @@ import { usePathText } from '../PathLabel';
 
 /** Sidebar section visibility and navigation defaults. */
 export function NavigationSettings({ editor }: { editor: SettingsEditor }) {
+  const confirmation = useConfirmation();
   const { snapshot, patch } = editor;
   const [hotkey, setHotkey] = useState<Awaited<ReturnType<ViewerAPI['hotkeyStatus']>>>();
   const [command, setCommand] = useState<Awaited<ReturnType<ViewerAPI['shellCommand']>>>();
@@ -106,10 +108,22 @@ export function NavigationSettings({ editor }: { editor: SettingsEditor }) {
         Drag section headings and shortcuts in any sidebar to change their order.
       </p>
       <div className="settings-actions">
-        <button onClick={() => patch('ui.sidebar', normalizePreferences().sidebar)}>
+        <button
+          className="danger"
+          onClick={() =>
+            confirmation.ask({
+              title: 'Reset Navigation Defaults?',
+              detail:
+                'The sidebar sections, shortcuts and their order will return to their defaults.',
+              action: 'Reset',
+              run: () => patch('ui.sidebar', normalizePreferences().sidebar),
+            })
+          }
+        >
           Reset Navigation Defaults
         </button>
       </div>
+      {confirmation.dialog}
     </>
   );
 }

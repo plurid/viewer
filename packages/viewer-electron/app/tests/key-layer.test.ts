@@ -188,3 +188,41 @@ describe('another prefix', () => {
     expect(invoke).toHaveBeenCalledTimes(2);
   });
 });
+
+it('runs root chords and displays the actual lead key for the root and leader tables', async () => {
+  const snapshot = structuredClone(getState().settings);
+  snapshot.revision++;
+  snapshot.settings.keymap = {
+    ...snapshot.settings.keymap,
+    root: { 'Alt+g': { g: 'frame-all' } },
+    leader: '<Space>',
+  };
+  receiveSettings(snapshot);
+  const run = setup();
+  const view = render(createElement(WhichKey, { label: () => undefined }));
+  for (const [key, extra, next, trail, command] of [
+    ['g', { altKey: true, code: 'KeyG' }, 'g', '⌥G', 'frame-all'],
+    [' ', {}, 'x', '␣', 'close-plane'],
+  ] as const) {
+    expect(press(document.body, key, extra).defaultPrevented).toBe(true);
+    act(() => vi.advanceTimersByTime(400));
+    expect(view.container.querySelector('.which-key-trail')?.textContent).toBe(trail);
+    press(document.body, next);
+    await act(async () => {});
+    expect(run).toHaveBeenLastCalledWith([command], 1);
+  }
+});
+
+it('gives the physical shifted key to its window command while keypad plus starts the prefix', () => {
+  const snapshot = structuredClone(getState().settings);
+  snapshot.revision++;
+  snapshot.settings.keymap.prefix = 'Shift+Cmd++';
+  snapshot.settings.shortcuts['focus-mode'] = 'Shift+Cmd+=';
+  receiveSettings(snapshot);
+  setup();
+  const modifiers = { shiftKey: true, metaKey: true };
+  expect(press(document.body, '+', { ...modifiers, code: 'Equal' }).defaultPrevented).toBe(false);
+  expect(press(document.body, '+', { ...modifiers, code: 'NumpadAdd' }).defaultPrevented).toBe(
+    true,
+  );
+});

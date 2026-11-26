@@ -1,3 +1,4 @@
+import { syncParentDirectory } from './directory-sync';
 import { lstat, fileStat } from '../files/stats';
 
 import { sameVersionItem } from '../files/item-identity';
@@ -158,7 +159,8 @@ export class DefinitionFiles<T> {
         const current =
           before === null ? null : decodeDefinition(before, this.schema, this.title, this.limit);
         const next = change(current);
-        if (!next)
+        if (!next) {
+          if (before !== null) await syncParentDirectory(actual);
           return {
             document:
               before === null || current === null
@@ -170,9 +172,11 @@ export class DefinitionFiles<T> {
                     definition: current,
                   },
           };
+        }
         const definition = this.schema.parse(next.definition);
         const text = this.text(before, definition);
         if (text !== before) await this.publish(actual, before, text, signal);
+        else await syncParentDirectory(actual);
         return {
           document: { file, root: path.dirname(file), revision: revision(text), definition },
           result: next.result,
@@ -217,6 +221,7 @@ export class DefinitionFiles<T> {
       if ((await source(actual, this.title, this.limit)) !== before)
         throw new Error('The ' + this.title.toLowerCase() + ' changed during this save.');
       await rename(temporary, actual);
+      await syncParentDirectory(actual);
     } finally {
       await discardOwnTemporaryFile(temporary);
     }

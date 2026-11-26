@@ -35,6 +35,7 @@ export function ColorField({
   automatic,
   automaticColor,
   onChange,
+  onPick = onChange,
 }: {
   label: string;
   /** `#rrggbb`, or empty for the automatic colour. */
@@ -45,6 +46,8 @@ export function ColorField({
   /** What the automatic choice is now, shown on it and offered first by the picker. */
   automaticColor?: string;
   onChange(value: string): void;
+  /** The system picker can send several values while the person is choosing. */
+  onPick?(value: string): void;
 }) {
   const swatches = spaceSwatches[look];
   const own = !!value && !swatches.some(([, color]) => color === value);
@@ -83,7 +86,7 @@ export function ColorField({
           type="color"
           aria-label="Custom color"
           value={value || automaticColor || '#272a30'}
-          onChange={(event) => onChange(event.target.value.toLowerCase())}
+          onChange={(event) => onPick(event.target.value.toLowerCase())}
         />
       </label>
     </div>

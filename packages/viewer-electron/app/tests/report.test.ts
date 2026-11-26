@@ -6,6 +6,7 @@ import {
   reportLimits,
 } from '../src/desktop/diagnostics/report';
 import type { ReportInput } from '../src/desktop/diagnostics/report';
+import { DiagnosticBudget, WorkerOutput } from '../src/desktop/diagnostics/failures';
 
 const local = vi.hoisted(() => ({
   commands: vi.fn(async (file: string, args: string[], _options: unknown) => {
@@ -113,6 +114,32 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('report contents', () => {
+  it('keeps worker failure records without copying fragments of stderr filenames', () => {
+    const records: string[] = [];
+    const worker = new WorkerOutput(
+      'Preview',
+      (detail) => {
+        records.push(
+          JSON.stringify({
+            at: '2026-11-01T12:01:00.000Z',
+            kind: 'worker-output',
+            detail,
+          }),
+        );
+      },
+      new DiagnosticBudget(),
+    );
+    worker.write("ENOENT: open '/Home/Example/Private\n    at Sample");
+    worker.write(" Folder'\n");
+    expect(records).toHaveLength(2);
+    const report = diagnosticReport({
+      ...fixture(),
+      includeMessageText: true,
+      log: records.join('\n'),
+    });
+    expect(report.match(/\(worker-output\)/g)).toHaveLength(2);
+    expect(report).not.toMatch(/Sample|Folder|Preview|Private/);
+  });
   it('includes only requested facts and the newest twenty validated failures', () => {
     const input = fixture();
     input.log =
@@ -148,10 +175,13 @@ describe('report contents', () => {
   it('includes bounded, well-formed excerpts only after opt-in', () => {
     const input = fixture();
     input.includeMessageText = true;
-    input.log = entry(1, 'Start ' + 'A'.repeat(2100) + '\n' + '/Home/Example/Private/Report.pdf');
+    const prefix = 'Start ' + 'A'.repeat(2100);
+    input.log = entry(1, prefix + '\n/Home/Example/Private/Report.pdf');
     const report = diagnosticReport(input);
     expect(report).not.toMatch(/A{20}|Private|Report\.pdf/);
-    expect(report).toContain('> Start [redacted]');
+    expect(report.match(/^> .*$/gm)).toEqual(['> ~/…/….pdf']);
+    const isolated = diagnosticReport({ ...input, log: entry(1, prefix) });
+    expect(isolated.match(/^> .*$/gm)).toEqual(['> Start [redacted]']);
     expect(() => encodeURIComponent(report)).not.toThrow();
     const long = diagnosticReport({ ...input, log: entry(1, 'safe '.repeat(399) + '😀') });
     expect(() => encodeURIComponent(long)).not.toThrow();
@@ -165,6 +195,20 @@ describe('report contents', () => {
     expect(report).toContain('Message text omitted: could not check computer name.');
     expect(report.match(/^### /gm)).toHaveLength(2);
     expect(report).not.toContain('Failure 1');
+  });
+
+  it('omits path text beyond an ambiguous quote or a frame-shaped newline', () => {
+    const input = fixture();
+    input.includeMessageText = true;
+    input.log = entry(
+      1,
+      "ENOENT: open '/Home/Example/2026's Private Folder/Notice\n    at Confidential File.pdf'",
+      'ENOENT',
+    );
+    const report = diagnosticReport(input);
+    expect(report).toContain('- Code: ENOENT');
+    expect(report).toContain('> ENOENT: open ~/…/….pdf');
+    expect(report).not.toMatch(/Private|Notice|Confidential|2026's/);
   });
 
   it('makes each hardware line optional', () => {

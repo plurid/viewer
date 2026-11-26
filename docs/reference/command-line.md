@@ -242,7 +242,8 @@ capital letter and has up to 31 letters and digits, so it never shadows a verb.
 
 A line without `$` placeholders refuses words: `:Name takes no words.` A command sequence saved in
 **Settings → Actions** with a command name runs as `:Name` too; see [actions](actions.md). A
-sequence cannot run another custom action or named command.
+sequence can call built-in commands and verbs. Commands reserved for the person, other custom
+actions and named commands are unavailable inside its steps.
 
 **Record Macro** (prefix **q**) records the commands you run by key, menu or palette, up to 50, and
 saves them as a command sequence. It skips custom actions, the palette, Settings, **Show Key
@@ -253,8 +254,9 @@ switch is recorded as `tabn Name`.
 
 `:bind`, `:unbind`, `:command` and `:delcommand` last until Viewer quits. **Settings → Shortcuts →
 This session** lists them: **Keep** writes them into `config.jsonc` (bindings into the keymap, named
-lines as command sequences), and **Discard** drops them. A session holds up to 200 bindings and 100
-named lines.
+lines as command sequences), and **Discard** drops them. **Keep** preserves the spelling and
+contents of unrelated key bindings, including other names for the same key. A session holds up to
+200 bindings and 100 named lines.
 
 Importing a configuration that changes keys or sequences which type into terminals, move files to
 the Trash, rename them, or use a `!` form asks for confirmation first.
@@ -282,6 +284,10 @@ you review the form. [Tasks and Git](tasks-and-git.md) describes the result.
 Type `>` in ⌘K, or choose **Ask in Words…**, and describe what you want: "select the images", "hide
 the grid". The model set as **Default for Ask Viewer** in **Settings → Models** answers with one
 command line and one sentence. **Enter** runs the line; **Tab** puts it in the field to edit.
+
+A request in words or by voice cannot run a custom workflow, terminal profile, executable or shell
+script. It also cannot open a saved layout containing a terminal plane, whether requested by name,
+by command ID or through a custom command.
 
 The model receives the request, the active folder's path, up to 50 selected names, the workspace
 names and the commands available here. It never receives file contents. A request is at most 1,000

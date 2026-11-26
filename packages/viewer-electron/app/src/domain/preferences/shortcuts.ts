@@ -1,5 +1,5 @@
 import type { ApplicationSettings } from '../services';
-import { keyGlyphs } from './keymap';
+import { keyGlyphs, keyParts, lowerKey, upperKey } from './keymap';
 export const defaultShortcuts: Record<string, string> = {
   palette: 'Cmd+K',
   dictate: 'Ctrl+Shift+Space',
@@ -106,10 +106,12 @@ const aliases: Record<string, string> = {
   return: 'enter',
 };
 export function shortcutParts(value: string): string[] {
-  return value
-    .toLowerCase()
-    .split('+')
-    .map((part) => aliases[part.trim()] || part.trim())
+  const { modifiers, base } = keyParts(value.trim());
+  return [...modifiers, base]
+    .map((part) => {
+      const key = lowerKey(part.trim());
+      return Object.hasOwn(aliases, key) ? aliases[key]! : key;
+    })
     .filter(Boolean);
 }
 export function shortcutKey(value: string): string {
@@ -158,30 +160,83 @@ const codePunctuation: Readonly<Record<string, string>> = {
   Backquote: '`',
 };
 /** The unmodified key on a US layout, from the physical key code. */
-function codeKey(code = ''): string | undefined {
+export function codeKey(code = ''): string | undefined {
   return (
     /^Key([A-Z])$/.exec(code)?.[1]?.toLowerCase() ??
     /^Digit(\d)$/.exec(code)?.[1] ??
     codePunctuation[code]
   );
 }
+type ShortcutEvent = Pick<KeyboardEvent, 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'key'> &
+  Partial<Pick<KeyboardEvent, 'code'>>;
+
+function modifiedKey(event: ShortcutEvent): string | undefined {
+  return event.altKey || event.shiftKey ? codeKey(event.code) : undefined;
+}
+
+/** Shift and Option record the unmodified key at that position when its code is known. */
+export function recordedShortcut(event: ShortcutEvent): string | undefined {
+  if (['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return;
+  const key = modifiedKey(event) ?? event.key;
+  return [
+    event.ctrlKey && 'Ctrl',
+    event.altKey && 'Alt',
+    event.shiftKey && 'Shift',
+    event.metaKey && 'Cmd',
+    key === ' ' ? 'Space' : key.length === 1 ? upperKey(key) : key,
+  ]
+    .filter(Boolean)
+    .join('+');
+}
+
+/** A character binding may use another key that types it until that recorded chord has an owner. */
+function canUseChord(value: string, event: ShortcutEvent, settings: ApplicationSettings): boolean {
+  const recorded = recordedShortcut(event);
+  return (
+    !recorded ||
+    sameKey(value, recorded) ||
+    !bindings(settings).some(([, chord]) => sameKey(chord, recorded))
+  );
+}
+
+/** No Prefix and the leader spell Shift in the character. An uppercase letter carries Shift,
+ * while an entry such as Cmd++ can also match the keypad without Shift. */
+export function canStartKeyBinding(
+  name: string,
+  event: ShortcutEvent,
+  settings: ApplicationSettings,
+): boolean {
+  if (!event.altKey && !event.shiftKey) return true;
+  const { base } = keyParts(name);
+  if (base.length !== 1) return true;
+  const chord = event.shiftKey && base !== lowerKey(base) ? 'Shift+' + name : name;
+  return canUseChord(chord, event, settings);
+}
+
 export function matchesShortcut(
   value: string,
-  event: Pick<KeyboardEvent, 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'key'> &
-    Partial<Pick<KeyboardEvent, 'code'>>,
+  event: ShortcutEvent,
+  settings?: ApplicationSettings,
 ): boolean {
+  if (!value) return false;
   const parts = shortcutParts(value);
+  if (
+    event.metaKey !== parts.includes('cmd') ||
+    event.ctrlKey !== parts.includes('ctrl') ||
+    event.altKey !== parts.includes('alt') ||
+    event.shiftKey !== parts.includes('shift')
+  )
+    return false;
   const key = parts.find((part) => !['cmd', 'ctrl', 'shift', 'alt'].includes(part));
-  return (
-    !!value &&
-    event.metaKey === parts.includes('cmd') &&
-    event.ctrlKey === parts.includes('ctrl') &&
-    event.altKey === parts.includes('alt') &&
-    event.shiftKey === parts.includes('shift') &&
-    (key === (event.key === ' ' ? 'space' : event.key.toLowerCase()) ||
-      // Option and Shift change the produced character (Option+C is "ç", Shift+. is ">").
-      ((event.altKey || event.shiftKey) && key === codeKey(event.code)))
-  );
+  const physical = modifiedKey(event);
+  if (physical && key === physical) return true;
+  if (key !== (event.key === ' ' ? 'space' : lowerKey(event.key))) return false;
+  return !physical || !settings || canUseChord(value, event, settings);
+}
+
+/** Includes bindings handled outside the window router, such as the prefix and picture rotation. */
+export function hasShortcutForEvent(settings: ApplicationSettings, event: ShortcutEvent): boolean {
+  return bindings(settings).some(([, chord]) => matchesShortcut(chord, event));
 }
 export function accelerator(value: string): string | undefined {
   if (!value) return undefined;
@@ -194,11 +249,12 @@ export function accelerator(value: string): string | undefined {
           alt: 'Alt',
           shift: 'Shift',
           enter: 'Return',
+          '+': 'Plus',
           arrowup: 'Up',
           arrowdown: 'Down',
           arrowleft: 'Left',
           arrowright: 'Right',
-        })[part] || part.toUpperCase(),
+        })[part] || upperKey(part),
     )
     .join('+');
 }
@@ -385,6 +441,15 @@ export function pictureShortcuts(settings: ApplicationSettings): Record<string, 
     Object.keys(previewShortcuts).map((id) => [id, resolvedShortcut(settings, id)]),
   );
 }
+export function resolvedAlternateShortcuts(settings: ApplicationSettings): Record<string, string> {
+  const own = ownBindings(settings);
+  return Object.fromEntries(
+    Object.entries(alternateShortcuts).filter(
+      ([id, key]) =>
+        settings.shortcuts[id] === undefined && !own.some(([, shortcut]) => sameKey(shortcut, key)),
+    ),
+  );
+}
 /** Every binding in effect but a picture's keys: commands' and the menu's, Finder's second keys,
  * recipes, custom actions and the prefix. */
 function windowBindings(settings: ApplicationSettings): Binding[] {
@@ -401,7 +466,7 @@ function windowBindings(settings: ApplicationSettings): Binding[] {
   };
   return [
     ...Object.entries(commands).map(([id, shortcut]): Binding => [id, shortcut, shortcutLabel(id)]),
-    ...Object.entries(alternateShortcuts).map(([id, shortcut]): Binding => [
+    ...Object.entries(resolvedAlternateShortcuts(settings)).map(([id, shortcut]): Binding => [
       `${id}:alternate`,
       shortcut,
       shortcutLabel(id),
@@ -465,6 +530,9 @@ export function shortcutOwner(
 ): string | undefined {
   return bindings(settings).find(
     ([id, shortcut]) =>
-      id !== except && sameKey(shortcut, value) && !sharedAsShipped(id, shortcut, except, value),
+      id !== except &&
+      !id.endsWith(':alternate') &&
+      sameKey(shortcut, value) &&
+      !sharedAsShipped(id, shortcut, except, value),
   )?.[2];
 }

@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { listColumns } from '../src/domain/preferences/list-columns';
+import { shortcutOwner } from '../src/domain/preferences/shortcuts';
 import { normalizePreferences } from '../src/domain/preferences/ui';
 import { defaultSettings } from '../src/domain/services';
 import {
@@ -327,6 +329,24 @@ describe('shared Finder input and file opening', () => {
     stopPropagation: vi.fn(),
     ...modifiers,
     code: modifiers.code || key,
+  });
+  it('yields the alternate Go to Folder chord to explicit bindings', () => {
+    const settings = defaultSettings('/fixtures');
+    const key = event('G', { metaKey: true, shiftKey: true });
+    expect(keyCommand(key, settings)).toBe('go-to');
+    for (const shortcut of ['', 'Ctrl+Cmd+G']) {
+      settings.shortcuts = { 'go-to': shortcut };
+      expect(keyCommand(key, settings)).toBeUndefined();
+      expect(shortcutOwner(settings, 'Shift+Cmd+G', 'undo-file')).toBeUndefined();
+    }
+    settings.shortcuts = {};
+    settings.recipes = [{ ...settings.recipes[0]!, shortcut: 'Cmd+Shift+G' }];
+    expect(settingsSchema.safeParse(settings).success).toBe(true);
+    expect(keyCommand(key, settings)).toBe('recipe.' + settings.recipes[0]!.id);
+  });
+  it('keeps the order of all supported list columns', () => {
+    const order = listColumns.map((c) => c.id);
+    expect(normalizePreferences({ list: { order } }).list.order).toEqual(order);
   });
   it('routes Finder keys and settings overrides without passing selection arrows to Plurid', () => {
     const settings = defaultSettings('/fixtures');

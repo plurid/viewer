@@ -57,6 +57,7 @@ import {
 import { palettePrefixes, type PaletteMode } from './palette-modes';
 import { clearRecentCommands } from './history';
 import { commandFolders } from './folders';
+import { toolFiles } from './target';
 import { paletteSuggested } from './suggestions';
 import { offerToForgetFolder } from '../state/places';
 import { useShortcutGlyphs } from '../keys/hints';
@@ -283,7 +284,7 @@ function CommandFinder({
       : !query.trim()
         ? withSuggested(
             paletteRows(commands, query, recent, workspaceChoices),
-            paletteSuggested(commands, context.selection, offer),
+            paletteSuggested(commands, toolFiles(context), offer),
             recent,
           )
         : paletteRows(commands, query, recent, workspaceChoices);
@@ -597,8 +598,8 @@ function useSmartRows(
     if (intent.command === 'go-to')
       return [
         row('go', {
-          label: `Go to ${name}`,
-          // the line it is, to learn: `:e ~/Downloads`
+          label: `Go to ${homeText(name, home)}`,
+          // Quoted words suppress tilde expansion in the command line.
           detail: `:e ${quoteWord(name)}`,
           group: 'Go',
           icon: 'folder',

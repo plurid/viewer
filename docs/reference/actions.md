@@ -28,15 +28,15 @@ Conditions are checked against the target captured when you choose the command, 
 selection. A command sequence without **Only in folders** is available everywhere, not only in
 folders.
 
-| Execution                    | `executor.kind` | Runs                                                                   |
-| ---------------------------- | --------------- | ---------------------------------------------------------------------- |
-| **Built-in command**         | `builtin`       | One command ID; not another custom command                             |
-| **Command sequence (macro)** | `sequence`      | 1 to 50 command lines in order                                         |
-| **Workflow**                 | `workflow`      | 1 to 20 steps: built-in command lines and executable or shell commands |
-| **Action recipe**            | `recipe`        | Opens **Run Action** with the recipe chosen                            |
-| **Terminal plane**           | `terminal`      | Opens a terminal plane with a shell profile                            |
-| **Executable**               | `executable`    | A program with literal arguments                                       |
-| **Shell script**             | `shell`         | A script run by the shell you name, up to 16,000 characters            |
+| Execution                    | `executor.kind` | Runs                                                                      |
+| ---------------------------- | --------------- | ------------------------------------------------------------------------- |
+| **Built-in command**         | `builtin`       | One command ID; not another custom command                                |
+| **Command sequence (macro)** | `sequence`      | 1 to 50 command lines in order                                            |
+| **Workflow**                 | `workflow`      | 1 to 20 steps using built-in lines and saved executable or shell commands |
+| **Action recipe**            | `recipe`        | Opens **Run Action** with the recipe chosen                               |
+| **Terminal plane**           | `terminal`      | Opens a terminal plane with a shell profile                               |
+| **Executable**               | `executable`    | A program with literal arguments                                          |
+| **Shell script**             | `shell`         | A script run by the shell you name, up to 16,000 characters               |
 
 ## Executables and shell scripts
 
@@ -84,8 +84,9 @@ most 20.
 | **Default**  | Up to 4,000 characters                                              |
 | **Required** | An empty value is refused                                           |
 
-A checkbox value is `true` or `false`. A workflow collects its own parameters and those of its
-executable and shell steps once; two different definitions of one name are refused.
+A checkbox value is `true` or `false`. Executable, shell and workflow commands take parameters. A
+workflow asks for its own parameters and those of its program steps once. Fields with the same name
+must have identical definitions. Each program receives its own fields.
 
 ## Command sequences
 
@@ -100,10 +101,16 @@ name. **Record Macro** saves the commands you run as a new sequence.
 
 ## Workflow commands
 
-A workflow command runs its steps in order. A command step is a built-in command line; it may not
-name a custom or named command. An action step runs an executable or shell command. The workflow
-stops with `Name stopped at step N: reason` when a step fails, a process exits with an error, or the
-workspace or originating plane changes. Dialogs a step opens still wait for you.
+Choose **Add Command Step** to run a saved executable or shell command, or **Add Built-In Step** to
+enter a built-in command line. Only the person can start a workflow command. A built-in line cannot
+call a named command, another custom action or a command reserved for a direct choice.
+
+Program steps run in the folder and selection where the workflow started. Each uses its own desktop
+first-run confirmation, including after its program, arguments or script change. The next step waits
+for completion. Before each launch, Viewer checks the child against the definition selected when the
+workflow started. A change stops the workflow at that step, even if the replacement has its own
+approval. A failed step also stops the workflow and reports its position. Changing the originating
+workspace or removing its plane stops the workflow. Dialogs still wait for you.
 
 For inspection, comparison and reviewed file changes with explicit dependencies, use a
 [workflow file](automation.md).
@@ -133,7 +140,9 @@ terminals, move to the Trash, rename or discard text asks before it applies.
 
 **Settings → Actions → Recipes** holds recipes; **New Recipe**, **Duplicate Recipe**, **Export
 Recipes** and **Import Recipes** manage them. **Remove Recipe** removes one of your own once no
-custom command uses it; the five built-in recipes stay. Viewer keeps up to 100.
+custom command uses it; the five built-in recipes stay. Viewer keeps up to 100. Import skips
+identical recipes. A different recipe with the same ID is added as a copy. Its shortcut is kept when
+it is free.
 
 | Built-in recipe              | Kind           | Default data              | Template                                                                                                          |
 | ---------------------------- | -------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |

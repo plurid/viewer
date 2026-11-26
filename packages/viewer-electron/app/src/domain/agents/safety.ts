@@ -3,7 +3,10 @@ import type { CustomAction } from '../automation/actions';
 import { forbiddenTrashCommands } from '../files/trash';
 import { settingCatalog, workspaceMayChange } from '../preferences/catalog';
 import { humanGitCommand } from '../comparison/git-actions';
-import { parseCommandLine, resolveName } from '../command-line/verbs';
+import type { LayoutTemplate } from '../workspaces/layout-templates';
+import { namedLayout } from '../workspaces/layout-templates';
+import { tileLayouts } from '../workspaces/tiling';
+import { bindStep, parseCommandLine, resolveName } from '../command-line/verbs';
 
 export const agentRemovalPolicy = Object.freeze({
   requiresUserApproval: true,
@@ -91,6 +94,7 @@ const externalCommands = new Set(['open-default', 'open-with', 'open-selection']
 export function modelLineCommandProblem(
   id: string,
   actions: readonly CustomAction[],
+  layouts: readonly LayoutTemplate[] = [],
 ): string | undefined {
   const byID = new Map(actions.map((action) => ['custom.' + action.id, action]));
   const visiting = new Set<string>();
@@ -99,17 +103,15 @@ export function modelLineCommandProblem(
     if (depth > agentSequenceNestingLimit || visiting.has(command))
       return 'its commands call each other recursively or too deeply';
     if (++expanded > agentCommandExpansionLimit) return 'its expanded commands exceed the limit';
+    if (command.startsWith('layout.'))
+      return modelLayoutProblem(layouts.find((item) => 'layout.' + item.id === command));
     if (!command.startsWith('custom.')) return modelBuiltinCommandProblem(command);
     const action = byID.get(command);
     if (!action) return 'the custom action was removed';
     const executor = action.executor;
-    if (['shell', 'executable', 'terminal'].includes(executor.kind)) return 'it runs a program';
-    const lines =
-      executor.kind === 'builtin'
-        ? [executor.command]
-        : executor.kind === 'sequence'
-          ? executor.commands
-          : [];
+    if (executor.kind === 'recipe') return undefined;
+    if (executor.kind !== 'builtin' && executor.kind !== 'sequence') return 'it runs a program';
+    const lines = executor.kind === 'builtin' ? [executor.command] : executor.commands;
     visiting.add(command);
     try {
       for (const line of lines) {
@@ -122,6 +124,13 @@ export function modelLineCommandProblem(
               if (problem) return problem;
             }
           } else if (name.kind === 'verb') {
+            if (name.verb.key === 'layout') {
+              const problem = modelLayoutVerbProblem(
+                bindStep(step, name.verb).args[0]!.text,
+                layouts,
+              );
+              if (problem) return problem;
+            }
             if (step.bang || modelMutationVerbs.has(name.verb.key))
               return 'it changes files or program commands';
           } else return 'it calls a named command that needs separate review';
@@ -135,6 +144,17 @@ export function modelLineCommandProblem(
     }
   };
   return inspect(id, 0);
+}
+
+export function modelLayoutProblem(layout: LayoutTemplate | undefined): string | undefined {
+  if (!layout) return 'the saved layout is unavailable';
+  if (layout.planes.some((plane) => plane.kind === 'terminal'))
+    return 'the saved layout starts a terminal';
+}
+
+export function modelLayoutVerbProblem(name: string, layouts: readonly LayoutTemplate[]) {
+  if ((tileLayouts as readonly string[]).includes(name)) return;
+  return modelLayoutProblem(namedLayout(layouts, name));
 }
 
 const modelMutationVerbs = new Set([

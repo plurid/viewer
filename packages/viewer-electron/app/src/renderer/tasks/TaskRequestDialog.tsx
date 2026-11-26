@@ -1,3 +1,4 @@
+import { createTaskLabel } from '../../domain/agents/review';
 import { useEffect, useRef, useState } from 'react';
 import { taskWorkflowInputSchema, type AgentTaskResult } from '../../domain/agents/task-workflow';
 import type { TaskWorkflowDraft } from '../../domain/command-line/task';
@@ -250,7 +251,7 @@ export function TaskRequestDialog({
           ) : (
             !partial && (
               <button type="submit" className="primary" disabled={!valid.success}>
-                Create task…
+                {createTaskLabel}…
               </button>
             )
           )}

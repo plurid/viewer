@@ -660,7 +660,7 @@ Shown in **Settings → Shortcuts** and **Settings → Navigation**. Default key
 | `settings.keymap.whichKey`     | `true`                                      | Shows the next keys while a sequence waits                                                                      |
 | `settings.keymap.timeout`      | `1500`                                      | 300 to 10,000 ms                                                                                                |
 | `settings.keymap.bindings`     | See [prefix keys](shortcuts.md#prefix-keys) | Up to 200 keys per table                                                                                        |
-| `settings.keymap.root`         | `{}`                                        | Keys without the prefix; each needs ⌃, ⌥ or ⌘, or is an F-key                                                   |
+| `settings.keymap.root`         | `{}`                                        | No-prefix sequences start with ⌃, ⌥ or ⌘, or an F-key. Later keys may be plain                                  |
 | `settings.keymap.repeat`       | `["+", "-"]`                                | Up to 50 prefix keys that repeat without the prefix                                                             |
 | `settings.keymap.repeatTime`   | `500`                                       | 100 to 3,000 ms                                                                                                 |
 | `settings.keymap.modes`        | `resize`                                    | Up to 20 named tables; a name starts with a lowercase letter and has up to 31 lowercase letters, digits and `-` |
@@ -864,7 +864,8 @@ authority.
 `viewer-personal-backup` format, version `1`. It is readable JSON of at most 64 MiB (67,108,864
 bytes), formatting included. Default backup filenames use your local calendar date. Export captures
 the current workspace layout without dirtying a clean project, creates a new file and never
-overwrites an existing one.
+overwrites an existing one. In the Mac App Store edition, choose a destination folder. Viewer adds a
+number to the dated filename if the name is already in use.
 
 | Part        | Contents                                                                                                                                                                                                                                 |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -876,13 +877,19 @@ overwrites an existing one.
 Import assigns new identities and adds independent workspaces, up to the limit of 1,000 workspaces
 in all. It refuses a backup from a newer Viewer and symbolic-link inputs, validates the whole file
 before creating anything and writes only new private records. Existing documents and the backup are
-kept. If writing fails partway, the records already written are kept for recovery; nothing removes
-them.
+kept. If a restore stops partway, retrying in the same review verifies and reuses the copies already
+written. An edited copy is preserved and stops the retry. If the workspace save fails after the
+documents have been restored, choose **Restore Copies** again in the same dialog. Viewer checks the
+restored documents and canvas assets before adding the workspaces. If a copy changed or cannot be
+read, the dialog names the file. Fix any reported configuration error before restoring preferences,
+or restore the workspaces with the preferences option off.
 
-Relinking rewrites typed file and folder references; document text, commands and web addresses stay
-as written. Shared project associations and external agent connections need reconnecting. A restored
-conversation is stopped and its saved context scopes are cleared. A command receipt that was running
-becomes interrupted.
+Relinking changes the selected folder in saved file and folder paths. A path such as
+`Parts/../sheet.dxf` keeps those components under the new folder, so the filesystem can follow the
+`Parts` link before resolving its parent. Document text, commands and web addresses stay as written.
+Reconnect shared projects separately. Restored workspaces omit external agent session planes and
+their task references. A restored conversation is stopped and its saved context scopes are cleared.
+A command receipt that was running becomes interrupted.
 
 Canvas content, inputs and history are copied together. Canvas assets are size- and hash-checked;
 source-file authority is removed. Reconstruction requests are not restored or resubmitted. If assets

@@ -17,6 +17,12 @@ import { activeWorkspace, getState, initialize } from '../src/renderer/state/sto
 import type { CommandContext, ResolvedCommand } from '../src/renderer/commands/registry';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import type { CustomAction, ExecutionTask } from '../src/domain/automation/actions';
+import { createTerminalHandlers } from '../src/desktop/ipc/terminal-handlers';
+import { schemas } from '../src/desktop/ipc/schemas';
+import { Executions } from '../src/desktop/actions/executions';
+import { ExecutionConfirmations } from '../src/desktop/actions/execution-confirmations';
+import { temporaryRoot } from '../tools/temporary';
+import type { ApplicationSettings } from '../src/domain/services';
 import type { DesktopEvent } from '../src/domain/contracts';
 import { agentCommandID } from '../src/domain/agents/safety';
 
@@ -91,54 +97,29 @@ function command(actions: CustomAction[]) {
         .run(context),
   };
 }
-it('waits for process completion and stops the workflow after failure', async () => {
-  const workflow = {
-    ...action('workflow'),
-    executor: {
-      kind: 'workflow' as const,
-      steps: [
-        { kind: 'action' as const, actionID: 'test' },
-        { kind: 'action' as const, actionID: 'build' },
-      ],
-    },
-  };
-  const c = command([action('test'), action('build'), workflow]);
-  const work = c.run();
-  await waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
-  expect(execute.mock.calls[0]?.[0]).toBe('test');
-  status('test', 'failed');
-  await expect(work).rejects.toThrow('step 1');
-  expect(execute).toHaveBeenCalledTimes(1);
-  expect(() => agentCommandID('custom.workflow', [workflow])).toThrow('bypass Trash');
+it('waits for a direct executable and reports process failure', async () => {
+  const work = command([action('workflow')]).run();
+  await waitFor(() => expect(execute).toHaveBeenCalledOnce());
+  status('workflow', 'failed');
+  await expect(work).rejects.toThrow('failed');
+  expect(listeners.size).toBe(0);
 });
-it('gathers typed parameters once and passes them literally through successful steps', async () => {
-  const first = action('test');
+it('passes direct command parameters literally and waits for completion', async () => {
+  const first = action('workflow');
   first.inputs = [{ name: 'name', label: 'Build name', kind: 'text', required: true }];
-  const workflow = {
-    ...action('workflow'),
-    executor: {
-      kind: 'workflow' as const,
-      steps: [
-        { kind: 'action' as const, actionID: 'test' },
-        { kind: 'action' as const, actionID: 'build' },
-      ],
-    },
-  };
-  const c = command([first, action('build'), workflow]);
+  const c = command([first]);
   render(<ActionParameters />);
   let work: ReturnType<typeof c.run>;
   act(() => {
     work = c.run();
   });
   fireEvent.change(await screen.findByLabelText('Build name'), {
-    target: { value: 'literal $(touch marker)' },
+    target: { value: 'literal $value' },
   });
   fireEvent.submit(screen.getByRole('button', { name: 'Run' }).closest('form')!);
-  await waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
-  expect(execute.mock.calls[0]?.[2]).toEqual({ name: 'literal $(touch marker)' });
-  status('test', 'completed');
-  await waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
-  status('build', 'completed');
+  await waitFor(() => expect(execute).toHaveBeenCalledOnce());
+  expect(execute.mock.calls[0]?.[2]).toEqual({ name: 'literal $value' });
+  status('workflow', 'completed');
   await work!;
   expect(listeners.size).toBe(0);
 });
@@ -305,4 +286,268 @@ it('explains when Create chooses a folder that already has a workflow and displa
       'This folder already has a workflow. Open it with Open Workflow…, or choose another folder.',
     ),
   ).toBeTruthy();
+});
+
+it.each(['workflow', 'sequence', 'terminal', 'recipe', 'builtin', 'missing'] as const)(
+  'refuses a %s action step before starting any child command',
+  async (kind) => {
+    const executors = {
+      workflow: { kind: 'workflow', steps: [{ kind: 'command', line: 'frame-all' }] },
+      sequence: { kind: 'sequence', commands: ['frame-all'] },
+      terminal: { kind: 'terminal', profileID: 'sample' },
+      recipe: { kind: 'recipe', recipeID: 'sample' },
+      builtin: { kind: 'builtin', command: 'frame-all' },
+    } satisfies Record<Exclude<typeof kind, 'missing'>, CustomAction['executor']>;
+    const child: CustomAction = {
+      ...action('build'),
+      executor: kind === 'missing' ? action('build').executor : executors[kind],
+    };
+    const flow: CustomAction = {
+      ...action('workflow'),
+      executor: { kind: 'workflow', steps: [{ kind: 'action', actionID: child.id }] },
+    };
+    expect(() => agentCommandID('custom.workflow', [flow])).toThrow('bypass Trash');
+    await expect(command(kind === 'missing' ? [flow] : [child, flow]).run()).rejects.toThrow(
+      /executable or shell/,
+    );
+    expect(execute).not.toHaveBeenCalled();
+  },
+);
+
+it('refuses a cached custom command after its executor changes', async () => {
+  const previous: CustomAction = {
+    ...action('workflow'),
+    executor: { kind: 'terminal', profileID: 'test' },
+  };
+  const { context } = command([previous]);
+  const newTerminal = vi.fn();
+  const definition = programCommands(
+    { rootID: () => context.paneID, newTerminal } as unknown as WorkspaceController,
+    vi.fn(),
+  ).find((item) => item.id === 'custom.workflow')!;
+  getState().settings.settings.customActions = [
+    { ...previous, executor: { kind: 'builtin', command: 'frame-all' } },
+  ];
+  await expect(definition.run(context)).rejects.toThrow('changed');
+  expect(newTerminal).not.toHaveBeenCalled();
+});
+
+function connectExecutions(
+  settings: () => ApplicationSettings,
+  confirm: (child: CustomAction) => Promise<void>,
+) {
+  const executions = new Executions(
+    settings,
+    (task) => {
+      for (const listener of listeners) listener({ type: 'execution', task });
+    },
+    undefined,
+    confirm,
+  );
+  const handlers = createTerminalHandlers({
+    executions,
+    isAgent: () => false,
+  } as unknown as Parameters<typeof createTerminalHandlers>[0]);
+  window.viewer.customExecute = async (...args) =>
+    handlers.customExecute(schemas.customExecute.parse(args), 1);
+  window.viewer.executionList = async () => executions.list(1);
+  return executions;
+}
+
+it('uses the desktop confirmation for the child executor and asks again after an edit', async () => {
+  const root = await temporaryRoot('viewer-workflow-approval-');
+  initialize({ home: root, platform: 'darwin', state: null, locations: [], openPaths: [] });
+  const ask = vi.fn(async () => true);
+  const approvals = new ExecutionConfirmations(root, ask);
+  const executions = connectExecutions(
+    () => getState().settings.settings,
+    (child) => approvals.require(child),
+  );
+  const child = action('child');
+  child.executor = {
+    kind: 'executable',
+    executable: root + '/absent',
+    args: ['first'],
+    perItem: false,
+  };
+  const flow: CustomAction = {
+    ...action('workflow'),
+    executor: { kind: 'workflow', steps: [{ kind: 'action', actionID: child.id }] },
+  };
+  const run = command([child, flow]).run;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await expect(run()).rejects.toThrow(/step 1.*executable/i);
+    expect(ask).toHaveBeenCalledTimes(1);
+  }
+  expect(ask.mock.calls[0]).toEqual([
+    expect.objectContaining({ detail: expect.stringContaining('first') }),
+  ]);
+  child.executor = { ...child.executor, args: ['second'] };
+  await expect(run()).rejects.toThrow(/step 1.*executable/i);
+  expect(ask).toHaveBeenCalledTimes(2);
+  expect(ask.mock.calls[1]).toEqual([
+    expect.objectContaining({ detail: expect.stringContaining('second') }),
+  ]);
+  child.executor = { ...child.executor, executable: process.execPath, args: ['--version'] };
+  await run();
+  expect(ask).toHaveBeenCalledTimes(3);
+  expect(executions.list(1)).toEqual([
+    expect.objectContaining({
+      status: 'completed',
+      title: 'child',
+      output: expect.stringContaining(process.version),
+    }),
+  ]);
+  child.executor = { kind: 'shell', executable: '/bin/sh', script: 'echo review', perItem: false };
+  ask.mockResolvedValueOnce(false);
+  await expect(run()).rejects.toThrow(/step 1/i);
+  expect(ask).toHaveBeenCalledTimes(4);
+  expect(ask.mock.calls[3]).toEqual([
+    expect.objectContaining({ detail: expect.stringContaining('echo review') }),
+  ]);
+  expect(executions.list(1)).toHaveLength(1);
+  await executions.close();
+});
+
+it('waits for process completion and stops the workflow after failure', async () => {
+  const workflow = {
+    ...action('workflow'),
+    executor: {
+      kind: 'workflow' as const,
+      steps: [
+        { kind: 'action' as const, actionID: 'test' },
+        { kind: 'action' as const, actionID: 'build' },
+      ],
+    },
+  };
+  const c = command([action('test'), action('build'), workflow]);
+  const work = c.run();
+  await waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+  expect(execute.mock.calls[0]?.[0]).toBe('test');
+  status('test', 'failed');
+  await expect(work).rejects.toThrow('step 1');
+  expect(execute).toHaveBeenCalledTimes(1);
+  expect(() => agentCommandID('custom.workflow', [workflow])).toThrow('bypass Trash');
+});
+it('gathers typed parameters once and passes them literally through successful steps', async () => {
+  const first = action('test');
+  first.inputs = [{ name: 'name', label: 'Build name', kind: 'text', required: true }];
+  const workflow = {
+    ...action('workflow'),
+    executor: {
+      kind: 'workflow' as const,
+      steps: [
+        { kind: 'action' as const, actionID: 'test' },
+        { kind: 'action' as const, actionID: 'build' },
+      ],
+    },
+  };
+  const c = command([first, action('build'), workflow]);
+  render(<ActionParameters />);
+  let work: ReturnType<typeof c.run>;
+  act(() => {
+    work = c.run();
+  });
+  fireEvent.change(await screen.findByLabelText('Build name'), {
+    target: { value: 'literal $value' },
+  });
+  fireEvent.submit(screen.getByRole('button', { name: 'Run' }).closest('form')!);
+  await waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+  expect(execute.mock.calls[0]?.[2]).toEqual({ name: 'literal $value' });
+  status('test', 'completed');
+  await waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+  status('build', 'completed');
+  await work!;
+  expect(listeners.size).toBe(0);
+});
+
+it('refuses a current program at dispatch for a model-originated command', async () => {
+  const { context } = command([
+    { ...action('workflow'), executor: { kind: 'terminal', profileID: 'fixture' } },
+  ]);
+  const newTerminal = vi.fn();
+  const definition = programCommands(
+    { rootID: () => context.paneID, newTerminal } as unknown as WorkspaceController,
+    vi.fn(),
+  ).find((item) => item.id === 'custom.workflow')!;
+  await expect(definition.run({ ...context, modelRequest: true })).rejects.toThrow(/program/);
+  expect(newTerminal).not.toHaveBeenCalled();
+});
+it('stops the workflow when its next child changes during the preceding step', async () => {
+  const first = action('first');
+  const second = action('second');
+  const flow: CustomAction = {
+    ...action('workflow'),
+    executor: {
+      kind: 'workflow',
+      steps: [
+        { kind: 'action', actionID: first.id },
+        { kind: 'action', actionID: second.id },
+      ],
+    },
+  };
+  const work = command([first, second, flow]).run();
+  await waitFor(() => expect(execute).toHaveBeenCalledOnce());
+  const settings = getState().settings.settings;
+  settings.customActions = [
+    first,
+    {
+      ...second,
+      executor: { kind: 'shell', executable: 'test', script: 'second', perItem: false },
+    },
+    flow,
+  ];
+  status(first.id, 'completed');
+  await expect(work).rejects.toThrow(/step 2.*changed/);
+  expect(execute).toHaveBeenCalledTimes(1);
+});
+
+it('stops at the selected step when the desktop already has an approved replacement child', async () => {
+  const root = await temporaryRoot('viewer-workflow-admission-');
+  initialize({ home: root, platform: 'darwin', state: null, locations: [], openPaths: [] });
+  const selected = action('child');
+  selected.executor = {
+    kind: 'executable',
+    executable: process.execPath,
+    args: ['--help'],
+    perItem: false,
+  };
+  const replacement = { ...selected, executor: { ...selected.executor, args: ['--version'] } };
+  const first = action('first');
+  first.executor = {
+    kind: 'executable',
+    executable: process.execPath,
+    args: ['--version'],
+    perItem: false,
+  };
+  const flow: CustomAction = {
+    ...action('workflow'),
+    executor: {
+      kind: 'workflow',
+      steps: [
+        { kind: 'action', actionID: first.id },
+        { kind: 'action', actionID: selected.id },
+        { kind: 'action', actionID: first.id },
+      ],
+    },
+  };
+  const ask = vi.fn(async () => true);
+  const approvals = new ExecutionConfirmations(root, ask);
+  await approvals.require(replacement);
+  const confirm = vi.fn((child: CustomAction) => approvals.require(child));
+  const executions = connectExecutions(
+    () => ({ ...getState().settings.settings, customActions: [first, replacement, flow] }),
+    confirm,
+  );
+  try {
+    await expect(command([first, selected, flow]).run()).rejects.toThrow(
+      /stopped at step 2:.*command changed/i,
+    );
+    expect(confirm.mock.calls.map(([child]) => child.id)).toEqual(['first']);
+    expect(executions.list(1).map((task) => [task.title, task.status])).toEqual([
+      ['first', 'completed'],
+    ]);
+  } finally {
+    await executions.close();
+  }
 });

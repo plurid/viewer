@@ -138,6 +138,20 @@ describe('window-owned dialogs', () => {
     await expect(second).resolves.toMatchObject({ response: 0 });
     expect(owner.ready).toBe(false);
   });
+  it('distinguishes a queued notice interrupted by window shutdown from choosing Later', async () => {
+    const options = { message: 'Update available', buttons: ['Download', 'Later'], cancelId: 1 };
+    const delivered = owner.message(options);
+    await owner.request({ kind: 'answer', id: shown!.id, button: 1 });
+    const choice = await delivered;
+    expect(choice.response).toBe(1);
+    expect(choice).not.toHaveProperty('interrupted', true);
+    const other = owner.message({ message: 'First notice', buttons: ['OK'] });
+    const queued = owner.message(options);
+    expect(shown).toMatchObject({ message: 'First notice' });
+    owner.stop();
+    await other;
+    await expect(queued).resolves.toMatchObject({ response: 1, interrupted: true });
+  });
   it('cancels an aborted notice without consuming the next one', async () => {
     const abort = new AbortController();
     const first = owner.message({

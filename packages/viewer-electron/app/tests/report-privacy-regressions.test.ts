@@ -61,6 +61,37 @@ describe('report privacy regressions', () => {
     ]);
     input.bundleRoot = '/Applications/Viewer.app';
     expect(diagnosticReport(input)).toBe(diagnosticReport(reportFixture(['Error: ignored'])));
+    input.privateValues = values;
+    input.includeMessageText = true;
+    expect(diagnosticReport(input)).not.toMatch(/private|Medical|Diagnosis|Zoe|:1:2/i);
+  });
+
+  it.each(['    at Reader (PrivatePatient.js:4:8)', '    at PrivatePatient (native)'])(
+    'omits frame-shaped relative filenames from a multiline excerpt (%s)',
+    (frame) => {
+      const input = reportFixture(['TypeError: Private Patient\n' + frame]);
+      expect(diagnosticReport({ ...input, includeMessageText: true })).not.toMatch(
+        /Private|Patient|Reader|4:8/i,
+      );
+    },
+  );
+
+  it('keeps an ordinary message beside its separately recorded frame', async () => {
+    const root = await temporaryRoot('viewer-report-frame-');
+    const log = new DiagnosticLog(path.join(root, 'diagnostics.log'));
+    const error = new Error('Processor failed');
+    error.stack =
+      'Error: Processor failed\n    at render (/Applications/Viewer.app/Contents/main.cjs:7:9)';
+    await log.record('main-error', error);
+    const report = diagnosticReport({
+      ...reportFixture(),
+      log: await readFile(log.file, 'utf8'),
+      includeMessageText: true,
+      privateValues: values,
+      bundleRoot: '/Applications/Viewer.app',
+    });
+    expect(report).toContain('> Error: Processor failed');
+    expect(report.match(/Contents\/main\.cjs:7:9/g)).toHaveLength(1);
   });
 
   it('accepts only real structured errno, known Node codes and exported Viewer codes', async () => {
@@ -87,28 +118,32 @@ describe('report privacy regressions', () => {
     ]);
   });
 
-  it('captures real Node ERR_* stacks after their complete bracketed header', () => {
-    let failure: unknown;
-    try {
-      Buffer.alloc(-1);
-    } catch (error) {
-      failure = error;
-    }
-    const native = failure as NodeJS.ErrnoException;
-    // Vitest replaces Node's stack formatter, including its bracketed code header.
-    native.stack =
-      native.name +
-      ' [' +
-      native.code +
-      ']: ' +
-      native.message +
-      '\n    at Buffer.alloc (/Applications/Viewer.app/Contents/main.cjs:12:3)';
-    const captured = diagnosticFailure(failure);
-    expect(captured.errorClass).toBe('RangeError');
-    expect(captured.code).toBe('ERR_OUT_OF_RANGE');
-    expect(captured.stack).toMatch(/^\s*at /);
-    expect(captured.stack).not.toContain('The value of "size"');
-  });
+  it.each(['\n', '\r\n'])(
+    'captures real Node ERR_* stacks after their complete bracketed header (%j)',
+    (separator) => {
+      let failure: unknown;
+      try {
+        Buffer.alloc(-1);
+      } catch (error) {
+        failure = error;
+      }
+      const native = failure as NodeJS.ErrnoException;
+      // Vitest replaces Node's stack formatter, including its bracketed code header.
+      native.stack =
+        native.name +
+        ' [' +
+        native.code +
+        ']: ' +
+        native.message +
+        separator +
+        '    at Buffer.alloc (/Applications/Viewer.app/Contents/main.cjs:12:3)';
+      const captured = diagnosticFailure(failure);
+      expect(captured.errorClass).toBe('RangeError');
+      expect(captured.code).toBe('ERR_OUT_OF_RANGE');
+      expect(captured.stack).toMatch(/^\s*at /);
+      expect(captured.stack).not.toContain('The value of "size"');
+    },
+  );
 
   it('keeps renderer locations without names and rejects alternate hosts and encoded traversal', async () => {
     const root = await temporaryRoot('viewer-report-renderer-');
@@ -229,6 +264,15 @@ describe('report privacy regressions', () => {
     expect(report).toContain('- Class: TypeError\n- Code: ENOENT');
     expect(report).toContain('Contents/main.cjs:10:20');
     expect(report).not.toMatch(/Medical|Diagnosis|Zoe|Payroll|Acme|private\.ts/);
+    const optedIn = diagnosticReport({
+      ...reportFixture(),
+      log: stored,
+      bundleRoot: '/Applications/Viewer.app',
+      privateValues: values,
+      includeMessageText: true,
+    });
+    expect(optedIn).toContain('- Contents/main.cjs:10:20');
+    expect(optedIn).not.toMatch(/Medical|Diagnosis|Zoe|Payroll|Acme|Private patient|private\.ts/);
   });
 
   it.each([

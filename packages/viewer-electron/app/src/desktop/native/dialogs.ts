@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { lstat } from 'node:fs/promises';
 import {
   dialog,
   type BrowserWindow,
@@ -103,7 +105,32 @@ export async function saveOnce(
   access: DialogAccess,
   window: BrowserWindow | undefined,
   options: SaveOptions,
+  purpose?: 'backup',
 ): Promise<string | undefined> {
+  if (access.scoped && purpose === 'backup') {
+    const result = await openDialog(window, {
+      title: 'Choose Backup Folder',
+      properties: ['openDirectory', 'createDirectory'],
+      securityScopedBookmarks: true,
+    });
+    const folder = result.filePaths[0];
+    if (result.canceled || !folder) return;
+    await access.allowOnce(folder, result.bookmarks?.[0], true);
+    await access.require([folder]);
+    const extension = '.viewer-backup.json';
+    const stem = path.basename(options.defaultPath ?? 'Viewer', extension);
+    for (let number = 1; ; number++) {
+      const file = path.join(folder, stem + (number === 1 ? '' : '-' + number) + extension);
+      const entry = await lstat(file).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return null;
+        throw error;
+      });
+      if (!entry) {
+        await access.require([file]);
+        return file;
+      }
+    }
+  }
   const settings: SaveDialogOptions = { ...options, securityScopedBookmarks: access.scoped };
   const result = await saveDialog(window, settings);
   if (result.canceled || !result.filePath) return;

@@ -70,7 +70,7 @@ export function importItermColors(xml: string, name: string, taken: Iterable<str
   });
   return {
     id: slugID(name, 'theme', taken),
-    name,
+    name: name.slice(0, 100),
     look: lookOf(background),
     shell: {
       space: background,
@@ -176,7 +176,9 @@ export function importVSCodeTheme(
     const color = themeColor(colors[key]);
     if (color) terminal[token] = color;
   }
-  const name = typeof json.name === 'string' && json.name.trim() ? json.name.trim() : fallbackName;
+  const name = (
+    typeof json.name === 'string' && json.name.trim() ? json.name.trim() : fallbackName
+  ).slice(0, 100);
   const look =
     json.type === 'light' || json.type === 'dark'
       ? json.type

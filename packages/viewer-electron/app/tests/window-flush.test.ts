@@ -1,3 +1,4 @@
+import { failedFlush } from '../src/domain/persistence/flush';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FLUSH_TIMEOUT_MS, WindowFlushRequests } from '../src/desktop/windows/flush-requests';
 
@@ -62,5 +63,13 @@ describe('native save acknowledgement', () => {
     await expect(stopped).resolves.toBeUndefined();
     requests.disconnected(2);
     await expect(other).rejects.toMatchObject({ code: 'PERSISTENCE_WINDOW_CLOSED', owner: 2 });
+  });
+});
+
+it('carries the save failure code through a renderer acknowledgement', () => {
+  expect(failedFlush(Object.assign(new Error('Protected'), { code: 'STATE_RETAINED' }))).toEqual({
+    ok: false,
+    code: 'STATE_RETAINED',
+    error: 'Protected',
   });
 });

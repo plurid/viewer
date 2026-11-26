@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import { matchesShortcut } from '../../domain/preferences/shortcuts';
+import type { ApplicationSettings } from '../../domain/services';
+import { getState } from '../state/core';
 
 /**
  * A PREVIEW'S OWN SHORTCUTS, as ⌘L and ⌘R turn a picture in Preview.app: they are the preview's
@@ -72,16 +74,21 @@ function owner(at: EventTarget | null): Element | undefined {
   }
 }
 /** The action a preview that has the keyboard takes for this key, if one does. */
-function action(event: KeyEvent): (() => void) | undefined {
+function action(
+  event: KeyEvent,
+  settings = getState()?.settings.settings,
+): (() => void) | undefined {
   for (const claim of answering(owner(event.target))) {
-    const chord = Object.keys(claim.actions.current).find((key) => matchesShortcut(key, event));
+    const chord = Object.keys(claim.actions.current).find((key) =>
+      matchesShortcut(key, event, settings),
+    );
     if (chord) return claim.actions.current[chord];
   }
 }
 /** Whether a preview that has the keyboard takes this key itself: the window's commands then
  * leave it. */
-export function previewOwnsKey(event: KeyEvent): boolean {
-  return !!action(event);
+export function previewOwnsKey(event: KeyEvent, settings?: ApplicationSettings): boolean {
+  return !!action(event, settings);
 }
 /** Whether the preview at `node` has the keyboard now, as its keys would find it. */
 export function previewHasKeyboard(node: Element): boolean {

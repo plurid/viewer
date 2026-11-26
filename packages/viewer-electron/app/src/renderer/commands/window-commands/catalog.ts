@@ -9,6 +9,7 @@ import {
 } from '../../../domain/workspaces/catalog';
 import { searchableDefinition } from '../../../domain/workspaces/definitions/query';
 import { openDefinition } from '../../state/definitions';
+import { homeText } from '../../../domain/files/path-label';
 import { getState } from '../../state/store';
 
 /** Dynamic entries: workspaces, open planes, places and saved searches. */
@@ -76,14 +77,13 @@ export function catalogCommands({
     commands.push({
       id: `defined:${definition.key}`,
       label: definition.name,
+      detailPath: definition.source === 'found' ? definition.root : undefined,
       badge: definition.source === 'found' ? 'Found' : undefined,
       group: 'Workspaces',
       icon: 'dock',
       detail:
         definition.source === 'found'
-          ? definition.root.startsWith(state.bootstrap.home + '/')
-            ? '~' + definition.root.slice(state.bootstrap.home.length)
-            : definition.root
+          ? homeText(definition.root, state.bootstrap.home)
           : `${definition.key} · ${definition.remembered ? 'Remembers ' + definition.remembered.planes : definition.planes.length} ${(definition.remembered?.planes ?? definition.planes.length) === 1 ? 'plane' : 'planes'}${command?.kind === 'terminal' ? ` · ${command.command}` : ''}`,
       aliases: definition.aliases,
       humanOnly: true,
@@ -107,20 +107,12 @@ export function catalogCommands({
   for (const pane of space.panes)
     commands.push({
       id: `plane:${pane.id}`,
-      label:
-        pane.type === 'task'
-          ? pane.title
-          : pane.type === 'receipt'
-            ? 'Command receipt'
-            : pane.type === 'journal'
-              ? 'Journal'
-              : pane.type === 'overview'
-                ? 'File Overview'
-                : pane.type === 'layout'
-                  ? paneTitle(pane)
-                  : pane.type === 'scratch' || pane.type === 'note'
-                    ? (pane.title ?? 'Untitled')
-                    : baseName(pane.path),
+      label: paneTitle(
+        pane,
+        pane.type === 'collection'
+          ? space.collections?.find((item) => item.id === pane.collectionID)?.name
+          : undefined,
+      ),
       group: 'Open planes',
       detail:
         pane.type === 'note' ? 'Saved note' : pane.type === 'scratch' ? 'Unsaved text' : pane.path,

@@ -1,5 +1,5 @@
 import type { FileEntry } from '../../domain/contracts';
-import { expandPath } from '../../domain/command-line/lex';
+import { LineError, expandPath } from '../../domain/command-line/lex';
 import { findVerb, verbName, verbs, type CompleteKind } from '../../domain/command-line/verbs';
 import { settingByName, settingNames, settingText } from '../../domain/command-line/set';
 import { overridable } from '../../domain/preferences/overrides';
@@ -141,10 +141,16 @@ function complete(
       const slash = partial.lastIndexOf('/');
       const folderPart = partial.slice(0, slash + 1);
       const base = partial.slice(slash + 1).replace(/\\(.)/g, '$1');
-      const directory = expandPath(
-        { text: folderPart.replace(/\\(.)/g, '$1') || '.', quoted: false },
-        sources.places,
-      );
+      let directory: string;
+      try {
+        directory = expandPath(
+          { text: folderPart.replace(/\\(.)/g, '$1') || '.', quoted: false },
+          sources.places,
+        );
+      } catch (error) {
+        if (error instanceof LineError) return { completions: [] };
+        throw error;
+      }
       const entries =
         sources.listing?.directory === directory
           ? sources.listing.entries.filter(

@@ -1,4 +1,5 @@
 import { generateKeyPairSync, sign } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -15,6 +16,8 @@ import { Updates, updateNotice } from '../src/desktop/updates/updates';
 import type { UpdateHost, UpdateNotice } from '../src/desktop/updates/updates';
 import { plistBundleVersion } from '../src/desktop/windows/about';
 import { temporaryRoot } from '../tools/temporary';
+import * as directorySync from '../src/desktop/persistence/directory-sync';
+import { DocumentStore } from '../src/desktop/persistence/document-store';
 
 /** Generated for this run only; no signing key is kept anywhere. */
 function keys() {
@@ -70,7 +73,8 @@ async function updates(options: Partial<UpdateHost> & { publicKey?: string } = {
     open: vi.fn(async () => {}),
     ...options,
   };
-  return { updates: new Updates(path.join(root, 'updates-v1.json'), host), host, notices };
+  const file = path.join(root, 'updates-v1.json');
+  return { updates: new Updates(file, host), host, notices, file };
 }
 
 describe('the signed update feed', () => {
@@ -250,9 +254,96 @@ describe('the launch check', () => {
     });
     expect(wrong.host.present).not.toHaveBeenCalled();
   });
+
+  it('rejects a replayed signed release after restarting', async () => {
+    const publisher = keys();
+    let response = signed({ ...feed, version: '0.1.0-2', build: 620 }, publisher);
+    const request: typeof fetch = async (url) =>
+      new Response(String(url).endsWith('.sig') ? response.signature : response.bytes);
+    let now = Date.UTC(2026, 10, 1);
+    const f = await updates({ request, publicKey: publisher.publicKey, now: () => now });
+    await f.updates.checkAtLaunch();
+    expect(f.notices[0]?.message).toBe('Viewer 0.1.0-2 is available');
+    response = signed({ ...feed, build: 900 }, publisher);
+    now += launchCheckInterval;
+    const next = new Updates(f.file, f.host);
+    await expect(next.checkAtLaunch()).resolves.toMatchObject({ kind: 'failed' });
+    expect(f.notices).toHaveLength(1);
+    await next.checkFromMenu();
+    expect(f.notices.at(-1)?.download).toBeUndefined();
+    response = signed({ ...feed, version: '0.1.0-2', build: 620 }, publisher);
+    now += launchCheckInterval;
+    await next.checkAtLaunch();
+    expect(f.notices).toHaveLength(2);
+  });
+
+  it('uses the announced build in an existing update state as its initial floor', async () => {
+    const live = server();
+    const f = await updates({ request: live.request, publicKey: live.publicKey });
+    await writeFile(f.file, JSON.stringify({ version: 1, announced: 620 }), { flag: 'wx' });
+    await f.updates.checkAtLaunch();
+    expect(f.notices).toHaveLength(0);
+  });
 });
 
 describe('Check for Updates', () => {
+  it('requires a durable verified release, retries the write and rejects replay after restart', async () => {
+    const publisher = keys();
+    let response = signed({ ...feed, version: '0.1.0-2' }, publisher);
+    const f = await updates({
+      publicKey: publisher.publicKey,
+      request: async (url) =>
+        new Response(String(url).endsWith('.sig') ? response.signature : response.bytes),
+    });
+    const save = vi
+      .spyOn(DocumentStore.prototype, 'save')
+      .mockRejectedValueOnce(new Error('disk full'));
+    try {
+      await expect(f.updates.check()).resolves.toMatchObject({ kind: 'failed' });
+      await expect(f.updates.check()).resolves.toMatchObject({ kind: 'available' });
+      expect(save).toHaveBeenCalledTimes(2);
+      response = signed(feed, publisher);
+      await expect(new Updates(f.file, f.host).check()).resolves.toMatchObject({ kind: 'failed' });
+    } finally {
+      save.mockRestore();
+    }
+  });
+
+  it('retries the same manual check after one failed state read', async () => {
+    const f = await updates(server());
+    const read = vi
+      .spyOn(DocumentStore.prototype, 'loadSnapshot')
+      .mockRejectedValueOnce(new Error('read failed'));
+    try {
+      await expect(f.updates.check()).resolves.toMatchObject({ kind: 'failed' });
+      await expect(f.updates.check()).resolves.toMatchObject({ kind: 'available' });
+    } finally {
+      read.mockRestore();
+    }
+  });
+  it('shows only one dialog for concurrent menu requests', async () => {
+    const live = server();
+    let chooseDownload!: (download: boolean) => void;
+    const decision = new Promise<boolean>((resolve) => {
+      chooseDownload = resolve;
+    });
+    const present = vi.fn(() => decision);
+    const f = await updates({ ...live, present });
+    const requests = [f.updates.checkFromMenu(), f.updates.checkFromMenu()];
+    await vi.waitFor(() => expect(present).toHaveBeenCalled());
+    chooseDownload(true);
+    await Promise.all(requests);
+    expect(present).toHaveBeenCalledOnce();
+    expect(f.host.open).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the launch check quiet after the menu already showed the same release', async () => {
+    const f = await updates(server());
+    await f.updates.checkFromMenu();
+    await f.updates.checkAtLaunch();
+    expect(f.notices).toHaveLength(1);
+  });
+
   it('says plainly when a build has no feed, is current or could not check', async () => {
     const none = await updates({ configuration: { url: '', publicKey: '' } });
     await none.updates.checkFromMenu();
@@ -318,4 +409,292 @@ describe('Check for Updates', () => {
       'The App Store keeps Viewer up to date',
     );
   });
+});
+
+it.each([
+  '{bad',
+  '{"version":2}',
+  '{"version":1,"announcementPending":true,"announced":600}',
+  '{"version":1,"announcementPending":true,"announcedVersion":"0.1.0-1"}',
+])('keeps unreadable update state in place (%s)', async (original) => {
+  const live = server();
+  const f = await updates({ request: live.request, publicKey: live.publicKey });
+  const file = f.file;
+  await writeFile(file, original);
+  await f.updates.checkAtLaunch();
+  expect(await readFile(file, 'utf8')).toBe(original);
+  expect(live.request).not.toHaveBeenCalled();
+});
+
+it('protects newer history that arrived after a manual check', async () => {
+  const f = await updates(server());
+  await f.updates.check();
+  const newer = '{"version":2,"keep":true}';
+  await writeFile(f.file, newer);
+  await f.updates.checkAtLaunch();
+  expect(await readFile(f.file, 'utf8')).toBe(newer);
+});
+it('retries a failed history read on the next manual check', async () => {
+  const live = server();
+  const f = await updates(live);
+  await writeFile(f.file, '{');
+  await f.updates.checkAtLaunch();
+  await writeFile(f.file, '{"version":1}');
+  await expect(f.updates.check()).resolves.toMatchObject({ kind: 'available' });
+  expect(live.request).toHaveBeenCalledTimes(2);
+});
+
+it.each([false, true])(
+  'keeps the verified release when history changes during a fetch (higher first: %s)',
+  async (higherFirst) => {
+    const live = server();
+    const higher = JSON.stringify({ version: 1, verified: { version: '0.1.0-2', build: 620 } });
+    const lower = JSON.stringify({ version: 1 });
+    const f = await updates({
+      publicKey: live.publicKey,
+      request: async (...args) => {
+        if (String(args[0]) === feedURL) await writeFile(f.file, higherFirst ? lower : higher);
+        return live.request(...args);
+      },
+    });
+    await writeFile(f.file, higherFirst ? higher : lower);
+    await expect(f.updates.check()).resolves.toMatchObject({ kind: 'failed', problem: 'invalid' });
+    expect(await readFile(f.file, 'utf8')).toBe(higherFirst ? lower : higher);
+  },
+);
+
+it.each(['launch', 'menu'])(
+  'shows one explicit result when the %s check starts first',
+  async (first) => {
+    const live = server();
+    let started!: () => void, release!: () => void;
+    const downloading = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const paused = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const f = await updates({
+      ...live,
+      request: async (...args) => {
+        started();
+        await paused;
+        return live.request(...args);
+      },
+    });
+    await writeFile(
+      f.file,
+      JSON.stringify({ version: 1, announcedVersion: feed.version, announced: feed.build }),
+    );
+    const early = first === 'launch' ? f.updates.checkAtLaunch() : f.updates.checkFromMenu();
+    await downloading;
+    const late = first === 'launch' ? f.updates.checkFromMenu() : f.updates.checkAtLaunch();
+    release();
+    await Promise.all([early, late]);
+    expect(f.notices).toHaveLength(1);
+    expect(f.notices[0]?.download).toBe(feed.url);
+  },
+);
+
+it.each(['verification', 'announcement'])(
+  'requires durable %s through repeated directory sync failures',
+  async (phase) => {
+    const f = await updates(server());
+    if (phase === 'verification')
+      await writeFile(
+        f.file,
+        JSON.stringify({ version: 1, announcedVersion: feed.version, announced: feed.build }),
+      );
+    const sync = directorySync.syncParentDirectory;
+    let attempts = 0;
+    let failing = true;
+    const injected = vi
+      .spyOn(directorySync, 'syncParentDirectory')
+      .mockImplementation(async (file) => {
+        const record = JSON.parse(await readFile(file, 'utf8'));
+        if (record.verified && record.announced) {
+          attempts++;
+          if (failing) throw new Error('Directory sync failed');
+        }
+        return sync(file);
+      });
+    try {
+      for (const checker of [f.updates, f.updates, new Updates(f.file, f.host)]) {
+        const before = attempts;
+        await checker.checkFromMenu();
+        expect(f.notices.at(-1)?.message).toBe('Viewer could not check for updates');
+        expect(attempts).toBeGreaterThan(before);
+        expect(JSON.parse(await readFile(f.file, 'utf8')).verified).toEqual({
+          version: feed.version,
+          build: feed.build,
+        });
+      }
+      const visible = await readFile(f.file, 'utf8');
+      const notices = f.notices.length;
+      await f.updates.checkAtLaunch();
+      expect(f.notices).toHaveLength(notices);
+      expect(await readFile(f.file, 'utf8')).toBe(visible);
+      failing = false;
+      const before = attempts;
+      await f.updates.checkFromMenu();
+      expect(attempts).toBeGreaterThan(before);
+      expect(f.notices.at(-1)?.download).toBe(feed.url);
+    } finally {
+      injected.mockRestore();
+    }
+  },
+);
+
+it.each(['before', 'during'])('checks for replaced history %s the pending sync', async (when) => {
+  const f = await updates(server());
+  const sync = directorySync.syncParentDirectory;
+  const injected = vi
+    .spyOn(directorySync, 'syncParentDirectory')
+    .mockRejectedValueOnce(new Error('Directory sync failed'));
+  try {
+    await f.updates.checkFromMenu();
+    expect(f.notices.at(-1)?.download).toBeUndefined();
+    const replacement = JSON.stringify({
+      version: 1,
+      checked: 1,
+      announced: feed.build,
+      announcedVersion: feed.version,
+      verified: { version: feed.version, build: feed.build },
+    });
+    if (when === 'before') await writeFile(f.file, replacement);
+    else
+      injected.mockImplementationOnce(async (file) => {
+        await sync(file);
+        await writeFile(f.file, replacement);
+      });
+    await f.updates.checkFromMenu();
+    expect(f.notices.at(-1)?.message).toBe('Viewer could not check for updates');
+    expect(await readFile(f.file, 'utf8')).toBe(replacement);
+    await f.updates.checkFromMenu();
+    expect(f.notices.at(-1)?.download).toBe(feed.url);
+  } finally {
+    injected.mockRestore();
+  }
+});
+
+it.each(['launch', 'menu'])(
+  'recovers an undelivered %s announcement once on a later launch',
+  async (first) => {
+    let now = Date.UTC(2026, 10, 1);
+    const f = await updates({ ...server(), now: () => now });
+    const sync = directorySync.syncParentDirectory;
+    let failures = 0;
+    const injected = vi
+      .spyOn(directorySync, 'syncParentDirectory')
+      .mockImplementation(async (file) => {
+        const history = JSON.parse(await readFile(file, 'utf8'));
+        if (!failures && history.verified && history.announced === feed.build) {
+          failures++;
+          throw new Error('Announcement directory sync failed');
+        }
+        return sync(file);
+      });
+    const offers = () => f.notices.filter((notice) => notice.download === feed.url);
+    try {
+      if (first === 'launch') {
+        await expect(f.updates.checkAtLaunch()).resolves.toMatchObject({ kind: 'available' });
+        await expect(new Updates(f.file, f.host).checkAtLaunch()).resolves.toBeUndefined();
+      } else {
+        await f.updates.checkFromMenu();
+        expect(f.notices.at(-1)?.message).toBe('Viewer could not check for updates');
+      }
+      expect(failures).toBe(1);
+      expect(offers()).toHaveLength(0);
+      for (let day = 0; day < 2; day++) {
+        now += launchCheckInterval;
+        await expect(new Updates(f.file, f.host).checkAtLaunch()).resolves.toMatchObject({
+          kind: 'available',
+        });
+        expect(offers()).toHaveLength(1);
+      }
+      await new Updates(f.file, f.host).checkFromMenu();
+      expect(offers()).toHaveLength(2);
+    } finally {
+      injected.mockRestore();
+    }
+  },
+);
+
+it('retries an update dialog that failed to open before Later was chosen', async () => {
+  let now = Date.UTC(2026, 10, 1);
+  const present = vi
+    .fn<UpdateHost['present']>()
+    .mockRejectedValueOnce(new Error('Window closed'))
+    .mockResolvedValue(false);
+  const f = await updates({ ...server(), present, now: () => now });
+  await expect(f.updates.checkAtLaunch()).rejects.toThrow('Window closed');
+  for (let day = 0; day < 2; day++) {
+    now += launchCheckInterval;
+    await new Updates(f.file, f.host).checkAtLaunch();
+    expect(present).toHaveBeenCalledTimes(2);
+  }
+  expect(f.host.open).not.toHaveBeenCalled();
+});
+
+it.each(['publication', 'sync'])(
+  'keeps Download and retries recording delivery after one %s failure',
+  async (phase) => {
+    let now = Date.UTC(2026, 10, 1);
+    const save = vi.spyOn(DocumentStore.prototype, 'save');
+    const sync = vi.spyOn(directorySync, 'syncParentDirectory');
+    const present = vi.fn(async () => {
+      const error = new Error('Could not record the response');
+      if (phase === 'publication') save.mockRejectedValueOnce(error);
+      else sync.mockRejectedValueOnce(error);
+      return true;
+    });
+    const f = await updates({ ...server(), present, now: () => now });
+    try {
+      await f.updates.checkAtLaunch();
+      expect(f.host.open).toHaveBeenCalledExactlyOnceWith(feed.url);
+      now += launchCheckInterval;
+      await expect(new Updates(f.file, f.host).checkAtLaunch()).resolves.toMatchObject({
+        kind: 'available',
+      });
+      expect(present).toHaveBeenCalledOnce();
+    } finally {
+      save.mockRestore();
+      sync.mockRestore();
+    }
+  },
+);
+
+it.each([
+  { version: feed.version, build: feed.build + 1 },
+  { version: '0.1.0-2', build: feed.build },
+])('keeps the pending notice for $version ($build) when an older dialog closes', async (next) => {
+  const publisher = keys();
+  let release = signed(feed, publisher);
+  let later!: (download: boolean) => void;
+  const olderDialog = new Promise<boolean>((resolve) => {
+    later = resolve;
+  });
+  const present = vi
+    .fn<UpdateHost['present']>()
+    .mockReturnValueOnce(olderDialog)
+    .mockRejectedValueOnce(new Error('Window closed'))
+    .mockResolvedValue(false);
+  const f = await updates({
+    publicKey: publisher.publicKey,
+    present,
+    request: async (url) =>
+      new Response(String(url).endsWith('.sig') ? release.signature : release.bytes),
+  });
+  const original = f.updates.checkFromMenu();
+  try {
+    await vi.waitFor(() => expect(present).toHaveBeenCalledOnce());
+    release = signed({ ...feed, ...next }, publisher);
+    await expect(new Updates(f.file, f.host).checkFromMenu()).rejects.toThrow('Window closed');
+  } finally {
+    later(false);
+    await original;
+  }
+  await new Updates(f.file, f.host).checkAtLaunch();
+  expect(present).toHaveBeenCalledTimes(3);
+  expect(present.mock.lastCall?.[0].message).toBe('Viewer ' + next.version + ' is available');
 });

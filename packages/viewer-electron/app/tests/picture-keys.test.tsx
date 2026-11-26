@@ -13,7 +13,7 @@ import ImagePreview from '../src/renderer/previews/modules/ImagePreview';
 import { previewOwnsKey } from '../src/renderer/previews/keys';
 import { gestureSettle } from '../src/renderer/previews/rotation';
 import { keyCommand } from '../src/renderer/explorer/input';
-import { getState, initialize } from '../src/renderer/state/store';
+import { getState, initialize, receiveSettings } from '../src/renderer/state/store';
 import {
   resolvedShortcut,
   shippedKeyHolder,
@@ -576,4 +576,22 @@ describe('two fingers on the trackpad', () => {
     lift();
     expect(turnOf(view)).toBe(0);
   });
+});
+
+it('turns the picture with keypad plus and leaves the main key to its saved window command', () => {
+  initialize({ home: '/fixtures', platform: 'darwin', state: null, locations: [], openPaths: [] });
+  const snapshot = structuredClone(getState().settings);
+  snapshot.revision++;
+  snapshot.settings.shortcuts = {
+    'image-rotate-right': 'Shift+Cmd++',
+    'focus-mode': 'Shift+Cmd+=',
+  };
+  receiveSettings(snapshot);
+  const view = show({ shortcuts: pictureShortcuts(snapshot.settings) });
+  const target = stage(view);
+  const main = command('+', target, { shiftKey: true, code: 'Equal' });
+  expect(main.defaultPrevented).toBe(false);
+  expect(keyCommand(main, snapshot.settings)).toBe('focus-mode');
+  expect(command('+', target, { shiftKey: true, code: 'NumpadAdd' }).defaultPrevented).toBe(true);
+  expect(turnOf(view)).toBe(90);
 });

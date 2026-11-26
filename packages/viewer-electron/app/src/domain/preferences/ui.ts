@@ -219,7 +219,7 @@ export function normalizePreferences(value?: unknown): UIPreferences {
             order: [
               ...new Set([
                 'name',
-                ...strings(list.order, 6, 30).filter((key) =>
+                ...strings(list.order, listColumns.length, 30).filter((key) =>
                   listColumns.some((column) => column.id === key),
                 ),
               ]),

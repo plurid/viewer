@@ -2,6 +2,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ResolvedCommand } from '../src/renderer/commands/registry';
+import { withSuggested } from '../src/renderer/commands/palette-sections';
+import { commandFolders } from '../src/renderer/commands/folders';
+import { PathHome } from '../src/renderer/ui/PathLabel';
 import { CommandResults } from '../src/renderer/commands/CommandResults';
 
 HTMLElement.prototype.scrollIntoView ??= function () {};
@@ -66,4 +69,73 @@ it('retains an arrowed row while using fresh metadata and dropping withdrawn row
   expect(options()).toHaveLength(1);
   expect(options()[0]?.textContent).toBe(newest.label);
   expect(options()[0]?.getAttribute('aria-selected')).toBe('true');
+});
+
+it('keeps child metadata off folders and labels recent commands below them', () => {
+  const child = {
+    ...row('custom.test', 'Test'),
+    shortcut: '⌘K',
+    badge: 'Child',
+    paletteFolder: ['Build'],
+  };
+  const { rows } = commandFolders([child, first], [first], [], '');
+  const view = render(
+    <CommandResults
+      query=""
+      rows={rows}
+      recent={[first.id]}
+      onSelect={vi.fn()}
+      onClose={vi.fn()}
+      onQuery={vi.fn()}
+    />,
+  );
+  const folder = view.getByRole('option', { name: /Build/ });
+  expect(folder.querySelector('kbd')).toBeNull();
+  expect(folder.textContent).not.toContain('Child');
+  expect(view.getByText('Recent').parentElement?.textContent).toContain(first.label);
+});
+it('renders a found workspace root as a path label', () => {
+  const root = '/fixtures';
+  const found = {
+    ...row('defined:sample', 'Sample'),
+    group: 'Workspaces',
+    icon: 'dock' as const,
+    badge: 'Found',
+    detail: '~',
+    detailPath: root,
+  };
+  const view = render(
+    <PathHome.Provider value={root}>
+      <CommandResults
+        query="Sample"
+        rows={[found]}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+        onQuery={vi.fn()}
+      />
+    </PathHome.Provider>,
+  );
+  expect(view.container.querySelector('.path-label')?.getAttribute('title')).toBe(root);
+  expect(view.getByText('~')).toBeTruthy();
+});
+
+it('renders a suggested found workspace reason as ordinary text', () => {
+  const detail = 'Remembers 5 planes';
+  const found = {
+    ...row('defined:project', 'Project'),
+    badge: 'Found',
+    group: 'Workspaces',
+    detail: '~/project',
+    detailPath: '/fixtures/project',
+    icon: 'dock' as const,
+  };
+  const { rows } = withSuggested(
+    { rows: [found], headings: new Map() },
+    [{ command: found, reason: detail }],
+    [],
+  );
+  const view = render(
+    <CommandResults rows={rows} query="" onSelect={vi.fn()} onClose={vi.fn()} onQuery={vi.fn()} />,
+  );
+  expect(view.getByText(detail).closest('.path-label')).toBeNull();
 });

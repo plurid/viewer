@@ -1,9 +1,6 @@
-import { execFile } from 'node:child_process';
-import { cp, lstat, mkdir } from 'node:fs/promises';
+import { cp, lstat, mkdir, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
-
-const run = promisify(execFile);
+import { execRelease as run } from './release-environment';
 
 /**
  * A copy of a folder or file that shares the original's disk blocks until either changes: an APFS
@@ -38,4 +35,40 @@ export async function cloneTree(source: string, target: string): Promise<void> {
     errorOnExist: true,
     verbatimSymlinks: true,
   });
+}
+
+/** A new output can have several missing parents below a link back into the seed. */
+export async function assertOutsideSeed(seed: string, output: string) {
+  const source = await realpath(seed);
+  let parent = path.dirname(path.resolve(output));
+  for (;;) {
+    try {
+      const existing = await realpath(parent);
+      if (existing === source || existing.startsWith(source + path.sep))
+        throw new Error('Choose an output outside the seed bundle.');
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      parent = path.dirname(parent);
+    }
+  }
+}
+
+/** The prepared runtime replaces only the matching resource in the new bundle. Clone
+ * sibling trees whole so framework symlinks and APFS cloning are preserved. */
+export async function cloneWithSpeechRuntime(seed: string, output: string, runtime: string) {
+  await assertOutsideSeed(seed, output);
+  async function copyDirectory(source: string, target: string, parents: string[]) {
+    if (!(await lstat(source)).isDirectory())
+      throw new Error('The seed bundle must contain ordinary Contents and Resources directories.');
+    await mkdir(target);
+    const child = parents[0] ?? path.basename(runtime);
+    for (const name of await readdir(source)) {
+      if (name !== child) await cloneTree(path.join(source, name), path.join(target, name));
+    }
+    if (parents.length)
+      await copyDirectory(path.join(source, child), path.join(target, child), parents.slice(1));
+    else await cloneTree(runtime, path.join(target, child));
+  }
+  await copyDirectory(seed, output, ['Contents', 'Resources']);
 }

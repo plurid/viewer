@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+import { sameJSON } from '../../domain/json';
 import { sameCapturedItem } from '../../domain/files/entries';
 import { itemIdentity } from '../../domain/files/item-identity';
 import { sameItem } from '../files/item-identity';
@@ -100,8 +102,9 @@ export class Executions {
     target: CapturedTarget,
     values: ActionValues = {},
     owner?: number,
+    expectedAction?: CustomAction,
   ): Promise<string> {
-    return this.enqueue(actionID, target, undefined, values, owner);
+    return this.enqueue(actionID, target, undefined, values, owner, expectedAction);
   }
   /** Only the window's manual command form calls this. No configuration or agent
    * request supplies an executor, environment or an approval override. */
@@ -116,6 +119,7 @@ export class Executions {
     manual?: { script: string; owner: number },
     values: ActionValues = {},
     owner = manual?.owner,
+    expectedAction?: CustomAction,
   ): Promise<string> {
     if (this.closed) return Promise.reject(new Error('Custom commands have closed.'));
     // counted before the first wait: checked after one, a burst of 21 starts saw 21 and refused all
@@ -133,6 +137,7 @@ export class Executions {
       manual,
       values,
       owner,
+      expectedAction,
     ).finally(() => this.preparing.delete(ticket));
     return ticket.promise;
   }
@@ -143,6 +148,7 @@ export class Executions {
     manual?: { script: string; owner: number },
     supplied: ActionValues = {},
     owner = manual?.owner,
+    expectedAction?: CustomAction,
   ): Promise<string> {
     if (this.closed) throw new Error('Custom commands have closed.');
     await this.access([target.directory, ...target.selection.map((file) => file.path)]);
@@ -169,7 +175,10 @@ export class Executions {
             perItem: false,
           },
         }
-      : settings.customActions.find((action) => action.id === actionID);
+      : structuredClone(settings.customActions.find((action) => action.id === actionID));
+    // The renderer may still show an older definition after the desktop has approved a replacement.
+    if (expectedAction && !isDeepStrictEqual(action, expectedAction))
+      throw new Error('The command changed. Choose it again.');
     if (!action || !actionAvailable(action, target))
       throw new Error('This action doesn’t apply to the selected items.');
     const values = actionValues(action.inputs ?? [], supplied);
@@ -182,6 +191,16 @@ export class Executions {
     for (const file of target.selection)
       if (!sameCapturedItem(await entry(file.path), file))
         throw new Error(`Selection changed: ${file.name}. Review the action again.`);
+    const checkDefinition = () => {
+      if (manual) return;
+      const latest = this.settings().customActions.find((item) => item.id === actionID);
+      const unchanged = expectedAction
+        ? isDeepStrictEqual(latest, action)
+        : sameJSON(latest?.executor, executor) && sameJSON(latest?.inputs, action.inputs);
+      if (!latest || !unchanged || !actionAvailable(latest, target))
+        throw new Error('The command changed. Choose it again.');
+    };
+    checkDefinition();
     if (profile) await this.confirmProfile(profile);
     else await this.confirm(action);
     if (this.closed || cancelled()) throw new Error('The command was canceled before it started.');
@@ -193,6 +212,7 @@ export class Executions {
       throw new Error('The command folder changed before launch. Choose the command again.');
     if (this.closed || cancelled())
       throw new Error('The command was canceled before it started because folder access changed.');
+    checkDefinition();
     const items = executor.perItem ? target.selection : [undefined];
     if (executor.perItem && !items.length) throw new Error('Select files for per-item execution.');
     const task: ExecutionTask = {
@@ -227,6 +247,7 @@ export class Executions {
             ...(item ? [item.path] : target.selection.map((file) => file.path)),
           ]);
           if (isCancelled()) break;
+          checkDefinition();
           const launch =
             manual && profile
               ? commandArguments(

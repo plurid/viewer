@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { lstat, realpath } from 'node:fs/promises';
 import { z } from 'zod';
-import { DocumentStore } from '../persistence/document-store';
+import { PermissionStore } from '../persistence/permission-store';
 import type { TrashReceipt } from '../native/macos-files';
 import { localPath } from '../schemas';
 import { containsPath } from './containment';
@@ -63,7 +63,7 @@ async function existingParent(file: string): Promise<string> {
  * watches, previews and queued jobs, and is released after those services stop. */
 export class FileAccess {
   readonly scoped: boolean;
-  private store: DocumentStore<z.infer<typeof document>>;
+  private store: PermissionStore<z.infer<typeof document>>;
   private grants: Grant[] = [];
   private incoming = new Map<string, Grant>();
   private incomingDirectories = new Map<string, Grant>();
@@ -98,23 +98,21 @@ export class FileAccess {
     private internalRoots: string[] = [dataPath],
   ) {
     this.scoped = !!native;
-    this.store = new DocumentStore(path.join(dataPath, 'file-access-v1.json'), (value) =>
+    this.store = new PermissionStore(path.join(dataPath, 'file-access-v1.json'), (value) =>
       document.parse(value),
     );
     this.internalRoots = internalRoots.map((value) => path.resolve(value));
   }
   load(): Promise<void> {
     if (!this.scoped) return Promise.resolve();
-    return (this.loading ??= this.store
-      .load()
-      .then((value) => {
-        this.grants = value?.grants ?? [];
-      })
-      .catch(() => {
-        // Corrupt or obsolete metadata cannot confer access. The native picker can
-        // repair the private store without preventing the application from starting.
-        this.grants = [];
-      }));
+    return (this.loading ??= this.store.load().then((value) => {
+      this.grants = value?.grants ?? [];
+    }));
+  }
+  private async prepareEdit() {
+    await this.load();
+    const published = await this.store.settlePublished();
+    if (published) this.grants = published.grants;
   }
   remember(file: string, directory: boolean, bookmark: string | undefined): Promise<void> {
     assertLocalPath(file);
@@ -129,7 +127,7 @@ export class FileAccess {
           directory,
           bookmark,
         });
-        await this.load();
+        await this.prepareEdit();
         if (wasDenied || this.blocked(grant.path)) throw new FileAccessRequired(grant.path);
         const grants = [...this.grants.filter((item) => item.path !== grant.path), grant];
         if (grants.length > 128)
@@ -144,12 +142,23 @@ export class FileAccess {
     this.mutations = work;
     return work;
   }
-  /** A file chosen in a panel for one use, an export or an import: for this session only. Each was
-   * saved as a folder permission, and at 128 of them new folders were refused. */
-  allowOnce(file: string, bookmark: string | undefined): Promise<void> {
+  /** A native panel selection stays available for this session without consuming a saved grant. */
+  async allowOnce(file: string, bookmark: string | undefined, directory = false): Promise<void> {
     assertLocalPath(file);
-    if (!this.scoped || !bookmark) return Promise.resolve();
-    return this.receiveNative([{ path: file, directory: false, bookmark }]);
+    if (!this.scoped) return;
+    if (directory) {
+      const revision = this.nativeRevision;
+      if (this.closed || this.blocked(path.resolve(file))) throw new FileAccessRequired(file);
+      const stop = bookmark ? this.native!.start(bookmark) : undefined;
+      try {
+        if (!bookmark) await this.require([file]);
+        if (!(await lstat(file)).isDirectory()) throw new Error('Choose a folder for the backup.');
+        if (revision !== this.nativeRevision) throw new FileAccessRequired(file);
+      } finally {
+        stop?.();
+      }
+    }
+    if (bookmark) await this.receiveNative([{ path: file, directory, bookmark }]);
   }
   /** Native clipboard/drop capabilities last for this desktop session. They
    * must not fill the small persistent picker list or silently grant a parent. */
@@ -390,7 +399,7 @@ export class FileAccess {
       .catch(() => {})
       .then(async () => {
         if (this.closed) throw new Error('Folder access has closed.');
-        await this.load();
+        await this.prepareEdit();
         await quiesce();
         const grants = this.grants.filter((grant) => grant.path !== root);
         await this.store.save({ version: 1, grants });

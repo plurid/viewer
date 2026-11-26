@@ -9,6 +9,7 @@ export function commandFolders(
   query: string,
 ) {
   const folders = new Map<string, string[]>();
+  const folderRows: ResolvedCommand[] = [];
   const scoped = commands.filter((command) => below(command.paletteFolder ?? [], parent));
   if (query.trim())
     return {
@@ -19,17 +20,21 @@ export function commandFolders(
     const next = command.paletteFolder?.[parent.length];
     if (!next) continue;
     const path = [...parent, next];
-    folders.set('palette:folder:' + JSON.stringify(path), path);
+    const id = 'palette:folder:' + JSON.stringify(path);
+    if (folders.has(id)) continue;
+    folders.set(id, path);
+    folderRows.push({
+      id,
+      source: command.source,
+      context: command.context,
+      aliases: [],
+      label: next,
+      group: 'Actions',
+      icon: 'folder',
+      detail: path.join(' / '),
+      primary: false,
+    });
   }
-  const folderRows = [...folders].map(([id, path]): ResolvedCommand => ({
-    ...scoped.find((command) => below(command.paletteFolder ?? [], path))!,
-    id,
-    label: path.at(-1)!,
-    group: 'Actions',
-    icon: 'folder',
-    detail: path.join(' / '),
-    primary: false,
-  }));
   const visible = parent.length
     ? scoped.filter((command) => command.paletteFolder?.length === parent.length)
     : rows.filter((command) => !command.paletteFolder?.length);

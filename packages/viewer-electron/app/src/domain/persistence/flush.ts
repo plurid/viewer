@@ -14,11 +14,15 @@ export const flushResultSchema = z.discriminatedUnion('ok', [
 export type FlushResult = z.infer<typeof flushResultSchema>;
 
 export function failedFlush(error: unknown): FlushResult {
+  const code = error && typeof error === 'object' && 'code' in error && error.code;
   return {
     ok: false,
     error:
       (error instanceof Error ? error.message : String(error)).slice(0, 2000) ||
       'The changes could not be saved.',
-    code: 'PERSISTENCE_FAILED',
+    code:
+      typeof code === 'string' && code.length > 0 && code.length <= 100
+        ? code
+        : 'PERSISTENCE_FAILED',
   };
 }

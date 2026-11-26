@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { editLens, useLenses } from '../src/renderer/state/lenses';
 import { initialize } from '../src/renderer/state/workspaces';
 import { getState } from '../src/renderer/state/core';
-import { flushState, resetPersistence } from '../src/renderer/state/persistence';
+import {
+  flushState,
+  flushWindowDocuments,
+  resetPersistence,
+} from '../src/renderer/state/persistence';
 import { queuePreference, resetPreferences } from '../src/renderer/state/preferences';
 import type { LensDocument, LensFolder } from '../src/domain/files/lenses';
 
@@ -59,64 +63,69 @@ describe('lens persistence durability', () => {
     vi.useRealTimers();
   });
 
-  it('drains queued lens edits when flushState runs before the debounce timer', async () => {
-    const folder = '/work/lens-flush';
-    const docA = makeDoc('a.json', '11111111-1111-4111-8111-111111111111');
-    const applied: string[] = [];
-    const settingsPatch = vi.fn(async () => ({
-      ...getState().settings,
-      revision: getState().settings.revision + 1,
-    }));
-    Object.assign(window, {
-      viewer: {
-        save: vi.fn(async () => {}),
-        settingsPatch,
-        onEvent: vi.fn(() => () => {}),
-        watch: vi.fn(async () => {}),
-        unwatch: vi.fn(async () => {}),
-        lens: vi.fn(async (req: { kind: string; file?: string }) => {
-          if (req.kind === 'list')
-            return {
-              folder,
-              lenses: [docA],
-              collapsed: {},
-              broken: [],
-              shared: false,
-            } satisfies LensFolder;
-          if (req.kind === 'apply' && req.file) {
-            applied.push(req.file);
-            return { document: docA, dropped: [] };
-          }
-          return {};
-        }),
-      },
-    });
-    initialize({
-      home: '/fixtures',
-      platform: 'darwin',
-      state: null,
-      locations: [],
-      openPaths: [],
-    });
-    await act(async () => {
-      root.render(<Harness folder={folder} />);
-      await Promise.resolve();
-    });
+  it.each(['workspace', 'protected layout'])(
+    'drains lens and preference edits before closing a %s',
+    async (kind) => {
+      const folder = '/work/lens-flush';
+      const docA = makeDoc('a.json', '11111111-1111-4111-8111-111111111111');
+      const applied: string[] = [];
+      const settingsPatch = vi.fn(async () => ({
+        ...getState().settings,
+        revision: getState().settings.revision + 1,
+      }));
+      Object.assign(window, {
+        viewer: {
+          save: vi.fn(async () => {}),
+          settingsPatch,
+          onEvent: vi.fn(() => () => {}),
+          watch: vi.fn(async () => {}),
+          unwatch: vi.fn(async () => {}),
+          lens: vi.fn(async (req: { kind: string; file?: string }) => {
+            if (req.kind === 'list')
+              return {
+                folder,
+                lenses: [docA],
+                collapsed: {},
+                broken: [],
+                shared: false,
+              } satisfies LensFolder;
+            if (req.kind === 'apply' && req.file) {
+              applied.push(req.file);
+              return { document: docA, dropped: [] };
+            }
+            return {};
+          }),
+        },
+      });
+      initialize({
+        home: '/fixtures',
+        platform: 'darwin',
+        state: null,
+        locations: [],
+        openPaths: [],
+      });
+      await act(async () => {
+        root.render(<Harness folder={folder} />);
+        await Promise.resolve();
+      });
 
-    await act(async () => {
-      queuePreference('ui.space.grid', false);
-      editLens(
-        folder,
-        'a.json',
-        [{ kind: 'set-group', group: { id: 'g1111', name: 'Renamed A', order: 0 } }],
-        'Rename',
-      );
-      await flushState(false);
-    });
+      await act(async () => {
+        queuePreference('ui.space.grid', false);
+        editLens(
+          folder,
+          'a.json',
+          [{ kind: 'set-group', group: { id: 'g1111', name: 'Renamed A', order: 0 } }],
+          'Rename',
+        );
+        if (kind === 'protected layout') await flushWindowDocuments();
+        else await flushState(false);
+      });
 
-    expect(settingsPatch).toHaveBeenCalledTimes(1);
-    expect(applied).toContain('a.json');
-  });
+      expect(window.viewer.save).toHaveBeenCalledTimes(kind === 'protected layout' ? 0 : 1);
+      expect(settingsPatch).toHaveBeenCalledTimes(1);
+      expect(applied).toContain('a.json');
+    },
+  );
 
   it('preserves queued sibling lens edits when a folder unmounts while another lens finishes saving', async () => {
     const folder = '/work/lens-unmount';

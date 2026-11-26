@@ -63,6 +63,20 @@ export interface LayoutTemplate {
   layout: TileLayout;
   main: number;
 }
+/** Resolve the name after :layout, by ID, exact name or a unique name prefix. */
+export function namedLayout(
+  layouts: readonly LayoutTemplate[],
+  text: string,
+): LayoutTemplate | undefined {
+  const lower = text.toLowerCase();
+  const exact =
+    layouts.find((layout) => layout.id.toLowerCase() === lower) ??
+    layouts.find((layout) => layout.name.toLowerCase() === lower);
+  if (exact) return exact;
+  const prefix = layouts.filter((layout) => layout.name.toLowerCase().startsWith(lower));
+  return prefix.length === 1 ? prefix[0] : undefined;
+}
+
 /** Home as `~`, so a template reads on any account. */
 const tilde = (path: string, home: string) =>
   path === home ? '~' : path.startsWith(home + '/') ? '~' + path.slice(home.length) : path;

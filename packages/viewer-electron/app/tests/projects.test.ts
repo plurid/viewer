@@ -3,6 +3,8 @@ import { chmod, readFile, readdir, rename, stat, symlink, writeFile } from 'node
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
+import * as directorySync from '../src/desktop/persistence/directory-sync';
+import { DefinitionFiles } from '../src/desktop/persistence/definition-files';
 import { Projects, decodeProject } from '../src/desktop/workspaces/projects';
 import {
   projectDefinitionSchema,
@@ -317,4 +319,40 @@ describe('project sessions', () => {
     await storage.save(state);
     expect((await storage.load()).state?.version).toBe(CURRENT_STATE_VERSION);
   });
+});
+
+it('reports directory sync failure after publishing a definition', async () => {
+  const file = path.join(root, 'viewer.project.jsonc');
+  const sync = vi
+    .spyOn(directorySync, 'syncParentDirectory')
+    .mockRejectedValueOnce(new Error('Directory sync failed'));
+  try {
+    await expect(new Projects(access, coordination).save(file, '', project())).rejects.toThrow(
+      'Directory sync failed',
+    );
+    expect(await readFile(file, 'utf8')).toContain('Studio');
+  } finally {
+    sync.mockRestore();
+  }
+});
+
+it('retries the directory sync before acknowledging identical definition updates', async () => {
+  const service = new DefinitionFiles(projectDefinitionSchema, 'Project', '', access, coordination);
+  const sync = vi
+    .spyOn(directorySync, 'syncParentDirectory')
+    .mockRejectedValue(new Error('Directory sync failed'));
+  const apply = () =>
+    service.update(path.join(root, 'project.jsonc'), () => ({
+      definition: project(),
+      result: 'saved',
+    }));
+  try {
+    await expect(apply()).rejects.toThrow('Directory sync failed');
+    await expect(apply()).rejects.toThrow('Directory sync failed');
+    sync.mockResolvedValue(undefined);
+    await expect(apply()).resolves.toMatchObject({ result: 'saved' });
+    expect(sync).toHaveBeenCalledTimes(3);
+  } finally {
+    sync.mockRestore();
+  }
 });

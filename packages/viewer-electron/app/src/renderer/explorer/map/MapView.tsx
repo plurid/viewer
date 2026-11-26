@@ -37,7 +37,7 @@ import { measureLocalPoint, type Point } from '../../ui/projectedResize';
 import { createLens, editLens } from '../../state/lenses';
 import { announce, getState, report, updateFolderPresentation } from '../../state/store';
 import { effectiveWindowSettings } from '../../state/effective-ui';
-import { shortcutFor, shortcutGlyphs } from '../../../domain/preferences/shortcuts';
+import { resolvedShortcut, shortcutGlyphs } from '../../../domain/preferences/shortcuts';
 import { plural } from '../../../domain/plural';
 import { FileIcon, Thumbnail, type FileViewProps } from '../views';
 import { useMarquee } from '../marquee';
@@ -208,7 +208,7 @@ export const MapView = memo(function MapView({
         updateFolderPresentation(path, { lens: created.lens.id });
         // the Undo key as this window has it, not a ⌘Z written into the sentence
         const undo = shortcutGlyphs(
-          shortcutFor(effectiveWindowSettings(getState()).shortcuts, 'undo-file'),
+          resolvedShortcut(effectiveWindowSettings(getState()), 'undo-file'),
         );
         announce(
           (created.local

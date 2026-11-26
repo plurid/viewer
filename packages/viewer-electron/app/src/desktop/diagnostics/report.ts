@@ -126,11 +126,16 @@ export function diagnosticReport(input: ReportInput): string {
             (failure.outside === 1 ? ' frame' : ' frames') +
             ' outside Viewer',
         );
-      if (input.includeMessageText && !unchecked.length) {
-        const message = boundedText(
-          redactReport(String(entry.detail), privateValues),
-          reportLimits.message,
-        );
+      // A worker record can start in the middle of a filename split across stderr lines.
+      if (input.includeMessageText && !unchecked.length && entry.kind !== 'worker-output') {
+        const detail = String(entry.detail);
+        // Only the exact stack captured separately can be detached from the message.
+        const stack = entry.stack;
+        const excerpt =
+          typeof stack === 'string' && stack && detail.endsWith('\n' + stack)
+            ? detail.slice(0, -stack.length - 1).replace(/\r$/, '')
+            : detail;
+        const message = boundedText(redactReport(excerpt, privateValues), reportLimits.message);
         lines.push('', ...message.split('\n').map((line) => '> ' + line));
       }
       lines.push('');

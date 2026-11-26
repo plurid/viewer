@@ -60,13 +60,15 @@ export class DiagnosticLog {
     await mkdir(path.dirname(this.file), { recursive: true, mode: 0o700 });
     await appendFile(this.file, line, { mode: 0o600 });
     if ((await stat(this.file)).size <= this.limit) return;
-    const text = await readFile(this.file, 'utf8');
-    const recent = text.slice(text.length - Math.floor(this.limit / 2));
+    const bytes = await readFile(this.file);
+    const boundary = bytes.indexOf(10, bytes.length - Math.floor(this.limit / 2) - 1);
     // Start at a whole entry; the replacement is written beside the log, then renamed over it.
     // The newest entry always survives, even one larger than the half that is kept.
-    const kept =
-      recent.slice(recent.indexOf('\n') + 1) ||
-      text.slice(text.lastIndexOf('\n', text.length - 2) + 1);
+    const start =
+      boundary >= 0 && boundary < bytes.length - 1
+        ? boundary + 1
+        : bytes.lastIndexOf(10, bytes.length - 2) + 1;
+    const kept = bytes.subarray(start);
     const replacement = `${this.file}.${randomUUID()}.tmp`;
     await writeFile(replacement, kept, { mode: 0o600, flag: 'wx' });
     await rename(replacement, this.file);

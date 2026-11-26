@@ -200,9 +200,11 @@ export function toolsCommands({
       icon: 'file',
       aliases: ['facts', 'document metadata', 'pages', 'dimensions'],
       when: (context) =>
-        context.selection.length === 1 || (context.scope === 'preview' && !!context.path),
+        context.selection.length === 1 ||
+        (!context.selection.length &&
+          (!!context.subject || (context.scope === 'preview' && !!context.path))),
       run: (context) => {
-        const path = context.selection[0]?.path || context.path;
+        const path = context.selection[0]?.path || context.subject?.path || context.path;
         if (path) sendWindowEvent('viewer:inspect', path);
       },
     },

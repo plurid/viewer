@@ -49,6 +49,7 @@ import {
   adapters,
   closedPanes,
   flushState,
+  flushWorkspace,
   mergeSharedFavorites,
   mergeSharedLineHistory,
   resetPersistence,
@@ -148,10 +149,10 @@ export function initialize(bootstrap: Bootstrap): void {
     adapters.set(space.id, new Map(Object.entries(space.arrangement)));
   emit();
 }
-export async function switchWorkspace(id: string): Promise<void> {
+export async function switchWorkspace(id: string, flush = flushState): Promise<void> {
   if (id === getState().saved.activeWorkspace) return;
   if (!getState().saved.workspaces.some((space) => space.id === id)) return;
-  await flushState();
+  await flush();
   if (window.viewer.workspaceClaim && !(await window.viewer.workspaceClaim(id))) return;
   if (getState().definitionNotice) dismissNotice();
   stopTour();
@@ -165,7 +166,7 @@ export async function switchWorkspace(id: string): Promise<void> {
     activePane: activeWorkspace().activePane || activeWorkspace().panes[0]?.id || '',
     quickPreview: null,
   });
-  await flushState(false);
+  await flush(false);
 }
 
 /** Refresh shared workspaces without replacing this window's unsaved active workspace. */
@@ -277,22 +278,25 @@ export async function newWorkspace(name: string): Promise<void> {
 }
 /** Imported copies are appended; current documents, layouts and session ownership stay intact. */
 export async function appendRestoredWorkspaces(imported: SavedState): Promise<void> {
-  await flushState();
+  await flushWorkspace();
   const current = getState().saved;
-  if (current.workspaces.length + imported.workspaces.length > maximumWorkspaces)
+  const present = new Set(current.workspaces.map((space) => space.id));
+  const missing = imported.workspaces.filter((space) => !present.has(space.id));
+  if (!missing.length) {
+    await switchWorkspace(imported.activeWorkspace, flushWorkspace);
+    return;
+  }
+  if (current.workspaces.length + missing.length > maximumWorkspaces)
     throw new Error(
       `You can have up to ${maximumWorkspaces} workspaces. Delete some, then restore again. The backup’s documents were kept.`,
     );
-  if (imported.workspaces.some((space) => current.workspaces.some((item) => item.id === space.id)))
-    throw new Error('A workspace in this backup is already open.');
-  for (const space of imported.workspaces)
-    adapters.set(space.id, new Map(Object.entries(space.arrangement)));
+  for (const space of missing) adapters.set(space.id, new Map(Object.entries(space.arrangement)));
   const favorites = [...current.favorites];
   for (const item of imported.favorites)
     if (!favorites.some((existing) => existing.path === item.path)) favorites.push(item);
   folderVisitSync.restore(imported.visits ?? {});
   savePatch({
-    workspaces: [...current.workspaces, ...imported.workspaces],
+    workspaces: [...current.workspaces, ...missing],
     workspaceVisits: { ...current.workspaceVisits, ...imported.workspaceVisits },
     previewStates: { ...current.previewStates, ...imported.previewStates },
     previewHistory: { ...current.previewHistory, ...imported.previewHistory },
@@ -300,8 +304,8 @@ export async function appendRestoredWorkspaces(imported: SavedState): Promise<vo
     recents: [...new Set([...current.recents, ...imported.recents])].slice(0, 50),
     visits: mergeFolderVisits(current.visits ?? {}, imported.visits ?? {}, Date.now()),
   });
-  await flushState(false);
-  await switchWorkspace(imported.activeWorkspace);
+  await flushWorkspace(false);
+  await switchWorkspace(imported.activeWorkspace, flushWorkspace);
 }
 export function renameWorkspace(name: string, id = activeWorkspace().id): void {
   if (id === activeWorkspace().id) {

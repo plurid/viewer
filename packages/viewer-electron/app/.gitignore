@@ -96,6 +96,7 @@ typings/
 
 # Electron-Forge
 out/
+assets/viewer-image-preview
 assets/viewer-macos-files.node
 assets/viewer-processors/
 assets/viewer-processors-*/

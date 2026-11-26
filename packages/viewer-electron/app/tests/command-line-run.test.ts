@@ -5,6 +5,10 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from '@testing-library/react';
+import type { WorkflowStep } from '../src/domain/automation/actions';
+import { customActionSchema } from '../src/desktop/actions/automation-schema';
+import { windowCommandInvoke } from '../src/renderer/commands/invoke';
+import { programCommands } from '../src/renderer/commands/programs';
 import { runLine } from '../src/renderer/command-line/run';
 import type { LineHost } from '../src/renderer/command-line/host';
 import {
@@ -62,6 +66,7 @@ const context = (): CommandContext => {
   const pane = activeWorkspace().panes.find((item) => item.id === state.activePane);
   return {
     scope: 'window',
+    invocation: 'person',
     workspaceID: state.saved.activeWorkspace,
     paneID: state.activePane,
     directory: pane?.type === 'folder' ? pane.path : undefined,
@@ -78,13 +83,7 @@ const host = (definitions: CommandDefinition[] = []): LineHost => {
     registry,
     workspace,
     context,
-    invoke: (id, remember) =>
-      registry.invoke(id, {
-        paneID: context().paneID,
-        scope: 'window',
-        context: context(),
-        remember,
-      }),
+    invoke: windowCommandInvoke(registry, context, () => undefined),
     newWorkspace: vi.fn(async () => {}),
     switchWorkspace: vi.fn(async () => {}),
     palette: vi.fn(),
@@ -399,3 +398,119 @@ describe('going places', () => {
     expect(live.palette).toHaveBeenCalledWith('line', 'help set');
   });
 });
+
+it('keeps every command step within custom action authority', async () => {
+  const actions = [
+    ['later', { kind: 'sequence', commands: ['frame-all', 'personal'] }],
+    ['line', { kind: 'sequence', commands: [':personal'], command: 'Personal' }],
+    ['flow', { kind: 'workflow', steps: [{ kind: 'command', line: ':personal' }] }],
+    ['verb', { kind: 'workflow', steps: [{ kind: 'command', line: 'tabclose' }] }],
+    ['builtin', { kind: 'builtin', command: 'personal' }],
+  ].map(([id, executor]) => customActionSchema.parse({ id, name: id, executor }));
+  const nested = {
+    action: { kind: 'action', actionID: 'child' },
+    command: { kind: 'command', line: ':frame-all | custom.child' },
+  } satisfies Record<WorkflowStep['kind'], WorkflowStep>;
+  const workflowSchema = customActionSchema.shape.executor.options[0];
+  expect(Object.keys(nested).sort()).toEqual(
+    workflowSchema.shape.steps.element.options.map((option) => option.shape.kind.value).sort(),
+  );
+  for (const step of Object.values(nested)) {
+    actions.push({
+      ...actions[0]!,
+      id: 'flow-' + step.kind,
+      executor: { kind: 'workflow', steps: [step] },
+    });
+  }
+  getState().settings.settings.customActions = actions;
+  const defs = [
+    command('frame-all'),
+    command('custom.child'),
+    { ...command('personal'), humanOnly: true },
+    { ...command('delete-workspace'), humanOnly: true },
+  ];
+  const runtime = host(defs);
+  defs.push(
+    ...programCommands(
+      { ...workspace, rootID: () => context().paneID! },
+      (id, target) => runtime.registry.invoke(id, { context: target }),
+      undefined,
+      context,
+      () => runtime,
+    ),
+  );
+  for (const id of actions.map((action) => 'custom.' + action.id))
+    await expect(runtime.registry.invoke(id, { context: context() }), id).rejects.toThrow(
+      id === 'custom.flow-action' ? /executable or shell/ : /custom action/,
+    );
+  expect((await runLine('Personal', runtime)).ok).toBe(false);
+  expect(ran).toEqual(['frame-all']);
+  expect(await runtime.invoke('personal')).toBe(true);
+  const allowed = actions.find((action) => action.id === 'flow')!;
+  allowed.executor = {
+    kind: 'workflow',
+    steps: [{ kind: 'command', line: 'frame-all | frame-all' }],
+  };
+  expect(await runtime.invoke('custom.flow')).toBe(true);
+  expect(ran.slice(-2)).toEqual(['frame-all', 'frame-all']);
+});
+
+it('sets numeric choices globally and in the workspace', async () => {
+  const runtime = host();
+  expect(await runLine('set termlinespace=1.5', runtime)).toEqual({ ok: true });
+  expect(settingsPatch).toHaveBeenCalledWith(
+    [{ path: 'settings.terminalFont.lineHeight', value: 1.5 }],
+    expect.any(Number),
+  );
+  expect(await runLine('setl termlinespace=1.2', runtime)).toEqual({ ok: true });
+  expect((await runLine('setl termlinespace?', runtime)).message).toContain('1.2');
+});
+
+it('rechecks a later custom command after a model line starts', async () => {
+  const action = customActionSchema.parse({
+    id: 'view',
+    name: 'View',
+    executor: { kind: 'builtin', command: 'frame-all' },
+  });
+  getState().settings.settings.customActions = [action];
+  const runtime = host([
+    command('frame-all'),
+    {
+      ...command('refresh'),
+      run: () => {
+        action.executor = { kind: 'workflow', steps: [{ kind: 'command', line: 'frame-all' }] };
+      },
+    },
+    command('custom.view'),
+  ]);
+  const result = await runLine('refresh | custom.view', runtime, true);
+  expect(result.ok).toBe(false);
+  expect(ran).not.toContain('custom.view');
+});
+
+it.each(['layout.review', 'layout Review'])(
+  'rechecks a saved layout before the later model step %s',
+  async (line) => {
+    const settings = getState().settings.settings;
+    settings.layouts = [
+      { id: 'review', name: 'Review', layout: 'tiled', main: 0.5, planes: [{ kind: 'scratch' }] },
+    ];
+    const opened = vi.fn();
+    const runtime = host([
+      { ...command('layout.review'), run: opened },
+      {
+        ...command('refresh'),
+        run: () => {
+          settings.layouts[0]!.planes.push({ kind: 'terminal', path: '' });
+        },
+      },
+    ]);
+    expect((await runLine(line, runtime, true)).ok).toBe(true);
+    expect(opened).toHaveBeenCalledOnce();
+    expect(await runLine('refresh | ' + line, runtime, true)).toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/terminal/i),
+    });
+    expect(opened).toHaveBeenCalledOnce();
+  },
+);

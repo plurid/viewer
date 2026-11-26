@@ -4,10 +4,11 @@ import { lstat, readFile, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readLicenseKey } from '../src/desktop/license/signature';
 import { feedPublicKey } from '../src/desktop/updates/signature';
-import { releaseEnvironment, releaseLicenseConfiguration } from '../tools/direct-release';
+import { releaseLicenseConfiguration } from '../tools/direct-release';
+import { execRelease, releaseEnvironment, spawnRelease } from '../tools/release-environment';
 import { issueLicenseKey, licenseKeyCommand } from '../tools/license-key';
 import { createSigningKeys, signingKey } from '../tools/update-feed';
 import { temporaryRoot } from '../tools/temporary';
@@ -231,6 +232,44 @@ describe('the offline license issuer', () => {
       }),
     ).toEqual({ PATH: '/generated/bin' });
   });
+
+  it('strips publisher variables at the release exec and spawn boundaries', async () => {
+    const names = [
+      'VIEWER_LICENSE_SIGNING_KEY',
+      'VIEWER_LICENSE_SIGNING_KEY_FILE',
+      'VIEWER_UPDATE_SIGNING_KEY',
+      'VIEWER_UPDATE_SIGNING_KEY_FILE',
+    ];
+    const env = Object.fromEntries(names.map((name) => [name, 'dummy']));
+    const args = [
+      '-p',
+      'JSON.stringify(Object.keys(process.env).filter(key => key.includes("SIGNING_KEY")))',
+    ];
+    for (const name of names) vi.stubEnv(name, 'dummy');
+    try {
+      for (const options of [{ env }, {}]) {
+        expect((await execRelease(process.execPath, args, options)).stdout.trim()).toBe('[]');
+        const child = spawnRelease(process.execPath, args, {
+          ...options,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        let stdout = '';
+        for await (const bytes of child.stdout!) stdout += bytes;
+        expect(stdout.trim()).toBe('[]');
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it.each(['mas', 'qualification'])(
+    'filters the %s child environment through the release policy',
+    async (file) => {
+      const source = await readFile(new URL('../tools/' + file + '.ts', import.meta.url), 'utf8');
+      expect(source).toMatch(/releaseEnvironment\(/);
+      expect(source).not.toMatch(/env:\s*\{\s*\.\.\.process\.env/);
+    },
+  );
 
   it('writes CLI usage errors to stdout only regardless of the shipped configuration', async () => {
     const exec = promisify(execFile);

@@ -32,6 +32,7 @@ export function BackupDialog({
   const [review, setReview] = useState<BackupReview>();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('');
+  const [copiesPrepared, setCopiesPrepared] = useState(false);
   const [preferences, setPreferences] = useState(false);
   const alive = useRef(true),
     pending = useRef(false),
@@ -75,10 +76,16 @@ export function BackupDialog({
         held.current = undefined;
         announce('Backup saved: ' + reply.name);
         onClose();
-      } else if (reply.kind === 'restored') {
-        held.current = undefined;
+      } else if (reply.kind === 'restored' && request.kind === 'restore') {
+        setCopiesPrepared(true);
         receiveSettings(reply.settings);
         await transition(() => appendRestoredWorkspaces(reply.state));
+        try {
+          await window.viewer.backup({ kind: 'release', id: request.id });
+          held.current = undefined;
+        } catch {
+          // Workspace saving is complete. Unmount retries the idempotent release.
+        }
         announce('Restored workspaces added. Terminals and servers are stopped.');
         onClose();
       }
@@ -167,7 +174,7 @@ export function BackupDialog({
                         </small>
                       </div>
                       <button
-                        disabled={busy}
+                        disabled={busy || copiesPrepared}
                         onClick={() =>
                           void run({ kind: 'relink', id: review.id, root: root.source })
                         }
@@ -181,7 +188,7 @@ export function BackupDialog({
                   <input
                     type="checkbox"
                     checked={preferences}
-                    disabled={busy}
+                    disabled={busy || copiesPrepared}
                     onChange={(event) => setPreferences(event.target.checked)}
                   />
                   <span>

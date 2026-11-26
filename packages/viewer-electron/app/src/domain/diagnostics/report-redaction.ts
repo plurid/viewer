@@ -70,6 +70,8 @@ const extensions = new Set([
   'html',
   'xml',
 ]);
+const bundleCodeExtension =
+  /\.(?:asar|cjs|js|mjs|ts|tsx|jsx|css|map|html|node|wasm|png|svg|json|jsonc)$/i;
 
 function decoded(value: string): string {
   let result = value
@@ -297,26 +299,23 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
         .split('/')
         .map((part) => {
           if (opaqueWord(part) || part.includes('[redacted]')) return '<token>';
-          if (
-            addressWord(part) &&
-            !/\.(?:asar|cjs|js|mjs|ts|tsx|jsx|css|map|html|node|wasm|png|svg|json|jsonc)$/i.test(
-              part,
-            )
-          )
-            return '<address>';
+          if (addressWord(part) && !bundleCodeExtension.test(part)) return '<address>';
           return redactNames(part);
         })
         .join('/');
-    const summarizePath = (raw: string) => {
+    const summarizePath = (raw: string, complete = false) => {
       const normalized = pathRoot(raw).replace(/^~[^/]*/, '~');
       const candidates = normalized.startsWith('~/')
         ? homes.map((home) => home + normalized.slice(1))
         : [normalized];
-      for (const bundle of bundles) {
-        const relative = candidates
-          .map((candidate) => bundleRelativePath(candidate, bundle))
-          .find(Boolean);
-        if (relative) return bundlePath(relative);
+      if (complete) {
+        for (const bundle of bundles) {
+          const relative = candidates
+            .map((candidate) => bundleRelativePath(candidate, bundle))
+            .find(Boolean);
+          if (relative && !/\s/.test(relative) && bundleCodeExtension.test(relative))
+            return bundlePath(relative);
+        }
       }
       for (const root of dataRoots) {
         const canonical = candidates.map(reportPath).find((value) => value?.startsWith(root + '/'));
@@ -361,120 +360,120 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
       return pathSummary(normalized, homes);
     };
 
-    return boundedText(text)
-      .replace(/\r\n?/g, '\n')
-      .split(/\n(?=[ \t]{0,16}at )/)
-      .map((part) => {
-        let source = messageControls(redactCredentials(decoded(part)))
-          .replace(/\\(?= )/g, '')
-          .replace(/\\/g, '/')
-          .replace(/\x24(?:HOME\b|\{HOME\})/g, '~')
-          .replace(/\/\.(?=\/)/g, '')
-          .replace(/\bfile:\/{1,3}(?:localhost\/)?/gi, '/')
-          .replace(/\/{2,}/g, '/');
-        if (/:Users:/i.test(source)) return '~/<path>';
-        source = source.replace(
-          /\b((?:getaddrinfo[ \t]{1,16})?(?:ENOTFOUND|EAI_AGAIN))[ \t]{1,16}[^\s]+/g,
-          '$1 <address>',
-        );
-        let result = '';
-        for (let index = 0; index < source.length;) {
-          const tail = source.slice(index);
-          if (/^data:/i.test(tail)) {
-            result += '<data>';
-            break;
-          }
-          if (/^[A-Za-z][A-Za-z0-9+.-]{0,24}:\//.test(tail)) {
-            result += '<address>';
-            break;
-          }
-          if (tail.startsWith('<Viewer>/')) {
-            const end = source.indexOf(' ', index);
-            const stop = end < 0 ? source.length : end;
-            result += bundlePath(source.slice(index + '<Viewer>/'.length, stop));
-            index = stop;
-            continue;
-          }
-          const character = source[index]!;
-          if (
-            /['"\x60«“‘]/.test(character) &&
-            (index === 0 || !/[\p{L}\p{N}]/u.test(source[index - 1]!))
-          ) {
-            const closing =
-              character === '«'
-                ? '»'
-                : character === '“'
-                  ? '”'
-                  : character === '‘'
-                    ? '’'
-                    : character;
-            let end = index + 1;
-            while (end < source.length) {
-              if (source[end] === closing && !internalApostrophe(source, end)) break;
-              end++;
-            }
-            const quoted = source.slice(index + 1, end);
-            result += /[/~]/.test(quoted) ? summarizePath(quoted) : '<quoted text>';
-            index = Math.min(source.length, end + 1);
-            continue;
-          }
-          const drive = /^[A-Za-z]:\//.test(tail.slice(0, 3));
-          if (character === '/' || character === '~' || drive) {
-            const known = knownRoots.find(
-              (root) =>
-                tail.toLowerCase().startsWith(root.toLowerCase()) &&
-                !/[\p{L}\p{M}]/u.test(tail[root.length] ?? ''),
-            );
-            let end = index + (known?.length ?? 0);
-            while (end < source.length) {
-              if (/\s|['"\x60«»“”‘’]/.test(source[end]!) && !internalApostrophe(source, end)) break;
-              end++;
-            }
-            let raw = source.slice(index, end);
-            const location = /(:\d{1,7}:\d{1,7}\)?)$/.exec(raw);
-            if (location) raw = raw.slice(0, -location[0].length);
-            if (drive) raw = raw.slice(2);
-            const summary = summarizePath(raw);
-            result += summary + (summary.startsWith('<Viewer>/') ? (location?.[0] ?? '') : '');
-            // A space may be part of an unquoted name. Its ambiguous suffix cannot be shared.
-            index = end < source.length && /\s/.test(source[end]!) ? source.length : end;
-            continue;
-          }
-          if (/\s/.test(character)) {
-            result += character;
-            index++;
-            continue;
-          }
-          // Consume each whitespace-delimited word once, including its address punctuation.
-          const nonspace = /^\S+/.exec(tail)![0];
-          const whole = nonspace.replace(/["'»”’]+$/, '');
-          if (/%[a-f\d]{2}/i.test(whole)) {
-            result += '[Encoded text omitted]';
-            index += nonspace.length;
-            continue;
-          }
-          if (addressWord(whole) || opaqueWord(whole) || mangled(whole)) {
-            result += addressWord(whole) ? '<address>' : '<token>';
-            index += nonspace.length;
-            continue;
-          }
-          const embedded = nonspace.search(/[/~]/);
-          if (embedded > 0 && !/[\p{L}\p{N}]/u.test(nonspace[embedded - 1]!)) {
-            result += nonspace.slice(0, embedded);
-            index += embedded;
-            continue;
-          }
-          if (embedded >= 0) {
-            result += summarizePath(nonspace);
-            index = source.length;
-          } else {
-            result += nonspace;
-            index += nonspace.length;
-          }
+    let source = messageControls(redactCredentials(decoded(boundedText(text))))
+      .replace(/\\(?= )/g, '')
+      .replace(/\\/g, '/')
+      .replace(/\x24(?:HOME\b|\{HOME\})/g, '~')
+      .replace(/\/\.(?=\/)/g, '')
+      .replace(/\bfile:\/{1,3}(?:localhost\/)?/gi, '/')
+      .replace(/\/{2,}/g, '/');
+    if (/:Users:/i.test(source)) return '~/<path>';
+    source = source.replace(
+      /\b((?:getaddrinfo[ \t]{1,16})?(?:ENOTFOUND|EAI_AGAIN))[ \t]{1,16}[^/\s~]+(?=\s|$)/g,
+      '$1 <address>',
+    );
+    let result = '';
+    // Before a relative path, spaces can belong to its first folder. Keep only a
+    // recognized operation prefix when we cannot tell where that folder started.
+    const operationPrefix =
+      /^(?:(?:ENOENT|EACCES|EPERM): )?(?:open|stat|lstat|read|write|rename|unlink) /i.exec(
+        source,
+      )?.[0] ?? '';
+    for (let index = 0; index < source.length;) {
+      const tail = source.slice(index);
+      if (/^data:/i.test(tail)) {
+        result = operationPrefix + '<data>';
+        break;
+      }
+      const drive = /^[A-Za-z]:\//.test(tail);
+      if (!drive && /^[A-Za-z][A-Za-z0-9+.-]{0,24}:\//.test(tail)) {
+        result = operationPrefix + '<address>';
+        break;
+      }
+      if (tail.startsWith('<Viewer>/')) {
+        result = operationPrefix + '<path>';
+        break;
+      }
+      const character = source[index]!;
+      if (
+        /['"\x60«“‘]/.test(character) &&
+        (index === 0 || !/[\p{L}\p{N}]/u.test(source[index - 1]!))
+      ) {
+        const closing =
+          character === '«' ? '»' : character === '“' ? '”' : character === '‘' ? '’' : character;
+        let end = index + 1;
+        while (end < source.length) {
+          if (source[end] === closing && !internalApostrophe(source, end)) break;
+          end++;
         }
-        return redactNames(result);
-      })
-      .join('\n');
+        if (/[/~]/.test(source.slice(index + 1))) {
+          // Quotes and line breaks can be literal filename characters. Even a suffix that
+          // looks like a stack frame can be part of the same path.
+          const remainder = source.slice(index + 1).trimEnd();
+          const raw = remainder.endsWith(closing) ? remainder.slice(0, -1) : remainder;
+          result = operationPrefix + summarizePath(raw, end === source.length - 1);
+          break;
+        }
+        result = operationPrefix + '<quoted text>';
+        break;
+      }
+      if (character === '/' || character === '~' || drive) {
+        const known = knownRoots.find(
+          (root) =>
+            tail.toLowerCase().startsWith(root.toLowerCase()) &&
+            !/[\p{L}\p{M}]/u.test(tail[root.length] ?? ''),
+        );
+        let end = index + (known?.length ?? 0);
+        while (end < source.length && !/\s/.test(source[end]!)) end++;
+        const raw = source.slice(drive ? index + 2 : index, end);
+        result =
+          operationPrefix +
+          summarizePath(raw, index === operationPrefix.length && end === source.length);
+        // A space may be part of an unquoted name. Its ambiguous suffix cannot be shared.
+        break;
+      }
+      // A newline and a frame-shaped suffix can both belong to one relative filename.
+      if (character === '\n' && /^\n[ \t]*at[ \t]+/.test(tail)) {
+        result = operationPrefix + pathSummary(tail, []);
+        break;
+      }
+      if (/\s/.test(character)) {
+        result += character;
+        index++;
+        continue;
+      }
+      // Consume each whitespace-delimited word once, including its address punctuation.
+      const nonspace = /^\S+/.exec(tail)![0];
+      const whole = nonspace.replace(/["'»”’]+$/, '');
+      const embedded = nonspace.search(/[/~]/);
+      const openingQuote = nonspace.search(/(?<=[^\p{L}\p{N}])['"\x60«“‘]/u);
+      if (openingQuote > 0 && (embedded < 0 || openingQuote < embedded)) {
+        // An assignment or call can introduce a quoted basename inside a word.
+        index += openingQuote;
+        continue;
+      }
+      if (embedded >= 0) result = operationPrefix;
+      if (/%[a-f\d]{2}/i.test(whole)) {
+        result += '[Encoded text omitted]';
+        if (embedded >= 0) break;
+        index += nonspace.length;
+        continue;
+      }
+      const address = addressWord(whole);
+      if (address || opaqueWord(whole) || mangled(whole)) {
+        result += address ? '<address>' : '<token>';
+        if (embedded >= 0) break;
+        index += nonspace.length;
+        continue;
+      }
+      if (embedded >= 0) {
+        result += summarizePath(nonspace);
+        break;
+      }
+      result += nonspace;
+      index += nonspace.length;
+    }
+    return redactNames(result);
   } catch {
     return '[Text omitted: privacy checks could not be completed.]';
   }

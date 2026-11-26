@@ -734,3 +734,24 @@ describe('agent review and execution grants', () => {
     expect(requests.get(stale.id).status).toBe('failed');
   });
 });
+
+it('stops a child command edited while its desktop confirmation was open', async () => {
+  const child = command({
+    kind: 'executable',
+    executable: process.execPath,
+    args: ['--version'],
+    perItem: false,
+  });
+  config.customActions = [child];
+  const executions = new Executions(
+    () => config,
+    () => {},
+    undefined,
+    async () => {
+      config.customActions = [{ ...child, executor: { kind: 'builtin', command: 'frame-all' } }];
+    },
+  );
+  cleanup.push(() => executions.close());
+  await expect(executions.start(child.id, target())).rejects.toThrow(/command changed/i);
+  expect(executions.list()).toEqual([]);
+});

@@ -48,8 +48,8 @@ describe('a command sequence', () => {
     expect(command.when(first)).toBe(true);
     await command.run(first);
     expect(invoke.mock.calls).toEqual([
-      ['select-all', first],
-      ['copy', later],
+      ['select-all', { ...first, invocation: 'custom-action' }],
+      ['copy', { ...later, invocation: 'custom-action' }],
     ]);
   });
   it('stops at a step not available here, and says which', async () => {

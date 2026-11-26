@@ -1,3 +1,4 @@
+import { customActionSchema } from '../actions/automation-schema';
 import { readItemIdentity } from '../../domain/files/item-identity';
 import { remoteRequest } from '../../domain/remote/contracts';
 import { reconstructionRequestSchema } from '../../domain/canvases/reconstruction';
@@ -147,7 +148,7 @@ const sessionKeysSchema = z
             repeat: z.boolean().optional(),
           })
           .strict()
-          .refine((binding) => binding.table !== 'root' || binding.keys.every(rootKey)),
+          .refine((binding) => binding.table !== 'root' || rootKey(binding.keys[0] ?? '')),
       )
       .max(200),
     aliases: z
@@ -712,6 +713,7 @@ export const schemas = {
       )
       .refine((values) => Object.keys(values).length <= 20)
       .optional(),
+    customActionSchema.optional(),
   ]),
   executionList: z.tuple([]),
   declaredCommands: z.tuple([localPath]),

@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
-import { lstat, mkdir, open } from 'node:fs/promises';
+import { lstat, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import type { CanvasDocument } from '../../domain/canvases/document';
 import { canvasLimits } from '../../domain/canvases/document';
 import { inspectReviewedFile } from '../native/reviewed-file';
+import { syncParentDirectory } from './directory-sync';
+import { publishExclusiveFile } from './exclusive-file';
 import { sourceHash } from '../canvases/sources';
 
 export const canvasBackupAssetSchema = z
@@ -88,18 +90,23 @@ export async function restoreCanvasBackupAssets(root: string, assets: readonly B
   for (const asset of assets) {
     const file = path.join(directory, asset.hash);
     const bytes = Buffer.from(asset.data, 'base64');
-    let handle;
-    try {
-      handle = await open(file, 'wx', 0o600);
-      await handle.writeFile(bytes);
-      await handle.sync();
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    const verifyExisting = async () => {
       const inspected = await inspectReviewedFile(file, bytes.length);
       if (inspected.bytes.length !== bytes.length || inspected.reviewed.sha256 !== asset.hash)
         throw new Error('An existing canvas asset is damaged. All copies were preserved.');
-    } finally {
-      await handle?.close();
+      await syncParentDirectory(file);
+    };
+    try {
+      await verifyExisting();
+      continue;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    try {
+      await publishExclusiveFile(file, bytes);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      await verifyExisting();
     }
   }
 }

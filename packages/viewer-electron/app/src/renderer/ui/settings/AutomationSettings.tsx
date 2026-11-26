@@ -722,7 +722,7 @@ export function ConfigurationSettings({ snapshot, save }: Props) {
                   : `Every ${label} setting goes back to its default.`,
               action: 'Reset',
               run: () => {
-                const defaults = defaultSettings(snapshot.settings.search.roots[0] || '/');
+                const defaults = defaultSettings(snapshot.home || '/');
                 save([
                   {
                     path: 'settings.' + section,

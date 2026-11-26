@@ -1,19 +1,51 @@
 /** Reproducible release evidence. A passing automated run is not Store approval. */
-import { spawn, execFile } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import { lstat, mkdir, open, readdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 import { hashFile, sourceHash, treeHash } from './qualification/source';
 import { cloneTree } from './clone';
 import { macOSMinimum } from './native-build/macos-target';
+import {
+  execRelease as exec,
+  releaseEnvironment,
+  spawnRelease as spawn,
+} from './release-environment';
+import store from '../mac-app-store.json' with { type: 'json' };
 
 export { treeHash } from './qualification/source';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const exec = promisify(execFile);
+const qualificationArch = 'arm64';
+
+export async function qualificationStoreCandidate(
+  appRoot: string,
+  environment: NodeJS.ProcessEnv,
+  build?: (env: NodeJS.ProcessEnv) => Promise<boolean>,
+) {
+  const bundle = path.join(appRoot, 'out/mac-app-store/mas-dev', qualificationArch, 'Viewer.app');
+  if (!build) return bundle;
+  const previous = await lstat(bundle, { bigint: true }).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return undefined;
+    throw error;
+  });
+  const built = await build(
+    releaseEnvironment({
+      ...environment,
+      VIEWER_MAC_CHANNEL: 'mas-dev',
+      VIEWER_BUILD_ARCH: qualificationArch,
+      VIEWER_MAS_ARCH: qualificationArch,
+    }),
+  );
+  if (!built) return undefined;
+  const current = await lstat(bundle, { bigint: true });
+  if (!current.isDirectory() || (previous?.dev === current.dev && previous.ino === current.ino))
+    throw new Error(
+      'Store qualification found a retained or invalid bundle in the build destination.',
+    );
+  return bundle;
+}
 type Check = {
   id: string;
   result: 'passed' | 'failed' | 'blocked';
@@ -140,11 +172,11 @@ async function main() {
     console.log('Qualification: ' + id);
     const child = spawn('pnpm', args, {
       cwd: root,
-      env: { ...process.env, ...environment },
+      env: releaseEnvironment({ ...process.env, ...environment }),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    child.stdout.pipe(log, { end: false });
-    child.stderr.pipe(log, { end: false });
+    child.stdout!.pipe(log, { end: false });
+    child.stderr!.pipe(log, { end: false });
     const result = await new Promise<Check>((resolve) => {
       child.once('error', (error) => resolve({ id, result: 'failed', reason: error.message }));
       child.once('exit', (code, signal) =>
@@ -165,6 +197,26 @@ async function main() {
     await mkdir(path.dirname(bundle), { recursive: true });
     await cloneTree(origin, bundle);
     await exec('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle]);
+    if (channel === 'mas-dev') {
+      await exec('/usr/bin/lipo', [
+        path.join(bundle, 'Contents/MacOS/Viewer'),
+        '-verify_arch',
+        qualificationArch,
+      ]);
+      const plist = path.join(bundle, 'Contents/Info.plist');
+      const expected = {
+        CFBundleIdentifier: store.bundleID,
+        CFBundleVersion: build ? process.env.VIEWER_MAS_BUILD : undefined,
+      };
+      for (const [key, value] of Object.entries(expected))
+        if (
+          value &&
+          (
+            await exec('/usr/bin/plutil', ['-extract', key, 'raw', '-o', '-', plist])
+          ).stdout.trim() !== value
+        )
+          throw new Error(`The Store candidate has an unexpected ${key}.`);
+    }
     const minimumOS = (
       await exec('/usr/bin/plutil', [
         '-extract',
@@ -225,8 +277,39 @@ async function main() {
     await run('build-dependency-audit', ['audit', '--json']);
     await run('licenses', ['exec', 'tsx', 'tools/licenses.ts']);
     if (staticChecks.some((passed) => !passed)) return;
+    // Store packaging needs a vacant Vite directory. The direct package can then
+    // use its approved Trash preflight, after the Store candidate has been frozen.
+    let storeCandidate: Candidate | undefined;
+    if (mas) {
+      if (
+        build &&
+        (!process.env.VIEWER_MAS_IDENTITY ||
+          !process.env.VIEWER_MAS_PROFILE ||
+          !process.env.VIEWER_MAS_BUILD)
+      )
+        checks.push({
+          id: 'mas-build',
+          result: 'blocked',
+          reason: 'Provide development signing identity, matching macOS profile and build number.',
+        });
+      else {
+        const origin = await qualificationStoreCandidate(
+          root,
+          process.env,
+          build ? (env) => run('mas-build', ['mas:dev'], env) : undefined,
+        );
+        if (origin) storeCandidate = await freeze('mas-dev', origin);
+      }
+    }
     // each build names its channel: one left exported must not turn either into the other
-    if (build && !(await run('direct-build', ['package'], { VIEWER_MAC_CHANNEL: 'direct' })))
+    if (
+      build &&
+      !(await run('direct-build', ['package'], {
+        VIEWER_MAC_CHANNEL: 'direct',
+        VIEWER_BUILD_ARCH: 'arm64',
+        VIEWER_NOTARY_PROFILE: '',
+      }))
+    )
       return;
     const direct = await freeze(
       'direct',
@@ -289,30 +372,15 @@ async function main() {
         });
         return;
       }
-      if (
-        build &&
-        (!process.env.VIEWER_MAS_IDENTITY ||
-          !process.env.VIEWER_MAS_PROFILE ||
-          !process.env.VIEWER_MAS_BUILD)
-      )
-        checks.push({
-          id: 'mas-build',
-          result: 'blocked',
-          reason: 'Provide development signing identity, matching macOS profile and build number.',
-        });
-      else if (!build || (await run('mas-build', ['mas:dev'], { VIEWER_MAC_CHANNEL: 'mas-dev' }))) {
-        const candidate = await freeze(
-          'mas-dev',
-          path.join(root, `out/mac-app-store/mas-dev/${process.arch}/Viewer.app`),
-        );
+      if (storeCandidate) {
         if (
           await run('mas-model-consent', ['exec', 'tsx', 'tests/mas-model-consent.ts'], {
-            VIEWER_TEST_MAS_BUNDLE: candidate.bundle,
+            VIEWER_TEST_MAS_BUNDLE: storeCandidate.bundle,
             VIEWER_MODEL_EVIDENCE: path.join(directory, 'mas-model-consent.json'),
           })
         )
           await run('mas-native', ['test:mas'], {
-            VIEWER_TEST_MAS_BUNDLE: candidate.bundle,
+            VIEWER_TEST_MAS_BUNDLE: storeCandidate.bundle,
             VIEWER_TEST_SOAK_MINUTES: String(soak),
             VIEWER_TEST_EVIDENCE: path.join(directory, 'mas-lifecycle.json'),
           });

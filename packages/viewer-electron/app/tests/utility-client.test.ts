@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { shellQuote } from '../src/desktop/terminals/terminal-launch';
+import { DiagnosticLog } from '../src/desktop/diagnostics/diagnostics';
+import { DiagnosticBudget, WorkerOutput } from '../src/desktop/diagnostics/failures';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 const forked = vi.hoisted(() => [] as { worker: string; args: string[] }[]);
@@ -133,3 +136,67 @@ parentPort.on('message', (request) => {
     }
   });
 });
+
+it.each(['thread', 'process'] as const)(
+  'keeps multiline credentials out of the stored %s worker output',
+  async (backend) => {
+    vi.resetModules();
+    const { launchWorker, reportWorkers } = await import('../src/desktop/workers/utility-client');
+    const log = new DiagnosticLog(path.join(root, 'worker.log'));
+    const records: Promise<void>[] = [];
+    reportWorkers({
+      output(name) {
+        const output = new WorkerOutput(
+          name,
+          (detail) => {
+            records.push(log.record('worker-output', detail));
+          },
+          new DiagnosticBudget(),
+        );
+        return (chunk) => output.write(chunk);
+      },
+      stopped: vi.fn(),
+    });
+    const shellCommand = [
+      'viewer',
+      '--db-password',
+      "SAMPLE_FIVE's\nSAMPLE_SIX\nSAMPLE_SEVEN",
+      'done',
+    ]
+      .map(shellQuote)
+      .join(' ');
+    const chunks = [
+      'first warning\n{"db_password":\r\n   "SAMPLE_ONE"}\n',
+      '{"client_se',
+      'cret"\n : \n [\n {"value":"SAMPLE_TWO"}\n ]}\n',
+      '"password":\n',
+      '   "SAMP',
+      'LE_THREE"\n',
+      'DB_PASSWORD=' + 'x'.repeat(2300),
+      'SAMPLE_FOUR',
+      '\n',
+      ...shellCommand.match(/[\s\S]{1,5}/g)!,
+      '\n',
+      'second ordinary diagnostic\n',
+      'worker resumed\n',
+    ];
+    const file = path.join(root, 'sample.cjs');
+    await writeFile(
+      file,
+      'for (const chunk of ' + JSON.stringify(chunks) + ') process.stderr.write(chunk);',
+    );
+    const worker = launchWorker(file, 'Fixture', backend);
+    if (worker.thread) {
+      await new Promise<void>((resolve) => worker.exit(() => resolve(), true));
+    } else {
+      const onData = forkDetails.at(-1)!.stderr.on.mock.calls.find(([name]) => name === 'data')![1];
+      for (const chunk of chunks) onData(Buffer.from(chunk));
+    }
+    await Promise.all(records);
+    const stored = await readFile(log.file, 'utf8');
+    expect(stored).toContain('Fixture: first warning');
+    expect(stored).toContain('Fixture: worker resumed');
+    expect(stored).toContain('Fixture: second ordinary diagnostic');
+    expect(stored).not.toMatch(/SAMPLE_(?:ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN)/);
+  },
+);

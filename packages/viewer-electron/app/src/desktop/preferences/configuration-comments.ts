@@ -286,7 +286,7 @@ const descriptions: Record<string, string[]> = {
     'or as tmux ("C-b", "M-h") and vim ("<C-b>", "<Space>") write them.',
   ],
   'settings.keymap.root': [
-    'Keys without the prefix (tmux bind -n): each with Ctrl, Alt or Cmd, or an F-key, so typing is never taken.',
+    'Keys without the prefix (tmux bind -n): start with Ctrl, Alt or Cmd, or an F-key. Further keys may be plain.',
   ],
   'settings.keymap.repeat': [
     'Prefix keys that repeat (tmux bind -r): pressed again within repeatTime (ms) they need no prefix.',

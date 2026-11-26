@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { feedLimits, launchCheckDue, updateDecision } from '../../domain/updates/feed';
 import type { InstalledRelease, UpdateFeed } from '../../domain/updates/feed';
+import { alphaVersionSchema, compareAlphaVersions } from '../../domain/updates/version';
 import { DocumentStore } from '../persistence/document-store';
+import { syncParentDirectory } from '../persistence/directory-sync';
 import type { UpdateFeedConfiguration } from '../release';
 import { UpdateError, feedEndpoint, httpsAddress, readSignedFeed } from './signature';
 import type { FeedEndpoint, UpdateProblem } from './signature';
@@ -29,8 +31,8 @@ export interface UpdateHost {
   systemVersion(): string;
   /** `settings.updates.checkAtLaunch`. */
   checkAtLaunch(): boolean;
-  /** Shows the notice; true when the person chose Download. */
-  present(notice: UpdateNotice): Promise<boolean>;
+  /** True for Download, false for dismissal, undefined if the window could not collect a response. */
+  present(notice: UpdateNotice): Promise<boolean | undefined>;
   /** Opens the https download in the browser. */
   open(url: string): Promise<void>;
   request?: typeof fetch;
@@ -42,11 +44,26 @@ const stateSchema = z
     version: z.literal(1),
     /** When the last launch check started. */
     checked: z.number().nonnegative().optional(),
-    /** The build a launch check last showed, so one release is shown once. */
+    /** The last available release selected for notification. */
     announced: z.number().int().positive().optional(),
+    announcedVersion: alphaVersionSchema.optional(),
+    /** Existing records omit this flag. They keep their prior suppression of repeat notices. */
+    announcementPending: z.literal(true).optional(),
+    verified: z
+      .object({ version: alphaVersionSchema, build: z.number().int().positive() })
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (state) =>
+      !state.announcementPending ||
+      (state.announced !== undefined && state.announcedVersion !== undefined),
+    {
+      message: 'A pending update notice needs its release version and build.',
+    },
+  );
 type UpdateState = z.infer<typeof stateSchema>;
+type Presentation = 'shown' | 'suppressed' | 'interrupted';
 
 const redirects = [301, 302, 303, 307, 308];
 
@@ -161,11 +178,16 @@ export function updateNotice(
 
 /**
  * Check for Updates and the quiet launch check, against one signed feed (domain/updates/feed.ts).
- * Nothing is downloaded or installed: an update opens its https download in the browser. A launch
- * check never reports a failure and shows each release once.
+ * Download opens the HTTPS address in the browser. Launch checks stay quiet for failures and
+ * for releases with a recorded response.
  */
 export class Updates {
   private running?: Promise<UpdateCheck>;
+  private presenting?: { check: UpdateCheck; result: Promise<Presentation> };
+  private verified?: UpdateState['verified'];
+  private durableRevision?: string;
+  private pendingRevision?: string;
+  private historyWrites: Promise<unknown> = Promise.resolve();
   private readonly state: DocumentStore<UpdateState>;
   private readonly endpoint?: FeedEndpoint;
   private readonly configured: boolean;
@@ -192,23 +214,162 @@ export class Updates {
   }
 
   async checkFromMenu(): Promise<void> {
-    const notice = updateNotice(await this.check(), this.host.installed, this.host.systemVersion());
-    if ((await this.host.present(notice)) && notice.download) await this.host.open(notice.download);
+    const check = this.presenting?.check ?? (await this.check());
+    // A shared launch presentation can finish without showing an already announced release.
+    if ((await this.present(check)) === 'suppressed') await this.present(check);
   }
 
   /** At most once a day, unless turned off in Settings; never in the Store edition. */
   async checkAtLaunch(): Promise<UpdateCheck | undefined> {
     if (this.host.store || !this.configured || !this.host.checkAtLaunch()) return undefined;
-    const state = (await this.state.load().catch(() => null)) ?? { version: 1 as const };
     const now = (this.host.now ?? Date.now)();
-    if (!launchCheckDue(state.checked, now)) return undefined;
-    await this.state.save({ ...state, checked: now }).catch(() => {});
+    const due = await this.updateHistory((state) =>
+      launchCheckDue(state.checked, now) ? { ...state, checked: now } : undefined,
+    ).catch(() => false);
+    if (!due) return undefined;
     const check = await this.check();
-    if (check.kind !== 'available' || state.announced === check.feed.build) return check;
-    await this.state.save({ ...state, checked: now, announced: check.feed.build }).catch(() => {});
-    const notice = updateNotice(check, this.host.installed, this.host.systemVersion());
-    if ((await this.host.present(notice)) && notice.download) await this.host.open(notice.download);
+    if (check.kind === 'available') await this.present(check, true);
     return check;
+  }
+
+  private async historySnapshot() {
+    const { value, revision } = await this.state.loadSnapshot();
+    const state = value ?? { version: 1 as const };
+    this.rememberVerified(state.verified);
+    return { state, revision };
+  }
+
+  private rememberVerified(release: UpdateState['verified']) {
+    if (release && (!this.verified || this.compareVerified(release, this.verified) > 0))
+      this.verified = release;
+  }
+
+  private compareVerified(
+    a: NonNullable<UpdateState['verified']>,
+    b: NonNullable<UpdateState['verified']>,
+  ) {
+    return compareAlphaVersions(a.version, b.version) || a.build - b.build;
+  }
+
+  private updateHistory(change: (state: UpdateState) => UpdateState | undefined): Promise<boolean> {
+    const write = this.historyWrites
+      .catch(() => undefined)
+      .then(async () => {
+        const { state, revision } = await this.historySnapshot();
+        const next = change(state);
+        // A visible record may have been published before a failed sync, even in another session.
+        const unchangedNeedsSync = !next && revision !== this.durableRevision;
+        const confirm = this.pendingRevision ?? (unchangedNeedsSync ? revision : null);
+        if (confirm) {
+          await syncParentDirectory(this.state.file);
+          const after = await this.historySnapshot();
+          this.pendingRevision = undefined;
+          if (after.revision !== confirm || revision !== confirm) {
+            this.durableRevision = undefined;
+            throw new Error('The saved update history changed while it was being confirmed.');
+          }
+          this.durableRevision = confirm;
+        }
+        if (!next) return false;
+        if (
+          this.verified &&
+          (!next.verified || this.compareVerified(next.verified, this.verified) < 0)
+        )
+          next.verified = this.verified;
+        await this.state.save(next, revision, (newRevision) => {
+          this.pendingRevision = newRevision;
+          this.durableRevision = undefined;
+          this.rememberVerified(next.verified);
+        });
+        this.durableRevision = this.pendingRevision;
+        this.pendingRevision = undefined;
+        return true;
+      });
+    this.historyWrites = write;
+    return write;
+  }
+
+  private present(check: UpdateCheck, quiet = false): Promise<Presentation> {
+    this.presenting ??= {
+      check,
+      result: this.show(check, quiet).finally(() => {
+        this.presenting = undefined;
+      }),
+    };
+    return this.presenting.result;
+  }
+
+  private async prepareAnnouncement(feed: UpdateFeed): Promise<boolean> {
+    let pending = false;
+    const created = await this.updateHistory((state) => {
+      this.releaseOrder(feed, state);
+      const order =
+        (state.announcedVersion && compareAlphaVersions(feed.version, state.announcedVersion)) ||
+        feed.build - (state.announced ?? 0);
+      if (order > 0)
+        return {
+          ...state,
+          announced: feed.build,
+          announcedVersion: feed.version,
+          announcementPending: true,
+        };
+      pending = order === 0 && state.announcementPending === true;
+    });
+    return created || pending;
+  }
+
+  private async recordDelivery(feed: UpdateFeed) {
+    const delivered = (state: UpdateState): UpdateState | undefined => {
+      if (
+        state.announcementPending &&
+        state.announced === feed.build &&
+        state.announcedVersion === feed.version
+      )
+        return { ...state, announcementPending: undefined };
+    };
+    try {
+      await this.updateHistory(delivered);
+    } catch {
+      // Retry the response without reopening the dialog. Download still honors the person's choice.
+      await this.updateHistory(delivered).catch(() => {});
+    }
+  }
+
+  private async show(check: UpdateCheck, quiet: boolean): Promise<Presentation> {
+    let announcement: UpdateFeed | undefined;
+    if (check.kind === 'available') {
+      try {
+        if (await this.prepareAnnouncement(check.feed)) announcement = check.feed;
+        else if (quiet) return 'suppressed';
+      } catch {
+        if (quiet) return 'suppressed';
+        check = {
+          kind: 'failed',
+          problem: 'invalid',
+          message: 'The saved update history changed or could not be read.',
+        };
+      }
+    }
+    const notice = updateNotice(check, this.host.installed, this.host.systemVersion());
+    const download = await this.host.present(notice);
+    if (download === undefined) return 'interrupted';
+    if (announcement) await this.recordDelivery(announcement);
+    if (download && notice.download) await this.host.open(notice.download);
+    return 'shown';
+  }
+
+  private releaseOrder(feed: UpdateFeed, state: UpdateState) {
+    const order = state.verified
+      ? compareAlphaVersions(feed.version, state.verified.version) ||
+        feed.build - state.verified.build
+      : (state.announcedVersion && compareAlphaVersions(feed.version, state.announcedVersion)) ||
+        feed.build - (state.announced ?? 0);
+    if (order < 0 || (this.verified && this.compareVerified(feed, this.verified) < 0))
+      throw new UpdateError(
+        'invalid',
+        'The update server returned an older release than Viewer already verified.',
+      );
+    return order;
   }
 
   private async read(): Promise<UpdateCheck> {
@@ -216,7 +377,15 @@ export class Updates {
     const endpoint = this.endpoint;
     if (!endpoint) return { kind: 'not-configured' };
     try {
+      const initial = await this.historySnapshot();
       const parsed = await fetchFeed(endpoint, this.host.request ?? fetch);
+      this.releaseOrder(parsed, initial.state);
+      await this.updateHistory((state) => {
+        const order = this.releaseOrder(parsed, state);
+        return !state.verified || order > 0
+          ? { ...state, verified: { version: parsed.version, build: parsed.build } }
+          : undefined;
+      });
       return {
         kind: updateDecision(parsed, this.host.installed, this.host.systemVersion()),
         feed: parsed,

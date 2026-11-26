@@ -2,6 +2,10 @@
  * A window whose renderer crashed, or hung past its grace, saves nothing more. Closing it, a backup
  * and Quit go ahead with what it saved last, never asking a dead renderer and never timing out.
  */
+import path from 'node:path';
+import { readFile, writeFile } from 'node:fs/promises';
+import { Storage } from '../src/desktop/persistence/storage';
+import { temporaryRoot } from '../tools/temporary';
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import type { BrowserWindow } from 'electron';
@@ -201,4 +205,33 @@ describe('a stopped window', () => {
     expect(sentFlushes(send)).toBe(1);
     expect(settingsFlush).toHaveBeenCalledTimes(4);
   });
+});
+
+it('flushes documents on close and quit when a newer layout is protected', async () => {
+  const f = fixture();
+  const storage = new Storage(
+    path.join(await temporaryRoot('viewer-retained-close-'), 'state.json'),
+  );
+  const original = '{"version":999}';
+  await writeFile(storage.file, original);
+  await storage.load();
+  Reflect.set(f.desktop, 'storage', storage);
+  f.workspace.send.mockImplementation((_channel, event) => {
+    f.flushes.acknowledge(
+      event.token,
+      1,
+      event.type === 'flush-documents'
+        ? { ok: true }
+        : { ok: false, code: 'STATE_RETAINED', error: 'Protected' },
+    );
+  });
+  f.settings.send.mockImplementation((_channel, event) =>
+    f.flushes.acknowledge(event.token, 2, { ok: true }),
+  );
+  await f.desktop.flushWindow(f.workspace.window);
+  await f.desktop.flush();
+  for (const name of ['notes', 'chats', 'fabrication'])
+    expect(Reflect.get(f.desktop, name).flush).toHaveBeenCalledTimes(2);
+  expect(Reflect.get(f.desktop, 'buffers').flush).toHaveBeenCalledTimes(3);
+  expect(await readFile(storage.file, 'utf8')).toBe(original);
 });

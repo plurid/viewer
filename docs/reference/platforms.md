@@ -18,6 +18,9 @@ Viewer requires macOS 14 or later (`LSMinimumSystemVersion` 14.0). Its native he
 that target, not for the build machine's SDK, and the build stops if the Electron runtime needs a
 newer macOS. [Building](../development/builds.md) describes the supported development setup.
 
+For local `pnpm package` or `pnpm make`, use a Node process for the intended architecture. If you
+set `VIEWER_BUILD_ARCH`, it must match that architecture.
+
 ## Features that need macOS
 
 On another platform these report the message shown and the rest of Viewer stays available.

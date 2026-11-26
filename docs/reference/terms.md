@@ -201,7 +201,7 @@ is taught. Every command, key and menu is in [Features and where to find them](c
   [Tasks, branches and worktrees](tasks-and-git.md)
 - **Branch task**: a task area made with a new Git branch in its own worktree, opened with its
   folder, a note, a terminal and its Git changes. The terminal starts stopped, and Git changes load
-  when you ask. _In Viewer:_ **New Task from Branch…**, **Create task**. _Learn:_
+  when you ask. _In Viewer:_ **New Task from Branch…**, **Create Task**. _Learn:_
   [Work on a project](../guides/develop.md)
 - **Worktree**: a second checkout of a Git repository in its own folder, on its own branch, with its
   own working files and staging. Views of one worktree share them; different worktrees do not. _In
@@ -229,9 +229,13 @@ is taught. Every command, key and menu is in [Features and where to find them](c
 - **Recipe**: a prepared change to the selection, such as **Batch rename…** or **Organize files…**,
   that becomes a proposal for you to review. Some recipes ask a model. _In Viewer:_ the **Actions**
   menu, **Action Tasks…**. _Learn:_ [Custom actions and sequences](actions.md)
-- **Sequence**: an action that runs commands in order, such as Test then Build, asking for its
-  inputs once and stopping at the first step that fails. _In Viewer:_ **Settings → Actions**.
-  _Learn:_ [Custom actions and sequences](actions.md)
+- **Sequence**: an action that runs built-in command lines in order, such as `select-all` followed
+  by `copy-path`. It stops at the first failure. _In Viewer:_ **Settings → Actions**, **Command
+  sequence (macro)**. _Learn:_ [Custom actions and sequences](actions.md)
+- **Workflow command**: an action that runs built-in lines and saved executable or shell commands in
+  order, such as Test then Build. It asks for the steps' parameters once and waits for each step to
+  finish. _In Viewer:_ **Settings → Actions**, **Workflow**. _Learn:_
+  [Workflow commands](actions.md#workflow-commands)
 - **Workflow**: a `viewer.workflow.jsonc` file of typed steps, such as inspections, comparisons,
   copies, conversions and recipes. Running it prepares reviews: you apply each, then resume. Opening
   a workflow never runs it. _In Viewer:_ **File → Workflows…**, **Run Workflow**. _Learn:_

@@ -1,3 +1,4 @@
+import { recipeListSchema } from '../../domain/automation/recipes';
 import { presentationValuesSchema } from '../../domain/preferences/presentation/profile-fields';
 import { toolbarsSchema } from '../../domain/preferences/toolbars';
 import { builtInProfileIDs, type SettingProfile } from '../../domain/preferences/profiles';
@@ -21,7 +22,7 @@ import {
   reasoningEfforts,
 } from '../../domain/models/providers';
 import {
-  alternateShortcuts,
+  resolvedAlternateShortcuts,
   defaultShortcuts,
   menuShortcuts,
   previewShortcuts,
@@ -47,20 +48,6 @@ import {
   darkPageDefaults,
   darkPageModes,
 } from '../../domain/previews/documents/dark-pages';
-const recipe = z
-  .object({
-    id,
-    name: z.string().min(1).max(100),
-    kind: z.enum(['batch-rename', 'book-name', 'rename', 'organize', 'summarize']),
-    formats: z.array(z.string().max(20)).max(100),
-    recursive: z.boolean(),
-    instructions: z.string().max(12000),
-    template: z.string().max(1000),
-    providerID: id.optional(),
-    data: z.enum(['names', 'excerpts', 'full-text']),
-    shortcut: z.string().max(80).optional(),
-  })
-  .strict();
 const templatePath = z
   .string()
   .max(4096)
@@ -310,7 +297,7 @@ export const settingsSchema = z
           }),
       )
       .max(20),
-    recipes: z.array(recipe).max(100),
+    recipes: recipeListSchema,
     optimizationRecipes: z.array(optimizationRecipeSchema).max(100).default([]),
     agents: z
       .object({
@@ -399,7 +386,7 @@ export const settingsSchema = z
         ...previewShortcuts,
         ...value.shortcuts,
       }).map((id) => resolvedShortcut(value, id)),
-      ...Object.values(alternateShortcuts),
+      ...Object.values(resolvedAlternateShortcuts(value)),
       ...value.recipes.map((item) => item.shortcut || ''),
       ...value.customActions.map((item) => item.shortcut || ''),
       // the prefix starts a sequence: no shortcut may share it

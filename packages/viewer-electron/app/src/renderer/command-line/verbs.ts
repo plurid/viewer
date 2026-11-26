@@ -1,3 +1,4 @@
+import { namedLayout } from '../../domain/workspaces/layout-templates';
 import { inheritedWindowPreferences } from '../state/effective-ui';
 import { operationOutcome } from '../operations/outcome';
 import {
@@ -167,7 +168,10 @@ async function setSettings(words: Word[], host: LineHost, local: boolean): Promi
         value = local ? undefined : settingValue(defaults, path);
         break;
       case 'value':
-        value = operation.value;
+        value =
+          definition.kind === 'choice' && typeof current === 'number'
+            ? Number(operation.value)
+            : operation.value;
     }
     if (local)
       setWorkspaceOverride(
@@ -316,7 +320,16 @@ export const verbRuns: Record<string, VerbRun> = {
       await run(host, `tile-layout-${name}`, 'Nothing is tiled.');
       return;
     }
-    await run(host, familyCommand(host, 'layout.', name, 'layout'), 'That layout cannot open.');
+    const layouts = getState().settings.settings.layouts;
+    const layout = namedLayout(layouts, name);
+    if (!layout) {
+      const meant = didYouMean(
+        name,
+        layouts.map((item) => item.name),
+      );
+      throw new Error(`No layout “${name}”.${meant ? ` Did you mean ${meant}?` : ''}`);
+    }
+    await run(host, 'layout.' + layout.id, 'That layout cannot open.');
   },
   'select-pane': async ({ flags }, host) => {
     const direction = (['L', 'R', 'U', 'D'] as const).find((letter) => flags[letter]);
@@ -444,7 +457,7 @@ function bindingPlace(flags: Record<string, string | true>, word: Word) {
       return key;
     });
   if (!keys.length || keys.length > 4) throw new Error('One to four keys, in turn.');
-  if (table === 'root' && !keys.every(rootKey))
+  if (table === 'root' && !rootKey(keys[0]!))
     throw new Error('A key without the prefix needs ⌃, ⌥ or ⌘, or is an F-key.');
   return { table, keys };
 }

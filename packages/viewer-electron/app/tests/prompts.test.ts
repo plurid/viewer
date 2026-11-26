@@ -13,9 +13,13 @@ import {
   type PromptContext,
   type PromptRequest,
 } from '../src/domain/command-line/prompt';
+import { agentCommandID } from '../src/domain/agents/safety';
+import { spokenRun } from '../src/domain/command-line/spoken';
 import { answerPrompt } from '../src/desktop/models/prompts';
 import { defaultSettings, type ApplicationSettings } from '../src/domain/services';
 import { newModelProvider } from '../src/domain/models/providers';
+import { customActionSchema } from '../src/desktop/actions/automation-schema';
+import type { LayoutTemplate } from '../src/domain/workspaces/layout-templates';
 import type { CustomAction } from '../src/domain/automation/actions';
 import { CommandPalette } from '../src/renderer/commands/CommandPalette';
 import type { PaletteMode } from '../src/renderer/commands/palette-modes';
@@ -370,4 +374,58 @@ describe('sorting', () => {
     act(() => void sort.run(at()));
     expect(pane()).toMatchObject({ sort: 'modified', descending: false });
   });
+});
+
+it('checks every custom executor for typed, spoken and agent requests', () => {
+  const examples = {
+    builtin: { kind: 'builtin', command: 'frame-all' },
+    recipe: { kind: 'recipe', recipeID: 'review' },
+    sequence: { kind: 'sequence', commands: ['frame-all'] },
+    terminal: { kind: 'terminal', profileID: 'example' },
+    executable: { kind: 'executable', executable: 'example', args: [], perItem: false },
+    shell: { kind: 'shell', executable: 'example', script: 'example', perItem: false },
+    workflow: { kind: 'workflow', steps: [{ kind: 'command', line: 'frame-all' }] },
+  } satisfies Record<CustomAction['executor']['kind'], CustomAction['executor']>;
+  expect(Object.keys(examples).sort()).toEqual(
+    customActionSchema.shape.executor.options.map((option) => option.shape.kind.value).sort(),
+  );
+  for (const executor of Object.values(examples)) {
+    const action = { ...actions[0]!, executor };
+    const refused = ['workflow', 'shell', 'executable', 'terminal'].includes(executor.kind);
+    expect(!!promptLineProblem('custom.script', ids, [action]), executor.kind).toBe(refused);
+    expect(spokenRun('custom.script', [action]).run === 'refused', executor.kind).toBe(refused);
+    if (refused) expect(() => agentCommandID('custom.script', [action])).toThrow();
+    else expect(agentCommandID('custom.script', [action])).toBeTruthy();
+  }
+});
+
+it('checks saved layouts by ID, name and verb in typed and spoken requests', () => {
+  const layouts: LayoutTemplate[] = [
+    { id: 'desk', name: 'Reading Room', layout: 'tiled', main: 0.5, planes: [{ kind: 'scratch' }] },
+    {
+      id: 'dev',
+      name: 'Build Room',
+      layout: 'tiled',
+      main: 0.5,
+      planes: [{ kind: 'terminal', path: '', profileID: 'build' }],
+    },
+  ];
+  const ids = new Set(['layout.desk', 'layout.dev', 'custom.open']);
+  for (const [id, verb, refused] of [
+    ['desk', 'layout Read', false],
+    ['dev', 'layout Build Room', true],
+  ] as const) {
+    const command = 'layout.' + id;
+    for (const executor of [
+      { kind: 'builtin', command },
+      { kind: 'sequence', commands: [verb] },
+    ] as const) {
+      const action = customActionSchema.parse({ id: 'open', name: 'Open', executor });
+      for (const line of [command, verb, 'custom.open'])
+        expect(!!promptLineProblem(line, ids, [action], new Map(), layouts), line).toBe(refused);
+      for (const line of [command, 'custom.open'])
+        expect(spokenRun(line, [action], layouts).run === 'refused', line).toBe(refused);
+    }
+  }
+  expect(promptLineProblem('layout tiled', ids, [], new Map(), layouts)).toBeUndefined();
 });

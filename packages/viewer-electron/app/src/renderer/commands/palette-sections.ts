@@ -201,7 +201,7 @@ export function withSuggested(
   const shown = new Set(recentRows.map((row) => row.id));
   const rows = suggested
     .filter((item) => !shown.has(item.command.id))
-    .map((item) => ({ ...item.command, detail: item.reason }));
+    .map((item) => ({ ...item.command, detail: item.reason, detailPath: undefined }));
   if (!rows.length) return view;
   const moved = new Set(rows.map((row) => row.id));
   const headings = new Map(view.headings);
@@ -252,7 +252,11 @@ interface Scored {
   score: number;
 }
 const choiceKey = (command: ResolvedCommand) =>
-  command.setting?.choice === undefined ? undefined : command.id.split('=')[0];
+  command.setting?.choice === undefined
+    ? undefined
+    : command.id.includes('=')
+      ? command.id.split('=')[0]
+      : command.setting.name;
 /**
  * A setting's choices as one row with its current value, unless the query names the setting and a
  * colon ("Appearance:") or one of its choices ("appearance light"): those rows then.
@@ -295,7 +299,10 @@ function foldChoices(items: readonly Scored[], needle: string): Scored[] {
         id: choicesPrefix + key,
         label: name,
         icon: 'settings',
-        setting: { name, value: current.command.setting!.choice },
+        setting: {
+          name,
+          value: current.command.setting!.current ? current.command.setting!.choice : 'Custom',
+        },
       },
     });
   }

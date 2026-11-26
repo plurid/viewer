@@ -1,5 +1,6 @@
+import * as directory from '../src/desktop/persistence/directory-sync';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { chmod, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { SettingsService } from '../src/desktop/preferences/settings';
 
@@ -339,4 +340,75 @@ describe('private model data authority', () => {
     ).rejects.toThrow('Allow this provider');
     await expect(permissions.set(provider, 'names')).rejects.toThrow('Allow this provider');
   });
+});
+
+it('keeps corrupt approval bytes before a new grant', async () => {
+  const file = path.join(root, 'model-permissions-v1.json');
+  await writeFile(file, '{bad');
+  await permissions.set(provider, 'names');
+  const copies = (await readdir(root)).filter((name) => name.endsWith('.bak'));
+  expect(copies).toHaveLength(1);
+  expect(await readFile(path.join(root, copies[0]!), 'utf8')).toBe('{bad');
+  expect((await permissions.get(provider))?.level).toBe('names');
+});
+
+it('protects newer model approvals in place', async () => {
+  const file = path.join(root, 'model-permissions-v1.json');
+  const bytes = '{"version":2,"more":["retain"]}';
+  await writeFile(file, bytes);
+  expect(await permissions.get(provider)).toBeNull();
+  await expect(permissions.set(provider, 'names')).rejects.toThrow();
+  expect(await readFile(file, 'utf8')).toBe(bytes);
+});
+
+it('refuses a grant if corrupt approval bytes cannot be preserved', async () => {
+  const file = path.join(root, 'model-permissions-v1.json');
+  await writeFile(file, '{bad');
+  await chmod(root, 0o500);
+  try {
+    await expect(permissions.set(provider, 'names')).rejects.toThrow();
+    expect(await readFile(file, 'utf8')).toBe('{bad');
+    expect(await permissions.get(provider)).toBeNull();
+  } finally {
+    await chmod(root, 0o700);
+  }
+});
+
+it.each([false, true])(
+  'protects a replacement between grant load and withdrawal (missing first: %s)',
+  async (missing) => {
+    const file = path.join(root, 'model-permissions-v1.json');
+    if (!missing) await permissions.set(provider, 'names');
+    await permissions.get(provider);
+    const original = '{"version":2,"metadata":"keep"}';
+    await writeFile(file, original);
+    await expect(permissions.set(provider, null)).rejects.toThrow();
+    expect(await readFile(file, 'utf8')).toBe(original);
+    expect(await permissions.get(provider)).toBeNull();
+  },
+);
+
+it('keeps a model withdrawal through a directory-sync failure and another edit', async () => {
+  const second = { ...provider, id: 'other-provider' };
+  current.push(second);
+  await permissions.set(provider, 'names');
+  const sync = vi
+    .spyOn(directory, 'syncParentDirectory')
+    .mockRejectedValueOnce(new Error('Directory sync failed'));
+  try {
+    await expect(permissions.set(provider, null)).rejects.toThrow('Directory sync failed');
+    expect(await permissions.get(provider)).toBeNull();
+    sync.mockRejectedValueOnce(new Error('Still cannot sync'));
+    await expect(permissions.set(second, 'names')).rejects.toThrow('Still cannot sync');
+    expect(
+      JSON.parse(await readFile(path.join(root, 'model-permissions-v1.json'), 'utf8')).permissions,
+    ).toEqual([]);
+    await permissions.set(second, 'names');
+    await permissions.close();
+    permissions = new ModelPermissions(root, () => current);
+    expect(await permissions.get(provider)).toBeNull();
+    expect(await permissions.get(second)).toMatchObject({ level: 'names' });
+  } finally {
+    sync.mockRestore();
+  }
 });

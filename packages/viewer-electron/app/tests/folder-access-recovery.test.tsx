@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+import { chmodSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
-import { mkdir } from 'node:fs/promises';
+import { link, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -9,7 +10,12 @@ import {
   FolderAccessButton,
   resetFolderAccessAttempts,
 } from '../src/renderer/ui/permissions/FolderAccessButton';
-import { chooseRemembered } from '../src/desktop/native/dialogs';
+import { PersonalBackups, backupSchema } from '../src/desktop/persistence/backup';
+import { getState } from '../src/renderer/state/core';
+import { publishExclusiveFile } from '../src/desktop/persistence/exclusive-file';
+import * as publication from '../src/desktop/operations/rename-exclusive';
+import { FileAccess } from '../src/desktop/files/file-access';
+import { chooseRemembered, saveOnce } from '../src/desktop/native/dialogs';
 import {
   attachWindowDialogs,
   WindowDialogs,
@@ -303,4 +309,72 @@ describe('native folder panel and privacy settings desktop boundary', () => {
     );
     await expect(handlers.fileAccessPrivacySettings(['files'], 99)).rejects.toThrow('person');
   });
+});
+
+it('asks for a Store backup folder and keeps an occupied backup intact', async () => {
+  const root = await temporaryRoot('viewer-backup-panel-');
+  const folder = path.join(root, 'Chosen');
+  await mkdir(folder);
+  const access = new FileAccess(path.join(root, 'private'), {
+    start: (bookmark) => {
+      if (bookmark === 'directory') chmodSync(root, 0o700);
+      return () => {};
+    },
+  });
+  const occupied = path.join(folder, 'Viewer-date.viewer-backup.json');
+  await writeFile(occupied, 'original');
+  await access.allowOnce(occupied, 'single-file');
+  const placeholder = path.join(folder, 'placeholder');
+  electronMock.dialog.showSaveDialog.mockResolvedValue({
+    canceled: false,
+    filePath: placeholder,
+    bookmark: 'file-only',
+  });
+  electronMock.dialog.showOpenDialog.mockResolvedValueOnce({
+    canceled: false,
+    filePaths: [folder],
+    bookmarks: ['directory'],
+  });
+  const publish = vi.spyOn(publication, 'renameExclusive').mockImplementation(link);
+  try {
+    initialize({ home: root, platform: 'darwin', locations: [], openPaths: [], state: null });
+    const backups = new PersonalBackups(root, {
+      flush: async () => {},
+      state: async () => getState().saved,
+      settings: () => getState().settings,
+      apply: async () => getState().settings,
+      registerCheck: async () => {},
+      choose: async () =>
+        (await saveOnce(
+          access,
+          undefined,
+          { defaultPath: 'Viewer-date.viewer-backup.json' },
+          'backup',
+        )) ?? null,
+    });
+    const prepared = await backups.request({ kind: 'prepare-export' }, 1);
+    if (prepared.kind !== 'review') throw new Error('Expected a backup review');
+    chmodSync(root, 0o000);
+    const result = await backups.request({ kind: 'write', id: prepared.review.id }, 1);
+    if (result.kind !== 'written') throw new Error('Expected a saved backup');
+    const chosen = path.join(folder, result.name);
+    expect(chosen).not.toBe(occupied);
+    expect(chosen).not.toBe(placeholder);
+    await access.require([folder, chosen]);
+    expect(backupSchema.parse(JSON.parse(await readFile(chosen, 'utf8'))).privateRoot).toBe(root);
+    await expect(publishExclusiveFile(chosen, 'replacement')).rejects.toMatchObject({
+      code: 'EEXIST',
+    });
+    expect(await readFile(occupied, 'utf8')).toBe('original');
+    expect(electronMock.dialog.showOpenDialog).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        properties: expect.arrayContaining(['openDirectory']),
+        securityScopedBookmarks: true,
+      }),
+    );
+  } finally {
+    chmodSync(root, 0o700);
+    publish.mockRestore();
+    await access.close();
+  }
 });

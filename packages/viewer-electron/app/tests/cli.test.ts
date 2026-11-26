@@ -1,11 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PassThrough, Readable, Writable } from 'node:stream';
+import { Duplex, PassThrough, Readable, Writable } from 'node:stream';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseCLI } from '../src/domain/cli/arguments';
 import { cliCommands, isCLIInvocation } from '../src/domain/cli/catalog';
 import { cliCompletion, cliHelp } from '../src/domain/cli/help';
 import { runCLI } from '../src/desktop/cli/run';
 import { CLIConnectionError, type CLICall } from '../src/desktop/cli/client';
+import { temporaryRoot } from '../tools/temporary';
+import { maxAgentReplyBytes } from '../src/domain/agents/clients';
+
+const connect = vi.hoisted(() => vi.fn());
+vi.mock('node:net', () => ({ connect }));
 
 const resolve = (file: string) => path.resolve('/work/project', file);
 const wrap = (value: unknown) => ({ content: [{ type: 'text', text: JSON.stringify(value) }] });
@@ -13,6 +19,7 @@ async function invoke(
   args: string[],
   options: {
     call?: CLICall;
+    dataPath?: string;
     version?: string;
     token?: string;
     input?: string;
@@ -47,6 +54,93 @@ async function invoke(
   });
   return { code, stdout, stderr };
 }
+
+async function relay(answer: (socket: Duplex, id: string) => void) {
+  const dataPath = await temporaryRoot('viewer-cli-relay-');
+  await writeFile(
+    path.join(dataPath, 'agent-connection-v1.json'),
+    JSON.stringify({ socket: 'fixture', pid: process.pid }),
+  );
+  const socket = new Duplex({
+    read() {},
+    write(chunk, _encoding, callback) {
+      answer(this, JSON.parse(String(chunk)).id);
+      callback();
+    },
+    final(callback) {
+      this.push(null);
+      callback();
+    },
+  });
+  connect.mockImplementation(() => {
+    queueMicrotask(() => socket.emit('connect'));
+    return socket;
+  });
+  return { dataPath, token: 'fixture-token' };
+}
+
+describe('terminal CLI over the MCP relay', () => {
+  it.each(['disconnect', 'oversize', 'invalid JSON', 'ID only', 'both fields', 'invalid error'])(
+    'exits with a connection error for an incomplete reply (%s)',
+    async (failure) => {
+      const endpoint = await relay((socket, id) => {
+        queueMicrotask(() => {
+          if (failure === 'disconnect') socket.destroy();
+          else if (failure === 'oversize') socket.push(Buffer.alloc(maxAgentReplyBytes + 1));
+          else if (failure === 'invalid JSON') socket.push('invalid\n');
+          else if (failure === 'both fields')
+            socket.push(JSON.stringify({ id, value: null, error: 'conflict' }) + '\n');
+          else if (failure === 'invalid error')
+            socket.push(JSON.stringify({ id, error: {} }) + '\n');
+          else socket.push(JSON.stringify({ id }) + '\n');
+        });
+      });
+      const result = await invoke(['status', '--json'], endpoint);
+      expect(result.code).toBe(3);
+      expect(JSON.parse(result.stdout)).toMatchObject({ ok: false, error: { code: 3 } });
+    },
+  );
+
+  it('keeps service errors distinct from transport failures', async () => {
+    const endpoint = await relay((socket, id) => {
+      socket.push(JSON.stringify({ id, error: 'Viewer disconnected.' }) + '\n');
+    });
+    const result = await invoke(['status', '--json'], endpoint);
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({ error: { message: 'Viewer disconnected.' } });
+  });
+
+  it.each([
+    [125_000, 0],
+    [185_000, 124],
+  ])(
+    'uses the CLI deadline before accepting a reply at %d ms',
+    async (replyAfter, expectedCode) => {
+      let requestSent!: () => void;
+      const sent = new Promise<void>((resolve) => {
+        requestSent = resolve;
+      });
+      let reply: ReturnType<typeof setTimeout> | undefined;
+      const endpoint = await relay((socket, id) => {
+        if (!id) return;
+        requestSent();
+        reply = setTimeout(() => {
+          if (!socket.destroyed) socket.push(JSON.stringify({ id, value: {} }) + '\n');
+        }, replyAfter);
+      });
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const result = invoke(['status', '--timeout', '180000', '--json'], endpoint);
+        await sent;
+        await vi.advanceTimersByTimeAsync(replyAfter);
+        expect((await result).code).toBe(expectedCode);
+      } finally {
+        clearTimeout(reply);
+        vi.useRealTimers();
+      }
+    },
+  );
+});
 
 describe('terminal command contract', () => {
   it('offers no token verb or option that starts a definition command', async () => {

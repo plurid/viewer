@@ -155,7 +155,7 @@ describe('existing worktree picker', () => {
     fireEvent.change(screen.getByLabelText('New branch name'), {
       target: { value: 'feature/images' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Task' }));
     await screen.findByText('Generated tool setup failure');
     expect(newTask).toHaveBeenCalledWith(
       expect.objectContaining({ directory: '/fixture/task-checkout', paneID: 'created-checkout' }),

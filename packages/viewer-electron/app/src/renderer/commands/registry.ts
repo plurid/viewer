@@ -9,6 +9,7 @@ export type CommandScope = 'window' | 'folder' | 'files' | 'preview' | 'sidebar'
 export type CommandInvocation = 'person' | 'custom-action';
 export interface CommandContext {
   invocation?: CommandInvocation;
+  modelRequest?: boolean;
   /** Desktop-issued dispatch ID echoed only for IPC calls started by an agent command. */
   agentDispatchID?: string;
   /** Wall-clock deadline after which an agent command must stop starting further steps. */
@@ -43,6 +44,7 @@ export interface CommandDefinition {
   aliases?: readonly string[];
   shortcut?: string;
   detail?: string | ((context: CommandContext) => string);
+  detailPath?: string;
   primary?: boolean | ((context: CommandContext) => boolean);
   remember?: boolean;
   relatedID?: string;
@@ -111,6 +113,7 @@ export interface ResolvedCommand {
   shortcut?: string;
   aliases: readonly string[];
   detail?: string;
+  detailPath?: string;
   relatedID?: string;
   relatedOnly?: boolean;
   primary: boolean;
@@ -263,6 +266,7 @@ export class CommandRegistry {
                 ? definition.detail(context)
                 : undefined
               : definition.detail,
+          detailPath: definition.detailPath,
           group: definition.group,
           relatedID: definition.relatedID,
           relatedOnly: definition.relatedOnly,
@@ -325,7 +329,8 @@ export class CommandRegistry {
   ): Promise<{ done?: string } | false> {
     const runnable = this.runnable(command);
     if (!runnable) return false;
-    const { definition, context } = runnable;
+    const { definition } = runnable;
+    const context = { ...runnable.context, modelRequest: true };
     const done = definition.spoken?.run
       ? await definition.spoken.run(context, progress, signal)
       : await this.runDefinition(definition, context);
@@ -342,6 +347,8 @@ export class CommandRegistry {
     definition: CommandDefinition,
     context: CommandContext,
   ): Promise<void> {
+    if (context.invocation === 'custom-action' && definition.id.startsWith('custom.'))
+      throw new Error('Custom actions cannot call another custom action.');
     if (definition.humanOnly && context.invocation === 'custom-action')
       throw new Error('This action cannot run from a custom action. Choose it directly.');
     if (context.agentDispatchDeadline !== undefined && Date.now() > context.agentDispatchDeadline)

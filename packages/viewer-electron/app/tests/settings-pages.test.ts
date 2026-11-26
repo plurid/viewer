@@ -9,6 +9,11 @@ import { createElement } from 'react';
 import { randomUUID } from 'node:crypto';
 import type { DesktopEvent } from '../src/domain/contracts';
 import type { SettingsSnapshot } from '../src/domain/services';
+import { CatalogSettings } from '../src/renderer/ui/settings/CatalogSettings';
+import { ConfigurationSettings } from '../src/renderer/ui/settings/AutomationSettings';
+import { RecipeSettings } from '../src/renderer/ui/settings/RecipeSettings';
+import type { SettingsEditor } from '../src/renderer/ui/settings/editor';
+import { defaultSettings } from '../src/domain/services';
 import { SettingsWindow } from '../src/renderer/ui/settings/Settings';
 import { categories, settingCatalog, settingValue } from '../src/domain/preferences/catalog';
 import { getState, initialize } from '../src/renderer/state/store';
@@ -184,4 +189,133 @@ describe('Settings pages', () => {
       }
     }
   });
+});
+
+it.each([[], ['/fixtures/work']].map((roots) => ({ roots })))(
+  'resets search roots $roots to the home folder',
+  ({ roots }) => {
+    HTMLDialogElement.prototype.showModal ??= function () {
+      this.setAttribute('open', '');
+    };
+    HTMLDialogElement.prototype.close ??= function () {
+      this.removeAttribute('open');
+    };
+    snapshot.home = '/fixtures';
+    snapshot.settings.search.roots = roots;
+    window.viewer.workspaceDefinitionFile = vi.fn().mockResolvedValue({
+      found: { total: 0, hidden: 0 },
+      projectManager: { state: 'undecided' },
+      diagnostics: [],
+    });
+    const save = vi.fn();
+    const view = render(createElement(ConfigurationSettings, { snapshot, save }));
+    fireEvent.click(view.getByRole('button', { name: /Configuration section/i }));
+    fireEvent.click(view.getByRole('menuitemradio', { name: 'Search' }));
+    fireEvent.click(view.getByRole('button', { name: 'Reset Section' }));
+    fireEvent.click(view.getByRole('button', { name: 'Reset' }));
+    expect(save).toHaveBeenCalledWith([
+      { path: 'settings.search', value: defaultSettings('/fixtures').search },
+    ]);
+  },
+);
+
+it('imports exported recipes without replacing local edits or duplicating built-ins', async () => {
+  const current = structuredClone(snapshot);
+  const local = {
+    ...current.settings.recipes[0]!,
+    id: crypto.randomUUID(),
+    name: 'Local',
+    shortcut: 'Ctrl+Cmd+9',
+  };
+  current.settings.recipes.push(local);
+  const apply: SettingsEditor['save'] = (change) => {
+    const patches = change(current);
+    for (const patch of patches)
+      current.settings.recipes = patch.value as typeof current.settings.recipes;
+  };
+  const editor: SettingsEditor = {
+    snapshot,
+    save: apply,
+    patch: (path, value) => apply(() => [{ path, value }]),
+    patches: vi.fn(),
+    error: vi.fn(),
+  };
+  const view = render(createElement(RecipeSettings, { editor }));
+  const imported = { ...local, name: 'Imported' };
+  const text = JSON.stringify([...snapshot.settings.recipes, imported]);
+  const input = view.container.querySelector('input[type=file]')!;
+  await act(async () =>
+    fireEvent.change(input, { target: { files: [{ text: async () => text }] } }),
+  );
+  expect(current.settings.recipes.slice(0, -1)).toEqual([...snapshot.settings.recipes, local]);
+  const copy = current.settings.recipes.at(-1)!;
+  expect(copy.name).toBe('Imported');
+  expect(copy.id).not.toBe(local.id);
+  expect(copy.shortcut).toBeFalsy();
+  await act(async () =>
+    fireEvent.change(input, { target: { files: [{ text: async () => text }] } }),
+  );
+  expect(current.settings.recipes).toEqual([...snapshot.settings.recipes, local, copy]);
+});
+it('saves the last space color when its page unmounts', () => {
+  const editor: SettingsEditor = {
+    snapshot,
+    save: vi.fn(),
+    patches: vi.fn(),
+    error: vi.fn(),
+    patch: vi.fn(),
+  };
+  const view = render(
+    createElement(CatalogSettings, {
+      editor,
+      definitions: settingCatalog.filter((d) => d.path === 'ui.space.color'),
+      query: '',
+    }),
+  );
+  const picker = view.getByLabelText('Custom color');
+  fireEvent.change(picker, { target: { value: '#112233' } });
+  expect(editor.patch).not.toHaveBeenCalled();
+  fireEvent.click(view.getByRole('button', { name: 'Ocean' }));
+  expect(editor.patch).toHaveBeenCalledWith('ui.space.color', '#0f2633');
+  fireEvent.click(view.getByRole('button', { name: 'Automatic' }));
+  expect(editor.patch).toHaveBeenLastCalledWith('ui.space.color', '');
+  fireEvent.change(picker, { target: { value: '#334455' } });
+  view.unmount();
+  expect(editor.patch).toHaveBeenLastCalledWith('ui.space.color', '#334455');
+  expect(editor.patch).toHaveBeenCalledTimes(3);
+});
+
+it('rejects a malformed recipe before it enters the settings write queue', async () => {
+  const editor: SettingsEditor = {
+    snapshot,
+    patch: vi.fn(),
+    save: vi.fn(),
+    patches: vi.fn(),
+    error: vi.fn(),
+  };
+  const view = render(createElement(RecipeSettings, { editor }));
+  const input = view.container.querySelector('input[type=file]')!;
+  await act(async () =>
+    fireEvent.change(input, { target: { files: [{ text: async () => '[null]' }] } }),
+  );
+  expect(editor.error).toHaveBeenCalled();
+  expect(editor.save).not.toHaveBeenCalled();
+});
+it('acknowledges a Settings window flush after committing the picker value', async () => {
+  const calls: string[] = [];
+  history.replaceState(null, '', '/?window=settings&category=Space');
+  window.viewer.settingsPatch = vi.fn(async (patches) => {
+    for (const patch of patches) calls.push(patch.path + '=' + String(patch.value));
+    return { ...snapshot, revision: snapshot.revision + 1 };
+  });
+  window.viewer.flushed = vi.fn(async () => {
+    calls.push('flushed');
+  });
+  const view = render(createElement(SettingsWindow));
+  const picker = await view.findByLabelText('Custom color');
+  fireEvent.change(picker, { target: { value: '#334455' } });
+  await act(async () =>
+    listeners.forEach((listener) => listener({ type: 'flush-settings', token: 'close' })),
+  );
+  expect(calls).toEqual(['ui.space.color=#334455', 'flushed']);
 });

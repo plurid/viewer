@@ -9,6 +9,19 @@ saved, in `settings.shortcuts` by ID; an empty value turns a key off. A default 
 itself, so a key Viewer later ships differently reaches you unless you changed it. Every command is
 also in **⌘K**, with its key beside it.
 
+Record a shortcut by pressing it on your keyboard. For an unshifted **⌘+** or **⌘ß**, the saved
+shortcuts are `Cmd++` and `Cmd+ß`. If the recorder cannot use a key, it stays open for another
+press.
+
+On a US keyboard, Shift-Command with the main **=** key records `Shift+Cmd+=`. The same modifiers
+with keypad **+** record `Shift+Cmd++`. You can give each to a different command. If you assign only
+`Shift+Cmd++`, either key runs it.
+
+In **No prefix**, Command with keypad **+** records `Cmd++` with or without Shift. A saved binding
+or a session `:bind -n` on `Cmd++` also runs on Shift-Command with the main **=** key while
+`Shift+Cmd+=` is free. Assign that shortcut to a command and the main key runs that command. After a
+prefix or in a mode, the binding table reads the character you press.
+
 A key belongs to one command only. Give a default key to something else, as a recipe or a custom
 action, and the command it came with leaves it to yours: its row in **Settings → Shortcuts** says
 so, and you can choose another key for it. The one key shared on purpose is **⌘L**: see
@@ -130,12 +143,16 @@ arrows step through the files Quick Preview shows.
 These keys turn the picture that has the keyboard: click the picture or its header's tools, or use
 Quick Preview. Anywhere else, **⌘L** is **Go to Folder…**: the two share it on purpose, and both
 rows in **Settings → Shortcuts** say so. A trackpad turn goes to the picture under the pointer, else
-to the one these keys would turn.
+to the one these keys would turn. The alternate **⇧⌘G** works while Go to Folder uses its shipped
+binding. Assigning **⇧⌘G** to another action gives that action the key.
 
 | Action                   | Key    | ID                   |
 | ------------------------ | ------ | -------------------- |
 | **Rotate Picture Left**  | **⌘L** | `image-rotate-left`  |
 | **Rotate Picture Right** | **⌘R** | `image-rotate-right` |
+
+In an active preview that supports zoom, **⌘+** and **⌘=** zoom in and **⌘-** zooms out. If you
+assign one of those shortcuts, it runs your command in the preview as it does in a folder.
 
 ## While a tour plays
 

@@ -1,6 +1,7 @@
+import { mergeImportedRecipes, recipeListSchema } from '../../../domain/automation/recipes';
 import { KeyCapture } from './KeyCapture';
 import { shortcutOwner } from '../../../domain/preferences/shortcuts';
-import type { ActionRecipe } from '../../../domain/services';
+import type { ActionRecipe, ApplicationSettings } from '../../../domain/services';
 import { builtInRecipes } from '../../../domain/services';
 import { Field } from './SettingField';
 import { ReferencedRemove } from './AutomationSettings';
@@ -11,7 +12,7 @@ import type { SettingsEditor } from './editor';
 
 /** Action recipes: editing, duplicating, importing and exporting. */
 export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
-  const { snapshot, patch, save, error: setError } = editor;
+  const { snapshot, save, error: setError } = editor;
   const settings = snapshot.settings;
   const recipePatch = (id: string, values: Partial<ActionRecipe>) =>
     save((current) => [
@@ -22,6 +23,8 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
         ),
       },
     ]);
+  const changeRecipes = (change: (current: ApplicationSettings) => ActionRecipe[]) =>
+    save(({ settings }) => [{ path: 'settings.recipes', value: change(settings) }]);
   return (
     <>
       <h2>Recipes</h2>
@@ -146,15 +149,20 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
             <div className="settings-actions">
               <button
                 onClick={() =>
-                  patch('settings.recipes', [
-                    ...settings.recipes,
-                    {
-                      ...recipe,
-                      id: crypto.randomUUID(),
-                      name: recipe.name + ' copy',
-                      shortcut: undefined,
-                    },
-                  ])
+                  changeRecipes((current) => {
+                    const source = current.recipes.find((item) => item.id === recipe.id);
+                    return source
+                      ? [
+                          ...current.recipes,
+                          {
+                            ...source,
+                            id: crypto.randomUUID(),
+                            name: source.name + ' copy',
+                            shortcut: undefined,
+                          },
+                        ]
+                      : current.recipes;
+                  })
                 }
               >
                 Duplicate Recipe
@@ -164,9 +172,8 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
                   name={`the recipe “${recipe.name}”`}
                   users={referencesTo(settings, 'recipe', recipe.id)}
                   onRemove={() =>
-                    patch(
-                      'settings.recipes',
-                      settings.recipes.filter((item) => item.id !== recipe.id),
+                    changeRecipes((current) =>
+                      current.recipes.filter((item) => item.id !== recipe.id),
                     )
                   }
                 >
@@ -180,9 +187,9 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
       <div className="settings-actions">
         <button
           onClick={() =>
-            patch('settings.recipes', [
-              ...settings.recipes,
-              { ...builtInRecipes[2], id: crypto.randomUUID(), name: 'New action' },
+            changeRecipes((current) => [
+              ...current.recipes,
+              { ...builtInRecipes[2]!, id: crypto.randomUUID(), name: 'New action' },
             ])
           }
         >
@@ -209,16 +216,18 @@ export function RecipeSettings({ editor }: { editor: SettingsEditor }) {
             accept="application/json,.json"
             onChange={(event) => {
               const file = event.target.files?.[0];
+              event.target.value = '';
               if (file)
                 void file
                   .text()
                   .then((text) => {
                     const value: unknown = JSON.parse(text);
-                    if (!Array.isArray(value))
+                    const result = recipeListSchema.safeParse(value);
+                    if (!result.success)
                       throw new Error(
-                        'That file isn’t a list of recipes. Choose one Viewer exported.',
+                        'That file isn’t a list of valid recipes. Choose one Viewer exported.',
                       );
-                    patch('settings.recipes', [...settings.recipes, ...value]);
+                    changeRecipes((current) => mergeImportedRecipes(current, result.data));
                   })
                   .catch((error) => setError(error.message));
             }}

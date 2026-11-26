@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser';
+import { createCommandLineHandlers } from '../src/desktop/ipc/command-line-handlers';
+import type { SessionKeys } from '../src/domain/preferences/session-keys';
+import { canonicalKeymap } from '../src/domain/preferences/keymap';
 import { SettingsService } from '../src/desktop/preferences/settings';
 import { defaultSettings } from '../src/domain/services';
 import { normalizePreferences } from '../src/domain/preferences/ui';
@@ -619,6 +622,8 @@ describe('settings the workspace window may change (2026-10-20)', () => {
       ['settings.terminals', service.snapshot().settings.terminals],
       ['settings', service.snapshot().settings],
       // Trash confirmation is the person's, in Settings, even inside a whole browsing section
+      ['settings.browsing.findWorkspaces', false],
+      ['settings.browsing', { ...service.snapshot().settings.browsing, findWorkspaces: false }],
       ['settings.browsing.confirmTrash', false],
       ['settings.browsing', { ...service.snapshot().settings.browsing, confirmTrash: false }],
     ] as const)
@@ -969,5 +974,79 @@ describe('a macro saved from the workspace (2026-10-23)', () => {
     await expect(
       patch([action('bad', { kind: 'sequence', commands: ['custom.other'] })]),
     ).rejects.toThrow();
+  });
+});
+
+it('persists the UI migration during import before any subsequent edit', async () => {
+  const service = create();
+  await service.load();
+  const source = await read();
+  source.ui.version = 3;
+  const imported = path.join(root, 'import.jsonc');
+  await fs.writeFile(imported, '// Imported comment\n' + JSON.stringify(source));
+  const snapshot = await service.importConfiguration(imported);
+  expect((await read()).ui.version).toBe(snapshot.ui.version);
+  await service.patch([{ path: 'ui.space.headerControls.layout', value: true }], snapshot.revision);
+  const reopened = create();
+  await reopened.load();
+  expect(reopened.snapshot().ui.space.headerControls.layout).toBe(true);
+  expect(await fs.readFile(file(), 'utf8')).toContain('// Imported comment');
+});
+
+it('refuses to preview a configuration patch while the source has diagnostics', async () => {
+  const service = create();
+  await service.load();
+  await fs.writeFile(file(), '{');
+  await service.reload();
+  const [diagnostic] = service.snapshot().config!.diagnostics;
+  expect(diagnostic).toBeTruthy();
+  expect(() => service.preview([{ path: 'settings.appearance', value: 'light' }])).toThrow(
+    diagnostic,
+  );
+});
+
+it('keeps unrelated no-prefix definitions exactly as written across session edits', async () => {
+  const service = create();
+  await service.load();
+  const saved = {
+    'M-h': 'frame-all',
+    'Alt+h': 'find-file',
+    '<F8>': { '<CR>': 'refresh', a: 'palette' },
+  };
+  await service.patch(
+    [{ path: 'settings.keymap.root', value: saved }],
+    service.snapshot().revision,
+  );
+  let session: SessionKeys = { bindings: [], aliases: [] };
+  const handlers = createCommandLineHandlers({
+    settings: service,
+    providers: { generate: vi.fn() },
+    credentials: { ids: () => [] },
+    sessionKeys: () => session,
+    setSessionKeys: (keys) => {
+      session = keys;
+    },
+    emit: vi.fn(),
+  });
+  const keep = async (table: string, keys: string[], line: string | null) => {
+    handlers.sessionKeysSet([{ aliases: [], bindings: [{ table, keys, line }] }], 1);
+    await handlers.sessionKeysKeep([], 2);
+    return (await read()).settings.keymap;
+  };
+  const prefix = await keep('prefix', ['v'], 'refresh');
+  expect(prefix.bindings.v).toBe('refresh');
+  expect(prefix.root).toEqual(saved);
+  const unrelated = await keep('root', ['F6'], 'frame-all');
+  expect(unrelated.root).toEqual({ ...saved, F6: 'frame-all' });
+  const edited = await keep('root', ['F8', 'Enter'], 'find-file');
+  expect(edited.root['<F8>']).toEqual({ '<CR>': 'find-file', a: 'palette' });
+  expect(canonicalKeymap(edited).root).toMatchObject({
+    'Alt+h': 'find-file',
+    F8: { Enter: 'find-file' },
+  });
+  expect((await keep('root', ['F8', 'a'], null)).root).toEqual({
+    ...saved,
+    '<F8>': { '<CR>': 'find-file' },
+    F6: 'frame-all',
   });
 });

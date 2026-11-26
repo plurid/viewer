@@ -67,7 +67,7 @@ export class ChatDocumentStore {
   }
 
   private async read(): Promise<ChatDocument | null> {
-    await this.writer.flush();
+    await this.writer.flush().catch(() => undefined);
     const bytes = await this.bytes();
     if (!bytes) return null;
     const stored = storedChatDocumentSchema.parse(JSON.parse(bytes.toString('utf8')));

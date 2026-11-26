@@ -1,3 +1,4 @@
+import * as directory from '../src/desktop/persistence/directory-sync';
 import { chmodSync } from 'node:fs';
 import { chmod, mkdir, readFile, rename, stat, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -400,4 +401,48 @@ describe('native folder access', () => {
       await chmod(blocked, 0o700).catch(() => {});
     }
   });
+});
+
+it('protects newer folder grants in place', async () => {
+  const file = path.join(data, 'file-access-v1.json');
+  const original = '{"version":2,"grants":[]}';
+  await writeFile(file, original);
+  await expect(access.remember(folder, true, 'new')).rejects.toThrow();
+  await expect(access.revoke(folder, async () => {})).rejects.toThrow();
+  expect(await readFile(file, 'utf8')).toBe(original);
+  expect(start).not.toHaveBeenCalled();
+});
+
+it('keeps replacement folder permissions and blocks a stale withdrawal', async () => {
+  const file = path.join(data, 'file-access-v1.json');
+  await access.remember(folder, true, 'chosen');
+  await access.require([folder]);
+  const replacement = '{"version":1,"grants":[]}';
+  await writeFile(file, replacement);
+  await expect(access.revoke(folder, async () => {})).rejects.toThrow();
+  expect(await readFile(file, 'utf8')).toBe(replacement);
+  await expect(access.require([folder])).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+});
+
+it('keeps a folder withdrawal through a directory-sync failure and another edit', async () => {
+  await access.remember(folder, true, 'first');
+  const sync = vi
+    .spyOn(directory, 'syncParentDirectory')
+    .mockRejectedValueOnce(new Error('Directory sync failed'));
+  try {
+    await expect(access.revoke(folder, async () => {})).rejects.toThrow('Directory sync failed');
+    await expect(access.require([folder])).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+    sync.mockRejectedValueOnce(new Error('Still cannot sync'));
+    await expect(access.remember(other, true, 'second')).rejects.toThrow('Still cannot sync');
+    expect(
+      JSON.parse(await readFile(path.join(data, 'file-access-v1.json'), 'utf8')).grants,
+    ).toEqual([]);
+    await access.remember(other, true, 'second');
+    await access.close();
+    access = new FileAccess(data, { start });
+    await expect(access.require([folder])).rejects.toMatchObject({ code: 'FILE_ACCESS_REQUIRED' });
+    await access.require([other]);
+  } finally {
+    sync.mockRestore();
+  }
 });

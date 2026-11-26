@@ -29,11 +29,16 @@ it cannot be exploited there, and what removes the exception. Only build and lin
 advisory in a package the app ships is fixed, never ignored.
 
 Build-time downloads must match their reviewed hashes. Preserve mismatched caches for inspection.
-The Office build appends the pinned, unmodified Noto CJK font collection to a new virtual-filesystem
-package. Upstream engine files and earlier packages stay intact. The resulting data and metadata
-have their own pins; the font source, copyright and SIL Open Font License are supplied with Viewer.
-The installed application must use its bundled resources rather than inheriting tools from a
-developer's PATH. Follow [AGENTS.md](../../AGENTS.md) before replacing or removing existing folders.
+The media processor cache must match the selected architecture and current FFmpeg and npm package
+pins. Both executables and the selected package assets must be present. Every retained file must
+match the checksum inventory. The speech build checks the recognizer source hash before it reuses a
+cached helper. If a cached speech build has no source hash, preserve it in another folder before
+rebuilding. The Office build appends the pinned, unmodified Noto CJK font collection to a new
+virtual-filesystem package. Upstream engine files and earlier packages stay intact. The resulting
+data and metadata have their own pins; the font source, copyright and SIL Open Font License are
+supplied with Viewer. The installed application must use its bundled resources rather than
+inheriting tools from a developer's PATH. Follow [AGENTS.md](../../AGENTS.md) before replacing or
+removing existing folders.
 
 After a change, run types, lint, affected regressions and the full tests. Package the app and repeat
 the relevant real workflow: a source test cannot establish that its native dependency was bundled or

@@ -32,12 +32,19 @@ arguments.
    choose **Save as Action…**. Type a **Name**, then choose **Review in Settings**.
 3. **Settings → Actions** shows the draft under **Custom commands**. Choose **Add Command**.
 4. Open the new command to change it: **Available for** and **File extensions** say when it applies,
-   and **Add parameter** asks for a part that changes between runs, such as a test name.
+   and **Add Parameter** asks for a part that changes between runs, such as a test name.
 
 The action now appears in **⌘K** and the file menu whenever it applies. Its first run asks you to
-confirm it. To chain steps, set **Execution** to **Command sequence (macro)**: a _Test_ step
-followed by a _Build_ step runs in order and stops at the first failure. Choose **Executable** with
-literal **Arguments** when a step needs no shell features; it is safer with unusual filenames.
+confirm it. Choose **Executable** with literal **Arguments** when filenames should be passed
+directly to a program.
+
+To run saved _Test_ and _Build_ commands together, create a **Workflow** in **Settings → Actions**.
+Use **Add Command Step** to select each command in order. Remove any unneeded built-in step. The
+workflow asks for their parameters once and waits for _Test_ to finish before starting _Build_. Each
+program keeps its own first-run confirmation.
+
+To chain built-in commands, choose **Command sequence (macro)**. For example, put `select-all` on
+the first line and `copy-path` on the second to copy the paths of all items in the active folder.
 
 ## Type commands
 

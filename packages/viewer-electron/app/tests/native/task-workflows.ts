@@ -312,7 +312,7 @@ try {
   await actions.field('New branch name', 'feature/generated-task');
   await actions.field('Worktree destination', checkout);
   await capture('branch-task-form');
-  await actions.button('Create task', 'dialog');
+  await actions.button('Create Task', 'dialog');
   await until(
     async () => (await saved()).workspaces[0]?.taskAreas?.[0]?.members.length,
     (count) => count === 4,

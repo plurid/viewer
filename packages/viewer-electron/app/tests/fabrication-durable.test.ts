@@ -399,3 +399,20 @@ describe('durable fabrication checks', () => {
     }
   });
 });
+
+it('registers a restored check beside a concurrent live save on the same index', async () => {
+  const checks = service();
+  const live = await open(checks);
+  const directory = path.join(root, 'private', 'fabrication-checks');
+  const observer = new CheckStore(directory);
+  const document = (await observer.read(live.id))!;
+  const restored = { ...document, id: randomUUID() };
+  const original = JSON.stringify(restored, null, 2);
+  const file = path.join(directory, restored.id + '.json');
+  await writeFile(file, original, { flag: 'wx' });
+  await Promise.all([checks.registerRestored(restored), open(checks)]);
+  const index = await observer.list();
+  expect(index).toHaveLength(3);
+  expect(index.map((item) => item.id)).toContain(restored.id);
+  expect(await readFile(file, 'utf8')).toBe(original);
+});

@@ -74,7 +74,7 @@ fewer than 200 planes.
 | ------------------------- | -------------------------------------------- |
 | **Open Worktree…**        | Lists the repository's registered checkouts. |
 | **Create Worktree…**      | In that dialog, makes a new checkout.        |
-| **New Task from Branch…** | The same form, ending with **Create task**.  |
+| **New Task from Branch…** | The same form, ending with **Create Task**.  |
 
 Each checkout shows **Current checkout**, **Checkout**, **Bare**, **Folder missing** or **Can’t
 open**, its lock reason when locked, and whether it is **Clean**. **Open Beside** opens it as a

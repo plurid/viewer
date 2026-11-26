@@ -213,6 +213,10 @@ export class FabricationChecks {
     if (ports.dataPath)
       this.store = new CheckStore(path.join(ports.dataPath, 'fabrication-checks'));
   }
+  async registerRestored(document: CheckDocument): Promise<void> {
+    if (!this.store) throw new Error('The private check store is unavailable.');
+    await this.store.register(document);
+  }
   private now() {
     return this.ports.now?.() ?? Date.now();
   }

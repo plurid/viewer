@@ -130,6 +130,13 @@ describe(':bind, :unbind and :mode', () => {
       palette: vi.fn(),
     };
   };
+  it('binds a no-prefix chord with a printable second key', async () => {
+    expect(await runLine('bind -n "M-h g" frame-all', host())).toEqual({
+      ok: true,
+      message: expect.stringContaining('frame-all'),
+    });
+    expect(session.bindings[0]?.keys).toEqual(['Alt+h', 'g']);
+  });
   it('bind for the session: a root key, a line with bars, a repeat key; unbind removes', async () => {
     const live = host();
     expect((await runLine('bind -n M-h select-pane -L', live)).ok).toBe(true);
@@ -181,4 +188,71 @@ describe('a macro', () => {
       'frame-all',
     ]);
   });
+});
+
+it('passes through empty root branches and a chord whose last leaf was unbound', () => {
+  keymap({ root: { F6: { g: { h: 'frame-all' } }, F7: { g: {} } } });
+  receiveSessionKeys({
+    aliases: [],
+    bindings: [{ table: 'root', keys: ['F6', 'g', 'h'], line: null }],
+  });
+  const run = setup();
+  for (const key of ['F6', 'q', 'F7', 'q'])
+    expect(press(document.body, key).defaultPrevented, key).toBe(false);
+  expect(effectiveKeymap().root).not.toHaveProperty('F6');
+  expect(run).not.toHaveBeenCalled();
+});
+
+it('reserves a shifted key for its shortcut until a prefix, leader or mode table is active', async () => {
+  const snapshot = structuredClone(getState().settings);
+  snapshot.revision++;
+  snapshot.settings.shortcuts['focus-mode'] = 'Ctrl+Shift+/';
+  snapshot.settings.keymap.leader = 'Ctrl+?';
+  snapshot.settings.keymap.bindings['Ctrl+?'] = 'dock';
+  snapshot.settings.keymap.modes.review = { bindings: { 'Ctrl+?': 'palette' } };
+  receiveSettings(snapshot);
+  const run = setup();
+  const question = (code: string) =>
+    press(document.body, '?', { code, shiftKey: true, ctrlKey: true });
+  expect(question('Slash').defaultPrevented).toBe(false);
+  expect(question('IntlRo').defaultPrevented).toBe(true);
+  expect(question('Slash').defaultPrevented).toBe(true);
+  press(document.body, 'b', { ctrlKey: true });
+  expect(question('Slash').defaultPrevented).toBe(true);
+  act(() => {
+    expect(enterKeyMode('review')).toBe(true);
+  });
+  expect(question('Slash').defaultPrevented).toBe(true);
+  await act(async () => {});
+  expect(run.mock.calls).toEqual([
+    [['dock'], 1],
+    [['dock'], 1],
+    [['palette'], 1],
+  ]);
+  press(document.body, 'Escape');
+});
+
+it('keeps an Option root binding while a more specific shifted shortcut owns the same letter key', async () => {
+  const snapshot = structuredClone(getState().settings);
+  snapshot.revision++;
+  snapshot.settings.keymap.root = { 'Alt+Cmd+c': 'dock' };
+  snapshot.settings.shortcuts['focus-mode'] = 'Alt+Shift+Cmd+C';
+  receiveSettings(snapshot);
+  const run = setup();
+  const modifiers = { altKey: true, metaKey: true, code: 'KeyC' };
+  expect(press(document.body, 'ç', modifiers).defaultPrevented).toBe(true);
+  expect(press(document.body, 'Ç', { ...modifiers, shiftKey: true }).defaultPrevented).toBe(false);
+  await act(async () => {});
+  expect(run).toHaveBeenCalledExactlyOnceWith(['dock'], 1);
+});
+
+it('keeps an explicitly shifted letter in the No prefix table', async () => {
+  keymap({ root: { 'Shift+Cmd+F': 'dock' } });
+  const run = setup();
+  // The same chord ships with Focus Mode. This binding names the shifted letter itself.
+  expect(
+    press(document.body, 'F', { code: 'KeyF', shiftKey: true, metaKey: true }).defaultPrevented,
+  ).toBe(true);
+  await act(async () => {});
+  expect(run).toHaveBeenCalledExactlyOnceWith(['dock'], 1);
 });

@@ -14,6 +14,7 @@ interface Transport {
   output: Writable;
   token?: string;
   signal?: AbortSignal;
+  requestTimeout?: number;
 }
 /** Headless stdio client; the running UI application owns services and approval. */
 export async function runMCPClient(
@@ -23,7 +24,7 @@ export async function runMCPClient(
     output: process.stdout,
     token: process.env.VIEWER_AGENT_TOKEN,
   },
-): Promise<void> {
+): Promise<string | undefined> {
   const token = transport.token;
   transport.signal?.throwIfAborted();
   if (!token) throw new Error('Set VIEWER_AGENT_TOKEN to the token shown in Viewer Settings.');
@@ -79,21 +80,20 @@ export async function runMCPClient(
   const drained = () => {
     if (ended && !pending.size) socket.end();
   };
-  const completed = new Promise<void>((resolve) => {
+  const completed = new Promise<string | undefined>((resolve) => {
     socket.once('close', () => {
       input.close();
+      const message = oversized
+        ? `Viewer sent a reply over ${maxAgentReplyBytes.toLocaleString('en-US')} bytes, ` +
+          'more than this agent connection carries. Ask for less, then start the agent again.'
+        : 'Viewer disconnected. Reconnect to the running app.';
+      const failure = pending.size ? message : undefined;
       for (const request of pending.values()) {
         clearTimeout(request.timer);
-        fail(
-          request.id,
-          oversized
-            ? `Viewer sent a reply over ${maxAgentReplyBytes.toLocaleString('en-US')} bytes, ` +
-                'more than this agent connection carries. Ask for less, then start the agent again.'
-            : 'Viewer disconnected. Reconnect to the running app.',
-        );
+        fail(request.id, message);
       }
       pending.clear();
-      resolve();
+      resolve(failure);
     });
   });
   socket.on('error', () => {
@@ -103,11 +103,18 @@ export async function runMCPClient(
   const forward = (line: string): boolean => {
     try {
       const reply = JSON.parse(line);
+      if (!reply || typeof reply !== 'object' || typeof reply.id !== 'string') return false;
       const request = pending.get(reply.id);
       if (!request) return true;
+      const hasError = Object.hasOwn(reply, 'error');
+      if (
+        hasError === Object.hasOwn(reply, 'value') ||
+        (hasError && typeof reply.error !== 'string')
+      )
+        return false;
       pending.delete(reply.id);
       clearTimeout(request.timer);
-      if (reply.error) fail(request.id, String(reply.error));
+      if (hasError) fail(request.id, reply.error);
       else write({ jsonrpc: '2.0', id: request.id, result: reply.value });
       return true;
     } catch {
@@ -163,7 +170,7 @@ export async function runMCPClient(
           socket.write(JSON.stringify({ cancel: id }) + '\n');
         fail(request.id, 'Viewer request timed out.');
         drained();
-      }, 120000);
+      }, transport.requestTimeout ?? 120000);
       pending.set(id, { id: request.id, timer });
       socket.write(JSON.stringify({ id, token, request }) + '\n');
     } catch {
@@ -176,8 +183,9 @@ export async function runMCPClient(
     drained();
   });
   try {
-    await completed;
+    const failure = await completed;
     transport.signal?.throwIfAborted();
+    return failure;
   } finally {
     transport.signal?.removeEventListener('abort', abort);
   }

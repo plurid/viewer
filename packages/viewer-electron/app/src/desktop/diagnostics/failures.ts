@@ -1,4 +1,6 @@
-import { boundedText, boundedTextTail } from '../../domain/diagnostics/text';
+import { StringDecoder } from 'node:string_decoder';
+import { WorkerRecordBoundary } from './worker-record';
+import { boundedText } from '../../domain/diagnostics/text';
 import { redactCredentials } from '../../domain/diagnostics/secrets';
 import { diagnosticFailure } from '../../domain/diagnostics/failure';
 import type { DiagnosticErrorFields } from '../../domain/diagnostics/failure';
@@ -65,8 +67,11 @@ export function recordConsoleErrors(
 
 /** A worker's stderr, line by line, at most a budget's share a minute. */
 export class WorkerOutput {
+  private decoder = new StringDecoder('utf8');
   private partial = '';
+  private overlong = false;
   private skipped = 0;
+  private boundary = new WorkerRecordBoundary();
 
   constructor(
     private name: string,
@@ -75,22 +80,41 @@ export class WorkerOutput {
   ) {}
 
   write(chunk: Buffer | string): void {
-    const lines = (this.partial + chunk.toString()).split('\n');
-    // a line without its end yet is held, bounded
-    this.partial = boundedTextTail(lines.pop()!, 2000);
-    for (const line of lines) {
-      const text = line.trim();
-      if (!text) continue;
-      if (!this.budget.take('worker:' + this.name)) {
-        this.skipped++;
-        continue;
-      }
-      const omitted = this.skipped
-        ? ` (${this.skipped} earlier ${this.skipped === 1 ? 'line' : 'lines'} left out)`
-        : '';
-      this.skipped = 0;
-      this.record(`${this.name}${omitted}: ${boundedText(redactSecrets(text), 1000)}`);
+    const text = typeof chunk === 'string' ? this.decoder.end() + chunk : this.decoder.write(chunk);
+    let start = 0;
+    while (start < text.length) {
+      const newline = text.indexOf('\n', start);
+      const end = newline < 0 ? text.length : newline;
+      if (this.partial.length + end - start > 2000) this.overlong = true;
+      const part = text.slice(start, end);
+      this.boundary.scan(part);
+      if (!this.overlong) this.partial += part;
+      if (newline < 0) return;
+      this.recordLine();
+      this.partial = '';
+      this.overlong = false;
+      start = end + 1;
     }
+  }
+
+  private recordLine(): void {
+    const disposition = this.boundary.finishLine();
+    const raw = this.partial.trim();
+    if (!this.overlong && disposition === 'empty') return;
+    if (!this.budget.take('worker:' + this.name)) {
+      this.skipped++;
+      return;
+    }
+    const omitted = this.skipped
+      ? ` (${this.skipped} earlier ${this.skipped === 1 ? 'line' : 'lines'} left out)`
+      : '';
+    this.skipped = 0;
+    const detail = this.overlong
+      ? '[Long worker line omitted]'
+      : disposition === 'omit'
+        ? '[Worker continuation omitted]'
+        : boundedText(redactSecrets(raw), 1000);
+    this.record(`${this.name}${omitted}: ${detail}`);
   }
 }
 

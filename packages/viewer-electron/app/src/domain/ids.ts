@@ -18,9 +18,12 @@ export function slugID(
   taken: Iterable<string> = [],
   now = Date.now(),
 ): string {
-  const base = `${slugOf(name, fallback)}-${now.toString(36)}`;
+  const slug = slugOf(name, fallback);
+  const time = now.toString(36);
   const used = new Set(taken);
-  let id = base;
-  for (let count = 2; used.has(id); count++) id = `${base}-${count}`;
-  return id;
+  for (let count = 1; ; count++) {
+    const suffix = count === 1 ? '-' + time : `-${time}-${count}`;
+    const id = slug.slice(0, 100 - suffix.length).replace(/-$/, '') + suffix;
+    if (!used.has(id)) return id;
+  }
 }

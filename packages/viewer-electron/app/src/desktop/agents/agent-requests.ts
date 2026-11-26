@@ -343,7 +343,7 @@ export class AgentRequests {
     base?: { settings: ApplicationSettings; ui: UIPreferences },
   ): { id: string; requiresUserReview: true } {
     for (const patch of patches) agentConfigurationPath(patch.keys ?? patch.path.split('.'));
-    this.settings.preview(patches, base);
+    this.settings.preview(patches, base ?? this.settings.snapshot());
     const proposal = this.add({
       kind: 'configuration',
       target: target && structuredClone(target),
@@ -407,12 +407,12 @@ export class AgentRequests {
       request = { ...request, pane: agentPlaneCopy(request.pane) };
     const title =
       request.kind === 'open-path'
-        ? 'Open path'
+        ? 'Open Path'
         : request.kind === 'select-files'
-          ? 'Select files'
+          ? 'Select Files'
           : request.kind === 'focus-plane'
-            ? 'Focus plane'
-            : 'Change workspace';
+            ? 'Focus Plane'
+            : 'Change Workspace';
     const proposal = this.add({
       kind: 'navigation',
       title,
@@ -519,8 +519,14 @@ export class AgentRequests {
           for (const patch of proposal.patches!)
             agentConfigurationPath(patch.keys ?? patch.path.split('.'));
           // checked again as it applies: what it names may have gone since it was proposed
-          this.settings.preview(proposal.patches!);
-          await this.settings.patch(proposal.patches!, proposal.revision!);
+          this.settings.preview(proposal.patches!, this.settings.snapshot());
+          try {
+            await this.settings.patch(proposal.patches!, proposal.revision!, 'agent');
+          } catch (error) {
+            const code = (error as NodeJS.ErrnoException)?.code;
+            if (code === 'SETTINGS_CONFLICT' || code === 'SETTINGS_INVALID') throw error;
+            throw new Error('Viewer could not save the configuration.');
+          }
         } else if (proposal.kind === 'terminal-write')
           throw new Error(
             'Agent terminal input is unavailable because it can permanently delete files.',

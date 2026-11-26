@@ -55,6 +55,13 @@ export interface ActionInput {
   choices?: string[];
 }
 export type ActionValues = Record<string, string>;
+export function workflowProgram(actions: readonly CustomAction[], id: string): CustomAction {
+  const child = actions.find((action) => action.id === id);
+  if (!child || (child.executor.kind !== 'executable' && child.executor.kind !== 'shell'))
+    throw new Error('Workflow steps must name existing executable or shell commands.');
+  return child;
+}
+
 export function actionInputs(
   action: CustomAction,
   actions: readonly CustomAction[],
@@ -63,9 +70,7 @@ export function actionInputs(
   if (action.executor.kind === 'workflow')
     for (const step of action.executor.steps) {
       if (step.kind !== 'action') continue;
-      const child = actions.find((action) => action.id === step.actionID);
-      if (!child || !['shell', 'executable'].includes(child.executor.kind))
-        throw new Error('Workflow steps must name existing executable or shell commands.');
+      const child = workflowProgram(actions, step.actionID);
       inputs.push(...(child.inputs ?? []));
     }
   const merged = new Map<string, ActionInput>();

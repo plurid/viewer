@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { modelLineCommandProblem } from '../agents/safety';
+import type { LayoutTemplate } from '../workspaces/layout-templates';
+import { modelLineCommandProblem, modelLayoutVerbProblem } from '../agents/safety';
 import type { CustomAction } from '../automation/actions';
 import { queryTypes } from '../search/query';
 import { LineError, withArguments } from './lex';
@@ -95,6 +96,7 @@ export function promptLineProblem(
   commands: ReadonlySet<string>,
   actions: readonly CustomAction[],
   userCommands: ReadonlyMap<string, readonly string[]> = new Map(),
+  layouts: readonly LayoutTemplate[] = [],
 ): string | undefined {
   let total = 0;
   const inspect = (text: string, depth: number): string | undefined => {
@@ -122,7 +124,11 @@ export function promptLineProblem(
         continue;
       }
       if (name.kind === 'verb') {
-        bindStep(step, name.verb);
+        const bound = bindStep(step, name.verb);
+        if (name.verb.key === 'layout') {
+          const problem = modelLayoutVerbProblem(bound.args[0]!.text, layouts);
+          if (problem) return `A model may not propose this layout because ${problem}.`;
+        }
         if (name.verb.key === 'task-new') {
           if (depth !== 0 || steps.length !== 1 || step.count !== undefined)
             return 'Task requests must run alone, without a count or a named sequence.';
@@ -147,7 +153,7 @@ export function promptLineProblem(
           }
         }
       }
-      const problem = modelLineCommandProblem(name.id, actions);
+      const problem = modelLineCommandProblem(name.id, actions, layouts);
       if (problem) return `A model may not propose ${name.id}: ${problem}.`;
     }
     return undefined;

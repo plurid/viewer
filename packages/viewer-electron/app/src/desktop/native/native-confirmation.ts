@@ -1,6 +1,6 @@
 import { dialog, type BrowserWindow, type MessageBoxOptions } from 'electron';
 import type { AgentProposal } from '../../domain/agents/requests';
-import { proposalRequester } from '../../domain/agents/review';
+import { proposalRequester, reviewButton } from '../../domain/agents/review';
 import { sharedClientID } from '../../domain/agents/clients';
 import { windowDialogs } from './window-dialogs';
 
@@ -93,17 +93,11 @@ export async function confirmAgentProposal(
       'Cancel',
       removal
         ? 'Move to Trash'
-        : proposal.kind === 'task-workflow'
-          ? 'Create task'
+        : proposal.kind === 'speech' || proposal.kind === 'task-workflow'
+          ? reviewButton(proposal)
           : proposal.kind === 'configuration'
             ? 'Change'
-            : proposal.kind === 'speech'
-              ? proposal.speech?.kind === 'use'
-                ? 'Choose model'
-                : proposal.speech?.kind === 'import'
-                  ? 'Import model'
-                  : 'Download model'
-              : 'Run',
+            : 'Run',
     ],
     defaultId: 0,
     cancelId: 0,

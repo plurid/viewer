@@ -26,7 +26,14 @@ import { closeCheck, forgetChecks, openCheck, runCheck } from '../src/renderer/f
 import { checkCommands, checkResultCommands } from '../src/renderer/fabrication/commands';
 import { SpeechControls } from '../src/renderer/speech/SpeechControls';
 import { sendWindowEvent } from '../src/renderer/app/window-events';
-import { closeSpoken } from '../src/renderer/command-line/spoken';
+import { customActionSchema } from '../src/desktop/actions/automation-schema';
+import {
+  askSpoken,
+  closeSpoken,
+  pressSpoken,
+  runOffered,
+  spokenSession,
+} from '../src/renderer/command-line/spoken';
 import { WorkspaceContext } from '../src/renderer/workspace/context';
 import { activeWorkspace, getState, initialize } from '../src/renderer/state/store';
 import { update } from '../src/renderer/state/core';
@@ -540,4 +547,75 @@ it('ignores the dictate shortcut while a modal DictationDialog is open', () => {
   } finally {
     dialog.remove();
   }
+});
+
+it.each(['workflow', 'layout'])(
+  'rechecks a changed %s when the person accepts a spoken step',
+  async (changed) => {
+    const fixture = customActionSchema.parse({
+      id: 'review',
+      name: 'Review view',
+      executor: { kind: 'builtin', command: 'frame-all' },
+    });
+    const settings = getState().settings.settings;
+    if (changed === 'layout') {
+      settings.layouts = [
+        {
+          id: 'review',
+          name: 'Review',
+          layout: 'even-horizontal',
+          main: 0,
+          planes: [{ kind: 'scratch' }],
+        },
+      ];
+      fixture.executor = { kind: 'builtin', command: 'layout.review' };
+    }
+    settings.customActions = [fixture];
+    const run = vi.fn();
+    const registry = new CommandRegistry();
+    const context: CommandContext = {
+      scope: 'window',
+      workspaceID: activeWorkspace().id,
+      selection: [],
+      clipboard: null,
+      jobs: [],
+    };
+    registry.register('window', {
+      context: () => context,
+      definitions: () => [
+        { id: 'custom.review', label: 'Review view', group: 'Actions', when: () => true, run },
+      ],
+    });
+    promptPlan.mockResolvedValue(planned(['custom.review']));
+    await askSpoken('Review view', context, registry);
+    await runOffered();
+    expect(spokenSession()?.stage).toBe('waiting');
+    if (changed === 'layout') settings.layouts[0]!.planes.push({ kind: 'terminal', path: '' });
+    else fixture.executor = { kind: 'workflow', steps: [{ kind: 'command', line: 'frame-all' }] };
+    await pressSpoken(0);
+    expect(run).not.toHaveBeenCalled();
+    expect(spokenSession()?.stage).toBe('stopped');
+  },
+);
+
+it('starts Dictate from keypad plus and leaves the assigned main key to its command', () => {
+  const snapshot = structuredClone(getState().settings);
+  snapshot.settings.shortcuts = { dictate: 'Shift+Cmd++', 'focus-mode': 'Shift+Cmd+=' };
+  update({ ...getState(), settings: snapshot });
+  window_();
+  const press = (code: string) => {
+    const event = new KeyboardEvent('keydown', {
+      key: '+',
+      code,
+      metaKey: true,
+      shiftKey: true,
+      cancelable: true,
+    });
+    act(() => {
+      window.dispatchEvent(event);
+    });
+    return event.defaultPrevented;
+  };
+  expect(press('Equal')).toBe(false);
+  expect(press('NumpadAdd')).toBe(true);
 });

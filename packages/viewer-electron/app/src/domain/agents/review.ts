@@ -2,6 +2,8 @@ import type { AgentProposal } from './requests';
 import { needsNativeConfirmation } from './requests';
 import { sharedClientID } from './clients';
 
+export const createTaskLabel = 'Create Task';
+
 const count = (value: number) => value.toLocaleString();
 
 /** Names the client or Chat that submitted a proposal. */
@@ -28,7 +30,7 @@ export function reviewButton(proposal: AgentProposal): string {
           ? 'Import Model'
           : 'Download Model';
     case 'task-workflow':
-      return 'Create task';
+      return createTaskLabel;
     case 'transform':
       return 'Export';
     case 'navigation':

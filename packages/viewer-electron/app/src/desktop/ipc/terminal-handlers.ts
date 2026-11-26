@@ -90,10 +90,10 @@ export function createTerminalHandlers(ports: TerminalPorts): TerminalHandlers {
       ports.terminals.stop(id, owner);
       ports.activity.cancelGit(id, ports.originID(owner));
     },
-    customExecute: async ([actionID, target, values], owner) => {
+    customExecute: async ([actionID, target, values, expectedAction], owner) => {
       // never on an agent's request: its approval was for a recipe or a command, not a program
       if (ports.isAgent(owner)) throw new Error('Agents cannot run programs or shell scripts.');
-      return ports.executions.start(actionID, target, values, owner);
+      return ports.executions.start(actionID, target, values, owner, expectedAction);
     },
     runCommand: async ([script, input], owner) => {
       if (ports.isAgent(owner)) throw new Error('Agents cannot run shell commands.');

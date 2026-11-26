@@ -7,7 +7,7 @@ export class CLIServiceError extends Error {}
 export type CLICall = (method: string, params: unknown, signal: AbortSignal) => Promise<unknown>;
 
 /** Use the existing MCP transport in-process; tokens, socket framing and authority have one owner. */
-export function cliClient(dataPath: string, token: string): CLICall {
+export function cliClient(dataPath: string, token: string, timeout: number): CLICall {
   return async (method, params, signal) => {
     signal.throwIfAborted();
     const input = new PassThrough();
@@ -19,8 +19,15 @@ export function cliClient(dataPath: string, token: string): CLICall {
       },
     });
     input.end(JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) + '\n');
+    let failure: string | undefined;
     try {
-      await runMCPClient(dataPath, { input, output, token, signal });
+      failure = await runMCPClient(dataPath, {
+        input,
+        output,
+        token,
+        signal,
+        requestTimeout: timeout,
+      });
     } catch (error) {
       signal.throwIfAborted();
       throw new CLIConnectionError(errorMessage(error));
@@ -29,6 +36,7 @@ export function cliClient(dataPath: string, token: string): CLICall {
       output.destroy();
     }
     signal.throwIfAborted();
+    if (failure) throw new CLIConnectionError(failure);
     let reply: { result?: unknown; error?: { message?: string } };
     try {
       reply = JSON.parse(Buffer.concat(chunks).toString('utf8'));

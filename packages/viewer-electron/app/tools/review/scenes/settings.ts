@@ -20,7 +20,10 @@ const sectionRules: Record<string, readonly string[]> = {
     'Name, API key and Reasoning effort sit at the 180 px edge; Endpoint, Model and JSON fields take the full width with their labels above.',
     'The provider status is one line and its row keeps its height while it loads.',
   ],
-  Shortcuts: ['Each shortcut button keeps its width; a “Used by …” message never grows its row.'],
+  Shortcuts: [
+    'Each shortcut button keeps its width; a “Used by …” message never grows its row.',
+    'A recorded ⌘+ or ⌘ß displays the pressed key. An unsupported key keeps the recorder listening.',
+  ],
   Speech: ['The hosted provider’s policy is one line; Name sits at the shared edge.'],
   Agents: ['A grant’s folder button shows the folder’s name, its path once below.'],
 };

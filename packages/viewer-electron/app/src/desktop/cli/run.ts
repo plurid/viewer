@@ -160,7 +160,8 @@ export async function runCLI(
           );
         return cliExit.credentials;
       }
-      const call = environment.call ?? cliClient(environment.dataPath, environment.token!);
+      const call =
+        environment.call ?? cliClient(environment.dataPath, environment.token!, invocation.timeout);
       const name = invocation.command!.name.join(' ');
       if (name === 'status') result = await call('ping', undefined, controller.signal);
       else if (name === 'tools list')

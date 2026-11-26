@@ -1,3 +1,4 @@
+import { modelLayoutProblem } from '../../../domain/agents/safety';
 import { effectiveWindowSettings } from '../../state/effective-ui';
 import {
   captureTemplate,
@@ -113,7 +114,21 @@ export function templateCommands({
       aliases: ['template', 'layout', template.name],
       detail: `${template.planes.length} planes`,
       when: (context) => windowScope(context) && actions.ready,
-      run: () => open(template),
+      run: (context) => {
+        const current = getState().settings.settings.layouts.find(
+          (item) => item.id === template.id,
+        );
+        if (!current) throw new Error('This layout is no longer available.');
+        if (
+          context.modelRequest ||
+          context.agentDispatchID ||
+          context.agentDispatchDeadline !== undefined
+        ) {
+          const problem = modelLayoutProblem(current);
+          if (problem) throw new Error('Cannot open the layout because ' + problem + '.');
+        }
+        open(current);
+      },
     })),
     ...layouts.map((template): CommandDefinition => ({
       id: `layout-remove.${template.id}`,

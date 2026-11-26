@@ -162,11 +162,20 @@ export function keyName(
   ].filter(Boolean);
   // a letter with ⌃ or ⌘ is the letter, whatever Shift did to it
   if ((event.ctrlKey || event.metaKey) && base.length === 1 && !event.shiftKey)
-    base = base.toLowerCase();
+    base = lowerKey(base);
   return [...modifiers, base].join('+');
 }
+export function lowerKey(key: string): string {
+  const lower = key.toLowerCase();
+  return lower.length === key.length ? lower : key;
+}
+/** A key label must still name the same key after case conversion. */
+export function upperKey(key: string): string {
+  const upper = key.toUpperCase();
+  return upper.length === key.length && upper.toLowerCase() === key.toLowerCase() ? upper : key;
+}
 /** A key's modifiers and the key itself: `+` is a key too (`+`, `Ctrl++`), so not a plain split. */
-function keyParts(value: string): { base: string; modifiers: string[] } {
+export function keyParts(value: string): { base: string; modifiers: string[] } {
   const base = value === '+' || value.endsWith('++') ? '+' : (value.split('+').at(-1) ?? '');
   const rest = value.slice(0, value.length - base.length);
   return { base, modifiers: rest ? rest.replace(/\+$/, '').split('+') : [] };
@@ -260,7 +269,7 @@ export function canonicalKey(written: string): string | undefined {
     modifiers.delete('Shift');
   } else if (base.length === 1 && modifiers.has('Shift')) {
     // Shift is in the character: S-a is A
-    base = base.toUpperCase();
+    base = upperKey(base);
     modifiers.delete('Shift');
   }
   return [
@@ -296,6 +305,7 @@ export function canonicalBindings(
         ? binding
         : canonicalBindings(binding as Record<string, KeymapBinding>, [...path, key], collisions)
             .bindings;
+    if (typeof next[key] === 'object' && !Object.keys(next[key]!).length) delete next[key];
   }
   return { bindings: next, collisions };
 }
@@ -303,6 +313,7 @@ export function canonicalBindings(
 export function canonicalKeymap(keymap: Keymap): Keymap {
   return {
     ...keymap,
+    leader: canonicalKey(keymap.leader) ?? keymap.leader,
     bindings: canonicalBindings(keymap.bindings).bindings,
     root: canonicalBindings(keymap.root ?? {}).bindings,
     repeat: (keymap.repeat ?? []).map((key) => canonicalKey(key) ?? key),
@@ -345,9 +356,9 @@ export class KeySequence {
   configure(keymap: Keymap): void {
     if (!this.node) this.keymap = keymap;
   }
-  start(now: number): void {
-    this.node = this.keymap.bindings;
-    this.keys = [];
+  start(now: number, rootKey?: string): void {
+    this.node = rootKey ? this.keymap.root[rootKey] : this.keymap.bindings;
+    this.keys = rootKey ? [rootKey] : [];
     this.table = 'prefix';
     this.modeName = undefined;
     this.count = 0;
@@ -486,7 +497,7 @@ export function keyGlyphs(name: string): string {
     .sort((a, b) => order.indexOf(a) - order.indexOf(b))
     .map((part) => glyphs[part] ?? part);
   // a letter after a modifier reads as Finder's menus show it: ⌃B
-  const key = glyphs[base] ?? (modifiers.length && base.length === 1 ? base.toUpperCase() : base);
+  const key = glyphs[base] ?? (modifiers.length && base.length === 1 ? upperKey(base) : base);
   return modifiers.join('') + key;
 }
 /** A binding as one row, for Settings: the keys in turn and the commands they run. */

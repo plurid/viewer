@@ -48,4 +48,4 @@ jobs:
           include-hidden-files: true
           path: |
             packages/viewer-electron/app/out/viewer-office-engine-smoke-*
-            packages/viewer-electron/app/assets/viewer-office-v1
+            packages/viewer-electron/app/assets/viewer-office-v3

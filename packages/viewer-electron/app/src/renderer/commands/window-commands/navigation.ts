@@ -84,7 +84,9 @@ export function navigationCommands({
     {
       ...copyPathCommand,
       when: (context) =>
-        ['preview', 'sidebar'].includes(context.scope) && copyPathCommand.when(context),
+        (['preview', 'sidebar'].includes(context.scope) ||
+          (context.scope === 'window' && !!context.subject)) &&
+        copyPathCommand.when(context),
     },
     {
       id: 'new-root-folder',

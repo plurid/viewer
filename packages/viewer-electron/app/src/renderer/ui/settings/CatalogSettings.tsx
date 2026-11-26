@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useRef } from 'react';
+import type { Ref } from 'react';
+import { Fragment, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import type { SettingDefinition } from '../../../domain/preferences/catalog';
 import { planeToolbar, settingValue } from '../../../domain/preferences/catalog';
 import type { HeaderControl, HeaderPresetName } from '../../../domain/preferences/header';
@@ -45,27 +46,35 @@ const headerControlsPath = 'ui.space.headerControls';
 export function CatalogSettings({
   editor,
   definitions,
+  flushRef,
   query,
 }: {
   editor: SettingsEditor;
   definitions: readonly SettingDefinition[];
+  flushRef?: Ref<() => void>;
   query: string;
 }) {
   const { snapshot, patch, patches, error: setError } = editor;
   // the system colour picker reports as it is dragged: the colour is saved once it rests
-  const colorTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  useEffect(() => {
-    const timers = colorTimers.current;
-    return () => {
-      for (const timer of timers.values()) clearTimeout(timer);
-    };
+  const colors = useRef(
+    new Map<string, { timer: ReturnType<typeof setTimeout>; commit: () => void }>(),
+  );
+  const flushColors = useCallback(() => {
+    for (const { timer, commit } of colors.current.values()) {
+      clearTimeout(timer);
+      commit();
+    }
   }, []);
-  const patchColor = (path: string, value: string) => {
-    clearTimeout(colorTimers.current.get(path));
-    colorTimers.current.set(
-      path,
-      setTimeout(() => patch(path, value), 200),
-    );
+  useImperativeHandle(flushRef, () => flushColors, [flushColors]);
+  useEffect(() => flushColors, [flushColors]);
+  const patchColor = (path: string, value: string, defer = false) => {
+    clearTimeout(colors.current.get(path)?.timer);
+    const commit = () => {
+      colors.current.delete(path);
+      patch(path, value);
+    };
+    if (defer) colors.current.set(path, { timer: setTimeout(commit, 200), commit });
+    else commit();
   };
   const settings = snapshot.settings;
   const chooseNewPlaneFolder = (field: 'newPlaneLocation' | 'emptyWorkspaceLocation') => {
@@ -215,6 +224,7 @@ export function CatalogSettings({
                     automatic="Automatic"
                     automaticColor={looks[snapshot.look].space}
                     onChange={(value) => patchColor(definition.path, value)}
+                    onPick={(value) => patchColor(definition.path, value, true)}
                   />
                 ) : (
                   <NumberField

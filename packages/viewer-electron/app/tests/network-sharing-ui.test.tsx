@@ -470,7 +470,7 @@ it('lets the person open sharing while an unrelated custom invocation is waiting
 
 it('refuses sharing in actual builtin, plain sequence and command-line custom executors', async () => {
   const invoke = vi.fn(async () => true);
-  const line = vi.fn(async () => ({ ok: true }));
+  const line = vi.fn(() => null);
   const executors: CustomAction['executor'][] = [
     { kind: 'builtin', command: 'network-sharing' },
     { kind: 'sequence', commands: ['network-sharing'] },

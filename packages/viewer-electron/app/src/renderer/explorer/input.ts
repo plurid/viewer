@@ -1,7 +1,9 @@
+import type { ResolvedCommand } from '../commands/registry';
 import type { ApplicationSettings } from '../../domain/services';
 import {
-  alternateShortcuts,
+  resolvedAlternateShortcuts,
   defaultShortcuts,
+  hasShortcutForEvent,
   isPreviewShortcut,
   matchesShortcut,
   resolvedShortcut,
@@ -38,7 +40,7 @@ export const explorerCommandIDs = new Set([
 export function keyCommand(event: RoutedKey, settings: ApplicationSettings): string | undefined {
   if (event.isComposing || event.repeat) return;
   // a picture that has the keyboard takes its own keys, as ⌘L and ⌘R (previews/keys.ts)
-  if (previewOwnsKey(event)) return;
+  if (previewOwnsKey(event, settings)) return;
   const bindings = {
     // as shipped, unless the person gave a shipped key to something else, which keeps it
     ...Object.fromEntries(
@@ -59,9 +61,10 @@ export function keyCommand(event: RoutedKey, settings: ApplicationSettings): str
         .map((item) => ['custom.' + item.id, item.shortcut]),
     ),
   };
-  const id = [...Object.entries(bindings), ...Object.entries(alternateShortcuts)].find(
-    ([, value]) => matchesShortcut(value, event),
-  )?.[0];
+  const id = [
+    ...Object.entries(bindings),
+    ...Object.entries(resolvedAlternateShortcuts(settings)),
+  ].find(([, value]) => matchesShortcut(value, event, settings))?.[0];
   if (id) return shortcutCommandID(id);
   if (
     (event.metaKey || event.ctrlKey) &&
@@ -90,6 +93,27 @@ export function keyCommand(event: RoutedKey, settings: ApplicationSettings): str
     if (event.key === 'Enter') return 'rename';
     if (event.key === ' ') return 'quick-preview';
   }
+}
+export function windowKeyCommand(
+  event: KeyboardEvent,
+  settings: ApplicationSettings,
+  previewCommand: (ids: readonly string[]) => ResolvedCommand | undefined,
+): string | ResolvedCommand | undefined {
+  if (!(event.metaKey || event.ctrlKey) || event.isComposing || event.repeat) return;
+  if (
+    event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    ['+', '=', '-'].includes(event.key) &&
+    !editable(event.target) &&
+    !overlayOpen() &&
+    !hasShortcutForEvent(settings, event)
+  ) {
+    const zoom = event.key === '-' ? 'preview.zoom-out' : 'preview.zoom-in';
+    const command = previewCommand([zoom]);
+    if (command) return command;
+  }
+  return keyCommand(event, settings);
 }
 export interface ExplorerInput {
   settings: ApplicationSettings;

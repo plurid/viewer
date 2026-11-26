@@ -77,6 +77,7 @@ export async function answerPrompt(
         new Set(request.context.commands.map((command) => command.id)),
         settings.customActions,
         userCommands,
+        settings.layouts,
       )
     : undefined;
   return { line, explanation, ...(problem ? { problem } : {}) };

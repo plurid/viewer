@@ -1,15 +1,22 @@
-import type { MenuItemConstructorOptions } from 'electron';
+import type { BrowserWindow, MenuItemConstructorOptions } from 'electron';
+import { EventEmitter } from 'node:events';
+import type { DialogPrompt } from '../src/domain/dialogs';
+import { attachWindowDialogs, WindowDialogs } from '../src/desktop/native/window-dialogs';
+import { applicationUpdates } from '../src/desktop/updates/native';
+import { temporaryRoot } from '../tools/temporary';
 import { describe, expect, it, vi } from 'vitest';
 import { installAboutPanel, installedRelease } from '../src/desktop/windows/about';
 import { guide, installApplicationMenu } from '../src/desktop/windows/application-menu';
 
 const native = vi.hoisted(() => ({
+  focused: vi.fn<() => BrowserWindow | null>(),
   about: vi.fn(),
   menu: vi.fn((template: MenuItemConstructorOptions[]) => template),
   open: vi.fn(async () => {}),
 }));
 
 vi.mock('electron', () => ({
+  BrowserWindow: { getFocusedWindow: native.focused },
   app: {
     isPackaged: false,
     getVersion: () => '0.1.0-0',
@@ -67,4 +74,60 @@ describe('Help guide links', () => {
       ['https://github.com/plurid/viewer/blob/master/docs/reference/shortcuts.md'],
     ]);
   });
+});
+
+it('keeps a queued update eligible when the renderer stops before displaying it', async () => {
+  const root = await temporaryRoot('viewer-queued-update-');
+  const window = Object.assign(new EventEmitter(), {
+    webContents: new EventEmitter(),
+    isDestroyed: () => false,
+  });
+  const parent = window as unknown as BrowserWindow;
+  const prompts: DialogPrompt[] = [];
+  const dialogs = new WindowDialogs({
+    home: root,
+    places: async () => [],
+    access: async () => {},
+    publish: (prompt) => {
+      if (prompt) prompts.push(prompt);
+    },
+  });
+  attachWindowDialogs(parent, dialogs);
+  native.focused.mockReturnValue(parent);
+  vi.stubGlobal('process', Object.create(process, { getSystemVersion: { value: () => '15.0' } }));
+  try {
+    await dialogs.request({ kind: 'current' });
+    const blocker = dialogs.message({ message: 'Existing notice', buttons: ['OK'] });
+    const messages = vi.spyOn(dialogs, 'message');
+    const updates = applicationUpdates(root, () => true);
+    vi.spyOn(updates, 'check').mockResolvedValue({
+      kind: 'available',
+      feed: {
+        version: '0.1.0-1',
+        build: 600,
+        notes: 'Changes',
+        url: 'https://example.invalid/update.dmg',
+        sha256: 'a'.repeat(64),
+        minimumSystemVersion: '14.0',
+      },
+    });
+    const first = updates.checkFromMenu();
+    await vi.waitFor(() => expect(messages).toHaveBeenCalledOnce());
+    expect(prompts.at(-1)).toMatchObject({ message: 'Existing notice' });
+    window.webContents.emit('render-process-gone');
+    await expect(first).resolves.toBeUndefined();
+    await blocker;
+    await dialogs.request({ kind: 'current' });
+    const retry = updates.checkAtLaunch();
+    await vi.waitFor(() =>
+      expect(prompts.at(-1)).toMatchObject({ message: 'Viewer 0.1.0-1 is available' }),
+    );
+    await dialogs.request({ kind: 'answer', id: prompts.at(-1)!.id, button: 1 });
+    await expect(retry).resolves.toMatchObject({ kind: 'available' });
+    expect(native.open).not.toHaveBeenCalled();
+  } finally {
+    dialogs.stop();
+    native.focused.mockReset();
+    vi.unstubAllGlobals();
+  }
 });

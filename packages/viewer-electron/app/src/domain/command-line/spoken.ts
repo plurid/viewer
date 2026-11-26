@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { LayoutTemplate } from '../workspaces/layout-templates';
 import type { CustomAction } from '../automation/actions';
 import { modelLineCommandProblem } from '../agents/safety';
 
@@ -63,12 +64,13 @@ const pressedChanges = new Set([
 export function spokenRun(
   id: string,
   actions: readonly CustomAction[],
+  layouts: readonly LayoutTemplate[] = [],
 ): { run: SpokenRun; reason?: string } {
   if (atOnce.has(id) || atOncePrefixes.some((prefix) => id.startsWith(prefix)))
     return { run: 'at-once' };
   if (pressedChanges.has(id)) return { run: 'press' };
   // terminals, other apps, Git, emptying the Trash, file Undo, the clipboard and programs
-  const reason = modelLineCommandProblem(id, actions);
+  const reason = modelLineCommandProblem(id, actions, layouts);
   return reason ? { run: 'refused', reason } : { run: 'press' };
 }
 

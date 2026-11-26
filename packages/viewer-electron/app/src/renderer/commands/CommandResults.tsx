@@ -19,9 +19,10 @@ function isPath(row: ResolvedCommand, text: string | undefined): text is string 
   return (row.icon === 'folder' || row.icon === 'file') && !!text && absolutePath.test(text);
 }
 /** A found file's or folder's row: its label is the item's own name. */
-const nameGroups = new Set(['Files', 'Frequent folders', 'Go']);
 function isName(row: ResolvedCommand): boolean {
-  return (row.icon === 'folder' || row.icon === 'file') && nameGroups.has(row.group);
+  return ['find-result:', 'smart:path:', 'smart:folder:'].some((prefix) =>
+    row.id.startsWith(prefix),
+  );
 }
 
 /** Live results retain pointer stability within sections while respecting their current priority. */
@@ -253,9 +254,11 @@ export function CommandResults({
         )}
         {rows.map((row, rowIndex) => (
           <div key={row.id}>
-            {!query && rowIndex === 0 && recent.includes(row.id) && (
-              <div className="command-group">Recent</div>
-            )}
+            {!query &&
+              recent.includes(row.id) &&
+              !recent.includes(rows[rowIndex - 1]?.id ?? '') && (
+                <div className="command-group">Recent</div>
+              )}
             {!query &&
               rowIndex > 0 &&
               recent.includes(rows[rowIndex - 1]?.id ?? '') &&
@@ -291,9 +294,9 @@ export function CommandResults({
                   <span>{row.label}</span>
                 )}
                 {row.detail &&
-                  (isPath(row, row.detail) ? (
+                  (row.detailPath || isPath(row, row.detail) ? (
                     <small>
-                      <PathLabel path={row.detail} />
+                      <PathLabel path={row.detailPath ?? row.detail} />
                     </small>
                   ) : (
                     <small>{row.detail}</small>

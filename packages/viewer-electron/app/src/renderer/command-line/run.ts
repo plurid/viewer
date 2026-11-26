@@ -8,7 +8,7 @@ import {
   verbNames,
 } from '../../domain/command-line/verbs';
 import { errorMessage } from '../../domain/errors';
-import { Stopped, type LineAgentDispatch, type LineHost } from './host';
+import { Stopped, type LineDispatch, type LineHost } from './host';
 import { withAgentDispatch } from '../app/agent-dispatch';
 import { OperationCancelled } from '../operations/outcome';
 import { withArguments } from '../../domain/command-line/lex';
@@ -31,7 +31,7 @@ export interface LineResult {
   /** Where in the line, for an error found before running. */
   at?: number;
 }
-function checkAgentDeadline(agent?: LineAgentDispatch): void {
+function checkAgentDeadline(agent?: LineDispatch): void {
   if (agent?.deadline !== undefined && Date.now() > agent.deadline)
     throw new Error('The agent action timed out before finishing.');
 }
@@ -46,12 +46,25 @@ export function userCommands(): Map<string, string[]> {
  * A line checked before any of it runs: each step's name known and its words right, so a typo in
  * step three does not leave steps one and two done.
  */
-export function planLine(text: string, host: LineHost, depth = 0): PlannedStep[] {
+export function planLine(
+  text: string,
+  host: LineHost,
+  depth = 0,
+  invocation = host.invocation,
+): PlannedStep[] {
   if (depth > 10) throw new LineError('Commands call each other too deeply.', 0);
   const context = host.context();
   const steps = parseCommandLine(text);
   return steps.map((step): PlannedStep => {
     const name = resolveName(step.name);
+    if (
+      invocation === 'custom-action' &&
+      (name.kind === 'user' || (name.kind === 'id' && name.id.startsWith('custom.')))
+    )
+      throw new LineError(
+        'A custom action cannot call another custom action or named command.',
+        step.at,
+      );
     if (name.kind === 'verb') {
       const bound = bindStep(step, name.verb);
       if (name.verb.key === 'task-new') {
@@ -70,7 +83,13 @@ export function planLine(text: string, host: LineHost, depth = 0): PlannedStep[]
         run: (live) => {
           checkAgentDeadline(live.agent);
           return withAgentDispatch(live.agent?.id, () =>
-            run({ step, ...bound, bang: step.bang }, live),
+            run(
+              { step, ...bound, bang: step.bang },
+              {
+                ...live,
+                invoke: (id, remember) => live.invoke(id, remember, live.agent, invocation),
+              },
+            ),
           );
         },
       };
@@ -88,8 +107,11 @@ export function planLine(text: string, host: LineHost, depth = 0): PlannedStep[]
       let planned: PlannedStep[];
       try {
         const words = step.words.map((word) => word.text);
+        const nestedInvocation = sessionKeys().aliases.some((alias) => alias.name === name.name)
+          ? invocation
+          : 'custom-action';
         planned = lines.flatMap((line) =>
-          planLine(withArguments(line, words, name.name), host, depth + 1),
+          planLine(withArguments(line, words, name.name), host, depth + 1, nestedInvocation),
         );
       } catch (error) {
         // where it went wrong is in the person's command, which runs at this step
@@ -133,7 +155,7 @@ export function planLine(text: string, host: LineHost, depth = 0): PlannedStep[]
       label,
       run: async (live) => {
         checkAgentDeadline(live.agent);
-        if (!(await live.invoke(name.id, false, live.agent)))
+        if (!(await live.invoke(name.id, false, live.agent, invocation)))
           throw new Error(`“${label}” is not available here.`);
       },
     };
@@ -153,6 +175,7 @@ export async function runLine(text: string, host: LineHost, model = false): Prom
         new Set(host.registry.ids()),
         getState().settings.settings.customActions,
         userCommands(),
+        getState().settings.settings.layouts,
       );
       if (problem) return { ok: false, message: problem };
     }
@@ -168,12 +191,30 @@ export async function runLine(text: string, host: LineHost, model = false): Prom
         switchWorkspace: (id) => withAgentDispatch(host.agent?.id, () => host.switchWorkspace(id)),
       }
     : host;
+  const reviewedHost: LineHost = model
+    ? {
+        ...liveHost,
+        invoke: (id, remember, agent, invocation) => {
+          if (id.startsWith('custom.') || id.startsWith('layout.')) {
+            const problem = promptLineProblem(
+              id,
+              new Set(host.registry.ids()),
+              getState().settings.settings.customActions,
+              userCommands(),
+              getState().settings.settings.layouts,
+            );
+            if (problem) throw new Error(problem);
+          }
+          return liveHost.invoke(id, remember, { ...agent, modelRequest: true }, invocation);
+        },
+      }
+    : liveHost;
   const messages: string[] = [];
   for (const item of planned)
     for (let time = 0; time < (item.step.count ?? 1); time++) {
       try {
         checkAgentDeadline(host.agent);
-        const message = await withAgentDispatch(host.agent?.id, () => item.run(liveHost));
+        const message = await withAgentDispatch(host.agent?.id, () => item.run(reviewedHost));
         if (message) messages.push(message);
       } catch (error) {
         if (error instanceof Stopped || error instanceof OperationCancelled) return { ok: false };

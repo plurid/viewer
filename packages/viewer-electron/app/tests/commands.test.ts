@@ -14,6 +14,9 @@ import { textEditFor } from '../src/renderer/commands/editing';
 import { copyPathCommand } from '../src/renderer/commands/copy-path';
 import { programCommands } from '../src/renderer/commands/programs';
 import { paletteRows } from '../src/renderer/commands/palette-sections';
+import { catalogCommands } from '../src/renderer/commands/window-commands/catalog';
+import { windowScopes } from '../src/renderer/commands/window-commands/scope';
+import type { Pane } from '../src/domain/contracts';
 import { windowCommands } from '../src/renderer/commands/window';
 import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
 import { planOrigin } from '../src/renderer/actions/commands';
@@ -335,6 +338,53 @@ describe('contextual commands', () => {
     await registry.run(background);
     expect(window.viewer.copyPaths).toHaveBeenLastCalledWith([context.directory]);
     expect(operate).not.toHaveBeenCalled();
+  });
+  it('names open plane rows by their plane titles', () => {
+    const scopes = windowScopes({ ready: true } as WindowActions);
+    const fixtures = [
+      [{ type: 'search', name: 'ext:pdf' }, 'ext:pdf'],
+      [{ type: 'tools' }, 'Tool library'],
+      [{ type: 'terminal' }, 'Terminal · project'],
+      [{ type: 'git-changes' }, 'Git changes · project'],
+      [{ type: 'canvas', title: 'Sketch' }, 'Sketch'],
+      [{ type: 'chat' }, 'Chat'],
+      [{ type: 'check', title: 'Report' }, 'Check Report'],
+      [{ type: 'browser', url: 'https://example.com' }, 'example.com'],
+    ] as const;
+    const panes = fixtures.map(
+      ([pane], index) => ({ ...pane, id: String(index), path: '/fixtures/project' }) as Pane,
+    );
+    const commands = catalogCommands({ ...scopes, space: { ...scopes.space, panes } });
+    expect(commands.filter((c) => c.id.startsWith('plane:')).map((c) => c.label)).toEqual(
+      fixtures.map(([, label]) => label),
+    );
+  });
+  it('targets the preview subject from window commands', async () => {
+    const subject = file('report.pdf');
+    const preview: CommandContext = {
+      ...context,
+      scope: 'window',
+      folder: undefined,
+      directory: undefined,
+      subject,
+      path: subject.path,
+      selection: [],
+    };
+    const newChat = vi.fn();
+    const commands = windowCommands({
+      workspace: new Proxy(
+        { newChat },
+        { get: (target, key: string) => (key === 'newChat' ? target.newChat : vi.fn()) },
+      ),
+      ready: true,
+    } as unknown as WindowActions);
+    for (const id of ['copy-path', 'inspect-file', 'new-chat']) {
+      const command = commands.find((item) => item.id === id)!;
+      expect(command.when(preview), id).toBe(true);
+      if (id !== 'inspect-file') await command.run(preview);
+    }
+    expect(window.viewer.copyPaths).toHaveBeenCalledWith([subject.path]);
+    expect(newChat).toHaveBeenCalledWith([subject.path]);
   });
   it('copies preview and sidebar paths without treating an unrelated file selection as their target', async () => {
     await copyPathCommand.run({ ...context, scope: 'preview', path: '/fixtures/model.step' });

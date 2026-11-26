@@ -137,8 +137,10 @@ export function diagnosticFailure(value: unknown): DiagnosticFailure {
     const description = message ? ': ' + message : '';
     const header = value.name + description;
     const headers = code ? [header, value.name + ' [' + code + ']' + description] : [header];
-    const complete = headers.find((header) => stack?.startsWith(header + '\n'));
-    const suffix = complete ? stack!.slice(complete.length + 1) : undefined;
+    const complete = headers.find(
+      (header) => stack?.startsWith(header + '\n') || stack?.startsWith(header + '\r\n'),
+    );
+    const suffix = complete ? stack!.slice(complete.length).replace(/^\r?\n/, '') : undefined;
     return {
       detail: boundedText(stack ?? header),
       errorClass:

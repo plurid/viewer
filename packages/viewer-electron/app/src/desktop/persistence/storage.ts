@@ -459,10 +459,15 @@ function salvageState(original: unknown): { state: SavedState; dropped: number }
     dropped: saved.workspaces.length - kept.length,
   };
 }
+const maximumStateBytes = 32 * 1024 * 1024;
+type RetainedState = 'newer-version' | 'unmovable';
+
 export class Storage {
   private writes: Promise<void> = Promise.resolve();
-  /** Set when an unreadable state file could not be moved aside; it is never written over. */
-  private retained?: string;
+  private retained?: RetainedState;
+  get layoutProtected(): boolean {
+    return this.retained !== undefined;
+  }
   constructor(readonly file: string) {}
   private async preserve(bytes: string | Uint8Array, suffix: string): Promise<void> {
     const backup = await open(this.file + suffix + '-' + randomUUID() + '.bak', 'wx', 0o600);
@@ -481,7 +486,7 @@ export class Storage {
     let state: SavedState;
     try {
       bytes = await readFile(this.file);
-      if (bytes.length > 32 * 1024 * 1024) throw new Error('State exceeds the size limit.');
+      if (bytes.length > maximumStateBytes) throw new Error('State exceeds the size limit.');
       original = JSON.parse(bytes.toString('utf8'));
       // A newer application owns this format. Keep its original in place and refuse writes.
       if (
@@ -491,7 +496,7 @@ export class Storage {
         typeof original.version === 'number' &&
         original.version > CURRENT_STATE_VERSION
       ) {
-        this.retained = this.file;
+        this.retained = 'newer-version';
         return {
           state: null,
           recovery:
@@ -506,7 +511,7 @@ export class Storage {
       try {
         await rename(this.file, backup);
       } catch {
-        this.retained = this.file;
+        this.retained = 'unmovable';
         return {
           state: salvaged?.state ?? null,
           recovery: `Saved workspace could not be loaded or moved aside, so it was left at ${this.file}. Layout changes in this session will not be saved over it.`,
@@ -542,16 +547,19 @@ export class Storage {
       return Promise.reject(
         Object.assign(
           new Error(
-            'The saved workspace could not be moved aside and remains protected at ' +
-              this.retained +
-              '. This window has not been saved.',
+            this.retained === 'newer-version'
+              ? 'The saved workspace needs a newer Viewer. Layout changes cannot be saved in this session.'
+              : 'The saved workspace could not be moved aside and remains protected at ' +
+                  this.file +
+                  '. This window has not been saved.',
           ),
           { code: 'STATE_RETAINED' },
         ),
       );
     const state = stateSchema.parse(input);
     const text = JSON.stringify(state);
-    if (text.length > 32 * 1024 * 1024) throw new Error('Workspace state exceeds the size limit.');
+    if (Buffer.byteLength(text, 'utf8') > maximumStateBytes)
+      throw new Error('Workspace state exceeds the size limit.');
     const write = this.writes
       .catch(() => undefined)
       .then(async () => {

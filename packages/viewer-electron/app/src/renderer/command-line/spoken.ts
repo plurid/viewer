@@ -96,13 +96,13 @@ const readerName = (provider: ModelProvider) =>
 /** The commands where the person spoke, as a spoken request may name them, unavailable ones with
  * why: the matcher says so when the words name one. */
 export function spokenCommands(registry: CommandRegistry, context: CommandContext) {
-  const actions = getState().settings.settings.customActions;
+  const { customActions, layouts } = getState().settings.settings;
   return registry
     .discover({ scope: 'window', paneID: context.paneID, context })
     .filter((command) => !command.id.includes(':') && !command.id.startsWith('setting.'))
     .map((command): SpokenCommand => {
       const { spoken } = command;
-      const policy = spokenRun(command.id, actions);
+      const policy = spokenRun(command.id, customActions, layouts);
       const subject = command.available ? spoken?.subject?.(command.context) : undefined;
       return {
         id: command.id,
@@ -241,6 +241,10 @@ async function runSteps(own: SpokenSession, from: number, pressed?: number): Pro
       patchStep(own, index, { state: 'failed', text });
       patch(own, { stage: 'stopped' });
     };
+    const { customActions, layouts } = getState().settings.settings;
+    const policy = spokenRun(step.command, customActions, layouts);
+    if (policy.run === 'refused')
+      return failed(policy.reason || 'This command cannot run from a spoken request.');
     if (!command) {
       const found = registry.discover({
         ids: [step.command],

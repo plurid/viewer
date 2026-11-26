@@ -1,3 +1,4 @@
+import { createTaskLabel } from '../../../domain/agents/review';
 import { useMemo, useState } from 'react';
 import {
   validBranchName,
@@ -200,7 +201,7 @@ export function CreateWorktree({
           className="primary"
           disabled={busy || !valid || !!occupied || (!!task && !task.name.trim())}
         >
-          {busy ? 'Creating…' : task ? 'Create task' : 'Create and Open'}
+          {busy ? 'Creating…' : task ? createTaskLabel : 'Create and Open'}
         </button>
       </footer>
     </form>

@@ -29,6 +29,7 @@ import { cliCommands } from '../src/domain/cli/catalog';
 import { verbs } from '../src/domain/command-line/verbs';
 import { workflowDefinitionSchema } from '../src/domain/automation/workflows';
 import { agentTools } from '../src/desktop/agents/agent-tools';
+import { JsoncConfiguration } from '../src/desktop/preferences/configuration';
 import { SettingsService } from '../src/desktop/preferences/settings';
 import { AgentRequests } from '../src/desktop/agents/agent-requests';
 import { AgentBroker, redactedSettings } from '../src/desktop/agents/agent-broker';
@@ -1243,6 +1244,7 @@ describe('agent removal safety', () => {
     expect(patchSpy).toHaveBeenCalledWith(
       [{ path: 'settings.appearance', value: 'light' }],
       f.settings.snapshot().revision,
+      'agent',
     );
     patchSpy.mockRestore();
   });
@@ -1661,4 +1663,106 @@ describe('synthetic captured agent selections', () => {
       'Unknown agent tool. Call tools/list to see available tools.',
     );
   });
+});
+
+it.each(['schema', 'read'])(
+  'keeps %s configuration diagnostics within local Settings',
+  async (kind) => {
+    const f = await fixture();
+    const patches = [{ path: 'settings.appearance', value: 'light' }];
+    const proposal = await f.call<{ id: string }>('propose_config', { patches });
+    const path = kind === 'schema' ? '/Outside/Unshared' : '/Memory/Viewer/config.jsonc';
+    const read = vi.spyOn(fs, 'readFile');
+    const load = vi.spyOn(f.settings, 'load').mockResolvedValue(undefined);
+    try {
+      if (kind === 'schema')
+        read.mockResolvedValue(
+          JSON.stringify({
+            version: 1,
+            settings: { folders: { [path]: { view: 'unsupported' } } },
+          }),
+        );
+      else
+        read.mockRejectedValue(Object.assign(new Error('Cannot read ' + path), { code: 'EACCES' }));
+      await f.settings.reload();
+      expect(f.settings.snapshot().config!.diagnostics.join(' ')).toContain(path);
+      const generic = /^Fix the configuration in Settings before proposing changes\.$/;
+      expect(() => f.requests.configuration(patches)).toThrow(generic);
+      await expect(f.requests.review(proposal.id, true)).rejects.toThrow(generic);
+      expect(f.requests.get(proposal.id).error).toMatch(generic);
+      for (const tool of ['validate_config', 'propose_config']) {
+        await expect(
+          f.call(tool, { patches: [{ path: 'settings.appearance', value: 'light' }] }),
+        ).rejects.toThrow(/^Fix the configuration in Settings before proposing changes\.$/);
+      }
+    } finally {
+      read.mockRestore();
+      load.mockRestore();
+    }
+  },
+);
+
+it('keeps saved program workflows out of the broker, CLI and watch definitions', async () => {
+  const f = await fixture();
+  const child = {
+    ...action({ kind: 'executable', executable: 'example', args: [], perItem: false }),
+    id: 'build',
+  };
+  const step = { kind: 'action' as const, actionID: child.id };
+  const saved = action({ kind: 'workflow', steps: [step] });
+  f.config.customActions = [saved, child];
+  for (const tool of ['explain_command', 'propose_command'])
+    await expect(f.call(tool, { commandID: 'custom.cleanup' })).rejects.toThrow(
+      /Agents cannot run/,
+    );
+  await expect(
+    f.call('propose_config', { patches: [{ path: 'settings.customActions', value: [saved] }] }),
+  ).rejects.toThrow(/Agents cannot change/);
+  expect(workflowDefinitionSchema.shape.steps.element.safeParse(step).success).toBe(false);
+  let output = '';
+  const sink = new Writable({
+    write(chunk, _encoding, done) {
+      output += String(chunk);
+      done();
+    },
+  });
+  const code = await runCLI(['command', 'run', 'custom.cleanup'], {
+    dataPath: '/Memory/Viewer',
+    version: 'test',
+    cwd: '/Granted',
+    home: '/Home',
+    input: Readable.from([]),
+    output: sink,
+    error: sink,
+    call: (method, params, signal) => f.broker.handle(f.created.token, { method, params }, signal),
+  });
+  expect(code).not.toBe(0);
+  expect(output).toMatch(/Agents cannot run/);
+  expect(f.execute).not.toHaveBeenCalled();
+  expect(f.requests.list()).toEqual([]);
+});
+
+it('keeps a configuration write error private when applying an agent proposal', async () => {
+  const f = await fixture();
+  const patches = [{ path: 'settings.appearance', value: 'light' }];
+  const proposal = await f.call<{ id: string }>('propose_config', { patches });
+  const load = vi.spyOn(f.settings, 'load').mockResolvedValue(undefined);
+  const read = vi.spyOn(JsoncConfiguration.prototype, 'read').mockResolvedValue(undefined);
+  const error = Object.assign(new Error('Cannot write /Memory/Viewer/config.jsonc'), {
+    code: 'EACCES',
+  });
+  const write = vi.spyOn(JsoncConfiguration.prototype, 'write').mockRejectedValue(error);
+  try {
+    await expect(f.requests.review(proposal.id, true)).rejects.toThrow(
+      'Viewer could not save the configuration.',
+    );
+    expect(f.requests.get(proposal.id).error).not.toContain('/Memory');
+    await expect(f.settings.patch(patches, f.settings.snapshot().revision)).rejects.toThrow(
+      error.message,
+    );
+  } finally {
+    write.mockRestore();
+    read.mockRestore();
+    load.mockRestore();
+  }
 });

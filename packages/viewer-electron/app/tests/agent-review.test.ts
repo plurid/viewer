@@ -211,3 +211,21 @@ describe('agent review text', () => {
     expect(listedLines.every((line) => line.endsWith('.pdf'))).toBe(true);
   });
 });
+
+it('shares Title Case labels between task and speech approvals', async () => {
+  const values = [...proposals.speech, ...proposals['task-workflow']];
+  expect(values.map(reviewButton)).toEqual([
+    'Choose Model',
+    'Import Model',
+    'Download Model',
+    'Create Task',
+  ]);
+  for (const value of values) {
+    await confirmAgentProposal(undefined, value);
+    expect(showMessageBox.mock.lastCall?.[0]).toMatchObject({
+      buttons: ['Cancel', reviewButton(value)],
+      defaultId: 0,
+      cancelId: 0,
+    });
+  }
+});

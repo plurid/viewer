@@ -1,11 +1,16 @@
 import { mkdir, open, rename } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { discardOwnTemporaryFile } from '../operations/removal';
+import {
+  coordinateMetadata,
+  publishMetadata,
+  requireNoInterruptedPublication,
+} from './metadata-publication';
 import { syncParentDirectory } from './directory-sync';
-/** Atomically publishes application-owned metadata, then syncs its directory for durability.
- * Failures before rename preserve the old document; a directory-sync failure can follow publication. */
+/** Publishes complete application-owned documents. Revision-bound writers retain displaced
+ * bytes until the replacement directory entry is durable. */
 export class DocumentStore<T> {
   private writes: Promise<void> = Promise.resolve();
   constructor(
@@ -14,7 +19,22 @@ export class DocumentStore<T> {
     private maxBytes = 16000000,
   ) {}
   async load(): Promise<T | null> {
-    await this.writes;
+    await this.writes.catch(() => undefined);
+    const bytes = await this.readBytes();
+    return bytes && this.validate(JSON.parse(bytes.toString('utf8')));
+  }
+  async loadSnapshot(): Promise<{ value: T | null; revision: string | null }> {
+    await this.writes.catch(() => undefined);
+    return coordinateMetadata(path.dirname(this.file), async () => {
+      const bytes = await this.readBytes();
+      if (!bytes) return { value: null, revision: null };
+      return {
+        value: this.validate(JSON.parse(bytes.toString('utf8'))),
+        revision: createHash('sha256').update(bytes).digest('hex'),
+      };
+    });
+  }
+  private async readBytes(): Promise<Buffer | null> {
     try {
       const handle = await open(
         this.file,
@@ -38,16 +58,19 @@ export class DocumentStore<T> {
           before.mtimeMs !== after.mtimeMs
         )
           throw new Error('Application metadata changed while reading.');
-        return this.validate(JSON.parse(buffer.toString('utf8')));
+        return buffer;
       } finally {
         await handle.close();
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        await requireNoInterruptedPublication(this.file);
+        return null;
+      }
       throw error;
     }
   }
-  save(input: T): Promise<void> {
+  save(input: T, expected?: string | null, published?: (revision: string) => void): Promise<void> {
     const text = JSON.stringify(this.validate(input));
     if (Buffer.byteLength(text, 'utf8') > this.maxBytes)
       throw new Error('Application metadata exceeds its limit.');
@@ -64,11 +87,17 @@ export class DocumentStore<T> {
           } finally {
             await handle.close();
           }
-          await rename(temporary, this.file);
-          // The journal's directory entry must be durable before a queued file
-          // mutation begins. Syncing only the temporary file is insufficient
-          // for a crash immediately after its atomic rename.
-          await syncParentDirectory(this.file);
+          if (expected === undefined) {
+            await rename(temporary, this.file);
+            published?.(createHash('sha256').update(text).digest('hex'));
+            await syncParentDirectory(this.file);
+          } else {
+            await coordinateMetadata(path.dirname(this.file), () =>
+              publishMetadata(this.file, temporary, expected, this.maxBytes, () =>
+                published?.(createHash('sha256').update(text).digest('hex')),
+              ),
+            );
+          }
         } finally {
           await discardOwnTemporaryFile(temporary);
         }

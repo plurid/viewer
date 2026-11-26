@@ -1,3 +1,4 @@
+import { useConfirmation } from './ConfirmAction';
 import {
   defaultShortcuts,
   isPreviewShortcut,
@@ -23,6 +24,7 @@ import { KeymapSettings } from './KeymapSettings';
  * key again, or none, said in its row, where the person gave that key to something else.
  */
 export function ShortcutSettings({ editor }: { editor: SettingsEditor }) {
+  const confirmation = useConfirmation();
   const { snapshot, patch } = editor;
   const settings = snapshot.settings;
   const set = (id: string, value: string | undefined, shipped: string) => {
@@ -88,9 +90,22 @@ export function ShortcutSettings({ editor }: { editor: SettingsEditor }) {
         },
       )}
       <div className="settings-actions">
-        <button onClick={() => patch('settings.shortcuts', {})}>Reset All Shortcuts</button>
+        <button
+          className="danger"
+          onClick={() =>
+            confirmation.ask({
+              title: 'Reset All Shortcuts?',
+              detail: 'Your command shortcuts will return to their shipped keys.',
+              action: 'Reset',
+              run: () => patch('settings.shortcuts', {}),
+            })
+          }
+        >
+          Reset All Shortcuts
+        </button>
       </div>
       <KeymapSettings editor={editor} />
+      {confirmation.dialog}
     </>
   );
 }

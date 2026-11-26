@@ -247,3 +247,14 @@ describe('a macro’s command name', () => {
     expect(commandName('\u2014')).toBeUndefined();
   });
 });
+
+it('keeps case-distinct session commands with distinct action IDs', () => {
+  const names = ['Dev', 'DEV'];
+  const kept = keepAliases(
+    [],
+    { bindings: [], aliases: names.map((name) => ({ name, line: 'frame-all' })) },
+    1,
+  );
+  expect(kept.map((action) => action.name)).toEqual(names);
+  expect(new Set(kept.map((action) => action.id)).size).toBe(names.length);
+});

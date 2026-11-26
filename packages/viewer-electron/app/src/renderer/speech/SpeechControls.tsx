@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { matchesShortcut, resolvedShortcut } from '../../domain/preferences/shortcuts';
-import { activeWorkspace, useViewer } from '../state/store';
+import { activeWorkspace, getState, useViewer } from '../state/store';
 import { SpokenRequest } from '../command-line/SpokenRequest';
 import { onWindowEvent } from '../app/window-events';
 
@@ -22,7 +22,8 @@ export function SpeechControls({ onEdit }: { onEdit(text: string): void }) {
   const openings = useRef(0);
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
-      if (!matchesShortcut(shortcut, event) || event.isComposing) return;
+      if (!matchesShortcut(shortcut, event, getState().settings.settings) || event.isComposing)
+        return;
       if (document.querySelector('dialog[open]')) return;
       event.preventDefault();
       event.stopImmediatePropagation();

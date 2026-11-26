@@ -3,6 +3,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
+import { expandPath } from '../src/domain/command-line/lex';
+import { parseCommandLine } from '../src/domain/command-line/verbs';
 import { CommandPalette } from '../src/renderer/commands/CommandPalette';
 import { CommandsContext } from '../src/renderer/commands/context';
 import type { CommandContext, CommandDefinition } from '../src/renderer/commands/registry';
@@ -55,13 +57,15 @@ const show = (
   definitions: CommandDefinition[] = [],
   directory = '/fixtures',
   selection: FileEntry[] = [],
+  subject?: FileEntry,
 ) => {
   const registry = new CommandRegistry();
   const context = {
     scope: 'window',
     workspaceID: activeWorkspace().id,
     paneID: activeWorkspace().panes[0]!.id,
-    directory,
+    directory: subject ? undefined : directory,
+    subject,
     selection,
     jobs: [],
     clipboard: null,
@@ -290,4 +294,45 @@ describe('the workspace offer in Suggested', () => {
     expect(reasons).toHaveLength(3);
     expect(reasons.at(-1)).toBe(offered(view));
   });
+});
+
+it('shows Go to and New File as commands and shortens home in the destination', async () => {
+  const { type, view } = show();
+  for (const [query, label] of [
+    ['go ~/Downloads', 'Go to ~/Downloads'],
+    ['new file notes.pdf', 'New File “notes.pdf”'],
+  ]) {
+    type(query);
+    const result = await view.findByText(label!);
+    expect(result.closest('.file-name-label')).toBeNull();
+  }
+});
+
+it('suggests Optimize for a large PDF open in a preview plane', () => {
+  const subject = {
+    ...entry('Report.pdf', false),
+    kind: 'file' as const,
+    mime: 'application/pdf',
+    extension: 'pdf',
+    size: 20 * 1024 * 1024,
+  };
+  const { view } = show(
+    [{ id: 'optimize-files', label: 'Optimize', group: 'Files', when: () => true, run: vi.fn() }],
+    undefined,
+    [],
+    subject,
+  );
+  expect(view.getByText('Suggested')).toBeTruthy();
+  expect(view.getByRole('option', { name: /Optimize/ }).textContent).toContain('PDF');
+});
+
+it('opens the displayed Go to destination when its path needs quotes', async () => {
+  const { type, view } = show([], '/fixtures/work');
+  type('go ~/Job Files');
+  const label = await view.findByText('Go to ~/Job Files');
+  const hint = label.closest('[role=option]')!.querySelector('small')!.textContent!;
+  const word = parseCommandLine(hint)[0]!.words[0]!;
+  expect(expandPath(word, { home: '/fixtures', folder: '/fixtures/work' })).toBe(
+    '/fixtures/Job Files',
+  );
 });

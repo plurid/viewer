@@ -14,12 +14,22 @@ import {
   type StoreChannel,
 } from './mas-configuration';
 import { cloneTree } from './clone';
+import { releaseEnvironment } from './release-environment';
+import { packageBuild } from './package-build';
 
 const directory = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const command = process.argv[2] ?? 'preflight';
 const channel: StoreChannel = storeChannel(command, process.env);
+const buildEnvironment = releaseEnvironment(process.env);
+const arch = process.env.VIEWER_MAS_ARCH ?? process.arch;
+if (arch !== 'arm64' && arch !== 'x64') throw new Error('VIEWER_MAS_ARCH must be arm64 or x64.');
 const run = (executable: string, args: string[], input?: Buffer) =>
-  execFileSync(executable, args, { encoding: 'utf8', input, maxBuffer: 4_000_000 });
+  execFileSync(executable, args, {
+    encoding: 'utf8',
+    input,
+    maxBuffer: 4_000_000,
+    env: buildEnvironment,
+  });
 
 function identity(
   requested: string,
@@ -67,7 +77,7 @@ function identity(
   return { hash: selected[1], name: selected[2] };
 }
 
-async function main() {
+async function main(packageRun: string) {
   if (!['preflight', 'dev', 'distribution'].includes(command))
     throw new Error('Usage: pnpm mas:preflight, pnpm mas:dev, or pnpm mas:package');
   if (process.platform !== 'darwin')
@@ -80,6 +90,7 @@ async function main() {
   // full provisioning document, device IDs and certificate material are never logged.
   const decoded = execFileSync('/usr/bin/security', ['cms', '-D', '-i', inputs.profile], {
     maxBuffer: 4_000_000,
+    env: buildEnvironment,
   });
   const profile = JSON.parse(
     run(
@@ -126,8 +137,6 @@ print(json.dumps(dict(
         'This Mac is not registered in the development profile. Add its provisioning UDID in Apple Developer and regenerate the profile.',
       );
   }
-  const arch = process.env.VIEWER_MAS_ARCH ?? process.arch;
-  if (arch !== 'arm64' && arch !== 'x64') throw new Error('VIEWER_MAS_ARCH must be arm64 or x64.');
   const entitlements = storeEntitlements(config, channel, applicationIdentifier);
   const entitlementDirectory = path.join(directory, 'out/mac-app-store/entitlements', channel);
   await mkdir(entitlementDirectory, { recursive: true });
@@ -157,10 +166,11 @@ print(json.dumps(dict(
   );
   if (command === 'preflight') return;
   const env = {
-    ...process.env,
+    ...buildEnvironment,
     VIEWER_MAC_CHANNEL: channel,
     VIEWER_MAS_IDENTITY: signer.hash,
     VIEWER_BUILD_ARCH: arch,
+    VIEWER_PACKAGE_RUN: packageRun,
   };
   // No shell interpolation, password export, Keychain mutation or Store upload.
   execFileSync('tsx', ['tools/build-helpers.ts'], { cwd: directory, env, stdio: 'inherit' });
@@ -189,7 +199,7 @@ print(json.dumps(dict(
     execFileSync(
       '/usr/bin/productbuild',
       ['--component', app, '/Applications', '--sign', installer.hash, pkg],
-      { stdio: 'inherit' },
+      { stdio: 'inherit', env: buildEnvironment },
     );
     run('/usr/sbin/pkgutil', ['--check-signature', pkg]);
     await writeFile(
@@ -210,7 +220,11 @@ print(json.dumps(dict(
         : '\nDevelopment build ready for testing on the registered Mac.'),
   );
 }
-await main().catch((error) => {
-  console.error('Mac App Store build: ' + (error instanceof Error ? error.message : String(error)));
-  process.exitCode = 1;
-});
+await packageBuild(directory, 'mas', arch, main, undefined, command === 'preflight').catch(
+  (error) => {
+    console.error(
+      'Mac App Store build: ' + (error instanceof Error ? error.message : String(error)),
+    );
+    process.exitCode = 1;
+  },
+);

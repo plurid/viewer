@@ -797,7 +797,7 @@ export type DesktopEvent =
   | { type: 'fabrication'; progress: CheckProgress }
   | { type: 'open'; paths: string[] }
   | { type: 'command'; command: string }
-  | { type: 'flush'; token: string }
+  | { type: 'flush' | 'flush-workspace' | 'flush-documents'; token: string }
   | { type: 'flush-settings'; token: string };
 export interface ViewerAPI {
   remote(request: RemoteRequest): Promise<RemoteReply>;
@@ -916,6 +916,8 @@ export interface ViewerAPI {
     actionID: string,
     target: CapturedTarget,
     values?: Record<string, string>,
+    /** The selected definition must still match the desktop copy that supplies the program. */
+    expectedAction?: CustomAction,
   ): Promise<string>;
   runCommand(script: string, target: CapturedTarget): Promise<string>;
   declaredCommands(directory: string): Promise<DeclaredCommandsReply>;

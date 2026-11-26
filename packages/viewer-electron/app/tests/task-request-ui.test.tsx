@@ -59,10 +59,10 @@ const initial = () => ({
 it('keeps model parameters editable and validates before any desktop request', () => {
   render(<TaskRequestDialog initial={initial()} onClose={() => {}} openFolder={async () => {}} />);
   fireEvent.change(screen.getByLabelText('Task branch'), { target: { value: 'bad..branch' } });
-  expect(screen.getByRole('button', { name: 'Create task…' })).toHaveProperty('disabled', true);
+  expect(screen.getByRole('button', { name: 'Create Task…' })).toHaveProperty('disabled', true);
   expect(screen.getByRole('status').textContent).toContain('valid local branch');
   fireEvent.change(screen.getByLabelText('Task branch'), { target: { value: 'feature/edited' } });
-  expect(screen.getByRole('button', { name: 'Create task…' })).toHaveProperty('disabled', false);
+  expect(screen.getByRole('button', { name: 'Create Task…' })).toHaveProperty('disabled', false);
   expect(create).not.toHaveBeenCalled();
 });
 it('releases the modal for desktop confirmation and restores the same values after cancellation', async () => {
@@ -76,7 +76,7 @@ it('releases the modal for desktop confirmation and restores the same values aft
   const close = vi.fn();
   render(<TaskRequestDialog initial={initial()} onClose={close} openFolder={async () => {}} />);
   fireEvent.change(screen.getByLabelText('Task name'), { target: { value: 'Edited task' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Create task…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create Task…' }));
   await waitFor(() => expect(create).toHaveBeenCalledOnce());
   expect(document.querySelector('dialog[open]')).toBeNull();
   expect(create.mock.calls[0]![0]).toMatchObject({
@@ -107,9 +107,9 @@ it('shows retained output and prevents an accidental retry after partial creatio
   const close = vi.fn(),
     open = vi.fn(async () => {});
   render(<TaskRequestDialog initial={initial()} onClose={close} openFolder={open} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Create task…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create Task…' }));
   await screen.findByRole('button', { name: 'Open Worktree Folder' });
-  expect(screen.queryByRole('button', { name: 'Create task…' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Create Task…' })).toBeNull();
   expect(screen.getByLabelText('Task worktree folder')).toHaveProperty('disabled', true);
   fireEvent.click(screen.getByRole('button', { name: 'Open Worktree Folder' }));
   await waitFor(() => expect(open).toHaveBeenCalledWith('/fixtures/Ship'));

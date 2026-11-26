@@ -287,3 +287,23 @@ describe('Settings, opened at a setting', () => {
     history.replaceState(null, '', '/');
   });
 });
+
+it('folds Plane toolbar into one row and opens both presets', () => {
+  const registry = new CommandRegistry();
+  registry.register('window', {
+    context: () => context,
+    definitions: () => windowCommands(actions),
+  });
+  const rows = registry.list({ ids: ['plane-toolbar.essential', 'plane-toolbar.full'] });
+  for (const results of [settingRows(rows, ''), paletteRows(rows, 'plane toolbar', [])]) {
+    expect(results.rows).toHaveLength(1);
+    expect(results.rows[0]).toMatchObject({
+      label: 'Plane toolbar',
+      setting: { value: 'Essential' },
+    });
+  }
+  expect(settingRows(rows, 'Plane toolbar: ').rows.map((row) => row.id)).toEqual([
+    'plane-toolbar.essential',
+    'plane-toolbar.full',
+  ]);
+});

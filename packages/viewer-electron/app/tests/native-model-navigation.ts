@@ -19,9 +19,13 @@ import {
 import type { PageExpression } from './native/runtime/page-function';
 import { pageCall } from './native/runtime/page-function';
 import { temporaryRoot } from '../tools/temporary';
+const require = createRequire(import.meta.url);
 const source =
   process.env.VIEWER_TEST_STEP_FILE ??
-  '/Users/ly3xqhl8g9/Downloads/Neuer ZIP-komprimierter Ordner (2)/2026-10-08_16-38-44/00026295_T02.200.008_00A_Festteil.step';
+  path.join(
+    path.dirname(require.resolve('occt-import-js/package.json')),
+    'test/testfiles/simple-basic-cube/cube.stp',
+  );
 const original = await readFile(source),
   hash = createHash('sha256').update(original).digest('hex');
 const root = await temporaryRoot('viewer-model-navigation-');
@@ -32,7 +36,6 @@ await Promise.all([profile, folder].map((file) => mkdir(file, { recursive: true 
 const step = path.join(folder, 'Part.step'),
   stl = path.join(folder, 'Part.stl');
 await writeFile(step, original);
-const require = createRequire(import.meta.url);
 const create = require('occt-import-js') as () => Promise<{
   ReadStepFile(data: Uint8Array, params: { linearUnit: string }): ImportedCad;
 }>;

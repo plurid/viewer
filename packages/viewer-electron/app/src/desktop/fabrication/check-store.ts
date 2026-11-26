@@ -31,15 +31,22 @@ export class CheckStore {
     return this.document(id).load();
   }
   async list() {
-    await this.writes;
+    await this.writes.catch(() => undefined);
     return (await this.index.load())?.checks ?? [];
   }
   save(input: CheckDocument): Promise<void> {
+    return this.enqueue(input, true);
+  }
+  /** Restore has already published a new private document exclusively. */
+  register(input: CheckDocument): Promise<void> {
+    return this.enqueue(input, false);
+  }
+  private enqueue(input: CheckDocument, writeDocument: boolean): Promise<void> {
     const document = checkDocumentSchema.parse(input);
     const write = this.writes
       .catch(() => {})
       .then(async () => {
-        await this.document(document.id).save(document);
+        if (writeDocument) await this.document(document.id).save(document);
         const index = (await this.index.load()) ?? { version: 1 as const, checks: [] };
         const { id, job, folder, paths, status, updated } = document;
         const summary = {

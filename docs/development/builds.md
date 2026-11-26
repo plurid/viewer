@@ -37,9 +37,20 @@ Local bundles use ad-hoc signing. They are not automatically notarized or Store 
 
 ## Preserve earlier outputs
 
-`pnpm package` and `pnpm make` first move the prior app `.vite` and exact current
-platform/architecture package directory to OS Trash. This is the narrow standing exception in
-[AGENTS.md](../../AGENTS.md). Other agent-initiated removals still require exact-path approval.
+Use one concrete architecture per `pnpm package` or `pnpm make` invocation. On macOS these commands
+first move the prior app `.vite` and the exact current platform/architecture package directory to
+the Trash. On Windows and Linux, packaging requires both destinations to be vacant. Other
+agent-initiated removals require exact-path approval. [AGENTS.md](../../AGENTS.md)
+
+Before retrying `pnpm make`, preserve the previous `out/make` and `out/make-results` directories
+elsewhere. If you already moved their files, the empty `out/make/zip/darwin/<architecture>`
+hierarchy can stay. The command checks these locations and the requested target before moving either
+app build folder. Use `pnpm direct:release` to notarize and retain the submitted archive.
+
+Run one package, make or Store build at a time in a checkout. Each command keeps a numbered record
+in `out/package-runs` and marks it `finished` when it exits. If a build was interrupted, wait for
+its helpers and Forge process to exit, then preserve the unfinished numbered directory elsewhere
+before retrying.
 
 For a local JS rebuild against a retained macOS seed, use the preserving helper from the app
 directory:
@@ -48,9 +59,12 @@ directory:
 node --import tsx tools/build-preserving.ts <seed-Viewer.app> <new-output-Viewer.app>
 ```
 
-The destination must be new. It retains seeds/intermediates, checks source witnesses and signs the
-resulting local bundle. It does not qualify changed native dependencies or a distribution release
-merely by rebuilding JavaScript.
+The destination must be new. Use a single-architecture seed matching `VIEWER_BUILD_ARCH` or, when
+unset, the Node process architecture. The helper checks the seed executable before preparing the
+speech runtime and copies that runtime into the new bundle. The build subprocess excludes the update
+and license signing keys and their file references before loading build dependencies. It retains
+intermediates, checks source witnesses and signs the resulting local bundle. It does not qualify
+changed native dependencies or a distribution release merely by rebuilding JavaScript.
 
 ## Dependencies and native resources
 
@@ -76,6 +90,8 @@ build is not Windows/Linux acceptance.
 ## Mac App Store path
 
 `pnpm mas:preflight`, `pnpm mas:dev` and `pnpm mas:package` use the separate Store configuration.
-Supply valid signing identities/profiles and follow the diagnostics. The Store file-access layer,
-entitlements, sandbox workers and signed-runtime acceptance differ from the direct build.
-[Release gates](releases.md) lists the evidence required before distributing either edition.
+Before building a Store app, preserve any existing app `.vite` and `out/Viewer-mas-<architecture>`
+directories elsewhere. Store packaging requires both destinations to be vacant. Supply valid signing
+identities/profiles and follow the diagnostics. The Store file-access layer, entitlements, sandbox
+workers and signed-runtime acceptance differ from the direct build. [Release gates](releases.md)
+lists the evidence required before distributing either edition.

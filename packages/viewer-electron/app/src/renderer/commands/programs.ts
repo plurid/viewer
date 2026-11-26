@@ -1,8 +1,15 @@
 import { effectiveWindowSettings } from '../state/effective-ui';
 import { parseCommandLine, plainCommandID, resolveName } from '../../domain/command-line/verbs';
+import { modelLineCommandProblem } from '../../domain/agents/safety';
+import { sameJSON } from '../../domain/json';
 import { withArguments } from '../../domain/command-line/lex';
 import type { CommandContext, CommandDefinition } from './registry';
-import { actionAvailable, actionInputs, terminalDirectory } from '../../domain/automation/actions';
+import {
+  actionAvailable,
+  actionInputs,
+  terminalDirectory,
+  workflowProgram,
+} from '../../domain/automation/actions';
 import { requestParameters } from './ActionParameters';
 import { executeAction } from './execute-action';
 import { activeWorkspace, getState } from '../state/store';
@@ -26,7 +33,8 @@ import {
 } from '../../domain/operations/export-presets';
 import { sendWindowEvent } from '../app/window-events';
 import { withAgentDispatch } from '../app/agent-dispatch';
-import type { LineAgentDispatch } from '../command-line/host';
+import { runLine } from '../command-line/run';
+import type { LineDispatch, LineHost } from '../command-line/host';
 export { captureTarget } from './target';
 export interface ProgramTools {
   showTasks?(target?: ReturnType<typeof captureTarget>): void;
@@ -48,11 +56,11 @@ export function programCommands(
   /** The context as it is now: a sequence's later steps act where the earlier ones left it. */
   live?: () => CommandContext,
   /** A step with words (`vs ~/Documents`), run by the command line. */
-  line?: (text: string, agent?: LineAgentDispatch) => Promise<{ ok: boolean; message?: string }>,
+  lineHost?: () => LineHost | null,
   tools: ProgramTools = {},
 ): CommandDefinition[] {
   const { showServers, newBrowser, imageTools, optimizeFiles, pdfTools } = tools;
-  const agentDispatch = (context: CommandContext): LineAgentDispatch | undefined =>
+  const agentDispatch = (context: CommandContext): LineDispatch | undefined =>
     context.agentDispatchID || context.agentDispatchDeadline !== undefined
       ? {
           ...(context.agentDispatchID ? { id: context.agentDispatchID } : {}),
@@ -64,15 +72,23 @@ export function programCommands(
   const customInvoke = (id: string, context: CommandContext) => {
     if (id === 'network-sharing')
       throw new Error('Network sharing cannot run from a custom action. Choose it directly.');
-    return invoke(id, context);
+    return invoke(id, { ...context, invocation: 'custom-action' });
   };
-  const customLine = async (text: string, agent?: LineAgentDispatch) => {
+  const customLine = async (text: string, context: CommandContext) => {
     for (const step of parseCommandLine(text)) {
       const name = resolveName(step.name);
+      if (name.kind === 'user' || (name.kind === 'id' && name.id.startsWith('custom.')))
+        throw new Error('A custom action cannot call another custom action or named command.');
       if (name.kind === 'id' && name.id === 'network-sharing')
         throw new Error('Network sharing cannot run from a custom action. Choose it directly.');
     }
-    return line ? line(text, agent) : { ok: false, message: 'Command line unavailable.' };
+    const host = lineHost?.();
+    if (!host) return { ok: false, message: 'Command line unavailable.' };
+    return runLine(
+      text,
+      { ...host, agent: agentDispatch(context), invocation: 'custom-action' },
+      context.modelRequest,
+    );
   };
   const folder = (context: CommandContext) => !!context.directory || !!context.folder;
   const target = (context: CommandContext) => {
@@ -353,17 +369,27 @@ export function programCommands(
             : folder(context) && actionAvailable(action, captureTarget(context, workspace)),
         run: async (context) => {
           const executor = action.executor;
+          const settings = getState().settings.settings;
+          const current = settings.customActions.find(({ id }) => id === action.id);
+          if (!current || (current !== action && !sameJSON(executor, current.executor)))
+            throw new Error('This custom action changed. Choose it again.');
+          if (context.modelRequest) {
+            const reason = modelLineCommandProblem(
+              'custom.' + action.id,
+              settings.customActions,
+              settings.layouts,
+            );
+            if (reason)
+              throw new Error('This request cannot run the command because ' + reason + '.');
+          }
           if (executor.kind === 'workflow') {
+            if (context.agentDispatchID || context.agentDispatchDeadline !== undefined)
+              throw new Error('Only the person can run a workflow command.');
             const actions = structuredClone(getState().settings.settings.customActions);
             const captured = captureTarget(context, workspace);
             const values = await requestParameters(action.name, actionInputs(action, actions));
             if (!values) return;
             for (const [index, step] of executor.steps.entries()) {
-              if (
-                context.agentDispatchDeadline !== undefined &&
-                Date.now() > context.agentDispatchDeadline
-              )
-                throw new Error('The agent action timed out before finishing.');
               if (activeWorkspace().id !== captured.workspaceID)
                 throw new Error('The workspace changed. The workflow stopped.');
               if (
@@ -374,25 +400,20 @@ export function programCommands(
                 throw new Error('The plane this started from changed, so the workflow stopped.');
               try {
                 if (step.kind === 'action') {
-                  const child = actions.find((action) => action.id === step.actionID);
-                  if (
-                    !child ||
-                    !['shell', 'executable'].includes(child.executor.kind) ||
-                    !actionAvailable(child, captured)
-                  )
+                  const child = workflowProgram(actions, step.actionID);
+                  const currentChild = workflowProgram(
+                    getState().settings.settings.customActions,
+                    step.actionID,
+                  );
+                  if (!sameJSON(child, currentChild))
+                    throw new Error('The command changed. Run the workflow again.');
+                  if (!actionAvailable(child, captured))
                     throw new Error(
                       'This command doesn’t apply to the folder the workflow started in.',
                     );
-                  await withAgentDispatch(context.agentDispatchID, () =>
-                    executeAction(child, captured, values),
-                  );
+                  await executeAction(child, captured, values);
                 } else {
-                  const agent = agentDispatch(context);
-                  const result = line
-                    ? await withAgentDispatch(context.agentDispatchID, () =>
-                        customLine(step.line, agent),
-                      )
-                    : { ok: false, message: 'Command line unavailable.' };
+                  const result = await customLine(step.line, context);
                   if (!result.ok) throw new Error(result.message || 'Command did not finish.');
                 }
               } catch (error) {
@@ -415,10 +436,7 @@ export function programCommands(
               if (!plainCommandID(command)) {
                 // run from a menu or a key, a named sequence has no words: $1… are empty
                 const text = withArguments(command, [], executor.command ?? action.name);
-                const agent = agentDispatch(context);
-                const result = line
-                  ? await withAgentDispatch(context.agentDispatchID, () => customLine(text, agent))
-                  : { ok: false };
+                const result = await customLine(text, context);
                 if (!result.ok)
                   throw new Error(
                     `“${action.name}” stopped at “${command}”${result.message ? `: ${result.message}` : '.'}`,
@@ -427,9 +445,12 @@ export function programCommands(
               }
               const step = index ? (live?.() ?? context) : context;
               const tagged =
-                context.agentDispatchID || context.agentDispatchDeadline !== undefined
+                context.agentDispatchID ||
+                context.agentDispatchDeadline !== undefined ||
+                context.modelRequest
                   ? {
                       ...step,
+                      ...(context.modelRequest ? { modelRequest: true } : {}),
                       ...(context.agentDispatchID
                         ? { agentDispatchID: context.agentDispatchID }
                         : {}),
@@ -464,10 +485,11 @@ export function programCommands(
             workspace.newTerminal(target(context), executor.profileID);
           else {
             const captured = captureTarget(context, workspace);
-            const values = await requestParameters(action.name, actionInputs(action, []));
+            const selected = structuredClone(action);
+            const values = await requestParameters(selected.name, actionInputs(selected, []));
             if (values)
               await withAgentDispatch(context.agentDispatchID, () =>
-                executeAction(action, captured, values),
+                executeAction(selected, captured, values),
               );
           }
         },

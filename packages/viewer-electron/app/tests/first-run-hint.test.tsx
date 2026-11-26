@@ -284,6 +284,16 @@ describe('the tips above a folder', () => {
     ]);
   });
 
+  it('omits a palette shortcut held by a recipe', () => {
+    profile({ firstRunHint: { used: [] } });
+    getState().settings.settings.recipes[0] = {
+      ...getState().settings.settings.recipes[0]!,
+      shortcut: 'Cmd+K',
+    };
+    folder();
+    expect(tips()?.textContent).not.toContain('⌘K');
+  });
+
   it('shows once, in the workspace’s first files plane', () => {
     profile({ firstRunHint: { used: [] } });
     act(() => {

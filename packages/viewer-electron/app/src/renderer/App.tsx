@@ -16,6 +16,7 @@ import {
 import type { SpatialOverviewHandle } from './workspace/overlays/useSpatialOverview';
 import { errorMessage } from '../domain/errors';
 import { homeText } from '../domain/files/path-label';
+import { flushWindowDocuments, flushWorkspace } from './state/persistence';
 import { failedFlush } from '../domain/persistence/flush';
 import { prepareNoteTrash, finishNoteTrash } from './notes/sessions';
 import { savePatch } from './state/core';
@@ -27,8 +28,8 @@ import { executeAgentNavigation } from './workspace/agent-navigation';
 import { programCommands } from './commands/programs';
 import { ExecutionPanel } from './terminals/ExecutionPanel';
 import { agentTerminalWork, receiveTerminalAuthority } from './terminals/start-authority';
-import { trimTerminals, terminalEditing, deferTerminalStart } from './terminals/sessions';
-import { explorerCommandIDs, keyCommand } from './explorer/input';
+import { trimTerminals, deferTerminalStart } from './terminals/sessions';
+import { explorerCommandIDs, windowKeyCommand } from './explorer/input';
 /** Native window chrome stays quiet; commands follow the active file, folder or preview. */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { type PluridApplicationHandle } from '@plurid/plurid-react';
@@ -75,7 +76,7 @@ import { RelationshipControls } from './ui/relationships/Relationships';
 import { ActionHub } from './actions/ActionHub';
 import { OperationsPanel } from './operations/OperationsPanel';
 import { useOperationsIndicator } from './operations/useOperationsIndicator';
-import { QuickPreview, quickPreviewEdit } from './previews/QuickPreview';
+import { QuickPreview } from './previews/QuickPreview';
 import { previewDocuments } from './previews/document-cache';
 import { useTitlebar } from './ui/titlebar';
 import { useTheme, useThemeVariables } from './ui/theme';
@@ -83,17 +84,17 @@ import { useKeySequences } from './keys/sequences';
 import { recordCommand, recordLine, useMacroRecording } from './keys/macro';
 import { WhichKey } from './keys/WhichKey';
 import { PlaneHints } from './keys/PlaneHints';
-import { openTerminalFind } from './terminals/find';
+import { windowCommandInvoke } from './commands/invoke';
 import { CommandsContext, useCommands, useCommandSource } from './commands/context';
 import { CommandRegistry, type CommandContext } from './commands/registry';
 import { windowCommands } from './commands/window';
 import { CommandPalette } from './commands/CommandPalette';
 import type { PaletteMode } from './commands/palette-modes';
-import type { LineAgentDispatch, LineHost } from './command-line/host';
-import { runLine, type LineResult } from './command-line/run';
+import type { LineHost } from './command-line/host';
+import { runLine } from './command-line/run';
 import { receiveSessionKeys } from './keys/session';
-import { editable, textEditFor } from './commands/editing';
-import { routeToEditor, subscribeEditingPlanes } from './editing/planes';
+import { editable } from './commands/editing';
+import { subscribeEditingPlanes } from './editing/planes';
 import { recoverBuffers } from './editing/unsaved';
 import { Sidebar } from './ui/navigation/Sidebar';
 
@@ -107,7 +108,7 @@ import { useWindowEvent } from './app/window-events';
 import { invalidateFolderSizes, receiveFolderSize } from './explorer/sizes';
 import {
   commandGlyphs,
-  shortcutFor,
+  resolvedShortcut,
   shortcutGlyphs,
   withShortcut,
 } from '../domain/preferences/shortcuts';
@@ -122,7 +123,6 @@ import { CheckPanel } from './fabrication/CheckPanel';
 import { subscribeJobContents } from './fabrication/contents';
 
 /** A document preview's own find, which ⌘F opens in its plane: PDF, DjVu, EPUB. */
-const previewFindIDs = ['preview.pdf-search', 'preview.djvu-search', 'preview.epub-find'] as const;
 
 export function App() {
   const registry = useMemo(
@@ -235,8 +235,8 @@ function AppWindow() {
   const space = useViewer(activeWorkspace);
   const look = useViewer(effectiveWindowLook);
   const settings = useViewer(effectiveWindowSettings);
-  const newPlaneShortcut = shortcutGlyphs(shortcutFor(settings.shortcuts, 'new-root-folder'));
-  const paletteShortcut = shortcutGlyphs(shortcutFor(settings.shortcuts, 'palette'));
+  const newPlaneShortcut = shortcutGlyphs(resolvedShortcut(settings, 'new-root-folder'));
+  const paletteShortcut = shortcutGlyphs(resolvedShortcut(settings, 'palette'));
   const [overview, setOverview] = useState<SpatialOverviewHandle>();
   const bootstrap = useViewer((state) => state.bootstrap);
   const notice = useViewer((state) => state.notice);
@@ -324,9 +324,7 @@ function AppWindow() {
     };
   }, [controller]);
   // the command line's runner, for sequences' steps with words: set once the line host is
-  const lineRunRef = useRef<(text: string, agent?: LineAgentDispatch) => Promise<LineResult>>(
-    async () => ({ ok: false }),
-  );
+  const lineHostRef = useRef<LineHost | null>(null);
   useCommandSource(
     'window',
     {
@@ -338,7 +336,7 @@ function AppWindow() {
           (id, context) => registry.invoke(id, { paneID: context.paneID, context }),
           terminalName,
           () => registry.context(getState().activePane) || windowContext(),
-          (text, agent) => lineRunRef.current(text, agent),
+          () => lineHostRef.current,
           {
             showServers: () => setWindowDialog({ type: 'servers' }),
             showNotes: () => setWindowDialog({ type: 'notes' }),
@@ -432,63 +430,7 @@ function AppWindow() {
     if (context?.scope !== 'preview') return undefined;
     return registry.list({ ids: [...ids], scope: 'window', paneID: context.paneID, context })[0];
   };
-  /** Runs a command where it belongs; false when nothing ran (a line stops there). */
-  const invoke = async (
-    id: string,
-    remember = true,
-    agent?: LineAgentDispatch,
-  ): Promise<boolean> => {
-    if (agent?.deadline !== undefined && Date.now() > agent.deadline)
-      throw new Error('The agent action timed out before finishing.');
-    const withAgent = (context: CommandContext): CommandContext =>
-      agent
-        ? {
-            ...context,
-            ...(agent.id ? { agentDispatchID: agent.id } : {}),
-            ...(agent.deadline !== undefined ? { agentDispatchDeadline: agent.deadline } : {}),
-          }
-        : context;
-    // Edit menu Undo, Redo and Select All reach a CodeMirror editor, which `webContents` does not
-    if (routeToEditor(id, getState().activePane)) return true;
-    // ⌘E in Quick Preview edits the text file it shows, as its plane
-    if (id === 'edit-file' && quickPreviewEdit()) return true;
-    // ⌘F in a terminal searches its output, rather than opening the file palette
-    if (id === 'find-file') {
-      const terminal = document.activeElement?.closest<HTMLElement>('.terminal-plane');
-      if (terminal?.dataset.terminalId && openTerminalFind(terminal.dataset.terminalId))
-        return true;
-      // and in a document's preview it finds in the document, as Preview's ⌘F does
-      const find = !overlayOpen() && previewCommand(previewFindIDs);
-      if (find) {
-        await registry.run({ ...find, context: withAgent(find.context) }, false);
-        return true;
-      }
-    }
-    if (
-      document.activeElement?.closest('.terminal-plane') &&
-      (await withAgentDispatch(agent?.id, () => terminalEditing(getState().activePane, id)))
-    )
-      return true;
-    const edit = textEditFor(id, editable(document.activeElement));
-    if (edit) {
-      await withAgentDispatch(agent?.id, () => window.viewer.textEdit(edit));
-      return true;
-    }
-    if (editable(document.activeElement) && explorerCommandIDs.has(id)) return false;
-    if (overlayOpen() && !['palette', 'settings'].includes(id)) return false;
-    const context = registry.context(getState().activePane) || windowContext();
-    if (id === 'paste' || id === 'paste-move') {
-      await withAgentDispatch(agent?.id, () => refreshClipboard());
-      if (agent?.deadline !== undefined && Date.now() > agent.deadline)
-        throw new Error('The agent action timed out before finishing.');
-    }
-    return registry.invoke(id, {
-      paneID: context.paneID,
-      scope: 'window',
-      context: withAgent({ ...context, clipboard: getState().clipboard }),
-      remember,
-    });
-  };
+  const invoke = windowCommandInvoke(registry, windowContext, previewCommand);
   const invokeRef = useRef(invoke);
   invokeRef.current = invoke;
   const previewCommandRef = useRef(previewCommand);
@@ -496,7 +438,7 @@ function AppWindow() {
   // THE COMMAND LINE: what a line runs against, and running one from the palette
   const lineHost = useMemo<LineHost>(
     () => ({
-      invoke: (id, remember, agent) => invokeRef.current(id, remember, agent),
+      invoke: (...args) => invokeRef.current(...args),
       registry,
       workspace: controller,
       context: () => registry.context(getState().activePane) || windowContext(),
@@ -521,7 +463,7 @@ function AppWindow() {
   };
   // the prefix, root and leader keys and the modes (keys/sequences.ts): before App's own key handler
   useKeySequences(runLines);
-  lineRunRef.current = (text, agent) => runLine(text, agent ? { ...lineHost, agent } : lineHost);
+  lineHostRef.current = lineHost;
   const runFromPalette = (text: string, model = false) => {
     recordLine(text);
     setPalette(null);
@@ -684,8 +626,18 @@ function AppWindow() {
             }),
           });
         }
-      } else if (event.type === 'flush')
-        void flushState()
+      } else if (
+        event.type === 'flush' ||
+        event.type === 'flush-documents' ||
+        event.type === 'flush-workspace'
+      )
+        void (
+          event.type === 'flush-documents'
+            ? flushWindowDocuments()
+            : event.type === 'flush-workspace'
+              ? flushWorkspace()
+              : flushState()
+        )
           .then(
             () => window.viewer.flushed(event.token, { ok: true }),
             (error) => {
@@ -866,48 +818,36 @@ function AppWindow() {
         spatialTool(null);
         event.preventDefault();
       }
-      if (!(event.metaKey || event.ctrlKey) || event.isComposing || event.repeat) return;
-      // ⌘+ and ⌘− zoom the picture or the document a preview plane shows, as Preview's do
-      const zoom =
-        event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        !editable(event.target) &&
-        !overlayOpen()
-          ? event.key === '=' || event.key === '+'
-            ? 'preview.zoom-in'
-            : event.key === '-'
-              ? 'preview.zoom-out'
-              : undefined
-          : undefined;
-      const zoomCommand = zoom && previewCommandRef.current([zoom]);
-      if (zoomCommand) {
+      const command = windowKeyCommand(
+        event,
+        getState().settings.settings,
+        previewCommandRef.current,
+      );
+      if (!command) return;
+      if (typeof command === 'object') {
         event.preventDefault();
         event.stopPropagation();
-        void registry.run(zoomCommand, false).catch(report);
+        void registry.run(command, false).catch(report);
         return;
       }
-      const id = keyCommand(event, getState().settings.settings);
       if (
         (event.target as Element).closest('.terminal-plane') &&
-        !['palette', 'settings'].includes(id || '')
+        !['palette', 'settings'].includes(command)
       )
         return;
       // inside a text editor, its file's commands still work: ⌘S, ⇧⌘S, ⌘T
       const textCommands = (event.target as Element).closest?.('.text-editor')
         ? ['save-file', 'save-file-as', 'new-scratch-plane']
         : [];
-      if (editable(event.target) && !['palette', 'settings', ...textCommands].includes(id || ''))
+      if (editable(event.target) && !['palette', 'settings', ...textCommands].includes(command))
         return;
-      if (id && explorerCommandIDs.has(id)) {
+      if (explorerCommandIDs.has(command)) {
         if (!overlayOpen()) routeFileKeyboard(getState().activePane, event);
         return;
       }
-      if (id) {
-        event.preventDefault();
-        event.stopPropagation();
-        void invokeRef.current(id).catch(report);
-      }
+      event.preventDefault();
+      event.stopPropagation();
+      void invokeRef.current(command).catch(report);
     };
     window.addEventListener('keydown', keydown, true);
     return () => window.removeEventListener('keydown', keydown, true);

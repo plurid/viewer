@@ -24,7 +24,7 @@ import { matchesDialogFilter } from '../../domain/dialogs';
 import { absolute, list, validName } from '../files/filesystem';
 import { packageExtensions } from '../../domain/files/entries';
 
-type Answer = { paths: string[]; button: number; system?: boolean };
+type Answer = { paths: string[]; button: number; system?: boolean; interrupted?: true };
 interface FileStamp {
   identity: TemporalIdentity;
   modified: number;
@@ -80,20 +80,20 @@ export class WindowDialogs {
     this.ready = false;
     for (const item of this.queue.splice(0)) {
       item.removeAbort?.();
-      item.resolve(this.cancelled(item.prompt));
+      item.resolve(this.cancelled(item.prompt, true));
     }
   }
-  private cancelled(prompt: DialogPrompt): Answer {
-    return { paths: [], button: prompt.kind === 'message' ? prompt.cancelId : 0 };
+  private cancelled(prompt: DialogPrompt, interrupted?: true): Answer {
+    return { paths: [], button: prompt.kind === 'message' ? prompt.cancelId : 0, interrupted };
   }
   private present(prompt: DialogPrompt, overwrite = false, signal?: AbortSignal): Promise<Answer> {
-    if (!this.ready || signal?.aborted) return Promise.resolve(this.cancelled(prompt));
+    if (!this.ready || signal?.aborted) return Promise.resolve(this.cancelled(prompt, true));
     if (this.queue.length >= 8) throw new Error('Finish the open dialogs before opening another.');
     return new Promise((resolve) => {
       const item: Pending = { prompt, resolve, overwrite };
       this.queue.push(item);
       if (signal) {
-        const abort = () => this.finish(item, this.cancelled(prompt));
+        const abort = () => this.finish(item, this.cancelled(prompt, true));
         signal.addEventListener('abort', abort, { once: true });
         item.removeAbort = () => signal.removeEventListener('abort', abort);
       }
@@ -171,7 +171,7 @@ export class WindowDialogs {
   async message(
     options: MessageBoxOptions,
     destructiveId?: number,
-  ): Promise<MessageBoxReturnValue> {
+  ): Promise<MessageBoxReturnValue & { interrupted?: true }> {
     const buttons = options.buttons?.length ? options.buttons : ['OK'];
     const answer = await this.present(
       {
@@ -193,7 +193,8 @@ export class WindowDialogs {
       false,
       options.signal,
     );
-    return { response: answer.button, checkboxChecked: false };
+    const result = { response: answer.button, checkboxChecked: false };
+    return answer.interrupted ? { ...result, interrupted: true } : result;
   }
   async request(request: DialogRequest): Promise<DialogReply> {
     if (request.kind === 'current') {

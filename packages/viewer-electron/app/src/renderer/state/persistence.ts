@@ -22,6 +22,7 @@ import {
 let persistTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingEngineFlush = false;
 let flushRequested = false;
+let flushingPreferences = true;
 let flushing: Promise<void> | undefined;
 let nextArrangementRevision = 0;
 /** Saves after a quiet period; a later request replaces an earlier one. */
@@ -191,7 +192,7 @@ function retainedPreviewStates(): SavedState['previewStates'] {
   const kept = entries.filter(([key]) => keep.has(key));
   return kept.length === entries.length ? states : Object.fromEntries(kept);
 }
-async function flushOnce(flushEngine: boolean): Promise<void> {
+async function flushDocuments(flushEngine: boolean, preferences = true): Promise<void> {
   if (flushEngine) window.dispatchEvent(new Event('pagehide'));
   // unsaved text first: a quit waits for this flush
   await flushBuffers();
@@ -203,7 +204,18 @@ async function flushOnce(flushEngine: boolean): Promise<void> {
   await flushLenses();
   // After the engine's synchronous flush: a save it scheduled is covered by this one.
   clearTimeout(persistTimer);
-  await flushPreferences();
+  if (preferences) await flushPreferences();
+}
+
+/** A protected layout stays on disk while the window still saves its editors and preferences. */
+export async function flushWindowDocuments(): Promise<void> {
+  clearTimeout(persistTimer);
+  await flushing?.catch(() => undefined);
+  await flushDocuments(true);
+}
+
+async function flushOnce(flushEngine: boolean, preferences: boolean): Promise<void> {
+  await flushDocuments(flushEngine, preferences);
   const arrangementRevisions = new Map(dirtyArrangements);
   const saved = {
     ...getState().saved,
@@ -269,7 +281,18 @@ async function flushOnce(flushEngine: boolean): Promise<void> {
 
 /** All callers join the same durable barrier, including work arriving during a save. */
 export function flushState(flushEngine = true): Promise<void> {
+  return requestFlush(flushEngine, true);
+}
+
+export function flushWorkspace(flushEngine = true): Promise<void> {
+  return requestFlush(flushEngine, false);
+}
+
+function requestFlush(flushEngine: boolean, preferences: boolean): Promise<void> {
   clearTimeout(persistTimer);
+  if (flushing && flushingPreferences !== preferences)
+    return flushing.catch(() => undefined).then(() => requestFlush(flushEngine, preferences));
+  flushingPreferences = preferences;
   pendingEngineFlush ||= flushEngine;
   flushRequested = true;
   if (flushing) return flushing;
@@ -279,7 +302,7 @@ export function flushState(flushEngine = true): Promise<void> {
         flushRequested = false;
         const engine = pendingEngineFlush;
         pendingEngineFlush = false;
-        await flushOnce(engine);
+        await flushOnce(engine, preferences);
       }
     })
     .finally(() => {

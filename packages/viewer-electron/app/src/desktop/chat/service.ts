@@ -239,6 +239,7 @@ export class Chats {
       new Set(principal.commands.map((command) => command.id)),
       settings.customActions,
       this.ports.aliases(),
+      settings.layouts,
     );
     if (problem) throw new Error(problem);
   }

@@ -1,6 +1,6 @@
 import { maximumWorkspaces } from '../../domain/workspaces/catalog';
-import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, open, readdir } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { lstat, mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import type { SavedState } from '../../domain/contracts';
@@ -17,13 +17,19 @@ import { portableCanvasSources } from '../../domain/canvases/sources';
 import { receiptSchema } from '../../domain/automation/receipts';
 import { checkDocumentSchema } from '../../domain/fabrication/check-document';
 import type { CheckDocument } from '../../domain/fabrication/check-document';
-import { CheckStore } from '../fabrication/check-store';
-import { pathMapper } from '../../domain/files/changes';
+import { syncParentDirectory } from './directory-sync';
+import { publishExclusiveFile } from './exclusive-file';
+import { preferencesSchema } from '../preferences/preferences-schema';
 import { inspectReviewedFile } from '../native/reviewed-file';
 import { textBufferSchema } from '../editing/text-buffers';
 import { settingsSchema, validateCustomProfiles } from '../preferences/settings-schema';
 import { stateSchema } from './storage';
-import { backupIdentityMap, backupRoots, restoreBackupState } from './backup-state';
+import {
+  backupIdentityMap,
+  backupPathMapper,
+  backupRoots,
+  restoreBackupState,
+} from './backup-state';
 import {
   canvasBackupAssetSchema,
   readCanvasBackupAssets,
@@ -93,7 +99,21 @@ export const backupSchema = z
   })
   .strict();
 type Backup = z.infer<typeof backupSchema>;
+interface RestoreAttempt {
+  ids: Map<string, string>;
+  started: number;
+  draftBases: Map<string, TextVersion>;
+  published: Set<string>;
+  registered: Set<string>;
+}
+interface RestoredCopy {
+  name: string;
+  bytes: number;
+  sha256: string;
+}
 interface Prepared {
+  attempt?: RestoreAttempt;
+  completed?: { reply: Extract<BackupReply, { kind: 'restored' }>; copies: RestoredCopy[] };
   owner: number;
   backup: Backup;
   mode: BackupReview['mode'];
@@ -101,14 +121,30 @@ interface Prepared {
   bindings: Map<string, string>;
   bytes: number;
 }
+
 interface BackupHost {
-  flush(): Promise<void>;
+  flush(scope?: 'workspace'): Promise<void>;
   state(): Promise<SavedState | null>;
-  settings(): SettingsSnapshot;
-  apply(patches: SettingsPatch[]): Promise<SettingsSnapshot>;
+  settings(refresh?: 'reload'): SettingsSnapshot | Promise<SettingsSnapshot>;
+  registerCheck(document: CheckDocument): Promise<void>;
+  apply(patches: SettingsPatch[], revision: number): Promise<SettingsSnapshot>;
   choose(owner: number, kind: 'import' | 'export' | 'folder'): Promise<string | null>;
   textVersion?(file: string): Promise<TextVersion | undefined>;
   imported?(): void;
+}
+
+async function verifyRestoredCopy(root: string, copy: RestoredCopy) {
+  const file = path.join(root, copy.name);
+  let digest: string;
+  try {
+    if (!(await lstat(path.dirname(file))).isDirectory())
+      throw new Error('The private document folder is missing or is a link.');
+    digest = (await inspectReviewedFile(file, copy.bytes)).reviewed.sha256;
+  } catch (cause) {
+    throw new Error(`Could not verify the restored copy ${copy.name}.`, { cause });
+  }
+  if (digest !== copy.sha256)
+    throw new Error(`The restored copy ${copy.name} changed after the previous attempt.`);
 }
 
 function validate(value: unknown): Backup {
@@ -133,26 +169,28 @@ function validate(value: unknown): Backup {
     throw new Error('These workspaces need a newer Viewer. The backup was left unchanged.');
   const backup = backupSchema.parse(value);
   validateCanvasBackupAssets(backup.documents.canvases, backup.canvasAssets);
+  validateReferences(backup.state, backup.documents);
+  return backup;
+}
+
+function validateReferences(state: SavedState, documents: Backup['documents']) {
   const ids = new Set<string>();
   const members = Object.fromEntries(
-    documentKeys.map((kind) => [
-      kind,
-      new Set(backup.documents[kind].map((document) => document.id)),
-    ]),
+    documentKeys.map((kind) => [kind, new Set(documents[kind].map((document) => document.id))]),
   ) as Record<DocumentKind, Set<string>>;
   for (const kind of documentKeys)
-    for (const document of backup.documents[kind]) {
+    for (const document of documents[kind]) {
       if (ids.has(document.id))
         throw new Error('The backup contains duplicate document identities.');
       ids.add(document.id);
     }
-  for (const chat of backup.documents.conversations)
+  for (const chat of documents.conversations)
     if (
       (chat.canvasID && !members.canvases.has(chat.canvasID)) ||
       (chat.branch && !members.conversations.has(chat.branch.conversationID))
     )
       throw new Error('The backup is incomplete: a conversation reference is missing.');
-  for (const canvas of backup.documents.canvases)
+  for (const canvas of documents.canvases)
     if (
       !members.conversations.has(canvas.conversationID) ||
       (canvas.fork && !members.canvases.has(canvas.fork.id))
@@ -160,7 +198,7 @@ function validate(value: unknown): Backup {
       throw new Error('The backup is incomplete: a canvas reference is missing.');
   const spaces = new Set<string>(),
     panes = new Set<string>();
-  for (const space of backup.state.workspaces) {
+  for (const space of state.workspaces) {
     if (spaces.has(space.id))
       throw new Error('The backup contains duplicate workspace identities.');
     spaces.add(space.id);
@@ -190,9 +228,6 @@ function validate(value: unknown): Backup {
         );
     }
   }
-  if (backup.state.version > CURRENT_STATE_VERSION)
-    throw new Error('The workspaces need a newer Viewer.');
-  return backup;
 }
 
 /** A bounded review owns exact bytes and fresh restore identities; it conveys no file access. */
@@ -319,15 +354,8 @@ export class PersonalBackups {
     }
   }
 
-  private async write(file: string, backup: Backup): Promise<void> {
-    // Exclusive creation: a native dialog’s replace choice cannot silently destroy an old backup.
-    const handle = await open(file, 'wx', 0o600);
-    try {
-      await handle.writeFile(JSON.stringify(backup, null, 2));
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
+  private write(file: string, backup: Backup): Promise<void> {
+    return publishExclusiveFile(file, JSON.stringify(backup, null, 2));
   }
 
   private async perform(
@@ -356,6 +384,7 @@ export class PersonalBackups {
           documents.canvases,
           maximumBackupBytes,
         );
+        const snapshot = await this.host.settings();
         backup = validate({
           format: 'viewer-personal-backup',
           version: 1,
@@ -366,7 +395,7 @@ export class PersonalBackups {
             Object.fromEntries(
               Object.keys(portablePreferencesSchema.shape).map((key) => [
                 key,
-                this.host.settings().settings[key as keyof SettingsSnapshot['settings']],
+                snapshot.settings[key as keyof SettingsSnapshot['settings']],
               ]),
             ),
           ),
@@ -415,8 +444,15 @@ export class PersonalBackups {
     if (request.kind === 'relink') {
       if (item.mode !== 'import' || !item.roots.includes(request.root))
         throw new Error('This folder is not part of the reviewed backup.');
+      if (item.completed || item.attempt?.published.size)
+        throw new Error(
+          'Some restored documents have already been saved. Finish this restore with the reviewed folders.',
+        );
       const folder = await this.host.choose(owner, 'folder');
-      if (folder) item.bindings.set(request.root, folder);
+      if (folder) {
+        item.bindings.set(request.root, folder);
+        item.attempt = undefined;
+      }
       return this.review(request.id, item);
     }
     if (request.kind === 'write') {
@@ -435,22 +471,34 @@ export class PersonalBackups {
       return { kind: 'written', name: path.basename(file) };
     }
     if (item.mode !== 'import') throw new Error('Choose an import review.');
-    await this.host.flush();
+    if (item.completed) {
+      for (const copy of item.completed.copies) await verifyRestoredCopy(this.root, copy);
+      this.requireOwner(owner);
+      return item.completed.reply;
+    }
+    await this.host.flush(request.preferences ? undefined : 'workspace');
     this.requireOwner(owner);
     const current = await this.host.state();
     if ((current?.workspaces.length ?? 0) + item.backup.state.workspaces.length > maximumWorkspaces)
       throw new Error(
         `Restoring these workspaces would exceed the limit of ${maximumWorkspaces}. Export smaller groups first.`,
       );
-    const ids = backupIdentityMap(
-      item.backup.state,
-      documentKeys.flatMap((kind) => item.backup.documents[kind].map((doc) => doc.id)),
-    );
+    const attempt: RestoreAttempt = (item.attempt ??= {
+      ids: backupIdentityMap(
+        item.backup.state,
+        documentKeys.flatMap((kind) => item.backup.documents[kind].map((doc) => doc.id)),
+      ),
+      started: Date.now(),
+      draftBases: new Map(),
+      published: new Set(),
+      registered: new Set(),
+    });
+    const { ids } = attempt;
     const changes = [
       { source: item.backup.privateRoot, destination: this.root },
       ...[...item.bindings].map(([source, destination]) => ({ source, destination })),
     ];
-    const map = pathMapper(changes),
+    const map = backupPathMapper(changes),
       id = (value: string) => ids.get(value) ?? value;
     const restored = stateSchema.parse(restoreBackupState(item.backup.state, ids, changes));
     const preferences = request.preferences ? structuredClone(item.backup.preferences) : {};
@@ -476,14 +524,18 @@ export class PersonalBackups {
           ...('root' in plane && plane.root ? { root: map(plane.root) } : {}),
         })),
       }));
-    const before = this.host.settings().settings;
+    const snapshot = await this.host.settings(request.preferences ? 'reload' : undefined);
+    if (request.preferences && snapshot.config?.diagnostics.length)
+      throw new Error(snapshot.config.diagnostics[0]);
+    const before = snapshot.settings;
     const next = settingsSchema.parse({ ...before, ...preferences });
     validateCustomProfiles(next.profiles, before.profiles);
     const patches: SettingsPatch[] = Object.entries(preferences).map(([key, value]) => ({
       path: 'settings.' + key,
       value,
     }));
-    if (request.preferences && restored.ui) patches.push({ path: 'ui', value: restored.ui });
+    if (request.preferences && restored.ui)
+      patches.push({ path: 'ui', value: preferencesSchema.parse(restored.ui) });
     // Validate all records before creating anything. The write pass only uses generated UUID names.
     const documents = {
       notes: item.backup.documents.notes.map((doc) => ({
@@ -551,7 +603,7 @@ export class PersonalBackups {
         paths: doc.paths.map(map),
         sources: doc.sources.map((source) => ({ ...source, path: map(source.path) })),
         status: doc.status === 'running' ? 'interrupted' : doc.status,
-        updated: Date.now(),
+        updated: attempt.started,
         // A readable import preserves observations, never authority derived from editable JSON.
         verification: undefined,
         confirmations: [],
@@ -581,14 +633,26 @@ export class PersonalBackups {
     };
     for (const draft of documents.drafts)
       if (draft.file && draft.base && this.host.textVersion) {
-        const version = await this.host.textVersion(draft.file).catch(() => undefined);
-        // Relinking a copied file changes its inode. Adopt it only when the original bytes match.
-        if (version?.sha256 === draft.base.sha256 && version.size === draft.base.size)
-          draft.base = version;
+        let base = attempt.draftBases.get(draft.id);
+        if (!base) {
+          const version = await this.host.textVersion(draft.file).catch(() => undefined);
+          base =
+            version?.sha256 === draft.base.sha256 && version.size === draft.base.size
+              ? version
+              : draft.base;
+          attempt.draftBases.set(draft.id, base);
+        }
+        draft.base = base;
       }
     for (const kind of documentKeys)
       for (const doc of documents[kind]) documentKinds[kind].schema.parse(doc);
+    validateReferences(restored, documents);
     await restoreCanvasBackupAssets(this.root, item.backup.canvasAssets);
+    const copies: RestoredCopy[] = item.backup.canvasAssets.map((asset) => ({
+      name: path.join('canvas-assets', asset.hash),
+      bytes: Buffer.byteLength(asset.data, 'base64'),
+      sha256: asset.hash,
+    }));
     for (const kind of documentKeys) {
       if (!documents[kind].length) continue;
       const directory = path.join(this.root, documentKinds[kind].directory);
@@ -599,23 +663,33 @@ export class PersonalBackups {
           'The private document destination is a link. Restored files were preserved.',
         );
       for (const doc of documents[kind]) {
-        const handle = await open(path.join(directory, doc.id + '.json'), 'wx', 0o600);
-        try {
-          await handle.writeFile(JSON.stringify(doc));
-          await handle.sync();
-        } finally {
-          await handle.close();
+        const bytes = Buffer.from(JSON.stringify(doc));
+        const copy = {
+          name: path.join(documentKinds[kind].directory, doc.id + '.json'),
+          bytes: bytes.length,
+          sha256: createHash('sha256').update(bytes).digest('hex'),
+        };
+        const file = path.join(this.root, copy.name);
+        if (attempt.published.has(doc.id)) {
+          await verifyRestoredCopy(this.root, copy);
+          await syncParentDirectory(file);
+        } else {
+          await publishExclusiveFile(file, bytes, () => attempt.published.add(doc.id));
         }
+        copies.push(copy);
       }
     }
-    // The discovery index is separate from documents and contains only their restored identities.
-    const checks = new CheckStore(path.join(this.root, documentKinds.checks.directory));
-    for (const document of documents.checks) await checks.save(document);
-    await checks.flush();
+    for (const document of documents.checks) {
+      if (attempt.registered.has(document.id)) continue;
+      await this.host.registerCheck(document);
+      attempt.registered.add(document.id);
+    }
     this.requireOwner(owner);
-    const settings = patches.length ? await this.host.apply(patches) : this.host.settings();
+    const settings = patches.length
+      ? await this.host.apply(patches, snapshot.revision)
+      : await this.host.settings();
     this.host.imported?.();
-    this.prepared.delete(request.id);
-    return { kind: 'restored', state: restored, settings };
+    item.completed = { reply: { kind: 'restored', state: restored, settings }, copies };
+    return item.completed.reply;
   }
 }

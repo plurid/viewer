@@ -207,6 +207,31 @@ async function provision(
   return runtime;
 }
 
+/** The executable named in the seed plist selects the speech runtime at startup. */
+export async function assertSeedArchitecture(app: string, requestedArch: string): Promise<void> {
+  const execute = promisify(execFile);
+  const { stdout: executable } = await execute('/usr/libexec/PlistBuddy', [
+    '-c',
+    'Print :CFBundleExecutable',
+    path.join(app, 'Contents/Info.plist'),
+  ]);
+  const name = executable.replace(/\n$/, '');
+  if (!name || name === '.' || name === '..' || path.basename(name) !== name)
+    throw new Error('The seed has an invalid executable name.');
+  const { stdout } = await execute('/usr/bin/lipo', [
+    '-archs',
+    path.join(app, 'Contents/MacOS', name),
+  ]);
+  const architecture = stdout.trim();
+  const arch = architecture === 'x86_64' ? 'x64' : architecture;
+  if (arch !== 'arm64' && arch !== 'x64')
+    throw new Error('Use a single-architecture arm64 or x64 Viewer seed.');
+  if (arch !== requestedArch)
+    throw new Error(
+      `The seed architecture ${arch} does not match the requested build architecture ${requestedArch}.`,
+    );
+}
+
 /** The Electron a packaged macOS app runs: its framework's bundle version. */
 export async function bundledElectronVersion(app: string): Promise<string> {
   const plist = path.join(

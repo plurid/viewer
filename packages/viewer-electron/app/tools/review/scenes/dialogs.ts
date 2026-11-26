@@ -198,7 +198,10 @@ const dialogs: DialogScene[] = [
 const dialogScene = (item: DialogScene): Scene => ({
   id: 'dialog-' + item.id,
   title: item.title,
-  mustBeTrue: dialogRules,
+  mustBeTrue:
+    item.dialog === 'TaskRequestDialog'
+      ? [...dialogRules, 'Create Task… opens the native confirmation with Create Task and Cancel.']
+      : dialogRules,
   setup: item.setup ?? { folder: samples, view: 'list' },
   variants: coverageVariants,
   covers: { dialogs: [item.dialog], ...(item.commandID ? { commands: [item.commandID] } : {}) },

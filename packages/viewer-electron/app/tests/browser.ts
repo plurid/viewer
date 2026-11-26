@@ -147,7 +147,7 @@ const api: ViewerAPI = {
   terminalResize: (id, cols, rows) => invoke('terminalResize', id, cols, rows),
   terminalAck: (id, bytes) => invoke('terminalAck', id, bytes),
   terminalClose: (id) => invoke('terminalClose', id),
-  customExecute: (actionID, target) => invoke('customExecute', actionID, target),
+  customExecute: (...args) => invoke('customExecute', ...args),
   executionList: () => invoke('executionList'),
   executionCancel: (id) => invoke('executionCancel', id),
 

@@ -104,6 +104,9 @@ the browser plane. Servers stay stopped after Viewer restarts until you start th
 Viewer quits once your work is safe. It first finishes a backup being written, saves every window
 (including open editors, notes, drafts, lenses and settings) and closes its browser planes.
 
+- If Viewer reports that a newer or unreadable workspace file is protected, closing or quitting
+  still saves your open editors and settings. Layout changes from that session are lost when you
+  close.
 - With file operations still running, Viewer asks what to do: **Wait for them**, **Cancel them and
   quit** or **Keep Viewer open**.
 - If a window fails to save or does not answer in time, Viewer reports the failure instead of
@@ -168,10 +171,14 @@ Mac App Store editions use this report; the default needs no user, computer-name
 
 Turn on **Include message text** only if you want excerpts. Message text can contain file names,
 addresses and other private text. Viewer removes what it can recognize. Read it before you share it.
-Recognized paths are reduced; code paths inside Viewer's bundle retain their diagnostic names, while
-the data folder keeps only fixed Viewer folder names. Failed privacy checks omit excerpts and name
-what could not be checked. Turning the checkbox off restores the default report. Copy copies exactly
-the displayed text.
+Viewer hides quoted filenames and shortens recognized paths. It omits text before or after a path
+when spaces or line breaks could be part of a filename. Frame locations come from the recorded
+stack. Text that resembles a stack frame in a message receives the same path checks as other text.
+Worker stderr records show structured failure details only. A worker can split one filename across
+multiple records. Complete code paths inside Viewer's bundle retain their diagnostic names, and the
+data folder keeps only fixed Viewer folder names. Failed privacy checks omit excerpts and name what
+could not be checked. Turning the checkbox off restores the default report. Copy copies exactly the
+displayed text.
 
 In the Mac App Store edition, message text needs the same additional privacy checks: account and
 Home details, the real Home path, full name, computer and host names, and mounted volume names.
@@ -183,6 +190,8 @@ it was shortened and ends at a whole line.
 Viewer sends neither report to its developer. The report does not add settings, file listings,
 clipboard contents, environment variables or license buyer details.
 
-**Help → Show Diagnostic Log** reveals the original local log. **Help → Show Crash Reports** opens
-crash reports kept on this Mac. Neither is sent. These original files can contain private paths and
-names; edit them before sharing, along with any screenshots.
+**Help → Show Diagnostic Log** reveals the original local log. The log omits worker lines longer
+than 2,000 characters and lines that carry a quoted credential or JSON value across line breaks. It
+resumes recording messages after the value ends. **Help → Show Crash Reports** opens crash reports
+kept on this Mac. Neither is sent. These original files can contain private paths and names; edit
+them before sharing, along with any screenshots.

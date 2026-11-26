@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -7,13 +8,35 @@ import { promisify } from 'node:util';
 import { expect, it } from 'vitest';
 import store from '../mac-app-store.json' with { type: 'json' };
 import { SpeechRuntime } from '../src/desktop/speech/runtime';
-import { speechRuntimeName } from '../src/desktop/speech/runtime-manifest';
+import {
+  speechRuntimeArchive,
+  speechRuntimeName,
+  speechRuntimeVersion,
+} from '../src/desktop/speech/runtime-manifest';
 import { storeConfiguration, storeEntitlements } from '../tools/mas-configuration';
 import { verifySpeechRuntime } from '../tools/speech-runtime';
 import { temporaryRoot } from '../tools/temporary';
 
 const appRoot = fileURLToPath(new URL('..', import.meta.url));
 const runtimeAssets = path.join(appRoot, 'assets', speechRuntimeName());
+
+it('refuses a speech build whose owned helper source has changed', async () => {
+  const root = await temporaryRoot('viewer-speech-source-');
+  const binary = 'Generated helper';
+  const digest = createHash('sha256').update(binary).digest('hex');
+  const manifest = JSON.stringify({
+    version: speechRuntimeVersion,
+    archive: speechRuntimeArchive.sha256,
+    helperHash: 'a'.repeat(64),
+    files: { 'viewer-speech-recognizer': digest, 'libwhisper.dylib': digest },
+  });
+  await writeFile(path.join(root, 'manifest.json'), manifest);
+  for (const name of ['viewer-speech-recognizer', 'libwhisper.dylib'])
+    await writeFile(path.join(root, name), binary);
+  await expect(verifySpeechRuntime(root)).resolves.toBeUndefined();
+  await expect(verifySpeechRuntime(root, 'b'.repeat(64))).rejects.toThrow('Preserve and relocate');
+  expect(await readFile(path.join(root, 'manifest.json'), 'utf8')).toBe(manifest);
+});
 
 it.skipIf(process.platform !== 'darwin' || !existsSync(path.join(runtimeAssets, 'manifest.json')))(
   'accepts normal package signing and rejects loose or package-tampered runtime bytes',

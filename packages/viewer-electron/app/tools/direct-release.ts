@@ -1,44 +1,31 @@
 /** Signed/notarized local candidates only. This does not publish or upload a Store listing. */
-import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { lstat, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 import { temporaryRoot } from './temporary';
 import { cloneTree } from './clone';
 import { directBuildNumber } from './build-number';
 import { macOSMinimum } from './native-build/macos-target';
 import { sourceHash } from './qualification/source';
+import {
+  execRelease as exec,
+  releaseEnvironment,
+  spawnRelease as spawn,
+} from './release-environment';
 import { releaseFeedEndpoint, releaseNotes, signingKey, writeSignedFeed } from './update-feed';
 import { httpsAddress } from '../src/desktop/updates/signature';
 import { licenseEndpoint } from '../src/desktop/license/signature';
 import { licenseConfiguration } from '../src/desktop/release';
 import type { LicenseConfiguration } from '../src/desktop/release';
 import { alphaVersionSchema } from '../src/domain/updates/version';
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'),
-  exec = promisify(execFile);
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export function releaseLicenseConfiguration(
   configuration: LicenseConfiguration = licenseConfiguration,
 ): void {
   licenseEndpoint(configuration);
-}
-
-/** Child gates and packagers have no reason to receive either publisher's signing material. */
-export function releaseEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return Object.fromEntries(
-    Object.entries(env).filter(
-      ([name]) =>
-        ![
-          'VIEWER_UPDATE_SIGNING_KEY',
-          'VIEWER_UPDATE_SIGNING_KEY_FILE',
-          'VIEWER_LICENSE_SIGNING_KEY',
-          'VIEWER_LICENSE_SIGNING_KEY_FILE',
-        ].includes(name),
-    ),
-  );
 }
 
 interface Notarization {
@@ -245,9 +232,9 @@ async function main() {
       env: {
         ...environment,
         VIEWER_MAC_CHANNEL: 'direct',
+        VIEWER_BUILD_ARCH: 'arm64',
         VIEWER_DIRECT_IDENTITY: signedIdentity,
-        // Forge's automatic notarizer permanently removes its temporary archive.
-        // This command owns the retained archive and submission instead.
+        // This command owns the retained archive and submission.
         VIEWER_NOTARY_PROFILE: '',
       },
       stdio: 'inherit',

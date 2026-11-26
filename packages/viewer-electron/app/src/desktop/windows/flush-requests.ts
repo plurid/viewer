@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { FlushResult } from '../../domain/persistence/flush';
 
 export const FLUSH_TIMEOUT_MS = 10_000;
-type FlushKind = 'flush' | 'flush-settings' | `note-trash:${string}`;
+type FlushKind =
+  'flush' | 'flush-workspace' | 'flush-documents' | 'flush-settings' | `note-trash:${string}`;
 
 interface Request {
   owner: number;

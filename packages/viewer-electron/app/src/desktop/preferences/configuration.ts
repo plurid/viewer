@@ -98,19 +98,23 @@ export class JsoncConfiguration<T> {
    * comments kept. Left as it was, it would be upgraded again at each read, over the choices made
    * since. A file that cannot be written stays as it is, upgraded in memory.
    */
-  private async upgraded(text: string): Promise<string> {
+  private upgradeText(text: string): string {
     if (!this.upgrade) return text;
-    const before: unknown = parse(text, [], { allowTrailingComma: true, disallowComments: false });
+    const before: unknown = parse(text, [], { allowTrailingComma: true });
     const after = this.upgrade(before);
     const edits = configEdits(before, after, [], { objectValues: this.options.objectValues });
     if (!edits.length) return text;
+    const upgraded = this.document(
+      applyConfigEdits(text, edits, { insertSpaces: true, tabSize: 2 }),
+      new Set(addedPaths(before, after)),
+    );
+    this.decode(upgraded);
+    return upgraded;
+  }
+  private async upgraded(text: string): Promise<string> {
     try {
-      const upgraded = this.document(
-        applyConfigEdits(text, edits, { insertSpaces: true, tabSize: 2 }),
-        new Set(addedPaths(before, after)),
-      );
-      this.decode(upgraded);
-      await this.atomic(this.file, upgraded, text);
+      const upgraded = this.upgradeText(text);
+      if (upgraded !== text) await this.atomic(this.file, upgraded, text);
       return upgraded;
     } catch {
       return text;
@@ -176,7 +180,7 @@ export class JsoncConfiguration<T> {
         `Fix ${this.options.name} before saving${this.options.name === 'config.jsonc' ? ' Settings' : ''}: ` +
           this.diagnostics[0],
       );
-    let text = this.text || JSON.stringify(value, null, 2) + '\n';
+    let text = this.text ? this.upgradeText(this.text) : JSON.stringify(value, null, 2) + '\n';
     const before = this.text ? this.decode(this.text) : undefined;
     // item by item, so the comments of what did not change stay
     if (before)
@@ -224,7 +228,7 @@ export class JsoncConfiguration<T> {
   async replace(text: string): Promise<T> {
     const value = this.decode(text);
     // an imported guide is left as it is; an undocumented file is documented like a new one
-    text = this.document(text, new Set());
+    text = this.document(this.upgradeText(text), new Set());
     const disk = await fs.readFile(this.file, 'utf8').catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return '';
       throw error;

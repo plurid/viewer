@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { expect, it, vi } from 'vitest';
 import type { ViewerAPI } from '../src/domain/contracts';
+import { customActionSchema } from '../src/desktop/actions/automation-schema';
 import { failedFlush } from '../src/domain/persistence/flush';
 import { createWindowHandlers } from '../src/desktop/ipc/window-handlers';
 import { WindowFlushRequests } from '../src/desktop/windows/flush-requests';
@@ -223,4 +224,39 @@ it('forwards failed flushed() results through preload so save barriers reject in
   expect(ipc.invoke).toHaveBeenLastCalledWith('viewer:request', 'flushed', [token, failed]);
   await expect(barrier).rejects.toThrow('Disk full');
   expect(schemas.flushed.safeParse([token]).success).toBe(false);
+});
+
+it('passes the selected action definition and values through the execution preload', async () => {
+  await import('../src/preload');
+  const selected = customActionSchema.parse({
+    id: 'build',
+    name: 'Build',
+    executor: { kind: 'executable', executable: 'build', args: ['{input:name}'] },
+  });
+  const target = {
+    workspaceID: 'workspace',
+    rootID: 'root',
+    paneID: 'folder',
+    directory: '/fixture',
+    selection: [],
+  };
+  const values = { name: 'Example' };
+  ipc.invoke.mockResolvedValue({ ok: true, value: 'task' });
+  await bridge.api!.customExecute(selected.id, target, values, selected);
+  expect(ipc.invoke).toHaveBeenLastCalledWith('viewer:request', 'customExecute', [
+    selected.id,
+    target,
+    values,
+    selected,
+  ]);
+  expect(schemas.customExecute.parse(ipc.invoke.mock.lastCall![2])).toEqual([
+    selected.id,
+    target,
+    values,
+    selected,
+  ]);
+  expect(
+    schemas.customExecute.safeParse([selected.id, target, values, { ...selected, approved: true }])
+      .success,
+  ).toBe(false);
 });

@@ -1,3 +1,4 @@
+import { createTaskLabel } from '../domain/agents/review';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { realpath } from 'node:fs/promises';
 import { RemoteConnections, remoteConnectionRoot } from './remote/connections';
@@ -1160,7 +1161,7 @@ export class Desktop {
           this.windows.get(owner)?.window,
           'Create this branch task?',
           taskWorkflowReviewDetail(setup),
-          'Create task',
+          createTaskLabel,
         ),
     });
     this.agentRequests = new AgentRequests(
@@ -1383,27 +1384,36 @@ export class Desktop {
     );
     this.storage = new Storage(path.join(dataPath, 'viewer-state-v1.json'));
     this.backups = new PersonalBackups(dataPath, {
-      flush: async () => {
+      flush: async (scope) => {
+        const kind = scope === 'workspace' ? 'flush-workspace' : 'flush';
         // Snapshot editors without cancelling an active conversation or its process ownership.
         await Promise.all(
           this.readyWindows().map((window) =>
-            this.flushes.request(window.webContents.id, 'flush', (token) =>
-              sendEvent(window.webContents, { type: 'flush', token }),
+            this.flushes.request(window.webContents.id, kind, (token) =>
+              sendEvent(window.webContents, { type: kind, token }),
             ),
           ),
         );
         // a backup also copies the command receipts
-        await Promise.all([this.flushWindowStores(), this.receipts.flush(), this.canvases.flush()]);
+        await Promise.all([
+          this.flushWindowStores(scope),
+          this.receipts.flush(),
+          this.canvases.flush(),
+        ]);
       },
       state: async () => (await this.storage.load()).state,
-      settings: () => ({ ...this.settings.snapshot(), credentials: this.credentials.ids() }),
+      settings: async (refresh) => ({
+        ...(refresh ? await this.settings.reload() : this.settings.snapshot()),
+        credentials: this.credentials.ids(),
+      }),
+      registerCheck: (document) => this.fabrication.registerRestored(document),
       textVersion: async (file) => {
         const result = await this.texts.open(file);
         return result.editable ? result.document.version : undefined;
       },
       imported: () => this.receipts.refreshDocuments(),
-      apply: async (patches) => ({
-        ...(await this.settings.patch(patches, this.settings.snapshot().revision)),
+      apply: async (patches, revision) => ({
+        ...(await this.settings.patch(patches, revision)),
         credentials: this.credentials.ids(),
       }),
       choose: async (owner, kind) => {
@@ -1412,10 +1422,15 @@ export class Desktop {
         if (!window || window.isDestroyed()) throw new Error('The backup window closed.');
         const file =
           kind === 'export'
-            ? await saveOnce(this.fileAccess, window, {
-                title: 'Save personal backup',
-                defaultPath: 'Viewer-' + localDateStamp() + '.viewer-backup.json',
-              })
+            ? await saveOnce(
+                this.fileAccess,
+                window,
+                {
+                  title: 'Save personal backup',
+                  defaultPath: 'Viewer-' + localDateStamp() + '.viewer-backup.json',
+                },
+                'backup',
+              )
             : await openOnce(this.fileAccess, window, {
                 title: 'Open personal backup',
                 filters: [{ name: 'Viewer backup', extensions: ['json'] }],
@@ -1843,7 +1858,9 @@ export class Desktop {
       if (!this.options.quitting?.()) {
         this.definitions.clearRootSearch(sender);
         void this.workspaceSessions
-          .closeAndPersist(sender, (state) => this.storage.save(this.withPreferences(state)))
+          .closeAndPersist(sender, async (state) => {
+            if (!this.storage.layoutProtected) await this.storage.save(this.withPreferences(state));
+          })
           .catch((error) => this.diagnoseFailure(error));
       }
       if (this.window === window) {
@@ -1942,7 +1959,11 @@ export class Desktop {
     if (!record || record.role !== 'viewer')
       throw new Error('This isn’t an open workspace window, so it has nothing to save.');
     await this.chats.stopOwner(owner);
-    await this.saveRenderer(owner, record);
+    await this.saveRenderer(
+      owner,
+      record,
+      this.storage.layoutProtected ? 'flush-documents' : 'flush',
+    );
     await this.flushWindowStores();
   }
   /** Saves the person's existing drafts before an agent task takes their window, since agent
@@ -1955,17 +1976,21 @@ export class Desktop {
   }
   /** Asks a workspace window's renderer to save, once it has published its commands and so can
    * answer. A stopped window is not asked: what it saved last is what it has. */
-  private async saveRenderer(owner: number, record: WindowRecord): Promise<void> {
+  private async saveRenderer(
+    owner: number,
+    record: WindowRecord,
+    kind: 'flush' | 'flush-documents' = 'flush',
+  ): Promise<void> {
     if (!record.ready || record.stopped) return;
-    await this.flushes.request(owner, 'flush', (token) => {
-      sendEvent(record.window.webContents, { type: 'flush', token });
+    await this.flushes.request(owner, kind, (token) => {
+      sendEvent(record.window.webContents, { type: kind, token });
     });
   }
   /** The stores a workspace window writes: flushed as it closes, and before a backup. */
-  private async flushWindowStores(): Promise<void> {
+  private async flushWindowStores(scope?: 'workspace'): Promise<void> {
     await Promise.all([
       this.storage.flush(),
-      this.settings.flush(),
+      scope === 'workspace' ? undefined : this.settings.flush(),
       this.buffers.flush(),
       this.notes.flush(),
       this.chats.flush(),

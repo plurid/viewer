@@ -1,24 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  recordedShortcut,
+  validShortcut,
+  validGlobalShortcut,
+} from '../../../domain/preferences/shortcuts';
 import { keyGlyphs, keyName } from '../../../domain/preferences/keymap';
-
-/** The unmodified key from its place: Option and Shift change the character. */
-const placeKey = (event: KeyboardEvent) =>
-  /^Key([A-Z])$/.exec(event.code)?.[1] ??
-  /^Digit(\d)$/.exec(event.code)?.[1] ??
-  (event.key === ' ' ? 'Space' : event.key.length === 1 ? event.key.toUpperCase() : event.key);
-/** A chord as shortcuts write it, from a key press: `Ctrl+A`, `Shift+Cmd+Z`, `Ctrl+Space`. */
-function chordFrom(event: KeyboardEvent): string | undefined {
-  if (['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return undefined;
-  return [
-    event.ctrlKey && 'Ctrl',
-    event.altKey && 'Alt',
-    event.shiftKey && 'Shift',
-    event.metaKey && 'Cmd',
-    placeKey(event),
-  ]
-    .filter(Boolean)
-    .join('+');
-}
 const sequenceText = (keys: readonly string[]) => keys.map(keyGlyphs).join(' ');
 /**
  * Press to set a key. A shortcut or prefix is a chord with ⌃ or ⌘; a leader is any key;
@@ -86,10 +72,15 @@ export function KeyCapture({
         if (name) finish(name);
         return;
       }
-      const chord = chordFrom(event);
+      const chord = recordedShortcut(event);
       if (!chord) return;
       if (!event.ctrlKey && !event.metaKey && !(kind === 'global-shortcut' && event.altKey)) {
         setMessage('Hold ⌃ or ⌘ with the key.');
+        return;
+      }
+      const valid = kind === 'global-shortcut' ? validGlobalShortcut : validShortcut;
+      if (!valid(chord)) {
+        setMessage('Viewer cannot use this key for a shortcut.');
         return;
       }
       const taken = ownerRef.current?.(chord);

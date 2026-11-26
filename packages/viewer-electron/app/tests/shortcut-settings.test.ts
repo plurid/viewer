@@ -6,6 +6,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { createElement } from 'react';
+import { receiveSessionKeys } from '../src/renderer/keys/session';
 import { ShortcutSettings } from '../src/renderer/ui/settings/ShortcutSettings';
 import type { SettingsEditor } from '../src/renderer/ui/settings/editor';
 import { defaultSettings, type SettingsSnapshot } from '../src/domain/services';
@@ -35,7 +36,7 @@ const show = (shortcuts: Record<string, string> = {}, more: Partial<ApplicationS
     save: vi.fn(),
     error: vi.fn(),
   } as SettingsEditor;
-  return { view: render(createElement(ShortcutSettings, { editor })), patch };
+  return { view: render(createElement(ShortcutSettings, { editor })), patch, editor };
 };
 
 it('records a shortcut by pressing it, and names one already in use', () => {
@@ -129,4 +130,64 @@ it('is found by searching Settings for “shortcut”', async () => {
       settingsDiscovery(settings, query).map((item) => item.category),
       query,
     ).toContain('Shortcuts');
+});
+
+it('records shifted punctuation by its physical key for shortcut conflicts', () => {
+  const { view, patch } = show();
+  fireEvent.click(view.getByRole('button', { name: 'Undo shortcut' }));
+  press('>', { metaKey: true, shiftKey: true, code: 'Period' });
+  expect(patch).not.toHaveBeenCalled();
+  expect(view.getByRole('alert').textContent).toContain('Show or Hide Hidden Files');
+});
+
+it('reports rejected session Keep and Discard in Settings', async () => {
+  receiveSessionKeys({ bindings: [], aliases: [{ name: 'Test', line: 'frame-all' }] });
+  Object.assign(window, {
+    viewer: {
+      sessionKeysKeep: vi.fn().mockRejectedValue(new Error('Keep failed')),
+      sessionKeysDiscard: vi.fn().mockRejectedValue(new Error('Discard failed')),
+    },
+  });
+  try {
+    const { view, editor } = show();
+    for (const button of ['Keep', 'Discard']) {
+      await act(async () => {
+        fireEvent.click(view.getByRole('button', { name: button }));
+      });
+      expect(editor.error).toHaveBeenCalledWith(button + ' failed');
+    }
+  } finally {
+    receiveSessionKeys({ bindings: [], aliases: [] });
+  }
+});
+
+it('preserves a rejected key binding until its own table acknowledges the edit', () => {
+  const { view, editor, patch } = show();
+  const chooseTable = (name: string) => {
+    fireEvent.click(view.getByRole('button', { name: /Key table/ }));
+    fireEvent.click(view.getByRole('menuitemradio', { name }));
+  };
+  chooseTable('No prefix');
+  fireEvent.click(view.getByRole('button', { name: "New binding's keys" }));
+  press('z');
+  press('Enter');
+  const line = view.getByLabelText("New binding's line") as HTMLInputElement;
+  fireEvent.change(line, { target: { value: 'dock' } });
+  const add = () => fireEvent.click(view.getByRole('button', { name: 'Add' }));
+  add();
+  expect(editor.error).toHaveBeenCalled();
+  expect(patch).not.toHaveBeenCalled();
+  chooseTable('Prefix');
+  expect(line.value).toBe('dock');
+  fireEvent.change(line, { target: { value: 'frame-all' } });
+  add();
+  expect(line.value).toBe('frame-all');
+  const [, keymap] = patch.mock.lastCall!;
+  const snapshot = {
+    ...editor.snapshot,
+    revision: editor.snapshot.revision + 1,
+    settings: { ...editor.snapshot.settings, keymap },
+  };
+  view.rerender(createElement(ShortcutSettings, { editor: { ...editor, snapshot } }));
+  expect(line.value).toBe('');
 });

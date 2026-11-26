@@ -1,8 +1,9 @@
 import { execFile } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { describe, expect, it, vi } from 'vitest';
+import type { ResolvedForgeConfig } from '@electron-forge/shared-types';
 import store from '../mac-app-store.json' with { type: 'json' };
 import { speechRuntimeName } from '../src/desktop/speech/runtime-manifest';
 import {
@@ -16,6 +17,7 @@ import {
   type ProfileSummary,
 } from '../tools/mas-configuration';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
+import { qualificationStoreCandidate } from '../tools/qualification';
 
 const config = storeConfiguration.parse(store);
 const profile: ProfileSummary = {
@@ -30,6 +32,103 @@ const profile: ProfileSummary = {
   certificateHashes: ['authorized-certificate'],
 };
 describe('Store release boundaries', () => {
+  it('freezes the newly built Store target even when the inherited architecture conflicts', async () => {
+    const root = await temporaryRoot('viewer-mas-candidate-');
+    const expected = path.join(root, 'out/mac-app-store/mas-dev/arm64/Viewer.app');
+    const build = vi.fn(async (env: NodeJS.ProcessEnv) => {
+      expect(env.VIEWER_MAS_ARCH).toBe('arm64');
+      expect(env.VIEWER_BUILD_ARCH).toBe('arm64');
+      await mkdir(expected, { recursive: true });
+      return true;
+    });
+    await expect(
+      qualificationStoreCandidate(root, { VIEWER_MAS_ARCH: 'x64' }, build),
+    ).resolves.toBe(expected);
+    await expect(qualificationStoreCandidate(root, {}, async () => true)).rejects.toThrow(
+      /retained/i,
+    );
+  });
+  it.each(['direct', 'mas-dev', 'mas'])('stops a %s build if signing fails', async (channel) => {
+    vi.stubEnv('VIEWER_MAC_CHANNEL', channel);
+    vi.stubEnv('VIEWER_DIRECT_IDENTITY', undefined);
+    vi.stubEnv('VIEWER_NOTARY_PROFILE', undefined);
+    vi.stubEnv(
+      'VIEWER_MAS_IDENTITY',
+      channel === 'mas-dev' ? 'Apple Development: Team' : 'Apple Distribution: Team',
+    );
+    vi.stubEnv('VIEWER_MAS_PROFILE', '/private/tmp/viewer.provisionprofile');
+    vi.stubEnv('VIEWER_MAS_BUILD', '42');
+    vi.resetModules();
+    try {
+      const { default: forge } = await import('../forge.config');
+      expect(forge.packagerConfig?.osxSign).toMatchObject({ continueOnError: false });
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  });
+
+  it.each(['direct', 'mas-dev', 'mas'])(
+    'describes local network uses available in %s',
+    async (channel) => {
+      vi.stubEnv('VIEWER_MAC_CHANNEL', channel);
+      vi.stubEnv('VIEWER_DIRECT_IDENTITY', undefined);
+      vi.stubEnv('VIEWER_NOTARY_PROFILE', undefined);
+      vi.stubEnv(
+        'VIEWER_MAS_IDENTITY',
+        channel === 'mas-dev' ? 'Apple Development: Team' : 'Apple Distribution: Team',
+      );
+      vi.stubEnv('VIEWER_MAS_PROFILE', '/private/tmp/viewer.provisionprofile');
+      vi.stubEnv('VIEWER_MAS_BUILD', '42');
+      vi.resetModules();
+      try {
+        const { default: forge } = await import('../forge.config');
+        const extendInfo = forge.packagerConfig?.extendInfo;
+        const purpose =
+          typeof extendInfo === 'object' ? extendInfo.NSLocalNetworkUsageDescription : undefined;
+        expect(purpose).toContain('model endpoints');
+        if (channel === 'direct') expect(purpose).toContain('SSH servers');
+        else expect(purpose).not.toMatch(/SSH|terminals/);
+      } finally {
+        vi.unstubAllEnvs();
+        vi.resetModules();
+      }
+    },
+  );
+
+  it('refuses a Forge architecture that disagrees with the native resources', async () => {
+    vi.stubEnv('VIEWER_MAC_CHANNEL', 'direct');
+    vi.stubEnv('VIEWER_BUILD_ARCH', 'arm64');
+    vi.stubEnv('VIEWER_NOTARY_PROFILE', undefined);
+    vi.resetModules();
+    try {
+      const { default: forge } = await import('../forge.config');
+      await expect(
+        forge.hooks?.prePackage?.(forge as ResolvedForgeConfig, 'darwin', 'x64'),
+      ).rejects.toThrow('does not match');
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  });
+
+  it('routes notarization through the retained direct release', async () => {
+    vi.stubEnv('VIEWER_MAC_CHANNEL', 'direct');
+    vi.stubEnv('VIEWER_DIRECT_IDENTITY', 'Developer ID Application: Sample Team');
+    vi.stubEnv('VIEWER_NOTARY_PROFILE', 'sample-notary-profile');
+    vi.resetModules();
+    try {
+      const { default: forge } = await import('../forge.config');
+      expect(forge.packagerConfig?.osxNotarize).toBeUndefined();
+      await expect(
+        forge.hooks?.prePackage?.(forge as ResolvedForgeConfig, 'darwin', 'arm64'),
+      ).rejects.toThrow('pnpm direct:release');
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  });
+
   it('uses the Apple Silicon Provisioning UDID rather than the Hardware UUID', () => {
     const hardware = {
       platform_UUID: '11111111-2222-3333-4444-555555555555',

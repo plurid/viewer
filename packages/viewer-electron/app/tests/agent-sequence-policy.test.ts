@@ -6,7 +6,6 @@ import { defaultSettings } from '../src/domain/services';
 import { programCommands } from '../src/renderer/commands/programs';
 import { CommandRegistry } from '../src/renderer/commands/registry';
 import type { CommandContext } from '../src/renderer/commands/registry';
-import { runLine } from '../src/renderer/command-line/run';
 import type { LineHost } from '../src/renderer/command-line/host';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
 import { executeAgentNavigation } from '../src/renderer/workspace/agent-navigation';
@@ -228,7 +227,7 @@ describe('agent sequence deadline and dispatch propagation', () => {
         (id, ctx) => registry.invoke(id, { scope: 'workspace', context: ctx }),
         undefined,
         () => baseContext,
-        (text, agent) => runLine(text, agent ? { ...host, agent } : host),
+        () => host,
       );
       const pipedDef = commands.find((item) => item.id === 'custom.piped-seq')!;
       await pipedDef.run({

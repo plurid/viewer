@@ -57,7 +57,7 @@ A task gives one piece of work its own checkout and tools.
 1. In the repository folder, press **⌘K** and choose **New Task from Branch…**.
 2. Type the **Task name** and the **Branch name**, or choose **Existing Branch**. Pick the branch to
    **Start from** and check the **Destination** folder for the new worktree.
-3. Choose **Create task**. Viewer creates the worktree and opens it with a note, a terminal and its
+3. Choose **Create Task**. Viewer creates the worktree and opens it with a note, a terminal and its
    Git changes.
 4. Come back to it later from **⌘K** → **Tasks…**.
 

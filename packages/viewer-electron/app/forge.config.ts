@@ -13,6 +13,7 @@ import { alphaVersionSchema, storeVersion } from './src/domain/updates/version';
 import { restoreAlphaVersion } from './tools/bundle-version';
 import { macChannel, storeConfiguration, storeInputs } from './tools/mas-configuration';
 import { documentTypes } from './tools/document-types';
+import { claimForgePhase, requireNewPackage } from './tools/package-build';
 import { copyPDFRuntime } from './tools/pdf-runtime';
 import { officeRuntimeName } from './src/desktop/previews/office-runtime-manifest';
 import { prepareNativeRebuild } from './tools/native-build/rebuild';
@@ -21,6 +22,11 @@ import { applicationCopyright } from './src/desktop/release';
 import { macOSMinimum } from './tools/native-build/macos-target';
 import { directBuildNumber } from './tools/build-number';
 import { nodePtyFileUsed, trimElectronTemplate } from './tools/bundle-trim';
+import {
+  assertMacPackagingArch,
+  assertMakeOutputAvailable,
+  assertRetainedNotarization,
+} from './tools/trash-previous-build';
 const require = createRequire(import.meta.url);
 const appRoot = path.dirname(fileURLToPath(import.meta.url));
 const channel = macChannel(process.env.VIEWER_MAC_CHANNEL);
@@ -29,9 +35,6 @@ const inputs = channel === 'direct' ? undefined : storeInputs(process.env, chann
 const version = alphaVersionSchema.parse(manifest.version);
 const directIdentity =
   channel === 'direct' ? process.env.VIEWER_DIRECT_IDENTITY?.trim() : undefined;
-const notaryProfile = channel === 'direct' ? process.env.VIEWER_NOTARY_PROFILE?.trim() : undefined;
-if (notaryProfile && !directIdentity)
-  throw new Error('Notarization requires VIEWER_DIRECT_IDENTITY (Developer ID Application).');
 if (
   directIdentity &&
   (directIdentity === '-' ||
@@ -42,6 +45,7 @@ if (
 const storeSigning = inputs
   ? {
       identity: inputs.identity,
+      continueOnError: false,
       identityValidation: true,
       type: channel === 'mas-dev' ? ('development' as const) : ('distribution' as const),
       provisioningProfile: inputs.profile,
@@ -110,7 +114,9 @@ const config: ForgeConfig = {
       // Local profiles permit configured HTTPS LAN endpoints. macOS 15+ needs
       // this purpose text for its separate local-network authorization.
       NSLocalNetworkUsageDescription:
-        'Viewer connects to SSH servers and model endpoints you choose on your local network for file browsing, terminals and AI actions.',
+        channel === 'direct'
+          ? 'Viewer connects to SSH servers you choose for file browsing and to local model endpoints you choose for AI actions and dictation.'
+          : 'Viewer connects to local model endpoints you choose for AI actions and dictation.',
       ...(inputs ? { ElectronTeamID: storeConfig.teamID } : {}),
       // The App Store build would receive access to an opened file only, which Viewer's
       // folder-based access does not handle yet, so only the direct build offers Open With.
@@ -126,6 +132,7 @@ const config: ForgeConfig = {
     // Distribution identities and notarization belong to the release configuration.
     osxSign: storeSigning ?? {
       identity: directIdentity || '-',
+      continueOnError: false,
       identityValidation: !!directIdentity,
       preAutoEntitlements: false,
       // Do not inherit the signer's broad camera/device defaults.
@@ -135,10 +142,25 @@ const config: ForgeConfig = {
         entitlements: 'assets/entitlements.mac.plist',
       }),
     },
-    ...(notaryProfile ? { osxNotarize: { keychainProfile: notaryProfile } } : {}),
   },
   rebuildConfig: { onlyModules: ['node-pty'], force: true },
   hooks: {
+    prePackage: async (_config, platform, arch) => {
+      if (channel === 'direct') assertRetainedNotarization(process.env.VIEWER_NOTARY_PROFILE);
+      if ((platform === 'mas') !== (channel !== 'direct'))
+        throw new Error(
+          'Use pnpm mas:dev / mas:package for the MAS runtime. Normal packaging uses the direct channel.',
+        );
+      if (platform === 'darwin' || platform === 'mas')
+        assertMacPackagingArch(arch, process.env.VIEWER_BUILD_ARCH ?? process.arch);
+      await claimForgePhase(appRoot, 'prePackage');
+      await requireNewPackage(appRoot, platform, arch);
+    },
+    preMake: async () => {
+      await claimForgePhase(appRoot, 'preMake');
+      if (channel === 'direct') assertRetainedNotarization(process.env.VIEWER_NOTARY_PROFILE);
+      await assertMakeOutputAvailable(path.join(appRoot, 'out'));
+    },
     resolveForgeConfig: async (_config, resolved) => {
       // Forge start rebuilds before preStart. Resolve headers before either start or package.
       await prepareNativeRebuild({
@@ -148,11 +170,7 @@ const config: ForgeConfig = {
       });
       return resolved;
     },
-    packageAfterExtract: async (_config, buildPath, _electronVersion, platform) => {
-      if ((platform === 'mas') !== (channel !== 'direct'))
-        throw new Error(
-          'Use pnpm mas:dev / mas:package for the MAS runtime; normal packaging uses the direct channel.',
-        );
+    packageAfterExtract: async (_config, buildPath) => {
       // English only, without unused purpose strings; the app is signed after this.
       await trimElectronTemplate(buildPath);
     },

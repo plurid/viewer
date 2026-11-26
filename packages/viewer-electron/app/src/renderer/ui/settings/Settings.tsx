@@ -77,6 +77,7 @@ export function SettingsWindow() {
   const writingPath = useRef<string | undefined>(undefined);
   const confirmation = useConfirmation();
   const latest = useRef<SettingsSnapshot | undefined>(undefined);
+  const flushColors = useRef<() => void>(null);
   const writes = useRef<SettingsEditQueue | null>(null);
   const accept = (value: SettingsSnapshot) => {
     if (latest.current && value.revision < latest.current.revision) return;
@@ -151,6 +152,7 @@ export function SettingsWindow() {
       }
       if (event.type === 'flush-settings') {
         (document.activeElement as HTMLElement | null)?.blur();
+        flushColors.current?.();
         void writes
           .current!.flush()
           .then(
@@ -293,7 +295,13 @@ export function SettingsWindow() {
             ))}
           {!query && category === 'Permissions' && <FilePermissions error={setError} />}
           {!query && category === 'Privacy' && <PrivacyInformation showLicense={!!license} />}
-          <CatalogSettings editor={editor} definitions={definitions} query={query} />
+          <CatalogSettings
+            key={category}
+            flushRef={flushColors}
+            editor={editor}
+            definitions={definitions}
+            query={query}
+          />
           {page === 'Navigation' && <NavigationSettings editor={editor} />}
           {page === 'License' && license && (
             <LicenseSettings status={license} onChange={setLicense} />
@@ -340,7 +348,7 @@ export function SettingsWindow() {
                           : `Every ${category} setting goes back to its default.`,
                     action: 'Reset',
                     run: () => {
-                      const defaults = defaultSettings(settings.search.roots[0] || '/');
+                      const defaults = defaultSettings(snapshot.home || '/');
                       if (category === 'Space') patch('ui.space', normalizePreferences().space);
                       else if (category === 'Previews')
                         patch('settings.previews', defaults.previews);

@@ -81,6 +81,27 @@ describe('opening a template', () => {
       openPaths: [],
     });
   });
+  it('checks the current saved layout before a model can open a cached command', async () => {
+    const settings = getState().settings.settings;
+    const layout: LayoutTemplate = {
+      id: 'sample',
+      name: 'Sample',
+      layout: 'tiled',
+      main: 0.5,
+      planes: [{ kind: 'scratch' }],
+    };
+    settings.layouts = [layout];
+    const cached = windowCommands(actions).find((command) => command.id === 'layout.sample')!;
+    settings.layouts = [{ ...layout, planes: [{ kind: 'terminal', path: '' }] }];
+    const before = activeWorkspace().panes.length;
+    await expect(async () => cached.run({ ...context, modelRequest: true })).rejects.toThrow(
+      /terminal/,
+    );
+    expect(activeWorkspace().panes).toHaveLength(before);
+    settings.layouts = [layout];
+    await act(async () => cached.run({ ...context, modelRequest: true }));
+    expect(activeWorkspace().panes).toHaveLength(before + 1);
+  });
   it('adds its planes as roots, tiled in its layout', async () => {
     const template: LayoutTemplate = {
       id: 'dev',

@@ -48,7 +48,7 @@ export function WhichKey({
             <span>Esc to exit</span>
           </>
         ) : (
-          [...(view.help ? [] : prefix ? [prefix] : []), ...view.keys].map((key, index) => (
+          [...(view.lead ? [view.lead] : []), ...view.keys].map((key, index) => (
             <kbd key={index}>{keyGlyphs(key)}</kbd>
           ))
         )}

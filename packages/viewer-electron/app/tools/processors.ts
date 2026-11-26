@@ -2,19 +2,31 @@
  * Build folders, source archives and failed artifacts are deliberately retained. */
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { chmod, copyFile, mkdir, mkdtemp, open, readFile, stat, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  copyFile,
+  lstat,
+  mkdir,
+  mkdtemp,
+  open,
+  readdir,
+  readFile,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import { x as extract } from 'tar';
 import { compatibleMacOSMinimum } from './native-build/macos-target';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ffmpeg = {
+export const ffmpeg = {
   version: '9.0.2',
   url: 'https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n9.0.2',
   sha256: '6e374ed621e48faa40639307dff48ba6fe574a509977956d2cce9669b7cc27e9',
 };
-const packages = [
+export const processorPackages = [
   [
     'sharp',
     '0.35.5',
@@ -113,29 +125,90 @@ export async function run(
     await handle.close();
   }
 }
-export async function prepareProcessors(minimum: string, arch = process.arch) {
+async function processorFiles(output: string, arch: string, packageNames: string[]) {
+  const files = new Map<string, string>();
+  async function visit(directory: string) {
+    for (const item of await readdir(directory, { withFileTypes: true })) {
+      const file = path.join(directory, item.name);
+      if (item.isDirectory()) await visit(file);
+      else if (!item.isFile()) throw new Error(`Invalid processor resource: ${file}`);
+      else if (file !== path.join(output, 'manifest.json')) {
+        files.set(path.relative(output, file), hash(await readFile(file), 'sha256', 'hex'));
+      }
+    }
+  }
+  await visit(output);
+  const sharp = `@img/sharp-darwin-${arch}`;
+  const sharpVersion = processorPackages.find(([name]) => name === sharp)![1];
+  for (const name of [
+    'ffmpeg',
+    'ffprobe',
+    'COPYING.LGPLv2.1',
+    'ffmpeg-build.txt',
+    `sources/ffmpeg-n${ffmpeg.version}.tar.gz`,
+    ...packageNames.map((name) => `node_modules/${name}/package.json`),
+    ...[
+      'sharp/dist/index.cjs',
+      '@img/colour/index.cjs',
+      'detect-libc/lib/detect-libc.js',
+      'semver/index.js',
+      sharp + '/index.cjs',
+      `${sharp}/lib/sharp-darwin-${arch}-${sharpVersion}.node`,
+      `@img/sharp-libvips-darwin-${arch}/lib/libvips-cpp.8.18.7.dylib`,
+    ].map((name) => 'node_modules/' + name),
+  ]) {
+    if (!files.has(name)) throw new Error(`Missing processor resource: ${name}`);
+  }
+  for (const name of ['ffmpeg', 'ffprobe'])
+    if (!((await lstat(path.join(output, name))).mode & 0o111))
+      throw new Error(`The processor ${name} is not executable.`);
+  return Object.fromEntries(files);
+}
+
+export async function prepareProcessors(minimum: string, arch = process.arch, root = appRoot) {
   if (process.platform !== 'darwin' || !['arm64', 'x64'].includes(arch))
     throw new Error('Packaged transform processors require a macOS arm64 or x64 build target.');
-  const selectedPackages = packages.filter(
+  const selectedPackages = processorPackages.filter(
     ([name]) => !name.includes('darwin-') || name.endsWith('-' + arch),
   );
-  const output = path.join(appRoot, `assets/viewer-processors-${process.platform}-${arch}`);
+  const packagePins = selectedPackages.map(([name, version, integrity]) => ({
+    name,
+    version,
+    integrity: 'sha512-' + integrity,
+  }));
+  const output = path.join(root, `assets/viewer-processors-${process.platform}-${arch}`);
   const descriptor = path.join(output, 'manifest.json');
-  const existing = (await readFile(descriptor, 'utf8')
-    .then(JSON.parse)
-    .catch(() => undefined)) as
-    { version: string; minimum: string; files: Record<string, string> } | undefined;
-  if (existing) {
-    if (existing.version !== ffmpeg.version || !compatibleMacOSMinimum(existing.minimum, minimum))
+  const folder = await lstat(output).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'ENOENT') throw error;
+    return undefined;
+  });
+  const names = packagePins.map((pin) => pin.name);
+  if (folder) {
+    if (!folder.isDirectory() || !(await lstat(descriptor)).isFile())
+      throw new Error(`Invalid processor cache: ${output}`);
+    const existing = JSON.parse(await readFile(descriptor, 'utf8')) as {
+      version: string;
+      minimum: string;
+      arch: string;
+      ffmpeg: typeof ffmpeg;
+      packages: typeof packagePins;
+      files: Record<string, string>;
+    };
+    if (
+      existing.version !== ffmpeg.version ||
+      !compatibleMacOSMinimum(existing.minimum, minimum) ||
+      existing.arch !== arch ||
+      !isDeepStrictEqual(existing.ffmpeg, ffmpeg) ||
+      !isDeepStrictEqual(existing.packages, packagePins)
+    )
       throw new Error(
         `The processor build differs from this target. Preserve and relocate it before rebuilding: ${output}`,
       );
-    for (const [file, expected] of Object.entries(existing.files))
-      if (hash(await readFile(path.join(output, file)), 'sha256', 'hex') !== expected)
-        throw new Error(`Packaged processor changed: ${file}`);
+    if (!isDeepStrictEqual(await processorFiles(output, arch, names), existing.files))
+      throw new Error(`The retained processor files differ from the inventory: ${output}`);
     return;
   }
-  const cache = path.join(appRoot, 'out/processor-sources');
+  const cache = path.join(root, 'out/processor-sources');
   await mkdir(cache, { recursive: true });
   const sourceArchive = path.join(cache, 'ffmpeg-n9.0.2.tar.gz');
   const supplied = process.env.VIEWER_PROCESSOR_SOURCE_ARCHIVE;
@@ -182,7 +255,8 @@ export async function prepareProcessors(minimum: string, arch = process.arch) {
   ];
   await run('./configure', flags, source, path.join(build, 'build.log'));
   await run('make', ['-j8', 'ffmpeg', 'ffprobe'], source, path.join(build, 'build.log'));
-  await mkdir(output, { recursive: true });
+  await mkdir(path.dirname(output), { recursive: true });
+  await mkdir(output);
   await mkdir(path.join(output, 'sources'), { recursive: true });
   for (const name of ['ffmpeg', 'ffprobe', 'COPYING.LGPLv2.1']) {
     await copyFile(path.join(source, name), path.join(output, name), 1);
@@ -212,18 +286,7 @@ export async function prepareProcessors(minimum: string, arch = process.arch) {
         ['File', 'Directory', 'ExtendedHeader', 'GlobalExtendedHeader'].includes(item.type),
     });
   }
-  const files: Record<string, string> = {};
-  const { readdir } = await import('node:fs/promises');
-  const visit = async (directory: string) => {
-    for (const item of await readdir(directory, { withFileTypes: true })) {
-      const file = path.join(directory, item.name);
-      if (item.isSymbolicLink())
-        throw new Error('Processor resources may not contain symbolic links.');
-      if (item.isDirectory()) await visit(file);
-      else files[path.relative(output, file)] = hash(await readFile(file), 'sha256', 'hex');
-    }
-  };
-  await visit(output);
+  const files = await processorFiles(output, arch, names);
   await writeFile(
     descriptor,
     JSON.stringify(
@@ -232,11 +295,7 @@ export async function prepareProcessors(minimum: string, arch = process.arch) {
         minimum,
         arch,
         ffmpeg,
-        packages: selectedPackages.map(([name, version, integrity]) => ({
-          name,
-          version,
-          integrity: 'sha512-' + integrity,
-        })),
+        packages: packagePins,
         files,
       },
       null,

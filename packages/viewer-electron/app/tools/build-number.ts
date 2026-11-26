@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { releaseEnvironment } from './release-environment';
 
 /**
  * The direct build's CFBundleVersion: the number of commits in the checked-out history. It grows
@@ -9,6 +10,7 @@ export function directBuildNumber(appRoot: string): string | undefined {
   try {
     const count = execFileSync('git', ['rev-list', '--count', 'HEAD'], {
       cwd: appRoot,
+      env: releaseEnvironment(process.env),
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();

@@ -23,7 +23,7 @@ const speechBinaries = ['viewer-speech-recognizer', 'libwhisper.dylib'];
 async function checkSpeechMinimum(directory: string): Promise<void> {
   for (const name of speechBinaries) await assertMacOSMinimum(path.join(directory, name));
 }
-export async function verifySpeechRuntime(directory: string): Promise<void> {
+export async function verifySpeechRuntime(directory: string, helperHash?: string): Promise<void> {
   const folder = await lstat(directory);
   if (!folder.isDirectory() || folder.isSymbolicLink())
     throw new Error('The speech engine must be an ordinary folder.');
@@ -33,10 +33,15 @@ export async function verifySpeechRuntime(directory: string): Promise<void> {
   const manifest = JSON.parse(await readFile(path.join(directory, 'manifest.json'), 'utf8')) as {
     version: string;
     archive: string;
+    helperHash?: string;
     files: Record<string, string>;
   };
   if (manifest.version !== speechRuntimeVersion || manifest.archive !== speechRuntimeArchive.sha256)
     throw new Error('The bundled speech engine manifest does not match its pinned release.');
+  if (helperHash && manifest.helperHash !== helperHash)
+    throw new Error(
+      `The speech build differs from the current helper source. Preserve and relocate it before rebuilding: ${directory}`,
+    );
   let changedBySigning = false;
   for (const name of speechBinaries) {
     const file = path.join(directory, name),
@@ -60,6 +65,8 @@ export async function prepareSpeechRuntime(
   const arch = process.env.VIEWER_BUILD_ARCH ?? process.arch;
   if (!['arm64', 'x64'].includes(arch))
     throw new Error('Choose a supported speech engine architecture.');
+  const helperSource = path.join(appRoot, 'tools/speech-recognizer.cpp');
+  const helperHash = await hashFile(helperSource);
   const destination = path.join(appRoot, 'assets', speechRuntimeName(arch));
   const exists = await lstat(destination).then(
     () => true,
@@ -69,7 +76,7 @@ export async function prepareSpeechRuntime(
     },
   );
   if (exists) {
-    await verifySpeechRuntime(destination);
+    await verifySpeechRuntime(destination, helperHash);
     await checkSpeechMinimum(destination);
     return destination;
   }
@@ -126,7 +133,7 @@ export async function prepareSpeechRuntime(
     '-save-temps=obj',
     '-I',
     headers,
-    path.join(appRoot, 'tools/speech-recognizer.cpp'),
+    helperSource,
     '-o',
     helper,
   ]);
@@ -145,6 +152,7 @@ export async function prepareSpeechRuntime(
         version: speechRuntimeVersion,
         archive: speechRuntimeArchive.sha256,
         commit: speechRuntimeArchive.commit,
+        helperHash,
         files: hashes,
       },
       null,
@@ -154,7 +162,7 @@ export async function prepareSpeechRuntime(
   );
   await checkSpeechMinimum(output);
   await cp(output, destination, { recursive: true, force: false, errorOnExist: true });
-  await verifySpeechRuntime(destination);
+  await verifySpeechRuntime(destination, helperHash);
   console.log('Prepared the bundled speech engine. Build intermediates were retained.');
   return destination;
 }

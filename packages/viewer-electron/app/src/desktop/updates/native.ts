@@ -7,7 +7,7 @@ import { installedRelease } from '../windows/about';
 import { Updates } from './updates';
 import type { UpdateNotice } from './updates';
 
-async function presentNotice(notice: UpdateNotice): Promise<boolean> {
+async function presentNotice(notice: UpdateNotice): Promise<boolean | undefined> {
   const options = {
     type: 'info' as const,
     message: notice.message,
@@ -17,8 +17,10 @@ async function presentNotice(notice: UpdateNotice): Promise<boolean> {
     cancelId: notice.download ? 1 : 0,
   };
   const parent = BrowserWindow.getFocusedWindow();
-  const { response } = await showViewerMessage(parent ?? undefined, options);
-  return !!notice.download && response === 0;
+  const reply = await showViewerMessage(parent ?? undefined, options);
+  if ('interrupted' in reply && reply.interrupted) return;
+  if (reply.response === options.cancelId && parent?.isDestroyed()) return;
+  return !!notice.download && reply.response === 0;
 }
 
 /** The address check of a browser plane's external open, limited to https. */

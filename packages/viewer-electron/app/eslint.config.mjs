@@ -108,7 +108,7 @@ export default tseslint.config(
   {
     // A sandboxed preload may require only Electron, and since Electron 45 it has no Buffer or
     // immediate timers: such an import or global would fail when the window opens, not here.
-    files: ['src/preload.ts'],
+    files: ['src/preload.ts', 'src/report-preload.ts'],
     rules: {
       'no-restricted-imports': [
         'error',

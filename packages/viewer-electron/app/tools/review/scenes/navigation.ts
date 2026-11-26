@@ -146,6 +146,7 @@ export const navigation: ReviewArea = {
     pageDropdown,
     paletteQuery('image', 'image', 'a picture’s commands', 'Forest.jpg'),
     paletteQuery('places', 'review', 'folders and places'),
+    paletteQuery('go-home', 'go ~/Downloads', 'Go to a folder under Home'),
     paletteQuery('settings', 'dark', 'settings by name'),
   ],
 };

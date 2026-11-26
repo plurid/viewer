@@ -113,6 +113,7 @@ describe('workspace definition state v13', () => {
     const loaded = await storage.load();
     expect(loaded.state).toBeNull();
     expect(loaded.recovery).toContain('newer Viewer');
+    await expect(storage.save(saved())).rejects.toThrow('newer Viewer');
     expect(await readFile(storage.file, 'utf8')).toBe(bytes);
   });
   it('restores backup copies as ad-hoc workspaces and stopped terminals', () => {
@@ -138,4 +139,15 @@ describe('workspace definition state v13', () => {
         restored.workspaces[0]!.panes[0]!.definitionPlane,
     ).toBeUndefined();
   });
+});
+
+it('refuses oversized UTF-8 state before replacing the last readable layout', async () => {
+  const storage = new Storage(path.join(await temporaryRoot('viewer-state-bytes-'), 'state.json'));
+  const state = saved();
+  await storage.save(state);
+  const original = await readFile(storage.file);
+  const part = '界'.repeat(4 * 1024 * 1024);
+  state.workspaces[0]!.arrangement = { a: part, b: part, c: part };
+  await expect(async () => storage.save(state)).rejects.toThrow('size limit');
+  expect(await readFile(storage.file)).toEqual(original);
 });

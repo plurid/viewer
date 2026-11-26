@@ -23,6 +23,7 @@ import { importChanges } from './import-changes';
  */
 // the workspace window's own view and presentation: domain/preferences/catalog.ts
 const workspaceMayPatch = workspaceMayChange;
+const invalidAgentConfiguration = 'Fix the configuration in Settings before proposing changes.';
 const configSchema = z
   .object({
     $schema: z.literal('config.schema.json').default('config.schema.json'),
@@ -314,15 +315,17 @@ export class SettingsService {
   patch(
     patches: SettingsPatch[],
     revision: number,
-    scope?: 'workspace',
+    scope?: 'workspace' | 'agent',
   ): Promise<SettingsSnapshot> {
     const task = this.queue
       .catch(() => {})
       .then(async () => {
         await this.load();
         await this.readChanges();
-        if (this.store.diagnostics.length)
-          throw Object.assign(new Error(this.store.diagnostics[0]), { code: 'SETTINGS_INVALID' });
+        if (this.store.diagnostics.length) {
+          const message = scope === 'agent' ? invalidAgentConfiguration : this.store.diagnostics[0];
+          throw Object.assign(new Error(message), { code: 'SETTINGS_INVALID' });
+        }
         let parsed: ReturnType<typeof validated>;
         try {
           const next = structuredClone(this.document);
@@ -355,10 +358,13 @@ export class SettingsService {
             !sequencesOnly(this.document.settings.customActions, parsed.settings.customActions)
           )
             throw new Error('Change this setting in Settings.');
-          // a whole browsing section from the workspace keeps the person's Trash confirmation
+          // A whole section must respect the same Settings-only fields as a leaf edit.
           if (
             scope === 'workspace' &&
-            parsed.settings.browsing.confirmTrash !== this.document.settings.browsing.confirmTrash
+            (parsed.settings.browsing.confirmTrash !==
+              this.document.settings.browsing.confirmTrash ||
+              parsed.settings.browsing.findWorkspaces !==
+                this.document.settings.browsing.findWorkspaces)
           )
             throw new Error('Change this setting in Settings.');
         } catch (error) {
@@ -387,6 +393,10 @@ export class SettingsService {
     patches: SettingsPatch[],
     base?: { settings: ApplicationSettings; ui: UIPreferences },
   ): { valid: true; changes: string[] } {
+    if (this.store.diagnostics.length) {
+      const message = base ? invalidAgentConfiguration : this.store.diagnostics[0];
+      throw Object.assign(new Error(message), { code: 'SETTINGS_INVALID' });
+    }
     const source = base
       ? {
           $schema: this.document.$schema,
