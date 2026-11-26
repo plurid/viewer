@@ -1,6 +1,12 @@
 import { verify } from 'node:crypto';
 import type { KeyObject } from 'node:crypto';
-import { licenseKeyText, licenseLimits, licensePayloadSchema } from '../../domain/license/license';
+import {
+  licenseKeyMarker,
+  licenseKeyText,
+  licenseLimits,
+  licensePayloadSchema,
+  licenseSignatureLength,
+} from '../../domain/license/license';
 import type { LicensePayload } from '../../domain/license/license';
 import type { LicenseConfiguration } from '../release';
 import { feedPublicKey, httpsAddress } from '../updates/signature';
@@ -44,8 +50,10 @@ export function readLicenseKey(text: string, key: KeyObject): LicensePayload {
   if (text.length > licenseLimits.key)
     throw new LicenseError('format', 'Paste the complete Viewer license key from your purchase.');
   const compact = licenseKeyText(text);
-  const match = /^viewer-license-1\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{86})$/.exec(compact);
-  if (!match)
+  const match = compact.startsWith(licenseKeyMarker)
+    ? /^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/.exec(compact.slice(licenseKeyMarker.length))
+    : undefined;
+  if (match?.[2]?.length !== licenseSignatureLength)
     throw new LicenseError('format', 'Paste the complete Viewer license key from your purchase.');
   const payload = Buffer.from(match[1]!, 'base64url');
   const signature = Buffer.from(match[2]!, 'base64url');

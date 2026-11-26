@@ -40,7 +40,7 @@ export interface OwnedWorker<Message = Reply> {
 }
 /** What the app does with workers' stderr and their unexpected ends: the diagnostic log. */
 export interface WorkerDiagnostics {
-  output(worker: string): (chunk: Buffer) => void;
+  output(worker: string): { write(chunk: Buffer): void; end(): void };
   stopped(worker: string, detail: string): void;
 }
 let diagnostics: WorkerDiagnostics | undefined;
@@ -49,6 +49,22 @@ let diagnostics: WorkerDiagnostics | undefined;
 export function reportWorkers(sink: WorkerDiagnostics): void {
   diagnostics = sink;
 }
+function readStderr(stream: NodeJS.ReadableStream | null, name: string): void {
+  if (!stream) return;
+  const mirror = process.env.VIEWER_RENDER_TEST === '1';
+  if (mirror) stream.pipe(process.stderr);
+  let output = diagnostics?.output(name);
+  if (output) {
+    const finish = () => {
+      output?.end();
+      output = undefined;
+    };
+    stream.on('data', (chunk: Buffer) => output?.write(chunk));
+    stream.on('end', finish);
+    stream.on('close', finish);
+  } else if (!mirror) stream.resume();
+}
+
 export function launchWorker<Message = Reply>(
   worker: string,
   name: string,
@@ -63,10 +79,7 @@ export function launchWorker<Message = Reply>(
     });
     // Worker stdout is never consumed; drain it and unread stderr so streams never fill.
     child.stdout?.resume();
-    if (process.env.VIEWER_RENDER_TEST === '1') child.stderr?.pipe(process.stderr);
-    const output = diagnostics?.output(name);
-    if (output) child.stderr?.on('data', output);
-    if (process.env.VIEWER_RENDER_TEST !== '1' && !output) child.stderr?.resume();
+    readStderr(child.stderr, name);
     return {
       thread: child,
       postMessage: (value) => child.postMessage(value),
@@ -81,10 +94,7 @@ export function launchWorker<Message = Reply>(
     serviceName: name,
     stdio: ['ignore', 'ignore', 'pipe'],
   });
-  if (process.env.VIEWER_RENDER_TEST === '1') child.stderr?.pipe(process.stderr);
-  const output = diagnostics?.output(name);
-  if (output) child.stderr?.on('data', output);
-  if (process.env.VIEWER_RENDER_TEST !== '1' && !output) child.stderr?.resume();
+  readStderr(child.stderr, name);
   return {
     process: child,
     postMessage: (value) => child.postMessage(value),
@@ -158,7 +168,7 @@ export class UtilityClient<Methods extends WorkerMethods = WorkerMethods> {
       if (this.child !== child) return;
       // a utility process's end is recorded by the app's child-process-gone, with its reason
       if (child.thread && !this.closed)
-        diagnostics?.stopped(this.options.name, `${this.options.name}: ${reason} (exit ${code})`);
+        diagnostics?.stopped(this.options.name, `${reason} (exit ${code})`);
       this.rejectPending('Background file services stopped. Retry the operation.');
       this.child = undefined;
       this.ready = undefined;

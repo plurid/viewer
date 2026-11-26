@@ -75,7 +75,6 @@ import {
   MainFailures,
   WorkerOutput,
   recordConsoleErrors,
-  redactSecrets,
 } from './desktop/diagnostics/failures';
 import { reportWorkers } from './desktop/workers/utility-client';
 import { answerStoppedWindows, rendererWatches } from './desktop/windows/window-health';
@@ -208,15 +207,13 @@ if (!headless) {
     diagnosticBudget,
   );
   reportWorkers({
-    output: (worker) => {
-      const output = new WorkerOutput(
+    output: (worker) =>
+      new WorkerOutput(
         worker,
-        (detail) => void diagnostics.record('worker-output', detail),
+        (detail, source) => void diagnostics.record('worker-output', detail, undefined, source),
         diagnosticBudget,
-      );
-      return (chunk) => output.write(chunk);
-    },
-    stopped: (_worker, detail) => void diagnostics.record('process-gone', detail),
+      ),
+    stopped: (worker, detail) => void diagnostics.record('process-gone', detail, undefined, worker),
   });
 }
 app.on('render-process-gone', (_event, _contents, details) => {
@@ -225,7 +222,12 @@ app.on('render-process-gone', (_event, _contents, details) => {
 app.on('child-process-gone', (_event, details) => {
   if (details.reason === 'clean-exit') return;
   const name = details.serviceName || details.name || details.type;
-  void diagnostics.record('process-gone', `${name}: ${details.reason} (exit ${details.exitCode})`);
+  void diagnostics.record(
+    'process-gone',
+    `${details.reason} (exit ${details.exitCode})`,
+    undefined,
+    name,
+  );
 });
 let window: BrowserWindow | null = null;
 const viewerWindows = new Set<BrowserWindow>();
@@ -919,7 +921,7 @@ app
       diagnose: (detail, fields) => void diagnostics.record('renderer-error', detail, fields),
       serviceError: (service, message) => {
         if (diagnosticBudget.take('service:' + service))
-          void diagnostics.record('service-error', `${service}: ${redactSecrets(message)}`);
+          void diagnostics.record('service-error', message, undefined, service);
       },
       worker: path.join(__dirname, 'worker.cjs'),
       fileBackend:

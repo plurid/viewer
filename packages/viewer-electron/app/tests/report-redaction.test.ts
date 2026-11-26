@@ -1,3 +1,4 @@
+import { licensePayload, licenseSignature } from './support/diagnostic-license';
 import { describe, expect, it } from 'vitest';
 import { redactReport } from '../src/domain/diagnostics/report-redaction';
 import type { ReportPrivateValue } from '../src/domain/diagnostics/report-redaction';
@@ -240,8 +241,8 @@ describe('optional message redaction', () => {
     'Set-Cookie: session=hunter2; HttpOnly',
     'Authorization: Basic ZXhhbXBsZTpwYXNz',
     'Bearer private-token',
-    '“viewer-license-1.\n  eyJlbWFpbCI6Imh1bnRlcjIifQ.\n  abcdefghijklmno”',
-    '“vie\n wer- license -1.\n eyJlbWFpbCI6Imh1bnRlcjIifQ.\n abcdefghijklmno”',
+    `“viewer-license-1.\n  ${licensePayload}.\n  ${licenseSignature}”`,
+    `“vie\n wer- license -1.\n ${licensePayload}.\n ${licenseSignature}”`,
     'AKIAIOSFODNN7EXAMPLE',
     'AbCd1234/AbCd1234/AbCd1234/AbCd1234/AbCd1234=',
     'eyJhbGciOiJIUzI1NiJ9.eyJpZCI6ImFiYyJ9.abcdefghijklmno',

@@ -1,7 +1,11 @@
 import type { KeyObject } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { licenseLimits, licensePayloadSchema } from '../src/domain/license/license';
+import {
+  licenseKeyMarker,
+  licenseLimits,
+  licensePayloadSchema,
+} from '../src/domain/license/license';
 import type { LicensePayload } from '../src/domain/license/license';
 import { licenseConfiguration } from '../src/desktop/release';
 import type { LicenseConfiguration } from '../src/desktop/release';
@@ -24,7 +28,7 @@ export function issueLicenseKey(
     throw new Error('Set the license public key in src/desktop/release.ts before issuing keys.');
   const bytes = Buffer.from(JSON.stringify(parsed.data), 'utf8');
   const signature = signBytes(bytes, key).toString('base64url');
-  const text = `viewer-license-1.${bytes.toString('base64url')}.${signature}`;
+  const text = `${licenseKeyMarker}${bytes.toString('base64url')}.${signature}`;
   if (text.length > licenseLimits.key) throw new Error('The license key exceeds its size limit.');
   try {
     readLicenseKey(text, endpoint.key);

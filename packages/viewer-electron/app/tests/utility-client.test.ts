@@ -146,14 +146,13 @@ it.each(['thread', 'process'] as const)(
     const records: Promise<void>[] = [];
     reportWorkers({
       output(name) {
-        const output = new WorkerOutput(
+        return new WorkerOutput(
           name,
-          (detail) => {
-            records.push(log.record('worker-output', detail));
+          (detail, source) => {
+            records.push(log.record('worker-output', detail, undefined, source));
           },
           new DiagnosticBudget(),
         );
-        return (chunk) => output.write(chunk);
       },
       stopped: vi.fn(),
     });
@@ -165,6 +164,8 @@ it.each(['thread', 'process'] as const)(
     ]
       .map(shellQuote)
       .join(' ');
+    const environment =
+      'exec /usr/bin/env DB_PASSWORD=' + shellQuote("SAMPLE_NINE's\nSAMPLE_TEN\\") + " 'viewer'";
     const chunks = [
       'first warning\n{"db_password":\r\n   "SAMPLE_ONE"}\n',
       '{"client_se',
@@ -177,8 +178,15 @@ it.each(['thread', 'process'] as const)(
       '\n',
       ...shellCommand.match(/[\s\S]{1,5}/g)!,
       '\n',
+      ...environment.match(/[\s\S]{1,5}/g)!,
+      '\nunsupported viewer-license-10 format\n',
+      '--db-password= viewer --version\n',
+      'env _DB_PASSWORD= viewer --version\n',
+      '{"token":"SAMPLE_EIGHT","state":"ready"}\n',
       'second ordinary diagnostic\n',
       'worker resumed\n',
+      'schema path /schemas/viewer-license-1.d/default.json\n',
+      'last message viewer-license-1.',
     ];
     const file = path.join(root, 'sample.cjs');
     await writeFile(
@@ -191,12 +199,28 @@ it.each(['thread', 'process'] as const)(
     } else {
       const onData = forkDetails.at(-1)!.stderr.on.mock.calls.find(([name]) => name === 'data')![1];
       for (const chunk of chunks) onData(Buffer.from(chunk));
+      const onClose = forkDetails
+        .at(-1)!
+        .stderr.on.mock.calls.find(([name]) => name === 'close')![1];
+      onClose();
     }
     await Promise.all(records);
     const stored = await readFile(log.file, 'utf8');
+    const details = stored
+      .trimEnd()
+      .split('\n')
+      .map((line) => JSON.parse(line).detail);
+    expect(details.slice(-2)).toEqual([
+      'Fixture: schema path /schemas/viewer-license-1.d/default.json',
+      'Fixture: last message viewer-license-1.',
+    ]);
+    expect(details).toContain('Fixture: --db-password= viewer --version');
+    expect(details).toContain('Fixture: unsupported viewer-license-10 format');
+    expect(details).toContain('Fixture: env _DB_PASSWORD= [redacted]');
+    expect(details).toContain('Fixture: {"token":[redacted],"state":"ready"}');
     expect(stored).toContain('Fixture: first warning');
     expect(stored).toContain('Fixture: worker resumed');
     expect(stored).toContain('Fixture: second ordinary diagnostic');
-    expect(stored).not.toMatch(/SAMPLE_(?:ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN)/);
+    expect(stored).not.toContain('SAMPLE_');
   },
 );

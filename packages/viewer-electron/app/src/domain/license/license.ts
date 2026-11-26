@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 export const licenseLimits = { key: 4096, email: 320, order: 256 } as const;
+export const licenseKeyMarker = 'viewer-license-1.';
+export const licenseSignatureLength = 86;
 export const trialDays = 30;
 const day = 24 * 60 * 60 * 1000;
 const quotePairs = [

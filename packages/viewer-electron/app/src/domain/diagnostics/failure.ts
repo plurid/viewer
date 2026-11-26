@@ -1,4 +1,4 @@
-import { boundedText } from './text';
+import { boundedDiagnosticInput } from './license-key';
 
 export const viewerErrorCodes = [
   'FILE_ACCESS_REQUIRED',
@@ -129,7 +129,7 @@ export function knownErrorCode(value: unknown, errno: ReadonlySet<string>): stri
 /** Capture before string conversion: a message can contain counterfeit frames and identifiers. */
 export function diagnosticFailure(value: unknown): DiagnosticFailure {
   try {
-    if (!(value instanceof Error)) return { detail: boundedText(String(value)) };
+    if (!(value instanceof Error)) return { detail: boundedDiagnosticInput(String(value)) };
     const message = value.message;
     const stack = typeof value.stack === 'string' ? value.stack : undefined;
     const candidate = (value as Error & { code?: unknown }).code;
@@ -142,11 +142,11 @@ export function diagnosticFailure(value: unknown): DiagnosticFailure {
     );
     const suffix = complete ? stack!.slice(complete.length).replace(/^\r?\n/, '') : undefined;
     return {
-      detail: boundedText(stack ?? header),
+      detail: boundedDiagnosticInput(stack ?? header),
       errorClass:
         knownErrorName(value.name === 'Error' ? value.constructor.name : value.name) ?? 'Error',
       code,
-      stack: suffix ? boundedText(suffix) : undefined,
+      stack: suffix ? boundedDiagnosticInput(suffix) : undefined,
     };
   } catch {
     return { detail: 'The failure could not be described.', errorClass: 'Error' };

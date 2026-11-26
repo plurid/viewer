@@ -1,3 +1,4 @@
+import { licensePayload, licenseSignature } from './support/diagnostic-license';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -69,22 +70,26 @@ describe('what the log keeps', () => {
     ['--db-password=,SAMPLE_ONLY --json', '--db-password=[redacted] --json'],
     ['--client-secret=;SAMPLE_ONLY', '--client-secret=[redacted]'],
     ['--custom-api-key ,SAMPLE_ONLY', '--custom-api-key [redacted]'],
-    ['DB_PASSWORD=,SAMPLE_ONLY run', 'DB_PASSWORD=[redacted] run'],
+    ['DB_PASSWORD=,SAMPLE_ONLY run', 'DB_PASSWORD=[redacted]'],
     ['export client_secret=;SAMPLE_ONLY', 'export client_secret=[redacted]'],
+    ['(password=) retry available', '(password=[redacted]'],
+    ['_AUTH_TOKEN= SAMPLE ONLY', '_AUTH_TOKEN= [redacted]'],
+    ['__AUTH_TOKEN=SAMPLE ONLY', '__AUTH_TOKEN=[redacted]'],
+    ['"password":not JSON SAMPLE ONLY', '"password":[redacted]'],
     ['DB_PASSWORD= "SAMPLE ONLY"', 'DB_PASSWORD= [redacted]'],
     ["DB_PASSWORD=  'SAMPLE\nSECOND LINE'", 'DB_PASSWORD=  [redacted]'],
     ['configuration DB_PASSWORD= SAMPLE ONLY', 'configuration DB_PASSWORD= [redacted]'],
     ['export DB_PASSWORD=  ,FIRST SECOND', 'export DB_PASSWORD=  [redacted]'],
     ['password =  sample value\nnext diagnostic', 'password =  [redacted]\nnext diagnostic'],
-    ['env DB_PASSWORD= viewer --version', 'env DB_PASSWORD= viewer --version'],
-    ['env MODE=test DB_PASSWORD= viewer --version', 'env MODE=test DB_PASSWORD= viewer --version'],
+    ['env DB_PASSWORD= viewer --version', 'env DB_PASSWORD= [redacted]'],
+    ['env MODE=test DB_PASSWORD= viewer --version', 'env MODE=test DB_PASSWORD= [redacted]'],
     [
       'env viewer configuration DB_PASSWORD= SAMPLE ONLY',
       'env viewer configuration DB_PASSWORD= [redacted]',
     ],
     [
       'exec /usr/bin/env AUTHORIZATION= viewer --version',
-      'exec /usr/bin/env AUTHORIZATION= viewer --version',
+      'exec /usr/bin/env AUTHORIZATION= [redacted]',
     ],
     ['DB_PASSWORD= viewer --version', 'DB_PASSWORD= [redacted]'],
     ['--db-password= sync', '--db-password= sync'],
@@ -120,13 +125,12 @@ describe('what the log keeps', () => {
     await log.record('main-error', message);
     expect(JSON.parse(await readFile(log.file, 'utf8')).detail).toBe(expected);
   });
-  it.each([
-    'https://api.example.invalid/query?token=&page=2\n    at fetchData',
-    '(password=) retry available',
-    '--token= --json',
-  ])('preserves the suffix after an empty credential value (%s)', (text) => {
-    expect(redactSecrets(text)).toBe(text);
-  });
+  it.each(['https://api.example.invalid/query?token=&page=2\n    at fetchData', '--token= --json'])(
+    'preserves the suffix after an empty credential value (%s)',
+    (text) => {
+      expect(redactSecrets(text)).toBe(text);
+    },
+  );
   it.each(['--db-password', '--client-secret', '--api-key', '-u'])(
     'redacts a separate value after the launcher quotes the option %s',
     async (option) => {
@@ -174,8 +178,8 @@ describe('what the log keeps', () => {
     '-u user:hunter2',
     '--password "private words"',
     'Cookie: session=hunter2; private-cookie=value',
-    '“viewer-license-1.\n eyJlbWFpbCI6Imh1bnRlcjIifQ.\n abcdefghijklmno”',
-    '“vie\n wer- license -1.\n eyJlbWFpbCI6Imh1bnRlcjIifQ.\n abcdefghijklmno”',
+    `“viewer-license-1.\n ${licensePayload}.\n ${licenseSignature}”`,
+    `“vie\n wer- license -1.\n ${licensePayload}.\n ${licenseSignature}”`,
   ])('does not persist recognizable credential forms: %s', async (text) => {
     expect(redactSecrets(text)).not.toMatch(/hunter2|private words|private-cookie|eyJ|abcdefghijk/);
     const log = new DiagnosticLog(path.join(root, 'credentials.log'));
@@ -240,7 +244,7 @@ describe('what the log keeps', () => {
       const records: string[] = [];
       const worker = new WorkerOutput(
         'Preview',
-        (detail) => records.push(detail),
+        (detail, source) => records.push(source + ': ' + detail),
         new DiagnosticBudget(),
       );
       for (const part of [
@@ -275,7 +279,7 @@ describe('what the log keeps', () => {
       const records: string[] = [];
       const worker = new WorkerOutput(
         'Preview',
-        (detail) => records.push(detail),
+        (detail, source) => records.push(source + ': ' + detail),
         new DiagnosticBudget(),
       );
       for (const ch of padding + command + '\n[warning] recovered\n{"status":"ready"}\n')
@@ -288,26 +292,38 @@ describe('what the log keeps', () => {
     }
   });
 
-  it.each(["password wasn't configured", 'parse error at [offset'])(
-    'recovers after an overlong plain-language warning containing %j',
-    (warning) => {
-      const rows: string[] = [];
-      const worker = new WorkerOutput('Preview', (row) => rows.push(row), new DiagnosticBudget());
-      worker.write(
-        'x'.repeat(2001) + ' ' + warning + '\n[warning] recovered\n{"status":"ready"}\n',
-      );
-      expect(rows.slice(1)).toEqual([
-        'Preview: [warning] recovered',
-        'Preview: {"status":"ready"}',
-      ]);
-    },
-  );
+  it.each([
+    "password wasn't configured",
+    'parse error at [offset',
+    'unexpected TOKEN": [offset',
+    'field "token": [offset',
+    'field "token": {"items":[1,broken',
+  ])('recovers after an overlong plain-language warning containing %j', (warning) => {
+    const rows: string[] = [];
+    const worker = new WorkerOutput(
+      'Preview',
+      (row, source) => rows.push(source + ': ' + row),
+      new DiagnosticBudget(),
+    );
+    worker.write(
+      'x'.repeat(2001) +
+        ' ' +
+        warning +
+        '\n{"status":"checking"}\n{"status":"retry"}\n[warning] recovered\n{"status":"ready"}\n',
+    );
+    expect(rows.slice(1)).toEqual([
+      'Preview: {"status":"checking"}',
+      'Preview: {"status":"retry"}',
+      'Preview: [warning] recovered',
+      'Preview: {"status":"ready"}',
+    ]);
+  });
 
   it('preserves credential context in the discarded portion of a long worker line', () => {
     const records: string[] = [];
     const worker = new WorkerOutput(
       'Preview',
-      (detail) => records.push(detail),
+      (detail, source) => records.push(source + ': ' + detail),
       new DiagnosticBudget(),
     );
     const command = ['viewer', '--db-password', "first's [value\nSAMPLE_FIVE\nlast secret", 'done']
@@ -332,7 +348,7 @@ describe('what the log keeps', () => {
     const rows: string[] = [];
     const worker = new WorkerOutput(
       'Preview',
-      (row) => rows.push(row),
+      (row, source) => rows.push(source + ': ' + row),
       new DiagnosticBudget(1, 100, () => now),
     );
     worker.write("ordinary message\n'--db-password' 'first\n");
@@ -352,7 +368,7 @@ describe('what the log keeps', () => {
     const records: string[] = [];
     const output = new WorkerOutput(
       'Preview',
-      (detail) => records.push(detail),
+      (detail, source) => records.push(source + ': ' + detail),
       new DiagnosticBudget(1, 1000, () => now),
     );
     output.write('ordinary message\n{"password":\n');
@@ -376,11 +392,12 @@ describe('what the log keeps', () => {
     );
     output.write('first line\nsecond ');
     output.write('line\n');
-    expect(record.mock.calls).toEqual([['Viewer previews: first line']]);
+    expect(record.mock.calls).toEqual([['first line', 'Viewer previews']]);
     now = 1000;
     output.write('third line\n');
     expect(record).toHaveBeenLastCalledWith(
-      'Viewer previews (1 earlier line left out): third line',
+      'third line',
+      'Viewer previews (1 earlier line left out)',
     );
   });
 });
@@ -430,13 +447,16 @@ describe('main-process failures', () => {
     );
     const lines = vi.fn();
     const stopped = vi.fn();
-    reportWorkers({ output: () => (chunk) => lines(String(chunk)), stopped });
+    reportWorkers({
+      output: () => ({ write: (chunk) => lines(String(chunk)), end: () => {} }),
+      stopped,
+    });
     const client = new UtilityClient(worker, { name: 'Fixture worker', backend: 'thread' });
     await expect(client.call('anything')).rejects.toThrow('Background file services stopped');
     await vi.waitFor(() =>
       expect(stopped).toHaveBeenCalledWith(
         'Fixture worker',
-        expect.stringMatching(/^Fixture worker: worker failed \(exit 1\)$/),
+        expect.stringMatching(/^worker failed \(exit 1\)$/),
       ),
     );
     expect(lines.mock.calls.join('')).toContain('worker says goodbye');

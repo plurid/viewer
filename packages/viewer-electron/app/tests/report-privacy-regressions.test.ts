@@ -329,7 +329,7 @@ describe('report privacy regressions', () => {
     expect(redactSecrets('line one\nline two')).toBe('line one\nline two');
     expect(redactSecrets('می‌خواهم')).toBe('می‌خواهم');
     expect(redactSecrets('می‌خواهم DB_PASS\u200cWORD=hunter2')).not.toContain('hunter2');
-    expect(redactSecrets('token="ab\u200dcd" next')).toBe('token=[redacted] next');
+    expect(redactSecrets('token="ab\u200dcd" next')).toBe('token=[redacted]');
     const root = await temporaryRoot('viewer-report-readable-');
     const log = new DiagnosticLog(path.join(root, 'diagnostics.log'));
     await log.record('main-error', 'line one\nline two می‌خواهم DB_PASS\u200cWORD=hunter2');

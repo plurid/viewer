@@ -116,8 +116,8 @@ describe('readable optional report text', () => {
 
   it('recognizes credentials decorated with terminal sequences', () => {
     const input = 'token=\u001b[31mabc\u001b[0m next line kept';
-    expect(redactSecrets(input)).toBe('token=[redacted] next line kept');
-    expect(redactReport(input, values)).toBe('token=[redacted] next line kept');
+    expect(redactSecrets(input)).toBe('token=[redacted]');
+    expect(redactReport(input, values)).toBe('token=[redacted]');
   });
 
   it.each(['token', 'password', 'cookie', 'authorization'])(

@@ -1,3 +1,4 @@
+import { boundedDiagnosticInput, DiagnosticLicenseKey } from '../../domain/diagnostics/license-key';
 import { StringDecoder } from 'node:string_decoder';
 import { WorkerRecordBoundary } from './worker-record';
 import { boundedText } from '../../domain/diagnostics/text';
@@ -44,9 +45,9 @@ function describe(value: unknown): string {
   return `[${kind || typeof value}]`;
 }
 
-/** What a console line says, bounded and with secrets redacted. */
+/** Describe console values before the log applies its credential policy. */
 export function diagnosticText(values: readonly unknown[]): string {
-  return boundedText(redactSecrets(values.map(describe).join(' ')));
+  return boundedDiagnosticInput(values.map(describe).join(' '));
 }
 
 /** Keeps writing to the console as before, and records a bounded share of what it writes. */
@@ -71,11 +72,21 @@ export class WorkerOutput {
   private partial = '';
   private overlong = false;
   private skipped = 0;
-  private boundary = new WorkerRecordBoundary();
+  private line = 0;
+  private omitLicenseLine = false;
+  private pending: { line: number; detail: string; source: string }[] = [];
+  private license = new DiagnosticLicenseKey((start, markerEnd, last) => {
+    if (start === last) return;
+    for (const row of this.pending) {
+      if (row.line >= markerEnd && row.line <= last) row.detail = '[Worker continuation omitted]';
+    }
+    this.omitLicenseLine ||= this.line === last;
+  });
+  private boundary = new WorkerRecordBoundary((ch) => this.license.scan(ch, this.line));
 
   constructor(
     private name: string,
-    private record: (detail: string) => void,
+    private record: (detail: string, source: string) => void,
     private budget: DiagnosticBudget,
   ) {}
 
@@ -89,17 +100,36 @@ export class WorkerOutput {
       const part = text.slice(start, end);
       this.boundary.scan(part);
       if (!this.overlong) this.partial += part;
-      if (newline < 0) return;
+      if (newline < 0) {
+        if (this.pending.length) this.flush(this.license.pendingLine());
+        return;
+      }
       this.recordLine();
+      this.flush(this.license.pendingLine());
+      this.line++;
+      this.omitLicenseLine = false;
       this.partial = '';
       this.overlong = false;
       start = end + 1;
     }
   }
 
+  end(): void {
+    this.write(this.decoder.end() + '\n');
+    this.license.finish();
+    this.flush();
+  }
+
+  private flush(pendingLine = Infinity): void {
+    while (this.pending.length && this.pending[0]!.line < pendingLine) {
+      const row = this.pending.shift()!;
+      this.record(row.detail, row.source);
+    }
+  }
+
   private recordLine(): void {
     const disposition = this.boundary.finishLine();
-    const raw = this.partial.trim();
+    const raw = this.partial.replace(/\r$/, '');
     if (!this.overlong && disposition === 'empty') return;
     if (!this.budget.take('worker:' + this.name)) {
       this.skipped++;
@@ -111,10 +141,10 @@ export class WorkerOutput {
     this.skipped = 0;
     const detail = this.overlong
       ? '[Long worker line omitted]'
-      : disposition === 'omit'
+      : disposition === 'omit' || this.omitLicenseLine
         ? '[Worker continuation omitted]'
-        : boundedText(redactSecrets(raw), 1000);
-    this.record(`${this.name}${omitted}: ${detail}`);
+        : raw;
+    this.pending.push({ line: this.line, detail, source: this.name + omitted });
   }
 }
 

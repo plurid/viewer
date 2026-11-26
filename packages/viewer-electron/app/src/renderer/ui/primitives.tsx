@@ -18,7 +18,7 @@ import { FileName } from './FileName';
 import type { PathLabelLayout } from './PathLabel';
 import { errorMessage } from '../../domain/errors';
 import { diagnosticFailure } from '../../domain/diagnostics/failure';
-import { boundedText } from '../../domain/diagnostics/text';
+import { boundedDiagnosticInput } from '../../domain/diagnostics/license-key';
 import { getState, report } from '../state/core';
 import { copyPaths, copyText } from '../state/ui';
 
@@ -366,7 +366,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: s
   }
   componentDidCatch(error: Error, info: { componentStack?: string | null }) {
     const failure = diagnosticFailure(error);
-    failure.detail = boundedText(`${failure.detail}\n${info.componentStack ?? ''}`);
+    failure.detail = boundedDiagnosticInput(`${failure.detail}\n${info.componentStack ?? ''}`);
     void window.viewer?.diagnosticReport?.(failure).catch(() => {});
   }
   render() {

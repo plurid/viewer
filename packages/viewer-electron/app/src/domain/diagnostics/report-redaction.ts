@@ -1,4 +1,5 @@
-import { boundedText, withoutControls } from './text';
+import { boundedDiagnosticInput } from './license-key';
+import { withoutControls } from './text';
 import { bundleRelativePath, reportPath } from './report-failure';
 import { redactCredentials } from './secrets';
 
@@ -360,7 +361,7 @@ export function redactReport(text: string, privateValues: readonly ReportPrivate
       return pathSummary(normalized, homes);
     };
 
-    let source = messageControls(redactCredentials(decoded(boundedText(text))))
+    let source = messageControls(redactCredentials(decoded(boundedDiagnosticInput(text))))
       .replace(/\\(?= )/g, '')
       .replace(/\\/g, '/')
       .replace(/\x24(?:HOME\b|\{HOME\})/g, '~')
