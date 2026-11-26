@@ -73,17 +73,17 @@ const fieldLabel = new RegExp(
   `(?<!\\w)(?<label>(?<opening>["'\\x60“‘]?)(?<field>${namePattern})["'\\x60”’]?)[ \\t]*(?<separator>[:=])[ \\t]*`,
 );
 
-type FieldOperand = 'before' | 'plain' | 'quoted';
+const nestedMember = new RegExp(jsonMember.source, 'y');
+const privateKeyBegin = /(?<pem>-----BEGIN [A-Z ]{0,32}PRIVATE KEY-----)/;
+const privateKeyEnd = /-----END [A-Z ]{0,32}PRIVATE KEY-----/g;
 
 /** A free-text assignment owns its whole line, including quoted words continued on later lines. */
 export class CredentialField {
   private closing: string;
   private escaped = false;
-  private operand: FieldOperand;
 
   constructor(label = '') {
     this.closing = unclosedLabelQuote(label);
-    this.operand = this.closing ? 'quoted' : 'before';
   }
 
   get continues(): boolean {
@@ -92,16 +92,7 @@ export class CredentialField {
 
   /** A quoted operand can contain text that looks like another field, option or bearer token. */
   scan(ch: string): boolean {
-    let literal = this.operand === 'quoted';
-    if (!this.continues) {
-      if (/\s/.test(ch)) {
-        if (literal) this.operand = 'plain';
-        literal = false;
-      } else if (this.operand === 'before') {
-        // A leading double quote may also open the name of a structured JSON member.
-        this.operand = closingQuotes[ch] ? 'quoted' : 'plain';
-      }
-    }
+    const literal = this.continues;
     if (this.escaped) this.escaped = false;
     else if (ch === '\\' && this.closing !== "'") this.escaped = true;
     else if (this.closing) {
@@ -111,13 +102,26 @@ export class CredentialField {
   }
 }
 
-function fieldEnd(text: string, start: number, label?: string, literal?: Uint8Array): number {
+function fieldEnd(text: string, start: number, label?: string): number {
   const field = new CredentialField(label);
   for (let index = start; index < text.length; index++) {
     const ch = text[index]!;
     if (!field.continues && (ch === '\r' || ch === '\n')) return index;
     if (ch === '\r' && text[index + 1] === '\n') index++;
-    if (field.scan(ch) && literal) literal[index] = 1;
+    if (ch === '"' && !field.continues && (index === start || /[ \t{,]/.test(text[index - 1]!))) {
+      // A structured member in free text can own a multiline JSON value.
+      nestedMember.lastIndex = index;
+      const member = nestedMember.exec(text);
+      if (member && isCredentialLabel(member.groups!.member!)) {
+        const value = nestedMember.lastIndex;
+        const end = parsedMemberEnd(text, value);
+        if (end !== undefined) {
+          index = end - 1;
+          continue;
+        }
+      }
+    }
+    field.scan(ch);
   }
   return text.length;
 }
@@ -133,15 +137,19 @@ function inQuery(text: string, offset: number): boolean {
   return query;
 }
 
-function memberEnd(text: string, start: number): number {
+function parsedMemberEnd(text: string, start: number): number | undefined {
   const end = jsonValueEnd(text, start);
   try {
     JSON.parse(text.slice(start, end));
-    if (/^\s*(?:[,}\]]|$)/.test(text.slice(end))) return end;
+    if (/^[ \t]*(?:[,}\]\r\n]|$)/.test(text.slice(end))) return end;
   } catch {
     // A malformed member has no reliable narrow value boundary.
   }
-  return Math.max(end, fieldEnd(text, start));
+  return undefined;
+}
+
+function memberEnd(text: string, start: number): number {
+  return parsedMemberEnd(text, start) ?? Math.max(jsonValueEnd(text, start), fieldEnd(text, start));
 }
 
 /** Key and value scanning is bounded and never retries a long value at each character. */
@@ -157,15 +165,21 @@ export function redactCredentials(input: string): string {
     offsets.push(index);
   }
   const spans: { start: number; end: number }[] = [];
-  const literal = new Uint8Array(text.length);
   const assignmentLabels = new Map<number, number>();
   const assignments = new RegExp(
-    [shellOption.source, jsonMember.source, fieldLabel.source].join('|'),
+    [shellOption.source, jsonMember.source, fieldLabel.source, privateKeyBegin.source].join('|'),
     'gi',
   );
   for (let match = assignments.exec(text); match; match = assignments.exec(text)) {
-    if (literal[match.index]) continue;
-    const { option, quote, member, field, label, opening, separator } = match.groups!;
+    const { option, quote, member, field, label, opening, separator, pem } = match.groups!;
+    if (pem && match[0].startsWith('-----BEGIN ')) {
+      privateKeyEnd.lastIndex = assignments.lastIndex;
+      const end = privateKeyEnd.test(text) ? privateKeyEnd.lastIndex : text.length;
+      spans.push({ start: match.index, end });
+      assignments.lastIndex = end;
+      continue;
+    }
+    if (pem) continue;
     if (option) {
       if (option.toLowerCase() !== '-u' && !isCredentialLabel(option.slice(2))) continue;
       const start = assignments.lastIndex;
@@ -192,26 +206,28 @@ export function redactCredentials(input: string): string {
       const assignedName = (name.length + 1) % 4 !== 0 && /[^=\r\n]/.test(text[start] ?? '');
       if (sensitive || assignedName) assignmentLabels.set(nameStart, equals + 1);
     }
-    if (!sensitive) continue;
+    if (!sensitive && !query) continue;
     let end: number;
     if (member) end = memberEnd(text, start);
     else if (query) {
       end = start;
       while (end < text.length && !/[\s&#]/.test(text[end]!)) end++;
-    } else end = fieldEnd(text, start, label, literal);
-    spans.push({ start, end });
-    // Another assignment on a masked line can introduce a value on the next line.
-    if (member || query || end === text.length) assignments.lastIndex = end;
+    } else end = fieldEnd(text, start, label);
+    if (sensitive) spans.push({ start, end });
+    assignments.lastIndex = end;
   }
-  for (const match of text.matchAll(/\b(?:Bearer|Basic)\s+/gi)) {
-    if (literal[match.index]) continue;
-    const start = match.index + match[0].length;
-    spans.push({ start, end: valueEnd(text, start, 'argument') });
-  }
+  const claimed = spans.slice();
   const license = new DiagnosticLicenseKey((start, _markerEnd, last) => {
     spans.push({ start, end: last + 1 });
   });
-  for (let index = 0; index < text.length; index++) license.scan(text[index]!, index);
+  let available = 0;
+  for (const { start, end } of claimed) {
+    for (; available < start; available++) license.scan(text[available]!, available);
+    license.finish();
+    license.scan('\0', start);
+    available = Math.max(available, end);
+  }
+  for (; available < text.length; available++) license.scan(text[available]!, available);
   license.finish();
   for (const match of text.matchAll(
     /\b(?:sk|pk|rk|gh[pousr]|xox[abprs]|glpat|github_pat)[-_][A-Za-z0-9_-]{8,}|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|\b[a-fA-F0-9]{20,}\b|\b[A-Za-z0-9+/]{12,}={1,2}(?![A-Za-z0-9=])/g,
@@ -219,10 +235,6 @@ export function redactCredentials(input: string): string {
     const end = match.index + match[0].length;
     if (assignmentLabels.get(match.index) !== end) spans.push({ start: match.index, end });
   }
-  for (const match of text.matchAll(
-    /-----BEGIN [A-Z ]{0,32}PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]{0,32}PRIVATE KEY-----|$)/g,
-  ))
-    spans.push({ start: match.index, end: match.index + match[0].length });
   const ordered = spans
     .filter((span) => span.end > span.start)
     .map((span) => ({

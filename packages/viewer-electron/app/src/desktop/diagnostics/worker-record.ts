@@ -23,7 +23,6 @@ function appendLabel(label: string, ch: string): string {
 export class WorkerRecordBoundary {
   private label = '';
   private field?: CredentialField;
-  private bearer = false;
   private keyBlock = false;
   private markerTail = '';
   private value: ValuePosition = 'outside';
@@ -78,7 +77,6 @@ export class WorkerRecordBoundary {
     if (!/\s/.test(ch)) this.hasText = true;
     this.scanLicense(ch);
     this.scanKeyBlock(ch);
-    if (!/\s/.test(ch)) this.bearer = false;
     const literal = this.field?.scan(ch);
     if (this.inJsonValue(ch)) return;
     if (ch === '"' && !this.quote) {
@@ -87,7 +85,7 @@ export class WorkerRecordBoundary {
     } else if (this.memberName !== undefined) {
       this.memberName = /[A-Za-z0-9_-]/.test(ch) ? appendLabel(this.memberName, ch) : undefined;
     }
-    if (!literal) this.scanArgument(ch);
+    if (!this.field) this.scanArgument(ch);
   }
 
   private scanKeyBlock(ch: string): void {
@@ -129,7 +127,6 @@ export class WorkerRecordBoundary {
     this.scanLicense('\n');
     if (this.json && !this.json.scan('\n')) this.json = undefined;
     const openValue = Boolean(this.quote || this.escaped);
-    this.bearer ||= /^(?:bearer|basic)$/i.test(this.label);
     const openRecord =
       openValue ||
       Boolean(
@@ -137,7 +134,6 @@ export class WorkerRecordBoundary {
         this.terminal ||
         this.json ||
         this.member === 'value' ||
-        this.bearer ||
         this.keyBlock,
       );
     if (this.field?.continues) this.field.scan('\n');
@@ -147,7 +143,7 @@ export class WorkerRecordBoundary {
     const omit = this.continuedValue || openRecord;
     this.continuedValue = openRecord;
     this.quotedOption = undefined;
-    if (!openValue) this.value = this.bearer ? 'before' : 'outside';
+    if (!openValue) this.value = 'outside';
     this.escaped = false;
     this.label = '';
     const empty = !this.hasText;
@@ -216,9 +212,6 @@ export class WorkerRecordBoundary {
         if (!option && space) return;
         if (!option && !queryEquals) this.field ??= new CredentialField(this.label);
         if (option && ch === '=') this.quote = unclosedLabelQuote(this.label);
-      } else if (space && /^(?:bearer|basic)$/i.test(this.label)) {
-        this.value = 'before';
-        this.bearer = true;
       } else if (space && this.value === 'inside') this.value = 'outside';
       this.label = '';
     } else {

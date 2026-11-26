@@ -20,7 +20,7 @@ const routes: Route[] = ['direct', 'service', 'worker', 'named-worker'];
 
 async function persisted(route: Route, messages: string[]): Promise<string[]> {
   const root = await temporaryRoot('viewer-credential-log-');
-  const log = new DiagnosticLog(path.join(root, 'rows.jsonl'), 16 * 1024 * 1024);
+  const log = new DiagnosticLog(path.join(root, 'rows.jsonl'), 64 * 1024 * 1024);
   const writes: Promise<void>[] = [];
   for (const message of messages) {
     if (route === 'direct') writes.push(log.record('main-error', message));
@@ -45,7 +45,13 @@ async function persisted(route: Route, messages: string[]): Promise<string[]> {
     .map((line) => JSON.parse(line).detail);
 }
 
-function* assignments() {
+interface GeneratedCredential {
+  message: string;
+  value: string;
+  open?: boolean;
+}
+
+function* assignments(): Generator<GeneratedCredential> {
   const words = ['J7qxB5nv', 'Z8mwF6yp'];
   const values = [words[0]!, words.join(' '), words.join('='), words.join("'")];
   for (const [open, close] of [
@@ -61,11 +67,12 @@ function* assignments() {
     for (const ending of ['Password', 'AUTH_TOKEN', 'client-secret']) {
       const name = prefix + ending;
       for (const value of values) {
+        const open = value === words.join("'");
         for (const padding of ['', '  ']) {
-          yield { message: name + '=' + padding + value, value };
-          yield { message: 'config ' + name + padding + ':' + padding + value, value };
+          yield { message: name + '=' + padding + value, value, open };
+          yield { message: 'config ' + name + padding + ':' + padding + value, value, open };
         }
-        yield { message: 'env ' + name + '=' + value + ' viewer --version', value };
+        yield { message: 'env ' + name + '=' + value + ' viewer --version', value, open };
         yield { message: '{"' + name + '":' + JSON.stringify(value) + ',"ok":true}', value };
         yield {
           message: 'https://local.invalid/?' + name + '=' + encodeURIComponent(value) + '&ok=1',
@@ -92,7 +99,7 @@ function* assignments() {
     }
     yield { message: name + '=first "' + words.join('\n') + '" after', value: words.join('\n') };
     yield { message: name + ': "' + words.join("'\n") + '" trailing', value: words.join("'\n") };
-    yield { message: name + '= "' + words.join('\n'), value: words.join('\n') };
+    yield { message: name + '= "' + words.join('\n'), value: words.join('\n'), open: true };
   }
   for (const message of [
     'token=first {"secret":\n  ["' + words.join(' ') + '"]}',
@@ -108,8 +115,8 @@ function* assignments() {
     '{"_AUTH_TOKEN":' + '['.repeat(270) + '\n"' + words.join(' ') + '"\n' + ']'.repeat(270) + '}',
     '{"_AUTH_TOKEN":["' + words[0] + '\\Q\n' + words[1] + '"]}',
     '_auth_token=“' + words.join("'\r\n") + '” trailing text',
-    'Bearer\n"' + words.join('\n') + '"',
-    'Basic' + ' '.repeat(40) + words[0],
+    'Authorization: Bearer "' + words.join('\n') + '"',
+    'Proxy-Authorization: Basic' + ' '.repeat(40) + words[0],
   ])
     yield { message, value: message.includes(words[1]!) ? words.join(' ') : words[0]! };
   for (const name of [
@@ -130,9 +137,9 @@ function* assignments() {
   ])
     yield { message: '_' + name + '=' + words.join(' '), value: words.join(' ') };
   for (const value of values) yield { message: '-u ' + shellQuote(value), value };
-  for (const prefix of ['Bearer', 'Basic']) {
+  for (const prefix of ['Authorization: Bearer', 'Proxy-Authorization: Basic']) {
     yield { message: prefix + ' ' + words[0], value: words[0]! };
-    yield { message: prefix + '  \n' + words[0], value: words[0]! };
+    yield { message: prefix + '  "' + words.join('\n') + '"', value: words.join('\n') };
     yield { message: prefix + ' "' + words.join('\n') + '"', value: words.join('\n') };
   }
   const body = words.join('');
@@ -202,11 +209,45 @@ function mixedAssignments(word: string): string[] {
     shellQuote('--auth-token=' + word) + ' --ok',
     "'--auth-token' " + word + ' --ok',
     '-u ' + word,
-    'Bearer ' + word,
-    'Basic ' + word,
+    'Authorization: Bearer ' + word,
+    'Proxy-Authorization: Basic ' + word,
     JSON.stringify({ _AUTH_TOKEN: word, ok: true }),
     '?_AUTH_TOKEN=' + encodeURIComponent(word) + '&ok=1',
   ];
+}
+
+/** Check each submitted case against its own persisted records, including the trusted source prefix. */
+async function persistedWithRecovery(route: Route, cases: {message: string; open?: boolean}[]): Promise<string[]> {
+  const statuses = (index: number) => ['worker ready ' + index, JSON.stringify({state: 'idle', record: index})];
+  const rows = await persisted(route, cases.map(({message, open}, index) =>
+    open ? message : [message, ...statuses(index)].join('\n')));
+  const worker = route === 'worker' || route === 'named-worker';
+  const prefix = route === 'named-worker' ? 'Token: ' : '';
+  const details: string[] = [];
+  const missing: number[] = [];
+  let offset = 0;
+  for (const [index, {message, open}] of cases.entries()) {
+    if (worker) {
+      const end = offset + message.split('\n').length;
+      details.push(...rows.slice(offset, end));
+      offset = end;
+      if (open) continue;
+      const [plain, structured] = statuses(index);
+      if (rows[offset] !== prefix + plain || rows[offset + 1] !== prefix + structured) missing.push(index);
+      offset += 2;
+    } else {
+      const row = rows[offset++]!;
+      if (open) details.push(row);
+      else {
+        const suffix = '\n' + statuses(index).join('\n');
+        if (!row.endsWith(suffix)) missing.push(index);
+        details.push(row.endsWith(suffix) ? row.slice(0, -suffix.length) : row);
+      }
+    }
+  }
+  expect(missing.slice(0, 5).map(index => cases[index]?.message)).toEqual([]);
+  expect(offset).toBe(rows.length);
+  return details;
 }
 
 function addFragments(fragments: Set<string>, value: string): void {
@@ -222,6 +263,64 @@ function containsFragment(fragments: Set<string>, row: string): boolean {
 }
 
 describe('persisted credential boundaries', () => {
+  it.each(routes)('keeps statuses after literal field names in adjoining quoted segments via %s', async route => {
+    const messages: string[] = [];
+    for (const [open, close] of [['"', '"'], ["'", "'"], ['\x60', '\x60'], ['“', '”'], ['‘', '’']]) {
+      for (const head of ['caption', "'caption'", 'plain' + open + ' first' + close + 'more']) {
+        for (const literal of [' note token=', ' --password ', ' a: Authorization:', ' note\nclient_secret=']) {
+          messages.push('env API_TOKEN=' + head + open + literal + close + ' viewer');
+        }
+      }
+    }
+    const prefix = route === 'service' || route === 'named-worker' ? 'Token: ' : '';
+    const statuses = ['worker ready', '{"state":"idle"}'];
+    const actual = await persisted(route, messages.map(m => [m, ...statuses].join('\n')));
+    const expected = messages.flatMap(message => {
+      if (route === 'direct' || route === 'service') return [prefix + 'env API_TOKEN=[redacted]\n' + statuses.join('\n')];
+      const entries = message.includes('\n') ? ['[Worker continuation omitted]', '[Worker continuation omitted]'] : ['env API_TOKEN=[redacted]'];
+      return [...entries, ...statuses].map(line => prefix + line);
+    });
+    expect(actual).toEqual(expected);
+  });
+
+  it.each(routes)('keeps credential-looking text inside its original value via %s', async route => {
+    const messages = [
+      ["env API_TOKEN=caption' -----BEGIN PRIVATE KEY-----' viewer", 'env API_TOKEN=[redacted]'],
+      ['--password "note -----BEGIN PRIVATE KEY-----" --ok', '--password [redacted] --ok'],
+      ['{"token":"-----BEGIN PRIVATE KEY-----","ok":true}', '{"token":[redacted],"ok":true}'],
+      ["https://local.invalid/?plan=token=can't&ok=1","https://local.invalid/?plan=token=can't&ok=1"],
+      ["https://local.invalid/?plan=x&token=token=can't&ok=1","https://local.invalid/?plan=x&token=[redacted]&ok=1"],
+    ] as const;
+    const last = ['worker ready', '{"state":"idle"}'];
+    const prefix = route === 'service' || route === 'named-worker' ? 'Token: ' : '';
+    const rows = await persisted(route, messages.map(([message]) => [message,...last].join('\n')));
+    expect(rows).toEqual(messages.flatMap(([,line]) => route === 'direct' || route === 'service'
+      ? [prefix + [line,...last].join('\n')] : [line,...last].map(value => prefix + value)));
+  });
+
+  it.each(routes)('recognizes authorization schemes only in credential fields via %s', async route => {
+    const cases: [string,string][] = [];
+    for (const scheme of ['Basic', 'Bearer', 'bAsIc', 'BEARER']) {
+      for (const tail of ['', ' ', ' is available']) {
+        for (const key of ['plan', 'token']) {
+          const url = 'https://example.invalid/?p=1&' + key + '=';
+          cases.push([url + scheme + tail, url + (key === 'token' ? '[redacted]' : scheme) + tail]);
+        }
+        for (const text of [scheme + tail, 'plan ' + scheme + tail]) cases.push([text,text]);
+      }
+      for (const name of ['Authorization', 'Proxy-Authorization']) {
+        cases.push([name + ': ' + scheme, name + ': [redacted]']);
+        cases.push([name + ': ' + scheme + ' J7qxZ8mw', name + ': [redacted]']);
+      }
+    }
+    const prefix = route === 'service' || route === 'named-worker' ? 'Token: ' : '';
+    const statuses = ['worker ready', '{"state":"idle"}'];
+    const rows = await persisted(route, cases.map(([text]) => [text,...statuses].join('\n')));
+    const expected = cases.flatMap(([,line]) => route === 'direct' || route === 'service'
+      ? [prefix + [line,...statuses].join('\n')] : [line,...statuses].map(value => prefix + value));
+    expect(rows).toEqual(expected);
+  });
+
   it.each(routes)(
     'protects a quoted environment operand through its last line via %s',
     async (route) => {
@@ -435,11 +534,10 @@ describe('persisted credential boundaries', () => {
         ])
           addFragments(fragments, spelling);
         for (const assignment of mixedAssignments(word))
-          messages.push(assignment + '\nworker ready');
+          messages.push(assignment);
       }
-      const rows = await persisted(route, messages);
+      const rows = await persistedWithRecovery(route, messages.map(message => ({message})));
       expect(rows.filter((row) => containsFragment(fragments, row)).slice(0, 5)).toEqual([]);
-      expect(rows.filter((row) => row.endsWith('worker ready'))).toHaveLength(messages.length);
     },
     120000,
   );
@@ -566,10 +664,7 @@ describe('persisted credential boundaries', () => {
     'keeps no four-character fragment of generated credential values via %s',
     async (route) => {
       const cases = Array.from(assignments());
-      const details = await persisted(
-        route,
-        cases.map((c) => c.message),
-      );
+      const details = await persistedWithRecovery(route, cases);
       const rows =
         route === 'worker' || route === 'named-worker'
           ? cases.reduce((count, c) => count + c.message.split('\n').length, 0)
