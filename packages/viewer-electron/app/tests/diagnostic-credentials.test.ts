@@ -287,6 +287,8 @@ describe('persisted credential boundaries', () => {
     const messages = [
       ["env API_TOKEN=caption' -----BEGIN PRIVATE KEY-----' viewer", 'env API_TOKEN=[redacted]'],
       ['--password "note -----BEGIN PRIVATE KEY-----" --ok', '--password [redacted] --ok'],
+      ["--password part:token=x --ok couldn't connect", "--password [redacted] --ok couldn't connect"],
+      ["--password= couldn't connect", "--password= couldn't connect"],
       ['{"token":"-----BEGIN PRIVATE KEY-----","ok":true}', '{"token":[redacted],"ok":true}'],
       ["https://local.invalid/?plan=token=can't&ok=1","https://local.invalid/?plan=token=can't&ok=1"],
       ["https://local.invalid/?plan=x&token=token=can't&ok=1","https://local.invalid/?plan=x&token=[redacted]&ok=1"],
@@ -319,6 +321,16 @@ describe('persisted credential boundaries', () => {
     const expected = cases.flatMap(([,line]) => route === 'direct' || route === 'service'
       ? [prefix + [line,...statuses].join('\n')] : [line,...statuses].map(value => prefix + value));
     expect(rows).toEqual(expected);
+  });
+
+  it.each(routes)('preserves statuses after a credential member with a missing value via %s', async route => {
+    const statuses = ['worker ready', '{"state":"idle"}'];
+    const first = '{"Authorization":';
+    const prefix = route === 'service' || route === 'named-worker' ? 'Token: ' : '';
+    const rows = await persisted(route, [[first, ...statuses].join('\n')]);
+    expect(rows).toEqual(route === 'direct' || route === 'service'
+      ? [prefix + [first, ...statuses].join('\n')]
+      : [first, ...statuses].map(line => prefix + line));
   });
 
   it.each(routes)(

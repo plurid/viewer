@@ -208,7 +208,12 @@ export function redactCredentials(input: string): string {
     }
     if (!sensitive && !query) continue;
     let end: number;
-    if (member) end = memberEnd(text, start);
+    if (member && /[\r\n]/.test(match[0].slice(match[0].indexOf(':') + 1))) {
+      // An unfilled member may be followed by an independent diagnostic.
+      const structured = parsedMemberEnd(text, start);
+      if (structured === undefined && !/^[\[{"\d-]/.test(text[start] ?? '')) continue;
+      end = structured ?? memberEnd(text, start);
+    } else if (member) end = memberEnd(text, start);
     else if (query) {
       end = start;
       while (end < text.length && !/[\s&#]/.test(text[end]!)) end++;

@@ -27,12 +27,14 @@ export class WorkerRecordBoundary {
   private markerTail = '';
   private value: ValuePosition = 'outside';
   private quote = '';
-  private quotedOption?: string;
+  private nextOption?: string;
   private escaped = false;
   private continuedValue = false;
   private terminal?: TerminalSequence;
 
   private member?: 'colon' | 'value';
+  private awaitingMemberLine = false;
+  private scalarLine?: string;
   private memberName?: string;
   private json?: WorkerJsonValue;
   private hasText = false;
@@ -75,6 +77,7 @@ export class WorkerRecordBoundary {
 
   private visible(ch: string): void {
     if (!/\s/.test(ch)) this.hasText = true;
+    if (this.scalarLine !== undefined && this.scalarLine.length <= 2000) this.scalarLine += ch;
     const queryValue = this.query === 'value' || this.query === 'private-value';
     const claimed = this.field || this.json || this.value === 'before' || this.value === 'inside' || this.query === 'private-value';
     if (this.keyBlock) {
@@ -91,7 +94,7 @@ export class WorkerRecordBoundary {
     }
     if (queryValue && !/[\s&#]/.test(ch)) return;
     if (this.value === 'before' || this.value === 'inside') {
-      this.scanArgument(ch);
+      this.scanOptionValue(ch);
       return;
     }
     const literal = this.field?.scan(ch);
@@ -124,6 +127,10 @@ export class WorkerRecordBoundary {
       if (this.member === 'colon' && ch === ':') this.member = 'value';
       else {
         const structured = this.member === 'value' && (ch === '{' || ch === '[' || ch === '"');
+        if (this.member === 'value' && this.awaitingMemberLine) {
+          if (structured) this.continuedValue = true;
+          else if (/[tfn\d-]/.test(ch)) this.scalarLine = ch;
+        }
         this.member = undefined;
         if (structured) {
           this.json = new WorkerJsonValue(ch);
@@ -150,16 +157,19 @@ export class WorkerRecordBoundary {
         this.field?.continues ||
         this.terminal ||
         this.json ||
-        this.member === 'value' ||
         this.keyBlock,
       );
     if (this.field?.continues) this.field.scan('\n');
     else this.field = undefined;
     this.markerTail = '';
     this.memberName = undefined;
-    const omit = this.continuedValue || openRecord;
+    const scalar = this.scalarLine !== undefined &&
+      /^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)[ \t]*(?:[,}\]]|$)/.test(this.scalarLine);
+    const omit = this.continuedValue || openRecord || scalar;
     this.continuedValue = openRecord;
-    this.quotedOption = undefined;
+    this.awaitingMemberLine = this.member === 'value';
+    this.scalarLine = undefined;
+    this.nextOption = undefined;
     if (!openValue) this.value = 'outside';
     this.escaped = false;
     this.label = '';
@@ -172,6 +182,40 @@ export class WorkerRecordBoundary {
     if (!this.label) return false;
     const label = this.label.replace(/^['"\x60“‘]|['"\x60”’]$/g, '');
     return label.toLowerCase() === '-u' || isCredentialLabel(label);
+  }
+
+  private scanOptionValue(ch: string): void {
+    if (this.escaped) {
+      this.escaped = false;
+      return;
+    }
+    if (this.value === 'before' && /\s/.test(ch)) return;
+    this.value = 'inside';
+    if (ch === '\\' && this.quote !== "'") {
+      this.escaped = true;
+      this.nextOption = undefined;
+      return;
+    }
+    if (this.quote) {
+      if (ch === this.quote) {
+        this.quote = '';
+        return;
+      }
+    } else if (closingQuotes[ch]) {
+      this.quote = closingQuotes[ch]!;
+      return;
+    } else if (/\s/.test(ch)) {
+      // A missing operand can put another credential option in its place.
+      const name = this.nextOption ?? '';
+      const next = name === '-u' || (name.startsWith('--') && isCredentialLabel(name.slice(2)));
+      this.value = next ? 'before' : 'outside';
+      this.nextOption = next ? '' : undefined;
+      return;
+    }
+    if (this.nextOption !== undefined) {
+      const valid = this.nextOption ? /[A-Za-z0-9_-]/.test(ch) : ch === '-';
+      this.nextOption = valid ? appendLabel(this.nextOption, ch) : undefined;
+    }
   }
 
   private scanArgument(ch: string): void {
@@ -194,46 +238,17 @@ export class WorkerRecordBoundary {
       }
       this.label = '';
     }
-    if (this.escaped) {
-      this.escaped = false;
-      return;
-    }
-    if (this.value !== 'outside' && ch === '\\' && this.quote !== "'") {
-      this.value = 'inside';
-      this.escaped = true;
-      this.quotedOption = undefined;
-      return;
-    }
-    if (this.quote) {
-      if (ch === this.quote) {
-        this.quote = '';
-        this.label = this.quotedOption ?? '';
-        this.quotedOption = undefined;
-      } else if (this.quotedOption !== undefined) {
-        // An empty option can be followed by another quoted option with its own value.
-        const valid = this.quotedOption ? /[A-Za-z0-9_-]/.test(ch) : ch === '-';
-        this.quotedOption = valid ? appendLabel(this.quotedOption, ch) : undefined;
-      }
-      return;
-    }
-    if (this.value !== 'outside' && closingQuotes[ch]) {
-      this.quote = closingQuotes[ch]!;
-      this.quotedOption = '';
-      this.value = 'inside';
-      this.label = '';
-      return;
-    }
     if (space || ch === '=' || ch === ':') {
       if (this.credentialLabel()) {
         const option = /^['"\x60“‘]?-(?:-|u['"\x60”’]?$)/i.test(this.label);
-        this.value = option ? 'before' : space ? 'field-name' : 'outside';
+        this.value = option ? (space ? 'before' : 'inside') : space ? 'field-name' : 'outside';
+        this.nextOption = option && space ? '' : undefined;
         if (!option && space) return;
         if (!option && !queryEquals) this.field ??= new CredentialField(this.label);
         if (option && ch === '=') this.quote = unclosedLabelQuote(this.label);
-      } else if (space && this.value === 'inside') this.value = 'outside';
+      }
       this.label = '';
     } else {
-      if (this.value === 'before') this.value = 'inside';
       if (/[A-Za-z0-9_'"\x60“”‘’-]/.test(ch)) {
         this.label = appendLabel(this.label, ch);
       } else this.label = '';
