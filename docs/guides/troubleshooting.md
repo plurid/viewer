@@ -194,6 +194,8 @@ clipboard contents, environment variables or license buyer details.
 `:` in message text hides the rest of that line, including in an `env` command. An open quote in the
 value or around the whole `NAME=value` argument keeps later lines hidden until it closes. JSON
 members, URL query parameters and command-line options retain the text after the credential value.
+The log masks Basic and Bearer credentials in Authorization and Proxy-Authorization fields. The
+same words in ordinary messages and URL parameters leave the following record readable.
 Whitespace ends a URL even when its last query parameter is empty. The log also masks complete
 Viewer license keys, including wrapped keys. A path such as
 `/schemas/viewer-license-1.d/default.json` stays readable. The log omits worker lines longer than

@@ -240,7 +240,7 @@ describe('optional message redaction', () => {
     'Cookie: session=hunter2; another=private-cookie',
     'Set-Cookie: session=hunter2; HttpOnly',
     'Authorization: Basic ZXhhbXBsZTpwYXNz',
-    'Bearer private-token',
+    'Proxy-Authorization: Bearer private-token',
     `“viewer-license-1.\n  ${licensePayload}.\n  ${licenseSignature}”`,
     `“vie\n wer- license -1.\n ${licensePayload}.\n ${licenseSignature}”`,
     'AKIAIOSFODNN7EXAMPLE',

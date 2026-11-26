@@ -8,7 +8,7 @@ import {
 
 type LineDisposition = 'empty' | 'record' | 'omit';
 type ValuePosition = 'outside' | 'field-name' | 'before' | 'inside';
-type QueryPosition = 'outside' | 'fragment' | 'name' | 'query';
+type QueryPosition = 'outside' | 'fragment' | 'name' | 'query' | 'value' | 'private-value';
 type TerminalSequence = 'escape' | 'intermediate' | 'csi' | 'string' | 'string-escape';
 
 /** Retain the beginning of a quoted option and the normalized suffix used by the classifier. */
@@ -75,8 +75,25 @@ export class WorkerRecordBoundary {
 
   private visible(ch: string): void {
     if (!/\s/.test(ch)) this.hasText = true;
-    this.scanLicense(ch);
-    this.scanKeyBlock(ch);
+    const queryValue = this.query === 'value' || this.query === 'private-value';
+    const claimed = this.field || this.json || this.value === 'before' || this.value === 'inside' || this.query === 'private-value';
+    if (this.keyBlock) {
+      this.scanKeyBlock(ch);
+      return;
+    }
+    if (claimed) {
+      this.scanLicense('\0');
+      this.markerTail = '';
+    } else {
+      this.scanLicense(ch);
+      this.scanKeyBlock(ch);
+      if (this.keyBlock) return;
+    }
+    if (queryValue && !/[\s&#]/.test(ch)) return;
+    if (this.value === 'before' || this.value === 'inside') {
+      this.scanArgument(ch);
+      return;
+    }
     const literal = this.field?.scan(ch);
     if (this.inJsonValue(ch)) return;
     if (ch === '"' && !this.quote) {
@@ -164,6 +181,7 @@ export class WorkerRecordBoundary {
     else if (ch === '#') this.query = 'fragment';
     else if (this.query !== 'fragment') {
       if (ch === '?' || (ch === '&' && this.query !== 'outside')) this.query = 'name';
+      else if (queryEquals) this.query = this.credentialLabel() ? 'private-value' : 'value';
       else if (this.query === 'name' && !/[A-Za-z0-9_-]/.test(ch)) this.query = 'query';
     }
     if (this.value === 'field-name') {

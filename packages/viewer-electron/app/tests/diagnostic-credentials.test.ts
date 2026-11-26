@@ -139,7 +139,7 @@ function* assignments(): Generator<GeneratedCredential> {
   for (const value of values) yield { message: '-u ' + shellQuote(value), value };
   for (const prefix of ['Authorization: Bearer', 'Proxy-Authorization: Basic']) {
     yield { message: prefix + ' ' + words[0], value: words[0]! };
-    yield { message: prefix + '  "' + words.join('\n') + '"', value: words.join('\n') };
+    yield { message: prefix + '  "' + words.join('\r\n') + '"', value: words.join('\r\n') };
     yield { message: prefix + ' "' + words.join('\n') + '"', value: words.join('\n') };
   }
   const body = words.join('');
