@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+import { readerProblemFields } from '../../../domain/previews/reader-problem';
 import { resourceStatusMessage } from '../../../domain/previews/resource-status';
 import init, { WasmDocument } from 'djvu-rs';
 import { djvuLimits, type DjVuReply, type DjVuRequest } from './protocol';
@@ -52,6 +53,7 @@ scope.onmessage = async ({ data }: MessageEvent<DjVuRequest>) => {
   } catch (error) {
     reply({
       kind: 'error',
+      ...readerProblemFields(error),
       id: data.id,
       message: errorMessage(error) || 'DjVu decoding failed.',
     });

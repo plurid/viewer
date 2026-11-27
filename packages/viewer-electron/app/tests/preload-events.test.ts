@@ -26,6 +26,23 @@ vi.mock('electron', () => ({
   webUtils: {},
 }));
 
+it('passes a typed preview refusal and its original detail across the preload', async () => {
+  await import('../src/preload');
+  const readerProblem = 'This Office document has damaged package relationships.';
+  const detail = 'Malformed or duplicate Office relationship.';
+  ipc.invoke.mockResolvedValueOnce({
+    ok: false,
+    error: detail,
+    code: 'VIEWER_ERROR',
+    readerProblem,
+  });
+  await expect(bridge.api!.document('workbook')).rejects.toEqual({
+    message: detail,
+    code: 'VIEWER_ERROR',
+    readerProblem,
+  });
+});
+
 it('passes a basis-bound definition reference and Run all items through preload without shell text', async () => {
   await import('../src/preload');
   const request = {

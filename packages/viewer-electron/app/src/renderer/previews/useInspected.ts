@@ -50,12 +50,7 @@ export function useInspected<K extends InspectedKind>(
         if (live && !signal.aborted)
           setInspection({
             status: 'failed',
-            message: previewProblem(error, inspectionProblems[kind], [
-              'The torrent file is not valid bencode.',
-              'This file has no torrent information.',
-              'This file holds no property list.',
-              'The property list is not a profile.',
-            ]),
+            message: previewProblem(error, inspectionProblems[kind]),
           });
       },
     );

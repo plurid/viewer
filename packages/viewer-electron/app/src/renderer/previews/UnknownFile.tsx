@@ -172,12 +172,11 @@ export function UnknownFile(context: PreviewContext) {
       (error: unknown) => {
         if (!signal.aborted)
           setRefusal(
-            previewProblem(error, "Viewer couldn't open this file in the chosen format.", [
-              'Only a file on disk can be shown as another format.',
-              'This preview file is no longer a regular file.',
-              `The contents of this file do not match .${target.entry.extension}.`,
-              `Show as cannot read a file as .${target.entry.extension}.`,
-            ]),
+            previewProblem(
+              error,
+              "Viewer couldn't open this file in the chosen format.",
+              target.entry.extension,
+            ),
           );
       },
     );

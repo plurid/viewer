@@ -1,3 +1,4 @@
+import { readerProblemFields } from '../domain/previews/reader-problem';
 import { ZodError } from 'zod';
 import type { IpcMainInvokeEvent } from 'electron';
 import { createTaskLabel } from '../domain/agents/review';
@@ -595,6 +596,7 @@ export class Desktop {
       office,
       (file, request, signal) => this.files.sqlite(file, request, signal),
       { renderer: ghostscript, cache: postscript },
+      (error) => this.diagnoseFailure(error),
     );
     this.webPreviews = new WebPreviews(access, (owner, servers) => {
       const target = this.windows.get(owner)?.window;
@@ -1476,6 +1478,7 @@ export class Desktop {
       return {
         ok: false,
         error: this.requestFailure(method, error, event.sender.id),
+        ...readerProblemFields(error),
         code: (error as NodeJS.ErrnoException)?.code || 'VIEWER_ERROR',
       };
     }

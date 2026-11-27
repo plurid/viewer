@@ -1,3 +1,4 @@
+import { WebPreviewError } from './web/policy';
 import path from 'node:path';
 import { realpath } from 'node:fs/promises';
 import { assertLocalPath } from '../files/local-path';
@@ -59,7 +60,7 @@ export class PreviewScope {
         [...this.paths].some((file) => previewContains(root, file)),
       )
     )
-      this.abort.abort(new Error('This preview request has expired.'));
+      this.abort.abort(new WebPreviewError(404, 'This preview request has expired.'));
   }
   async finish(): Promise<void> {
     while (this.pending.size) await Promise.allSettled([...this.pending]);
@@ -73,7 +74,7 @@ export class PreviewScope {
         [...this.paths].some((file) => previewContains(root, file)),
       )
     ) {
-      this.abort.abort(new Error('This preview request has expired.'));
+      this.abort.abort(new WebPreviewError(404, 'This preview request has expired.'));
       this.signal.throwIfAborted();
     }
   }
@@ -87,10 +88,11 @@ export class PreviewWork {
     run: (scope: PreviewScope) => Promise<T>,
     signal?: AbortSignal,
   ): Promise<T> {
-    if (this.closed) return Promise.reject(new Error('Preview resources have closed.'));
+    if (this.closed)
+      return Promise.reject(new WebPreviewError(404, 'Preview resources have closed.'));
     if (this.tasks.size >= 512)
       return Promise.reject(
-        new Error('Too many preview requests. Close some previews and try again.'),
+        new WebPreviewError(429, 'Too many preview requests. Close some previews and try again.'),
       );
     const scope = new PreviewScope(files);
     const cancel = () => scope.invalidate();

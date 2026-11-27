@@ -136,11 +136,7 @@ export function inspectStructured(
     if (pending.length) result.limited = true;
   } catch (error) {
     const message = errorMessage(error);
-    const reason = knownPreviewProblem(error, [
-      'Files over 1 MB show as text only.',
-      'Files with over 100 YAML documents show as text only.',
-      'XML this large shows as text only.',
-    ]);
+    const reason = knownPreviewProblem(error);
     if (reason) {
       result.error = reason;
       if (reason !== message) result.diagnostic = message;

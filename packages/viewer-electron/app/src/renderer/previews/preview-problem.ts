@@ -6,11 +6,7 @@ export function reportPreviewProblem(error: unknown): void {
 }
 
 /** A decoder can throw arbitrary text from a file. Only known reader messages reach the card. */
-export function previewProblem(
-  error: unknown,
-  fallback: string,
-  readerMessages: readonly (string | RegExp)[] = [],
-): string {
+export function previewProblem(error: unknown, fallback: string, extension?: string): string {
   reportPreviewProblem(error);
-  return knownPreviewProblem(error, readerMessages) ?? fallback;
+  return knownPreviewProblem(error, extension) ?? fallback;
 }

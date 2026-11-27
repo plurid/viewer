@@ -77,7 +77,6 @@ export default function PostScriptPreview(context: PreviewContext) {
             previewProblem(
               value,
               "Viewer couldn't read this PostScript file. Its bytes are shown below.",
-              ['This PostScript file is malformed; its bytes are shown below.'],
             ),
           );
       });
@@ -140,21 +139,7 @@ export default function PostScriptPreview(context: PreviewContext) {
       setMessage(`Pages rendered with ${value.derivation?.decoder ?? 'Ghostscript'}.`);
     } catch (value) {
       if (!mounted.current || signal.aborted) return;
-      const detail = previewProblem(value, "Viewer couldn't render the pages in this file.", [
-        'PostScript rendering was canceled.',
-        'Reading the page was canceled.',
-        'Ghostscript could not be checked.',
-        'Ghostscript changed; choose Render pages again.',
-        'Install Ghostscript (brew install ghostscript) to show the pages.',
-        'The selected program did not identify itself as Ghostscript.',
-        'Ghostscript did not produce a complete PDF.',
-        'The Ghostscript scratch folder changed and was kept.',
-        'The Ghostscript scratch folder could not be safely checked and was kept.',
-        'Ghostscript’s temporary files were kept because Viewer couldn’t move them to the Trash.',
-        'Ghostscript scratch could not be moved to Trash and was kept.',
-        'Ghostscript left scratch behind after rendering; the scratch was moved to Trash.',
-        /^Ghostscript(?: \d{1,3}\.\d{1,3}(?:\.\d{1,3})?)? (?:could not render this document|exceeded the (?:rendering time|PDF output size|scratch-space) limit)\.$/,
-      ]);
+      const detail = previewProblem(value, "Viewer couldn't render the pages in this file.");
       const canceledError =
         detail === 'PostScript rendering was canceled.' ||
         detail === 'Reading the page was canceled.';

@@ -1,3 +1,4 @@
+import { restoreReaderError } from '../../../domain/previews/reader-problem';
 import * as THREE from 'three';
 import wasmURL from 'occt-import-js/dist/occt-import-js.wasm?url';
 import { cadMaterial } from './appearance';
@@ -161,7 +162,10 @@ export class WarmCadWorker {
         if (this.worker !== worker || this.current !== job || event.data.id !== job.request.id)
           return;
         if ((event.data.heap ?? 0) > this.heapLimit) this.cool = true;
-        job.finish(event.data.error ? new Error(event.data.error) : undefined, event.data.meshes);
+        job.finish(
+          event.data.error ? restoreReaderError(event.data.error, event.data) : undefined,
+          event.data.meshes,
+        );
       };
       const failed = (event?: Event) => {
         event?.preventDefault();

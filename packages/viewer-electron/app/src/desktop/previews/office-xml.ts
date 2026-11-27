@@ -1,10 +1,13 @@
+import { ReaderRefusal } from '../../domain/previews/reader-problem';
 import { XMLStream, type XMLEvents, type XMLNode } from '../../domain/previews/data/xml';
 export type { XMLNode } from '../../domain/previews/data/xml';
 const fail = () => new Error('Malformed or unsupported Office XML.');
 const officeError = (error: unknown) =>
-  new Error(
-    (error instanceof Error ? error.message : String(error)).replace(/\bXML\b/g, 'Office XML'),
-  );
+  error instanceof ReaderRefusal
+    ? error
+    : new Error(
+        (error instanceof Error ? error.message : String(error)).replace(/\bXML\b/g, 'Office XML'),
+      );
 /** Keep Office's existing error vocabulary over the shared bounded XML scanner. */
 export class OfficeXMLStream extends XMLStream {
   constructor(events: XMLEvents, maximumNodes = 200000) {

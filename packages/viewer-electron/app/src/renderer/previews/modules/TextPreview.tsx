@@ -224,11 +224,7 @@ export default function TextPreview(context: TextPreviewProps) {
       })
       .catch((error) => {
         if (!signal.aborted)
-          setError(
-            previewProblem(error, "Viewer couldn't read the text in this file.", [
-              'The property list is too large.',
-            ]),
-          );
+          setError(previewProblem(error, "Viewer couldn't read the text in this file."));
       });
   }, [resource.id, resource.url, resource.entry, services, signal, reading]);
   const editable = !!paneID && !!data && !data.binary && !data.truncated && !data.decoded;

@@ -1,3 +1,5 @@
+import { restoreReaderError } from '../../domain/previews/reader-problem';
+import type { ReaderProblemFields } from '../../domain/previews/reader-problem';
 /** One view owns its worker. Late replies cannot complete a cancelled request. */
 export class PreviewWorker {
   private worker: Worker;
@@ -11,10 +13,13 @@ export class PreviewWorker {
   ) {
     this.worker = create();
     this.worker.onmessage = (
-      event: MessageEvent<{ id: number; value?: unknown; error?: string }>,
+      event: MessageEvent<{ id: number; value?: unknown; error?: string } & ReaderProblemFields>,
     ) => {
       const reply = event.data;
-      this.pending.get(reply.id)?.(reply.error ? new Error(reply.error) : undefined, reply.value);
+      this.pending.get(reply.id)?.(
+        reply.error ? restoreReaderError(reply.error, reply) : undefined,
+        reply.value,
+      );
     };
     this.worker.onerror = (event) => {
       event.preventDefault();

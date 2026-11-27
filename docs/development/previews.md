@@ -44,6 +44,13 @@ retry or another useful view. Register small, bounded state with the existing hi
 tied to source versions. Preserve unsaved text through the editing owner rather than a
 component-local copy.
 
+When a reader refuses a file, add its sentence to the matching preview in
+`src/domain/previews/reader-problem.ts` and throw a `ReaderRefusal`. Pass file-derived details as
+the second argument for diagnostics. At IPC and worker boundaries, carry `readerProblemFields` with
+the original error and restore it with `restoreReaderError`. Call `previewProblem` in the renderer
+with a fallback for the action that failed. The registry test renders each new sentence through that
+preview.
+
 ## Verify and document
 
 Test detection, valid/malformed samples, bounds, cancellation, late results, source changes, revoked

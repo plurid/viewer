@@ -1,3 +1,4 @@
+import { readerProblemFields } from '../../../domain/previews/reader-problem';
 import createOcct from 'occt-import-js';
 import wasmURL from 'occt-import-js/dist/occt-import-js.wasm?url';
 import { cadMeshes } from './cad-data';
@@ -64,6 +65,7 @@ self.onmessage = async (event: MessageEvent<CadRequest>) => {
   } catch (error) {
     self.postMessage({
       id,
+      ...readerProblemFields(error),
       error: errorMessage(error) || "Couldn't read this CAD file.",
       heap: occt?.HEAP8.length,
     } satisfies CadResponse);

@@ -14,7 +14,7 @@ How to read an item:
 - Findings about security, an agent acting beyond its grant, or losing files are kept out of this
   page until they are fixed.
 
-Open here: 171 (S1 0, S2 53, S3 118); 52 confirmed.
+Open here: 175 (S1 0, S2 54, S3 121); 52 confirmed.
 
 ## Decisions the owner made
 
@@ -276,6 +276,17 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
   `src/renderer/pdf-tools/PDFToolsDialog.tsx:152-166`
 - **S3** PDFPagePreview never clears its 15 s slow-load error if the PDF finishes loading later.
   `src/renderer/pdf-tools/PDFPagePreview.tsx:35-37`
+
+## Previews
+
+- **S2** A supplied preview resource still has no Try Again action after a transient read failure.
+  `src/renderer/previews/PreviewHost.tsx:544`
+- **S3** A typed worker refusal resolves as a successful undefined result when its diagnostic text
+  is empty. `src/renderer/previews/worker-client.ts:20`
+- **S3** The grant card drops the file provider’s instruction to refresh the folder when a file
+  moves during coordination. `src/renderer/previews/useResource.ts:62`
+- **S3** The registry table can pass when a registered sentence is dropped by the action that
+  actually shows it. `tests/reader-cards.test.tsx:289`
 
 ## Interface controls and styles
 

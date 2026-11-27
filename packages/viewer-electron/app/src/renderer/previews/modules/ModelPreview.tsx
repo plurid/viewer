@@ -45,7 +45,6 @@ import { PreviewFailure } from '../PreviewFailure';
 import { plural } from '../../../domain/plural';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
 import type { Look } from '../../../domain/contracts';
-import { errorMessage } from '../../../domain/errors';
 
 interface ModelSession {
   frame(): void;
@@ -109,19 +108,6 @@ function disposeObject(object: THREE.Object3D): void {
     texture.dispose();
   }
 }
-const modelReaderMessages = [
-  'No geometry could be read.',
-  'This model has invalid geometry.',
-  'This model exceeds the geometry limit for previews.',
-  'This model exceeds the 128 MB decoded geometry limit.',
-  'This model exceeds the 128 MB decoded texture limit.',
-  'This CAD file exceeds the conversion limit (64 MB).',
-  'This mesh exceeds the 128 MB parsing limit.',
-  'This 3D format is not supported.',
-  'CAD conversion took too long. Try a simpler model or reopen the file.',
-  "This model loads files from the internet, which Viewer doesn't do. Put its textures next to the model file.",
-  "Couldn't read this model file. Check that it's still there, then try again.",
-];
 export default function ModelPreview(context: PreviewContext) {
   const { resource, signal, active, interactive, look } = context;
   const stage = useRef<HTMLDivElement>(null);
@@ -446,7 +432,7 @@ export default function ModelPreview(context: PreviewContext) {
           viewCube.current?.update(camera);
         } catch (error) {
           graphicsFailed = true;
-          setError(previewProblem(error, "Viewer couldn't draw this model.", modelReaderMessages));
+          setError(previewProblem(error, "Viewer couldn't draw this model."));
           setLoading(false);
           return;
         }
@@ -740,16 +726,11 @@ export default function ModelPreview(context: PreviewContext) {
     };
     const fail = (error: unknown) => {
       if (!disposed && !abort.signal.aborted) {
-        const incomplete =
-          resource.entry.extension === 'stl' &&
-          errorMessage(error) === 'Offset is outside the bounds of the DataView';
         setError(
           previewProblem(
             error,
-            incomplete
-              ? 'The file ends before all of its model data can be read.'
-              : "Viewer couldn't read the shapes in this model.",
-            modelReaderMessages,
+            "Viewer couldn't read the shapes in this model.",
+            resource.entry.extension,
           ),
         );
         setLoading(false);

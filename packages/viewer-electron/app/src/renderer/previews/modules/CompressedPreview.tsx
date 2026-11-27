@@ -79,10 +79,7 @@ export default function CompressedPreview(context: PreviewContext) {
       if (live)
         setExpansion({
           state: 'failed',
-          error: previewProblem(error, "Viewer couldn't read the compressed data in this file.", [
-            'This file expands beyond the 8 MB preview limit.',
-            'This gzip file holds no file.',
-          ]),
+          error: previewProblem(error, "Viewer couldn't read the compressed data in this file."),
         });
     });
     return () => {

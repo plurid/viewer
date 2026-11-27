@@ -95,7 +95,7 @@ export type OfficeContentFormat = keyof typeof officeContentTypes;
 export function readsOfficeContent(extension: string): extension is OfficeContentFormat {
   return Object.hasOwn(officeContentTypes, extension.toLowerCase());
 }
-const layoutFailures = {
+export const layoutFailures = {
   OFFICE_LAYOUT_TIMEOUT: 'Office layout exceeded 45 seconds.',
   OFFICE_LAYOUT_CONVERSION:
     'Viewer couldn’t lay out this document. It may be protected or damaged.',

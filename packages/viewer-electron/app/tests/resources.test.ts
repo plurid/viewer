@@ -28,6 +28,65 @@ describe('scoped preview resources', () => {
     expect(await resources.read(page.id, undefined, 1)).toMatchObject({ text: '<p>Page</p>' });
   });
 
+  it.each([
+    ['ENOENT', 404],
+    ['EACCES', 403],
+    ['EPERM', 403],
+    ['ELOOP', 403],
+    ['ENOTDIR', 404],
+    ['EIO', 500],
+  ] as const)('classifies %s and can read the same grant on retry', async (code, status) => {
+    const access = vi.fn(async () => {});
+    const diagnose = vi.fn();
+    resources = new Resources(
+      access,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      diagnose,
+    );
+    const grant = await resources.grantBytes(root, 'read.dxf', Buffer.from('drawing'), 1);
+    const failure = Object.assign(new Error('read failed at private path'), { code });
+    access.mockRejectedValueOnce(failure);
+    const response = await resources.response(new Request(grant.url));
+    expect(response.status).toBe(status);
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(await response.text()).not.toContain(failure.message);
+    if (status === 500) expect(diagnose).toHaveBeenCalledWith(failure);
+    const retry = await resources.response(new Request(grant.url));
+    expect(retry.status).toBe(200);
+    expect(await retry.text()).toBe('drawing');
+  });
+
+  it('reports a saturated resource queue and serves the same grant once a slot opens', async () => {
+    let resume!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    const access = vi.fn(async () => {});
+    resources = new Resources(access);
+    const grant = await resources.grantBytes(root, 'queue.txt', Buffer.from('ok'));
+    access.mockImplementation(() => waiting);
+    const reads = Array.from({ length: 512 }, () =>
+      resources.response(new Request(grant.url, { method: 'HEAD' })),
+    );
+    try {
+      const full = await resources.response(new Request(grant.url));
+      expect(full.status).toBe(429);
+    } finally {
+      resume();
+      await Promise.all(reads);
+    }
+    expect(await (await resources.response(new Request(grant.url))).text()).toBe('ok');
+    await resources.close();
+    expect((await resources.response(new Request(grant.url))).status).toBe(404);
+  });
+
   it('returns a permission refusal when file access is lost before a resource fetch', async () => {
     const access = vi.fn(async () => {});
     resources = new Resources(access);

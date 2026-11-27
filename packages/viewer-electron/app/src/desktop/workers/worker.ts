@@ -1,3 +1,4 @@
+import { readerProblemFields } from '../../domain/previews/reader-problem';
 import type { ApplicationSettings, IndexStatus } from '../../domain/services';
 import { FileIndex } from '../search/index-core';
 import { IndexWatcher } from '../search/index-watch';
@@ -163,6 +164,7 @@ port.on('message', async (event) => {
     port.postMessage({
       id: request.id,
       error: errorMessage(error),
+      ...readerProblemFields(error),
       code: (error as NodeJS.ErrnoException).code,
     });
   }

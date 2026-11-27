@@ -19,7 +19,10 @@ async function invoke<T>(method: ApiMethod, ...args: unknown[]): Promise<T> {
     : ipcRenderer.invoke('viewer:request', method, args))) as ApiResult<T>;
   // Electron drops custom Error properties when crossing contextBridge. A
   // plain rejection envelope preserves the code; the renderer restores Error.
-  if (!result.ok) return Promise.reject({ message: result.error, code: result.code });
+  if (!result.ok) {
+    const { error, code, readerProblem } = result;
+    return Promise.reject({ message: error, code, readerProblem });
+  }
   return result.value;
 }
 const api: ViewerAPI = {

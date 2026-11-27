@@ -1,3 +1,4 @@
+import type { ReaderProblemFields } from '../../../domain/previews/reader-problem';
 export interface ImportedCad {
   success: boolean;
   meshes: {
@@ -14,7 +15,8 @@ export interface CadMesh {
   normals?: Float32Array;
   indices: Uint32Array;
 }
-export type CadReply = { meshes: CadMesh[]; error?: never } | { error: string; meshes?: never };
+export type CadReply =
+  { meshes: CadMesh[]; error?: never } | ({ error: string; meshes?: never } & ReaderProblemFields);
 
 export interface CadRequest {
   id: number;

@@ -1,3 +1,4 @@
+import { ReaderRefusal } from '../../../domain/previews/reader-problem';
 import { lookup } from 'mime-types';
 
 export const webLimits = {
@@ -18,11 +19,13 @@ export const webLimits = {
 } as const;
 
 export class WebPreviewError extends Error {
+  readonly readerProblem?: ReaderRefusal['readerProblem'];
   constructor(
     readonly status: number,
-    message: string,
+    reason: string | ReaderRefusal,
   ) {
-    super(message);
+    super(reason instanceof ReaderRefusal ? reason.message : reason);
+    if (reason instanceof ReaderRefusal) this.readerProblem = reason.readerProblem;
   }
 }
 

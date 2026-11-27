@@ -1,3 +1,4 @@
+import { restoreReaderError } from '../../../domain/previews/reader-problem';
 import { previewProblem } from '../preview-problem';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
@@ -37,7 +38,7 @@ function connect(): DjVuClient {
     const waiting = pending.get(data.id);
     if (!waiting) return;
     pending.delete(data.id);
-    if (data.kind === 'error') waiting.reject(new Error(data.message));
+    if (data.kind === 'error') waiting.reject(restoreReaderError(data.message, data));
     else waiting.resolve(data);
   };
   worker.onerror = (event) => failAll(event.message || 'The DjVu decoder stopped.');

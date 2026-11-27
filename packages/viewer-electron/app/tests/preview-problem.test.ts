@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
+import { knownPreviewProblem, readerProblemFields } from '../src/domain/previews/reader-problem';
 import { previewProblem } from '../src/renderer/previews/preview-problem';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -29,6 +30,10 @@ it.each([
 });
 
 it.each([
+  [
+    Object.assign(new Error('The file could not be read.'), { code: 'EACCES' }),
+    'Viewer needs permission to read this file.',
+  ],
   [
     new Error("EACCES: permission denied, open '/private/file'"),
     'Viewer needs permission to read this file.',
@@ -73,4 +78,19 @@ it.each([
   expect(diagnosticReport).toHaveBeenCalledWith(
     expect.objectContaining({ detail: expect.stringContaining(error.message) }),
   );
+});
+
+it('preserves a coded read refusal through a text-only decoder error envelope', () => {
+  const error = Object.assign(new Error('Private file detail.'), { code: 'EACCES' });
+  const fields = structuredClone(readerProblemFields(error));
+  expect(knownPreviewProblem(Object.assign(new Error(error.message), fields))).toBe(
+    'Viewer needs permission to read this file.',
+  );
+});
+
+it('keeps an unregistered sentence in a worker reply off the card', () => {
+  const error = Object.assign(new Error('Private reader detail.'), {
+    readerProblem: 'Private file content.',
+  });
+  expect(previewProblem(error, 'Preview unavailable.')).toBe('Preview unavailable.');
 });

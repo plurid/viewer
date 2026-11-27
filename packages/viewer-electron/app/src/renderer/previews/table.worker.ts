@@ -1,3 +1,4 @@
+import { readerProblemFields } from '../../domain/previews/reader-problem';
 import {
   delimitedPreview,
   tableMatches,
@@ -30,6 +31,6 @@ self.onmessage = (
       self.postMessage({ id: request.id, value }, { transfer: [value.buffer] });
     }
   } catch (error) {
-    self.postMessage({ id: request.id, error: errorMessage(error) });
+    self.postMessage({ id: request.id, error: errorMessage(error), ...readerProblemFields(error) });
   }
 };

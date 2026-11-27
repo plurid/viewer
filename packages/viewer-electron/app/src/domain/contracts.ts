@@ -1,3 +1,4 @@
+import type { ReaderProblemFields } from './previews/reader-problem';
 import type { CheckedFolder } from './files/folder-checks';
 import type { PrivacySettingsPane } from './files/access';
 import type { RemoteRequest, RemoteReply, RemoteConnectionSnapshot } from './remote/contracts';
@@ -1100,7 +1101,8 @@ export interface ViewerAPI {
   onEvent(listener: (event: DesktopEvent) => void): () => void;
 }
 export type ApiMethod = Exclude<keyof ViewerAPI, 'onEvent'>;
-export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: string; code: string };
+export type ApiResult<T> =
+  { ok: true; value: T } | ({ ok: false; error: string; code: string } & ReaderProblemFields);
 
 declare global {
   interface Window {

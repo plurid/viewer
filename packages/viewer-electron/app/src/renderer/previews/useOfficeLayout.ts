@@ -1,7 +1,6 @@
-import { previewProblem, reportPreviewProblem } from './preview-problem';
+import { previewProblem } from './preview-problem';
 import { useEffect, useState } from 'react';
 import type { Resource } from '../../domain/contracts';
-import { officeLayoutRecovery } from '../../domain/previews/documents/layout';
 import type { OfficeLayoutMetadata } from '../../domain/previews/documents/layout';
 import type { PreviewContext } from './contracts';
 
@@ -46,14 +45,14 @@ export function useOfficeLayout(context: PreviewContext, sheet?: string) {
       })
       .catch((error) => {
         if (abort.signal.aborted) return;
-        const recovery = officeLayoutRecovery(error?.code, extension);
-        if (recovery) reportPreviewProblem(error);
         setLoad({
           key,
           signal: abort.signal,
-          error:
-            recovery ??
-            previewProblem(error, "Viewer couldn't lay out the pages in this document."),
+          error: previewProblem(
+            error,
+            "Viewer couldn't lay out the pages in this document.",
+            extension,
+          ),
         });
       });
     return () => {

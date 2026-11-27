@@ -90,9 +90,7 @@ export default function EmbeddedPreview(context: PreviewContext) {
       if (live)
         setReading({
           state: 'failed',
-          error: previewProblem(error, "Viewer couldn't read the preview stored in this file.", [
-            'This picture is not the PNG or JPEG it is named.',
-          ]),
+          error: previewProblem(error, "Viewer couldn't read the preview stored in this file."),
         });
     });
     return () => {

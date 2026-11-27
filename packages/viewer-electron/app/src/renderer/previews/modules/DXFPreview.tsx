@@ -1,4 +1,5 @@
-import { previewProblem, reportPreviewProblem } from '../preview-problem';
+import { restoreReaderError } from '../../../domain/previews/reader-problem';
+import { previewProblem } from '../preview-problem';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PreviewContext } from '../contracts';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
@@ -112,17 +113,20 @@ export default function DXFPreview(context: PreviewContext) {
       if (disposed || signal.aborted) return;
       const result = event.data;
       if (result.kind === 'drawing') setDrawing(result.drawing);
-      else if (result.kind === 'refused') {
-        reportPreviewProblem(result.message);
-        setError(result.message);
-      } else
+      else
         setError(
-          previewProblem(result.message, "Viewer couldn't read the shapes in this drawing."),
+          previewProblem(
+            restoreReaderError(result.message, result),
+            "Viewer couldn't read the shapes in this drawing.",
+          ),
         );
       stop();
     };
-    worker.onerror = () => {
-      if (!disposed && !signal.aborted) setError("Viewer couldn't load this drawing.");
+    worker.onerror = (event) => {
+      if (!disposed && !signal.aborted)
+        setError(
+          previewProblem(event.error ?? event.message, "Viewer couldn't load this drawing."),
+        );
       stop();
     };
     signal.addEventListener('abort', stop, { once: true });

@@ -64,11 +64,7 @@ export function useOfficeDocument(context: PreviewContext, worksheet?: Worksheet
         .catch((error) => {
           clearTimeout(timer);
           if (alive && !context.signal.aborted)
-            fail(
-              previewProblem(error, "Viewer couldn't read the contents of this document.", [
-                'The message headers exceed the reader limit.',
-              ]),
-            );
+            fail(previewProblem(error, "Viewer couldn't read the contents of this document."));
         });
     return () => {
       alive = false;

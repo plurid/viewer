@@ -44,11 +44,7 @@ export default function ArchivePreview(context: PreviewContext) {
       .catch((error) => {
         if (!signal.aborted)
           setError(
-            previewProblem(error, "Viewer couldn't read the list of files in this archive.", [
-              'Viewer can’t open a ZIP archive split into several files.',
-              'Viewer can’t open ZIP64 archives.',
-              'Compressed TAR preview is limited to 64 MB.',
-            ]),
+            previewProblem(error, "Viewer couldn't read the list of files in this archive."),
           );
       });
     return () => {

@@ -78,9 +78,7 @@ export function useHtmlPreview(
         if (!cancelled && !signal.aborted)
           accept({
             status: 'error',
-            message: previewProblem(error, "Viewer couldn't read this page.", [
-              'This property list holds no saved web page.',
-            ]),
+            message: previewProblem(error, "Viewer couldn't read this page."),
           });
       });
     return () => {

@@ -1,3 +1,4 @@
+import { ReaderRefusal } from '../../domain/previews/reader-problem';
 import { fileStat } from '../files/stats';
 import { sameVersionItem } from '../files/item-identity';
 import { constants } from 'node:fs';
@@ -34,7 +35,7 @@ async function countedDuration(
       current.mtimeMs !== source.info.mtimeMs ||
       current.size !== source.info.size
     )
-      throw new Error('The video changed before conversion. Reopen its preview.');
+      throw new ReaderRefusal('The video changed before conversion. Reopen its preview.');
     const counted = await execute(
       path.join(root, 'ffprobe'),
       [
@@ -123,14 +124,14 @@ export function videoDecoder(root: string, execute = runProcessor): Decoder {
         !facts.height ||
         Math.max(facts.width, facts.height) > 32768
       )
-        throw new Error('This file has no supported video picture.');
+        throw new ReaderRefusal('This file has no supported video picture.');
       const bitrate = Math.min(
         2000000,
         Math.floor(((videoPreviewLimit - 1024 * 1024) * 8) / facts.duration) -
           (facts.audio ? 128000 : 0),
       );
       if (bitrate < 250000)
-        throw new Error(
+        throw new ReaderRefusal(
           'The complete video is too long for the 64 MB compatibility-preview limit. Open it in its original app.',
         );
       // Probing seeks the inherited open description. Reopen independently after
@@ -148,7 +149,7 @@ export function videoDecoder(root: string, execute = runProcessor): Decoder {
           current.ctimeMs !== source.info.ctimeMs ||
           current.size !== source.info.size
         )
-          throw new Error('The video changed before conversion. Reopen its preview.');
+          throw new ReaderRefusal('The video changed before conversion. Reopen its preview.');
         data = await execute(
           path.join(root, 'ffmpeg'),
           [
@@ -255,7 +256,9 @@ export function videoDecoder(root: string, execute = runProcessor): Decoder {
         ) ?? [];
       const duration = Math.max(...durations.filter(Number.isFinite));
       if (!Number.isFinite(duration) || duration <= 0)
-        throw new Error('The compatibility copy could not be verified through its final frame.');
+        throw new ReaderRefusal(
+          'The compatibility copy could not be verified through its final frame.',
+        );
       const result = mediaInfo(
         { ...inspection, format: { ...inspection.format, duration: String(duration) } },
         'mp4',
@@ -267,23 +270,24 @@ export function videoDecoder(root: string, execute = runProcessor): Decoder {
         result.height > 720 ||
         Math.abs(result.duration - facts.duration) > 0.25
       )
-        throw new Error(
+        throw new ReaderRefusal(
           'A complete compatibility copy could not be verified. Open this video in its original app.',
         );
       return { data, extension: 'mp4', kind: 'video', decoder: 'FFmpeg 9.0.2' };
     } catch (error) {
-      if (signal.aborted) throw signal.reason ?? new Error('The video preview was canceled.');
+      if (signal.aborted)
+        throw signal.reason ?? new ReaderRefusal('The video preview was canceled.');
       if (deadline.signal.aborted)
-        throw new Error(
+        throw new ReaderRefusal(
           'Local video conversion exceeded two minutes. Open the file in its original app.',
         );
       const message = errorMessage(error);
       if (message.includes('output exceeded'))
-        throw new Error(
+        throw new ReaderRefusal(
           'The complete compatibility copy exceeds 64 MB. Open this video in its original app.',
         );
       if (message.includes('Media processor failed'))
-        throw new Error(
+        throw new ReaderRefusal(
           'A compatible video copy could not be decoded. Open the file in its original app.',
         );
       throw error;
@@ -304,7 +308,7 @@ async function audioCopy(
   signal: AbortSignal,
 ): Promise<DerivedRendition> {
   if (!(duration > 0) || duration * 24_000 > videoPreviewLimit - 1024 * 1024)
-    throw new Error(
+    throw new ReaderRefusal(
       'The complete recording is too long for the 64 MB compatibility-preview limit. Open it in its original app.',
     );
   const input = await open(
@@ -319,7 +323,7 @@ async function audioCopy(
       current.mtimeMs !== source.info.mtimeMs ||
       current.size !== source.info.size
     )
-      throw new Error('The recording changed before conversion. Reopen its preview.');
+      throw new ReaderRefusal('The recording changed before conversion. Reopen its preview.');
     data = await execute(
       path.join(root, 'ffmpeg'),
       [
@@ -404,7 +408,7 @@ async function audioCopy(
   // AAC frames hold 1024 samples each
   const copied = (Number(stream?.nb_read_frames) * 1024) / Number(stream?.sample_rate);
   if (stream?.codec_name !== 'aac' || !(Math.abs(copied - duration) <= 0.25))
-    throw new Error(
+    throw new ReaderRefusal(
       'A complete compatibility copy could not be verified. Open this recording in its original app.',
     );
   return { data, extension: 'm4a', kind: 'video', decoder: 'FFmpeg 9.0.2' };

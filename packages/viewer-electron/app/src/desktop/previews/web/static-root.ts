@@ -1,3 +1,4 @@
+import { ReaderRefusal } from '../../../domain/previews/reader-problem';
 import { sameVersionItem } from '../../files/item-identity';
 import { lstat, fileStat } from '../../files/stats';
 import type { FileStats as Stats } from '../../files/stats';
@@ -231,7 +232,8 @@ export class StaticRoot {
           ? webLimits.htmlBytes
           : webLimits.embeddedAssetBytes
         : webLimits.httpAssetBytes;
-      if (target.info.size > limit) throw new WebPreviewError(413, 'The asset is too large.');
+      if (target.info.size > limit)
+        throw new WebPreviewError(413, new ReaderRefusal('The asset is too large.'));
       lease.signal.throwIfAborted();
       lease.file = await open(
         target.actual,

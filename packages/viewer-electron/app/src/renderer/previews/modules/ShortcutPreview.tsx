@@ -56,9 +56,7 @@ export default function ShortcutPreview(context: PreviewContext) {
         if (live && !signal.aborted)
           setReading({
             status: 'failed',
-            message: previewProblem(error, "Viewer couldn't read the address in this shortcut.", [
-              'This file is too large to be a shortcut.',
-            ]),
+            message: previewProblem(error, "Viewer couldn't read the address in this shortcut."),
           });
       });
     return () => {

@@ -1,5 +1,4 @@
-/** A refusal written by the DXF reader, safe to carry across its worker boundary. */
-export class DXFReadError extends Error {}
+import { ReaderRefusal, readerProblemFields } from '../../reader-problem';
 
 const windowsPages: Record<string, string> = {
   '932': 'shift_jis',
@@ -29,9 +28,12 @@ export function decodeDXF(buffer: Uint8Array): string {
     return new TextDecoder(encoding).decode(buffer);
   } catch {
     const label = ansi ? encoding : page;
-    const reason = /^(?:windows-\d{1,5}|DOS\d{1,5})$/i.test(label)
-      ? `Drawing text encoding ${label} is not supported.`
-      : 'This drawing uses an unsupported text encoding.';
-    throw new DXFReadError(reason + ' Export a UTF-8 ASCII DXF (2007 or newer).');
+    const explained = readerProblemFields(
+      `Drawing text encoding ${label} is not supported. Export a UTF-8 ASCII DXF (2007 or newer).`,
+    );
+    throw new ReaderRefusal(
+      explained.readerProblem ??
+        'This drawing uses an unsupported text encoding. Export a UTF-8 ASCII DXF (2007 or newer).',
+    );
   }
 }

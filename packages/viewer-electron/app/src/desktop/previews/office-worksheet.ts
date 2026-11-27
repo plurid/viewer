@@ -1,3 +1,4 @@
+import { ReaderRefusal } from '../../domain/previews/reader-problem';
 import type { DocumentData } from '../../domain/services';
 import type { WorkbookRow, WorkbookSheet } from '../../domain/previews/documents/office';
 import { columnName } from '../../domain/previews/documents/office';
@@ -35,7 +36,7 @@ function cellAddress(reference: string): { row: number; column: number } {
   const column = [...match[1]!].reduce((n, letter) => n * 26 + letter.charCodeAt(0) - 64, 0),
     row = Number(match[2]);
   if (row > 1048576 || column > 16384)
-    throw new Error('Worksheet cell address exceeds Excel limits.');
+    throw new ReaderRefusal('Worksheet cell address exceeds Excel limits.');
   return { row, column };
 }
 

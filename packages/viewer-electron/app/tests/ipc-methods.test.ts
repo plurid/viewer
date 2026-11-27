@@ -1,3 +1,4 @@
+import { ReaderRefusal } from '../src/domain/previews/reader-problem';
 import { describe, expect, it, vi } from 'vitest';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ApiHandlers } from '../src/desktop/ipc/schemas';
@@ -43,6 +44,21 @@ function requestFixture(handlers: Partial<ApiHandlers> = {}) {
 }
 
 describe('IPC method table', () => {
+  it('carries the reader sentence independently of the desktop diagnostic', async () => {
+    const readerProblem = 'This Office document has damaged package relationships.';
+    const error = 'Malformed or duplicate Office relationship.';
+    const { request } = requestFixture({
+      document: async () => {
+        throw new ReaderRefusal(readerProblem, error);
+      },
+    });
+    expect(await request('document', ['11111111-1111-4111-8111-111111111111'])).toMatchObject({
+      ok: false,
+      error,
+      readerProblem,
+    });
+  });
+
   it.each([
     ['stat', ['viewer://trash'], "Viewer couldn't open this location."],
     ['settingsPatch', [null], "Viewer couldn't save these settings."],

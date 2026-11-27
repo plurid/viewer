@@ -1,5 +1,6 @@
 import { resourceStatusMessage } from '../../../domain/previews/resource-status';
-import { previewProblem } from '../preview-problem';
+import { fontLoadFailure as unloadable } from '../../../domain/previews/reader-problem';
+import { previewProblem, reportPreviewProblem } from '../preview-problem';
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { PreviewContext } from '../contracts';
@@ -28,7 +29,6 @@ const defaultSize = 48;
 const pangram = 'The quick brown fox jumps over the lazy dog';
 const figures = '0123456789 .,:;!? &@#$%*+=/ ()[]{} \'"';
 const oversized = 'Viewer shows fonts up to 32 MB.';
-const unloadable = "This font may be damaged, or in a format Viewer can't show.";
 
 // Each face gets its own family, so two previews of different files never share a name.
 let families = 0;
@@ -55,13 +55,14 @@ export default function FontPreview(context: PreviewContext) {
           (info) => ({ info, unread: info.unread }),
           (error: unknown) => ({
             info: undefined,
-            unread: error instanceof FontError ? error.message : 'Its tables could not be read.',
+            unread: previewProblem(error, 'Its tables could not be read.'),
           }),
         );
         face = new FontFace(family, bytes);
         try {
           await face.load();
-        } catch {
+        } catch (error) {
+          reportPreviewProblem(error);
           const { unread } = await details;
           throw new FontError(unread ? `${unloadable} ${unread}` : unloadable);
         }
@@ -71,8 +72,7 @@ export default function FontPreview(context: PreviewContext) {
         if (!abort.signal.aborted) setLoad({ status: 'ready', url, family, info, unread });
       } catch (error) {
         if (abort.signal.aborted) return;
-        const detail =
-          error instanceof FontError ? error.message : previewProblem(error, unloadable);
+        const detail = previewProblem(error, unloadable);
         setLoad({ status: 'failed', url, detail });
       }
     })();

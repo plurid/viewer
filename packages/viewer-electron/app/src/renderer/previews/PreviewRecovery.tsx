@@ -51,10 +51,7 @@ export function PreviewRecovery({
                 })
                 .catch((error) =>
                   setProblem(
-                    previewProblem(error, "Viewer couldn't find the renamed file in this folder.", [
-                      'Viewer found no single renamed file in this folder. Use Locate File… to choose it.',
-                      'The file changed as Viewer found it. Try again.',
-                    ]),
+                    previewProblem(error, "Viewer couldn't find the renamed file in this folder."),
                   ),
                 )
                 .finally(() => setBusy(false));

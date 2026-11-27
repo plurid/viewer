@@ -102,6 +102,16 @@ const hasDemuxer = (extension: string) => {
     return false;
   }
 };
+// A preview worker needs the status even when the resource returns no bytes.
+const resourceHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Cross-Origin-Resource-Policy': 'cross-origin',
+  'Cache-Control': 'no-store',
+};
+function resourceFailure(status: number, headers?: Record<string, string>): Response {
+  return new Response(null, { status, headers: { ...resourceHeaders, ...headers } });
+}
+
 export class Resources {
   private grants = new Map<string, Grant>();
   private streams = new Map<string, Map<Readable, string>>();
@@ -133,6 +143,7 @@ export class Resources {
       renderer: Pick<Ghostscript, 'status' | 'variant'>;
       cache: DerivedPreviews;
     },
+    private diagnose?: (error: unknown) => void,
   ) {}
   grant(file: string, requestID?: string, owner?: number): Promise<Resource> {
     if (requestID && this.pending.has(requestID))
@@ -437,7 +448,7 @@ export class Resources {
   private get(id: string, owner?: number): Grant {
     const grant = this.grants.get(id);
     if (!grant || (owner !== undefined && grant.owner !== owner))
-      throw new Error('This preview resource has expired.');
+      throw new WebPreviewError(404, 'This preview resource has expired.');
     return grant;
   }
   async close(): Promise<void> {
@@ -572,7 +583,8 @@ export class Resources {
     if (!confirms(identifyBytes(head, grant.resource.entry.name, directory), extension))
       throw new Error(`The contents of this file do not match .${extension}.`);
     await this.access([grant.file]);
-    if (this.get(id, owner) !== grant) throw new Error('This preview resource has expired.');
+    if (this.get(id, owner) !== grant)
+      throw new WebPreviewError(404, 'This preview resource has expired.');
     grant.format = { extension, version: fileVersion(info) };
     const { entry } = grant.resource;
     return {
@@ -610,7 +622,8 @@ export class Resources {
   ): Promise<ResourceRead> {
     const grant = this.get(id, owner);
     if (grant.authority) await this.access([grant.authority]);
-    if (this.get(id, owner) !== grant) throw new Error('This preview resource has expired.');
+    if (this.get(id, owner) !== grant)
+      throw new WebPreviewError(404, 'This preview resource has expired.');
     const limit = Math.max(1, Math.min(requested, MAX_READ));
     let buffer: Buffer;
     let size: number;
@@ -698,7 +711,8 @@ export class Resources {
     signal.throwIfAborted();
     await this.access([grant.file]);
     // A preview closed while its database was read cannot receive the rows.
-    if (this.get(id, owner) !== grant) throw new Error('This preview resource has expired.');
+    if (this.get(id, owner) !== grant)
+      throw new WebPreviewError(404, 'This preview resource has expired.');
     return reply;
   }
   async archiveEntry(id: string, name: string, owner?: number): Promise<Resource> {
@@ -1009,15 +1023,19 @@ export class Resources {
     grant.archiveChildren.add(childID);
     return resource;
   }
-  response(request: Request): Promise<Response> {
-    return this.work
-      .track(this.paths(new URL(request.url).hostname), (scope) => this.respond(request, scope))
-      .catch(
-        () =>
-          new Response('The file was moved or deleted, or this preview has expired.', {
-            status: 404,
-          }),
-      );
+  async response(request: Request): Promise<Response> {
+    try {
+      const paths = this.paths(new URL(request.url).hostname);
+      return await this.work.track(paths, (scope) => this.respond(request, scope));
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | null)?.code;
+      if (needsFolderAccess(code) || code === 'ELOOP') return resourceFailure(403);
+      if (code === 'ENOENT' || code === 'ENOTDIR') return resourceFailure(404);
+      if (error instanceof WebPreviewError && error.status < 500)
+        return resourceFailure(error.status);
+      this.diagnose?.(error);
+      return resourceFailure(500);
+    }
   }
   private async respond(request: Request, scope: PreviewScope): Promise<Response> {
     let opened: FileHandle | undefined;
@@ -1026,7 +1044,7 @@ export class Resources {
       const url = new URL(request.url);
       const grant = this.get(url.hostname);
       if (grant.authority) await this.access([grant.authority]);
-      if (!['GET', 'HEAD'].includes(request.method)) return new Response(null, { status: 405 });
+      if (!['GET', 'HEAD'].includes(request.method)) return resourceFailure(405);
       const relative = decodeURIComponent(url.pathname.replace(/^\/asset\//, ''));
       if (
         url.pathname === relative ||
@@ -1034,23 +1052,22 @@ export class Resources {
         relative.includes('\0') ||
         relative.includes('\\')
       )
-        return new Response(null, { status: 403 });
+        return resourceFailure(403);
       let file = grant.file;
       if (grant.root) {
         const resolved = path.resolve(grant.root, relative);
         if (resolved !== grant.root && !resolved.startsWith(grant.root + path.sep))
-          return new Response(null, { status: 403 });
+          return resourceFailure(403);
         file = await realpath(resolved);
-        if (!file.startsWith(grant.root + path.sep)) return new Response(null, { status: 403 });
+        if (!file.startsWith(grant.root + path.sep)) return resourceFailure(403);
       } else if (relative !== (grant.file ? path.basename(grant.file) : grant.resource.entry.name))
-        return new Response(null, { status: 404 });
+        return resourceFailure(404);
       // The granted path must still be the same real file, not a substituted link.
-      else if (file && !grant.data && (await realpath(file)) !== file)
-        return new Response(null, { status: 403 });
+      else if (file && !grant.data && (await realpath(file)) !== file) return resourceFailure(403);
       if (file) scope.add(file);
       if (file && file !== grant.file) {
         if ((grant.assets?.size ?? 0) >= 256 && !grant.assets?.has(file))
-          return new Response(null, { status: 429 });
+          return resourceFailure(429);
         grant.assets?.add(file);
       }
       if (!grant.data) await this.access([file!]);
@@ -1066,23 +1083,23 @@ export class Resources {
         this.get(url.hostname);
       }
       const info = grant.data ? null : await stat(file!);
-      if (info && !info.isFile()) return new Response(null, { status: 403 });
+      if (info && !info.isFile()) return resourceFailure(403);
       if (info) {
         opened = await open(
           file!,
           constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0),
         );
         const actual = await fileStat(opened);
-        if (!actual.isFile() || !sameItem(actual, info)) return new Response(null, { status: 403 });
+        if (!actual.isFile() || !sameItem(actual, info)) return resourceFailure(403);
         if (grant.root && file !== grant.file && (lookup(file!) || '').startsWith('image/')) {
           // Reject oversized companion bitmaps before Chromium decodes them.
           // A later renderer budget also accounts for combined texture storage.
-          if (actual.size > 64 * 1024 * 1024) return new Response(null, { status: 413 });
+          if (actual.size > 64 * 1024 * 1024) return resourceFailure(413);
           const header = Buffer.alloc(Math.min(actual.size, 512000));
           const { bytesRead } = await opened.read(header, 0, header.length, 0);
           const dimensions = imageDimensions(header.subarray(0, bytesRead));
           if (dimensions && dimensions.width * dimensions.height * 4 > 128 * 1024 * 1024)
-            return new Response(null, { status: 413 });
+            return resourceFailure(413);
         }
       }
       this.get(url.hostname);
@@ -1092,21 +1109,16 @@ export class Resources {
         selected = byteRange(request.headers.get('range'), size);
       } catch (error) {
         if (!(error instanceof WebPreviewError)) throw error;
-        return new Response(null, {
-          status: 416,
-          headers: { 'Content-Range': `bytes */${size}` },
-        });
+        return resourceFailure(416, { 'Content-Range': `bytes */${size}` });
       }
       const { start, end, partial } = selected;
       const headers: Record<string, string> = {
         'Content-Type': lookup(relative) || 'application/octet-stream',
         'Content-Length': String(Math.max(0, end - start + 1)),
         'Accept-Ranges': 'bytes',
-        'Access-Control-Allow-Origin': '*',
-        'Cross-Origin-Resource-Policy': 'cross-origin',
+        ...resourceHeaders,
         'X-Content-Type-Options': 'nosniff',
         'Content-Security-Policy': "default-src 'none'; sandbox",
-        'Cache-Control': 'no-store',
       };
       if (partial) headers['Content-Range'] = `bytes ${start}-${end}/${size}`;
       if (request.method === 'HEAD' || !size)
@@ -1118,7 +1130,9 @@ export class Resources {
         const held = claim;
         const cancelled = () => stream.destroy(new Error('File access was canceled.'));
         held?.signal?.addEventListener('abort', cancelled, { once: true });
-        stream.on('error', () => {});
+        stream.on('error', (error) => {
+          if (!held?.signal?.aborted && !request.signal.aborted) this.diagnose?.(error);
+        });
         const streams = this.streams.get(url.hostname) ?? new Map<Readable, string>();
         streams.set(stream, file!);
         this.streams.set(url.hostname, streams);
@@ -1133,12 +1147,6 @@ export class Resources {
       }
       opened = undefined; // The stream now owns and closes the descriptor, including cancellation.
       return new Response(body, { status: partial ? 206 : 200, headers });
-    } catch (error) {
-      if (needsFolderAccess((error as NodeJS.ErrnoException)?.code))
-        return new Response(null, { status: 403 });
-      return new Response('The file was moved or deleted, or this preview has expired.', {
-        status: 404,
-      });
     } finally {
       await opened?.close();
       await claim?.release();

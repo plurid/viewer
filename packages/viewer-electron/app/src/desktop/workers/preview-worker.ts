@@ -1,3 +1,4 @@
+import { readerProblemFields } from '../../domain/previews/reader-problem';
 import { errorMessage } from '../../domain/errors';
 import type { ArchiveListing } from '../../domain/contracts';
 import type { WorksheetWindow } from '../../domain/previews/documents/office';
@@ -116,6 +117,7 @@ port.on('message', async (event) => {
     port.postMessage({
       id: request.id,
       error: errorMessage(error),
+      ...readerProblemFields(error),
       code: (error as NodeJS.ErrnoException).code,
     });
   }

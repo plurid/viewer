@@ -1,3 +1,5 @@
+import { restoreReaderError } from '../../domain/previews/reader-problem';
+import type { ReaderProblemFields } from '../../domain/previews/reader-problem';
 import { utilityProcess, type UtilityProcess } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
@@ -23,7 +25,7 @@ type CallArguments<Args extends unknown[]> = [] extends Args
   ? [args?: Args, signal?: AbortSignal]
   : [args: Args, signal?: AbortSignal];
 
-interface Reply {
+interface Reply extends ReaderProblemFields {
   id?: string;
   value?: unknown;
   error?: string;
@@ -160,7 +162,7 @@ export class UtilityClient<Methods extends WorkerMethods = WorkerMethods> {
       clearTimeout(pending.timer);
       pending.cleanup();
       this.pending.delete(reply.id!);
-      if (reply.error) pending.reject(Object.assign(new Error(reply.error), { code: reply.code }));
+      if (reply.error) pending.reject(restoreReaderError(reply.error, reply));
       else pending.resolve(reply.value);
     });
     let reason = 'exited';
