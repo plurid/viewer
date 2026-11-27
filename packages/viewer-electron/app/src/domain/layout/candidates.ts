@@ -84,15 +84,15 @@ function variants(
         mode,
       );
       const base = isProblem(automatic) ? 4 : (automatic.columns ?? 4);
-      const counts = new Set([current, base, base + 1, base - 1, base + 2]);
+      const counts = [base, base + 1, base - 1, base + 2].filter((value) => value >= 2);
       return [
         {
           id: 'contact-sheet:auto',
           label: 'Automatic',
           settings: changeMode(settings, 'contact-sheet', { columns: 'auto' }),
         },
-        ...[...counts]
-          .filter((value): value is number => typeof value === 'number' && value >= 2 && value <= 10)
+        ...counts
+          .filter((value) => value !== current)
           .map((columns) => ({
             id: 'contact-sheet:' + columns,
             label: `${columns} columns`,

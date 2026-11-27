@@ -16,7 +16,6 @@ import { PDFPagePreview } from './PDFPagePreview';
 import './pdf-tools.css';
 import { isActiveJob } from '../../domain/operations/jobs';
 import { errorMessage } from '../../domain/errors';
-import { statusLabel } from '../ui/status-labels';
 import { homeText } from '../../domain/files/path-label';
 
 export function PDFToolsDialog({
@@ -158,13 +157,7 @@ export function PDFToolsDialog({
         entries = await Promise.all(paths.map((file) => window.viewer.stat(file))),
         next = await load(entries, inputs);
       setInputs(next);
-      const added = initialPages(next.slice(inputs.length), inputs.length);
-      setPages((pages) => [...pages, ...added]);
-      if (!inputs.length && added[0]) {
-        setSource(0);
-        setActive(added[0].id);
-        setRange(`1-${next[0]!.pages}`);
-      }
+      setPages((pages) => [...pages, ...initialPages(next.slice(inputs.length), inputs.length)]);
     } catch (reason) {
       setError(String(errorMessage(reason) || reason));
     } finally {
@@ -393,7 +386,7 @@ export function PDFToolsDialog({
                   {homeText(
                     (job.status === 'running'
                       ? `${Math.round((job.progress || 0) * 100)}% · ${job.detail || 'Exporting…'}`
-                      : statusLabel(job.status)) + (job.errors[0] ? ` · ${job.errors[0].message}` : ''),
+                      : job.status) + (job.errors[0] ? ` · ${job.errors[0].message}` : ''),
                     home,
                   )}
                 </span>

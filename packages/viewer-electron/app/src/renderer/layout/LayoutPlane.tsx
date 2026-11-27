@@ -10,9 +10,7 @@ import { suggestLayout } from '../../domain/layout/suggest';
 import type { ModeSuggestion } from '../../domain/layout/suggest';
 import { changeMode, defaultLayoutSettings, isPlannedMode } from '../../domain/layout/settings';
 import type { LayoutSettings, PlannedMode } from '../../domain/layout/settings';
-import { FileNameField, fileNameError } from '../ui/FileNameField';
-import { transformExtension } from '../../domain/operations/transforms';
-import { outputStem, layoutFileName, layoutName, titledPlan } from '../../domain/layout/names';
+import { layoutFileName, layoutName, titledPlan } from '../../domain/layout/names';
 import { isScreenSize } from '../../domain/layout/pages';
 import { sourceLimits } from '../../domain/layout/sources';
 import type { LayoutSource } from '../../domain/layout/sources';
@@ -102,14 +100,14 @@ export default function LayoutPlane({ pane }: { pane: LayoutPane }) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [ids, setIDs] = useState<string[]>([]);
-  const key = JSON.stringify(pane.sources);
+  const key = pane.sources.join('\n');
   useEffect(() => {
     const abort = new AbortController();
     let found: ReadSelection | undefined;
     setRead(undefined);
     setFailure('');
     setSettings(undefined);
-    void readSelection(JSON.parse(key) as string[], abort.signal, (done, total) => {
+    void readSelection(key.split('\n'), abort.signal, (done, total) => {
       if (!abort.signal.aborted) setProgress({ done, total });
     })
       .then((value) => {
@@ -376,7 +374,7 @@ export default function LayoutPlane({ pane }: { pane: LayoutPane }) {
               {plan && (
                 <button
                   className="primary"
-                  disabled={working || heavy || !!fileNameError(outputStem(name, plan.plan.format), transformExtension(plan.plan.format))}
+                  disabled={working || heavy || !name.trim()}
                   onClick={() => void save(plan)}
                 >
                   {working ? 'Saving…' : `Save ${formatLabels[plan.plan.format]}`}
@@ -494,7 +492,18 @@ function Output({
         />
       )}
       {plan.note && <p className="layout-note">{plan.note}</p>}
-      <FileNameField label="Output name" value={name} onChange={onName} extension={transformExtension(format)} folder={folder} />
+      <Row
+        compact
+        label="Name"
+        control={
+          <input
+            aria-label="Output name"
+            value={name}
+            maxLength={200}
+            onChange={(event) => onName(event.target.value)}
+          />
+        }
+      />
       <p className="muted layout-folder" title={folder}>
         Saves a new file in {baseName(folder)}, beside the originals.
       </p>

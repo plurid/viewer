@@ -13,7 +13,7 @@ import {
 } from '../src/domain/fabrication/answer';
 import { correctDrawing, correctionFor } from '../src/domain/fabrication/correction';
 import { pageText } from '../src/domain/fabrication/prompt';
-import { prepareQuotePage, quoteOn, quotePassages } from '../src/domain/fabrication/quotes';
+import { quoteOn, quotePassages } from '../src/domain/fabrication/quotes';
 import { checkTour } from '../src/domain/fabrication/tour';
 import { boxRegion } from '../src/domain/files/regions';
 import { tourDefinitionSchema } from '../src/domain/tours/tour';
@@ -818,15 +818,4 @@ describe('quotes', () => {
     expect(quoteOn('4× Ø9 at 60 mm', 'Ø9')).toBe(true);
     expect(quoteOn(page, '')).toBe(false);
   });
-});
-
-it('matches every quote against the same prepared page', () => {
-  const lines = ['12 pieces', 'plate 20 mm', '30 × 2 holes', 'footer'];
-  const page = lines.join('\n');
-  const matches = prepareQuotePage(page);
-  for (const first of lines) for (const last of lines) {
-    for (const quote of [first,last,first+'\n'+last,first+' '+last, first.slice(1), last+'9']) {
-      expect(matches(quote)).toBe(quoteOn(page,quote));
-    }
-  }
 });

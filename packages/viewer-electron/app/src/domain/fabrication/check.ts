@@ -117,7 +117,7 @@ export const fabricationRequestSchema = z.discriminatedUnion('kind', [
   z
     .object({ kind: z.literal('list'), paths: z.array(path).min(1).max(inventoryLimit).optional() })
     .strict(),
-  z.object({ kind: z.literal('validate'), id: checkID, handoff: z.literal(true).optional() }).strict(),
+  z.object({ kind: z.literal('validate'), id: checkID }).strict(),
   z
     .object({
       kind: z.literal('correct'),

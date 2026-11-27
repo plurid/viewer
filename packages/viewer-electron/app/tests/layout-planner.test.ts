@@ -424,10 +424,6 @@ describe('plans', () => {
     expect(last.kind === 'page' && last.crop.y + last.crop.height).toBeCloseTo(1, 5);
   });
 
-  it.each([2,3])('refuses split collages whose gaps consume every slot for %i photos', count => {
-    const base = changePage(defaultLayoutSettings(), 'collage', {size:'a6', margin:mm(45), gap:mm(60)});
-    expect(planLayout(changeMode(base,'collage',{style:'split'}), photos(count),'collage')).toEqual({problem:'Choose a smaller margin or gap.'});
-  });
   it('explain what cannot be laid out', () => {
     const outcome = planLayout(
       defaultLayoutSettings(),

@@ -2,7 +2,6 @@ import type { CommandContext, CommandDefinition } from '../commands/registry';
 import type { WorkspaceController } from '../workspace/context';
 import { layoutFileKind } from '../../domain/layout/sources';
 import type { LayoutFileKind } from '../../domain/layout/sources';
-import { nestingLimits } from '../../domain/layout/nesting/plan';
 import { layoutLimits } from '../../domain/layout/plan';
 
 /** The selected files the Layout plane uses, in selection order. */
@@ -50,10 +49,7 @@ export function layoutCommands(workspace: WorkspaceController): CommandDefinitio
       group: 'Files',
       icon: 'drawing',
       aliases: ['nesting', 'nest', 'dxf', 'laser', 'cnc', 'cut parts', 'stock sheet'],
-      when: (context) => {
-        const count = laidOut(context, ['drawing']).length;
-        return within(context) && count > 0 && count <= nestingLimits.sources;
-      },
+      when: (context) => within(context) && laidOut(context, ['drawing']).length > 0,
       run: (context) =>
         workspace.openLayout(
           laidOut(context, ['drawing']).map((entry) => entry.path),

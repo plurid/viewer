@@ -28,10 +28,8 @@ export function useNestSearch(
 ) {
   const [state, setState] = useState<State>({ status: 'idle' });
   const worker = useRef<Worker | null>(null);
-  const [extension, setExtension] = useState({problem, budget, round: 0});
-  const round = extension.problem === problem && extension.budget === budget ? extension.round : 0;
-  if (extension.problem !== problem || extension.budget !== budget)
-    setExtension({problem, budget, round: 0});
+  const [round, setRound] = useState(0);
+  const [extra, setExtra] = useState(0);
   /** The problem the shown layout belongs to, and that layout: a longer search keeps it until
    * it finds a better one. */
   const shown = useRef<{ problem?: NestProblem; update?: NestUpdate }>({});
@@ -84,7 +82,7 @@ export function useNestSearch(
       started.postMessage({
         problem,
         looser,
-        budget: budget * (1 + round),
+        budget: budget + extra,
         seed: round + 1,
       } satisfies NestRequest);
     }, settle);
@@ -92,7 +90,7 @@ export function useNestSearch(
       clearTimeout(timer);
       close();
     };
-  }, [problem, looser, budget, round, close]);
+  }, [problem, looser, budget, extra, round, close]);
   const stop = useCallback(() => {
     if (!worker.current) return;
     close();
@@ -100,8 +98,9 @@ export function useNestSearch(
   }, [close]);
   /** Searches again with more time, from a different random start. */
   const longer = useCallback(() => {
-    setExtension((value) => ({problem, budget, round: value.round + 1}));
-  }, [problem, budget]);
+    setExtra((value) => value + budget);
+    setRound((value) => value + 1);
+  }, [budget]);
   // Until the effect above catches up with a new problem, the last layout is of the old one: its
   // sheets may name formats that are gone, so it is not shown.
   const { problem: owner, ...shownState } = state;

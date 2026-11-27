@@ -5,6 +5,8 @@ import { Failure, Loading } from '../ui/primitives';
 import type { Resource } from '../../domain/contracts';
 GlobalWorkerOptions.workerSrc = workerURL;
 
+const slowNotice = 'The page preview is taking longer than expected. Try again.';
+
 /** One bounded page bitmap, one scoped resource. Switching pages cancels the old render;
  * switching sources releases even a resource that arrives after unmount. */
 export function PDFPagePreview({
@@ -33,7 +35,7 @@ export function PDFPagePreview({
     setError('');
     setRendered(false);
     const timer = setTimeout(() => {
-      if (live) setError('The page preview is taking longer than expected. Try again.');
+      if (live) setError(slowNotice);
     }, 15000);
     void (
       suppliedResource
@@ -67,6 +69,8 @@ export function PDFPagePreview({
         const loaded = await task.promise;
         if (live) {
           clearTimeout(timer);
+          // a document that arrives after the notice takes the notice away
+          setError((current) => (current === slowNotice ? '' : current));
           setPDF(loaded);
         }
       })

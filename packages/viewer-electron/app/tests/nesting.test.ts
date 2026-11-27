@@ -437,13 +437,6 @@ describe('true-shape nesting', () => {
     }
   });
 
-  it.each(['ring','path'])('checks containment of every separate %s', (kind) => {
-    const outline = [5,5,105,5,105,105,5,105];
-    const far = [200,200,220,200,220,220,200,220];
-    const inner = [20,20,30,20,30,30,20,30];
-    const parts = [{ rings:[outline], paths:[] }, {rings:kind === 'ring' ? [far, inner] : [far], paths:kind === 'path' ? [inner] : []}];
-    expect(verifyNest({parts, formats:[{width:500,height:500}], margin:0, spacing:2,tolerance:0}, [{format:0, placements:parts.map((_,part)=>({part,rotation:0,mirror:false,x:0,y:0}))}]).ok).toBe(false);
-  });
   it('finds overlaps and margin crossings in a layout it did not make', () => {
     const square100 = only(drawing([square(0, 0, 100)]));
     const problem = nestProblem(

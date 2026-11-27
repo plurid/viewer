@@ -99,11 +99,11 @@ export function reconcileJob(job: ReconcileJob): { parts: PartPlan[]; findings: 
   let next = Math.max(0, ...used) + 1;
   const findings: ViewerFinding[] = [];
   const parts: PartPlan[] = [];
-  const said = (kind: Compared, ref: string) =>
+  const said = (kind: Compared, ref: string, drawing?: string) =>
     answer.findings.some(
       (finding) =>
         finding.kind === kind &&
-        finding.dxf?.ref === ref,
+        (finding.dxf?.ref === ref || (drawing !== undefined && finding.drawing?.ref === drawing)),
     );
   const grading = { ...job.grading, sources: job.sources };
   const raise = (entry: Omit<ViewerFinding, 'grade'>, grade: (finding: Finding) => Grade) => {
@@ -223,7 +223,7 @@ export function reconcileJob(job: ReconcileJob): { parts: PartPlan[]; findings: 
         request &&
         drawing &&
         !agree(kind, request.value, drawing.value, pieces) &&
-        !said(kind, source.ref)
+        !said(kind, source.ref, drawing.ref)
       ) {
         const drawingName = byRef.get(drawing.ref!)?.name ?? drawing.ref!;
         raise(

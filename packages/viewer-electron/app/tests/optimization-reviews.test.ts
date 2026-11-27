@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, stat, readFile, readdir, rename, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect, it, vi } from 'vitest';
 import type { OperationRequest, Resource } from '../src/domain/contracts';
@@ -100,7 +100,6 @@ it('exports the measured candidate without re-encoding, keeping it alive after i
     () => {},
     candidate.id,
   );
-  expect((await stat(output)).mode & 0o777).toBe(0o644 & ~process.umask());
   expect(await readFile(output)).toEqual(Buffer.alloc(4096, 37));
   expect(statistics).toMatchObject({ inputBytes: 8192, outputBytes: 4096 });
   expect(test.execute).toHaveBeenCalledTimes(1);

@@ -65,7 +65,9 @@ describe('background worker client', () => {
     try {
       await expect(client.call('attempts')).rejects.toThrow('Not ready yet.');
       await expect(client.call('attempts')).resolves.toBe(2);
-      await expect(client.call('refusal')).rejects.toMatchObject({ readerProblem: 'The file could not be read.' });
+      await expect(client.call('refusal')).rejects.toMatchObject({
+        readerProblem: 'The file could not be read.',
+      });
     } finally {
       await client.close();
     }

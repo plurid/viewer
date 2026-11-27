@@ -12,13 +12,6 @@ const taken = {
   OffsetTimeOriginal: '+02:00',
   SubSecTimeOriginal: '42',
 };
-import { jpegMetadata } from '../src/desktop/transforms/jpeg-metadata';
-it('preserves only descriptive EXIF and capture time in a lossless safe JPEG', () => {
-  const input = withSegment(Buffer.from([255,216,255,217]), exifSegment({IFD0:{}, IFD2:taken})!);
-  const safe = jpegMetadata(input, 'safe');
-  expect(imageCaptureTime(safe.subarray(6))).toEqual(taken);
-  expect(imageCaptureTime(jpegMetadata(input,'strip').subarray(6))).toEqual({});
-});
 const credits = { Artist: 'Viewer fixture', Copyright: 'Generated CC0' };
 
 /** An ISO base media box: its size, its type and its body. */

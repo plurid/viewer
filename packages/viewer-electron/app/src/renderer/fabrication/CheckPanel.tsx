@@ -32,7 +32,6 @@ import { startingSheets } from '../layout/nesting/headless';
 import { preparedNestings, subscribeNestings } from '../layout/nesting/prepared';
 import { useWorkspace } from '../workspace/context';
 import {
-  canRetryExport,
   cancelCheck,
   cancelHandoff,
   checkCollapsed,
@@ -59,7 +58,7 @@ import './check.css';
 
 /** How an operation the check started stands, in words. */
 function jobStatus(job: OperationJob | undefined, done: (job: OperationJob) => string): string {
-  if (!job) return 'This operation is unavailable in File Operations.';
+  if (!job) return 'Starting…';
   if (job.status === 'completed') return done(job);
   if (job.status === 'failed' || job.status === 'cancelled')
     return job.errors[0]?.message ?? (job.status === 'failed' ? 'It failed.' : 'Canceled.');
@@ -861,7 +860,7 @@ function Finding({
           <p>
             <strong>Proposed:</strong> {correctionProposal(correction.plan, correction.name)}.
           </p>
-          {current.corrections[finding.id] && (
+          {current.corrections[finding.id] ? (
             <p className="check-note" role="status">
               {jobStatus(job, (done) => {
                 const report = done.completed[0]?.correction;
@@ -870,8 +869,7 @@ function Finding({
                   : 'Saved.';
               })}
             </p>
-          )}
-          {canRetryExport(job) && (
+          ) : (
             <button
               type="button"
               disabled={!!current.stale}
@@ -968,8 +966,7 @@ function Handoff({ current, jobs }: { current: CheckSession; jobs: readonly Oper
         <p className="check-note" role="status">
           {jobStatus(job, () => 'The handoff finished without a location. Check File Operations.')}
         </p>
-      ) : null}
-      {current.handoffProgress ? (
+      ) : current.handoffProgress ? (
         <div className="check-progress" role="status">
           <span>
             {current.handoffProgress}
@@ -979,7 +976,7 @@ function Handoff({ current, jobs }: { current: CheckSession; jobs: readonly Oper
             Cancel
           </button>
         </div>
-      ) : canRetryExport(job) && (
+      ) : (
         <button
           type="button"
           disabled={!!current.stale || !!hold}

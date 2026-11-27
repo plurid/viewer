@@ -375,7 +375,7 @@ export class AgentRequests {
       throw new Error('Handoffs are exported from a fabrication check.');
     absolute(destination);
     validName(name);
-    if (!name.toLowerCase().endsWith('.' + transformExtension(plan.format)) && !(plan.format === 'jpeg' && name.toLowerCase().endsWith('.jpeg')))
+    if (!name.toLowerCase().endsWith('.' + transformExtension(plan.format)))
       throw new Error('Choose an output filename matching the transform format.');
     if (!combinedTransform(plan) && target.selection.length !== 1)
       throw new Error('Propose one image export at a time, or use a reviewed conversion workflow.');

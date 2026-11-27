@@ -15,7 +15,6 @@ import type {
   PartsReply,
   PartsRequest,
 } from './protocol';
-import { eachLimited } from '../measure';
 import { nestingWorkers } from './workers';
 
 /** Millimetres, unless a drawing says otherwise. */
@@ -36,27 +35,23 @@ export interface NestingFile {
 }
 export type FileOptions = Pick<NestingFile, 'units' | 'marks' | 'together'>;
 
-interface Pending { resolve(reply: PartsReply): void; reject(error: Error): void; }
+type Pending = (reply: PartsReply) => void;
 /** The parts worker, each question answered once by its number; headless.ts reads with it too. */
 export class PartsClient {
   private worker = nestingWorkers.parts();
   private next = 0;
-  private stopped?: Error;
   private pending = new Map<number, Pending>();
   constructor() {
     this.worker.onmessage = (event: MessageEvent<PartsReply>) => {
       const reply = event.data;
-      this.pending.get(reply.id)?.resolve(reply);
+      this.pending.get(reply.id)?.(reply);
       this.pending.delete(reply.id);
     };
-    this.worker.onerror = () => this.close(new Error('The drawing reader stopped. Try again.'));
-    this.worker.onmessageerror = () => this.close(new Error('The drawing reader returned unreadable data. Try again.'));
   }
   private ask(question: PartsQuestion): Promise<PartsReply> {
     const id = ++this.next;
-    if (this.stopped) return Promise.reject(this.stopped);
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, {resolve, reject});
+    return new Promise((resolve) => {
+      this.pending.set(id, resolve);
       this.worker.postMessage({ ...question, id } satisfies PartsRequest);
     });
   }
@@ -75,11 +70,8 @@ export class PartsClient {
   forget(key: string) {
     this.worker.postMessage({ kind: 'forget', key } satisfies PartsRequest);
   }
-  close(reason = new Error('The drawing reader was closed.')) {
-    if (this.stopped) return;
-    this.stopped = reason;
+  close() {
     this.worker.terminate();
-    for (const request of this.pending.values()) request.reject(reason);
     this.pending.clear();
   }
 }
@@ -137,8 +129,8 @@ export function useNestingFiles(entries: readonly FileEntry[]) {
       together: false,
     }));
     setFiles(initial);
-    void eachLimited(initial, 6, async (file) => {
-        if (!live) return;
+    for (const file of initial)
+      void (async () => {
         let resource: Resource | undefined;
         try {
           resource = await window.viewer.resource(file.entry.path);
@@ -158,7 +150,7 @@ export function useNestingFiles(entries: readonly FileEntry[]) {
         } finally {
           if (resource) void window.viewer.release(resource.id).catch(() => {});
         }
-      });
+      })();
     return () => {
       live = false;
       reader.close();

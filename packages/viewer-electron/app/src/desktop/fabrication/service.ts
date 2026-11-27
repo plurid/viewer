@@ -102,7 +102,6 @@ import { commonFolder, tourDefinitionSchema } from '../../domain/tours/tour';
 import { boxRegion } from '../../domain/files/regions';
 import { modelBoxLabel } from '../../domain/models/segmentation';
 import { countText } from '../../domain/layout/nesting/format';
-import { containsPath } from '../files/containment';
 import { quoteOn } from '../../domain/fabrication/quotes';
 import { errorMessage } from '../../domain/errors';
 import { DXF_MAX_BYTES } from '../../domain/previews/drawings/dxf/math';
@@ -209,7 +208,7 @@ export class FabricationChecks {
   private loading = new Map<string, Promise<Check>>();
   private store?: CheckStore;
   private closing = false;
-  private runs = new Map<Promise<CheckResult>, { check: Check; abort: AbortController }>();
+  private runs = new Set<Promise<CheckResult>>();
   constructor(private ports: FabricationPorts) {
     if (ports.dataPath)
       this.store = new CheckStore(path.join(ports.dataPath, 'fabrication-checks'));
@@ -226,10 +225,8 @@ export class FabricationChecks {
       case 'open':
         return this.open(request.paths, owner);
       case 'run': {
-        const check = this.own(request.id, owner);
-        const abort = new AbortController();
-        const work = this.run(check, request.providerID, request.pages, abort);
-        this.runs.set(work, { check, abort });
+        const work = this.run(request.id, request.providerID, request.pages, owner);
+        this.runs.add(work);
         try {
           return await work;
         } finally {
@@ -250,7 +247,7 @@ export class FabricationChecks {
       case 'validate': {
         const check = this.own(request.id, owner);
         await this.validate(check);
-        if (request.handoff) this.requireCutPlan(check);
+        this.requireCutPlan(check);
         return check.result!;
       }
       case 'correct':
@@ -295,17 +292,6 @@ export class FabricationChecks {
   stopOwner(owner: number): void {
     for (const check of this.checks.values()) check.owners.delete(owner);
   }
-  async quiesce(root: string): Promise<void> {
-    const affected: Promise<CheckResult>[] = [];
-    for (const [work, { check, abort }] of this.runs) {
-      if (containsPath(root, check.folder) || check.sources.some((source) => containsPath(root, source.path))) {
-        abort.abort();
-        affected.push(work);
-      }
-    }
-    await Promise.allSettled(affected);
-  }
-
   async close(): Promise<void> {
     this.closing = true;
     for (const check of this.checks.values()) {
@@ -315,7 +301,7 @@ export class FabricationChecks {
       check.running.abort();
       await this.save(check);
     }
-    await Promise.allSettled(this.runs.keys());
+    await Promise.allSettled([...this.runs]);
     await this.flush();
   }
   async flush(): Promise<void> {
@@ -626,7 +612,7 @@ export class FabricationChecks {
     for (const nesting of plan.nestings) {
       for (const [local, index] of nesting.sources.entries()) {
         const source = allowed.get(paths[index]!);
-        if (!source || source.quantity?.pieces === 0) throw new Error('The nesting includes a drawing outside this checked job.');
+        if (!source) throw new Error('The nesting includes a drawing outside this checked job.');
         const quantities = nesting.plan.parts
           .filter((part) => part.source === local)
           .reduce((sum, part) => sum + part.quantity, 0);
@@ -645,7 +631,7 @@ export class FabricationChecks {
     }
   }
   private requireCutPlan(check: Check): void {
-    if (check.result!.parts.some((part) => part.quantity?.pieces !== 0 && (part.question || !part.quantity || !part.thickness)))
+    if (check.result!.parts.some((part) => part.question || !part.quantity || !part.thickness))
       throw new Error(
         'Resolve the job’s quantities and thicknesses before preparing cut sheets or exporting.',
       );
@@ -825,12 +811,13 @@ export class FabricationChecks {
   }
 
   private async run(
-    check: Check,
+    id: string,
     providerID: string,
     pages: readonly RenderedPage[],
-    abort: AbortController,
+    owner: number,
   ): Promise<CheckResult> {
     if (this.closing) throw new Error('Viewer is closing. Reopen this check to run it again.');
+    const check = this.own(id, owner);
     if (check.running) throw new Error('This check is already running.');
     const provider = this.ports.settings().providers.find((item) => item.id === providerID);
     if (!provider) throw new Error('That model is no longer in Settings → Models. Choose another.');
@@ -849,7 +836,7 @@ export class FabricationChecks {
           ? `${provider.name} may receive ${modelDataLabels[permission.level]}. This check also sends pictures: allow ${modelDataLabels.images} for ${provider.name}.`
           : `${provider.name} may not receive file data yet. Allow ${modelDataLabels.images} for ${provider.name} to check this job.`,
       );
-    abort.signal.throwIfAborted();
+    const abort = new AbortController();
     check.running = abort;
     check.status = 'running';
     check.error = undefined;
@@ -858,7 +845,6 @@ export class FabricationChecks {
     check.verification = undefined;
     check.confirmations = [];
     check.corrections = {};
-    check.handoffs = [];
     const signal = abort.signal;
     const started = this.now();
     const record: CheckRecord = {
@@ -1135,12 +1121,7 @@ export class FabricationChecks {
           source.path,
           data,
           this.ports.encodePhoto,
-          this.ports.renderPhoto && (async (file, signal) => {
-            const bytes = await this.ports.renderPhoto!(file, signal);
-            if ((await hashListed(file, source.version, access, signal)) !== hash)
-              throw new Error(`${source.name} changed since the check listed it.`);
-            return bytes;
-          }),
+          this.ports.renderPhoto,
           signal,
         );
         if (!fits(photo.image)) {

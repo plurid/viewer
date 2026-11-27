@@ -23,8 +23,9 @@ interface Placed {
   y0: number;
   x1: number;
   y1: number;
-  /** Separate contours may lie on different pieces of material. */
-  contours: Float64Array[];
+  /** A point on its outline, for containment. */
+  px: number;
+  py: number;
 }
 
 export interface VerifiedProblem {
@@ -103,7 +104,8 @@ function place(problem: VerifiedProblem, placement: Placement): Placed {
   };
   for (const ring of rings) take(ring, true);
   for (const path of paths) take(path, false);
-  return { edges: Float64Array.from(edges), rings, x0, y0, x1, y1, contours: [...rings,...paths] };
+  const first = rings[0] ?? paths[0]!;
+  return { edges: Float64Array.from(edges), rings, x0, y0, x1, y1, px: first[0]!, py: first[1]! };
 }
 
 /** The distance between two placed parts, from their nearest edges; zero when one lies on the
@@ -140,8 +142,8 @@ function gap(a: Placed, b: Placed, near: number): number {
       if (best === 0) return 0;
     }
   // Without an edge nearby, one part can still lie wholly on the other's material.
-  const overlaps = (part: Placed, material: Placed) =>
-    part.contours.some(contour => contour.length >= 2 && insideRings(contour[0]!, contour[1]!, material.rings));
-  if (overlaps(a,b) || overlaps(b,a)) return 0;
+  if (a.rings.length && b.rings.length) {
+    if (insideRings(b.px, b.py, a.rings) || insideRings(a.px, a.py, b.rings)) return 0;
+  }
   return best;
 }

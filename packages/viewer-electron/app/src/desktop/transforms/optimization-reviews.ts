@@ -397,7 +397,7 @@ export class OptimizationReviews implements TransformExecutor {
       const before = await fileStat(input);
       if (!before.isFile() || before.size > 256_000_000)
         throw new Error('The candidate is invalid or exceeds 256 MB.');
-      if (output) target = await open(output, 'wx', 0o644);
+      if (output) target = await open(output, 'wx', 0o600);
       const hash = createHash('sha256');
       const buffer = Buffer.allocUnsafe(64 * 1024);
       let position = 0;

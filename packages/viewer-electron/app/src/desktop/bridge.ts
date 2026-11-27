@@ -1578,7 +1578,6 @@ export class Desktop {
       this.resources.quiesce(root),
       this.webPreviews.quiesce(root),
       this.transforms.quiesce(root),
-      this.fabrication.quiesce(root),
       this.optimizationReviews.invalidate(root),
       this.thumbnails.quiesce(root),
       this.watchers.revoke(root),

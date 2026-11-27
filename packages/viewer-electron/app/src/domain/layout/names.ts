@@ -53,15 +53,12 @@ export function layoutName(
     .slice(0, 120);
 }
 /** The output name without the extension a person may have typed. */
-export const outputStem = (name: string, format: LayoutFormat) => {
-  const suffix = format === 'jpeg' ? /(?:\.jpe?g)+$/i : format === 'pdf' ? /(?:\.pdf)+$/i : /(?:\.png)+$/i;
-  return name.trimEnd().replace(suffix,'').trimEnd();
-};
+const outputStem = (name: string) => name.trim().replace(/\.(?:pdf|png|jpe?g)$/i, '');
 export const layoutFileName = (name: string, format: LayoutFormat) =>
-  outputStem(name, format) + '.' + transformExtension(format);
+  outputStem(name) + '.' + transformExtension(format);
 /** The plan as saved under `name`: a PDF is titled with the name the person chose, which a PDF
  * reader shows in place of its file name. */
 export function titledPlan(plan: LayoutTransform, name: string): LayoutTransform {
-  const title = outputStem(name, plan.format).slice(0, 200);
+  const title = outputStem(name).slice(0, 200);
   return plan.format === 'pdf' && title ? { ...plan, title } : plan;
 }

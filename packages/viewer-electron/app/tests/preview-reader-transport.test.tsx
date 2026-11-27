@@ -4,18 +4,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import path from 'node:path';
 import { initialize } from '../src/renderer/state/store';
 import { Resources } from '../src/desktop/previews/resources';
-import {
-  fileCoordination,
-  FileCoordination,
-} from '../src/desktop/files/file-coordination';
+import { fileCoordination, FileCoordination } from '../src/desktop/files/file-coordination';
 import { PreviewHost } from '../src/renderer/previews/PreviewHost';
 import { CommandRegistry } from '../src/renderer/commands/registry';
 import { CommandsContext } from '../src/renderer/commands/context';
 import { PreviewWorker } from '../src/renderer/previews/worker-client';
-import {
-  ReaderRefusal,
-  readerProblemFields,
-} from '../src/domain/previews/reader-problem';
+import { ReaderRefusal, readerProblemFields } from '../src/domain/previews/reader-problem';
 import { restoreApiErrors } from '../src/renderer/api-boundary';
 import { dxf, entity } from './dxf-fixtures';
 import { errorMessage } from '../src/domain/errors';

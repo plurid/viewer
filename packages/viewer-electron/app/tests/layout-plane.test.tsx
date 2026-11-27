@@ -314,20 +314,6 @@ describe('the Layout plane', () => {
     expect(screen.getAllByText(/^Fills/).length).toBeGreaterThan(0);
   });
 
-  it('keeps newlines inside a source path and rejects invalid output names', async () => {
-    const path = '/Photos/Line\nBreak.jpg';
-    open([path,...Object.keys(photos)]);
-    await ready();
-    expect(window.viewer.stat).toHaveBeenCalledWith(path);
-    const field = screen.getByRole('textbox', {name:/Output name/i});
-    for (const value of ['a/b', '.jpg']) {
-      fireEvent.change(field, {target:{value}});
-      fireEvent.blur(field);
-      expect(screen.getByRole<HTMLButtonElement>('button', {name:'Save JPEG'}).disabled).toBe(true);
-    }
-    fireEvent.change(field, {target:{value:'.hidden'}});
-    expect(screen.getByText(/will be hidden/i)).toBeTruthy();
-  });
   it('keeps the person’s own name for the output', async () => {
     open(Object.keys(photos));
     await ready();

@@ -212,7 +212,6 @@ export function OptimizeDialog({
           </div>
           <p className="muted">Originals are kept.</p>
           <Disclosure
-            group="optimize-options" closeOnEscape
             variant="compact"
             className="optimization-advanced"
             summary="Quality and dimensions"
@@ -309,7 +308,6 @@ export function OptimizeDialog({
             </div>
           </Disclosure>
           <Disclosure
-            group="optimize-options" closeOnEscape
             variant="compact"
             className="optimization-recipes"
             summary="Saved batch recipes"

@@ -739,11 +739,6 @@ export function restoreEvidenceArrangement(
     evidenceTouchedIDs: undefined,
   });
 }
-/** A missing receipt may have aged out of the operation history. */
-export function canRetryExport(job: OperationJob | undefined): boolean {
-  return !job || job.status === 'failed' || job.status === 'cancelled';
-}
-
 /** The corrected copies saved so far: each original's copy, by path. */
 export function correctedCopies(
   current: CheckSession,
@@ -762,7 +757,7 @@ export function correctedCopies(
  * quantity and thickness when it gives them. */
 export function cutSheets(current: CheckSession, jobs: readonly OperationJob[]) {
   const copies = correctedCopies(current, jobs);
-  const parts: (PartPlan & { cut: string })[] = (current.result?.parts ?? []).filter(part => part.quantity?.pieces !== 0).map((part) => ({
+  const parts: (PartPlan & { cut: string })[] = (current.result?.parts ?? []).map((part) => ({
     ...part,
     cut: copies.get(part.path) ?? part.path,
   }));
@@ -895,7 +890,7 @@ export async function exportHandoff(current = session): Promise<void> {
   if (!current?.opening || !current.result || current.stale || exporting) return;
   exporting = true;
   try {
-    const verified = await ask({ kind: 'validate', id: current.opening.id, handoff: true });
+    const verified = await ask({ kind: 'validate', id: current.opening.id });
     if (verified.kind !== 'result') throw new Error('The check could not be validated.');
     current = { ...current, result: verified };
     await saveHandoff(current);
