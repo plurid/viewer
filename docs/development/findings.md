@@ -14,7 +14,7 @@ How to read an item:
 - Findings about security, an agent acting beyond its grant, or losing files are kept out of this
   page until they are fixed.
 
-Open here: 205 (S1 0, S2 67, S3 138); 67 confirmed.
+Open here: 168 (S1 0, S2 52, S3 116); 52 confirmed.
 
 ## Decisions the owner made
 
@@ -28,15 +28,14 @@ Open here: 205 (S1 0, S2 67, S3 138); 67 confirmed.
 
 Fixes run in waves. Each item gets a test that fails first, an independent review of the fix, and a
 check of the whole app before the wave is committed. Done: agents and actions, operations and the
-Trash engine, previews, windows and saved state, files and native helpers, models and speech.
+Trash engine, previews, windows and saved state, files and native helpers, models and speech,
+settings and commands, the CLI with license, updates and the build, and persistence.
 
-1. Settings and commands; the CLI, license, updates and the build; persistence. This wave takes the
-   remaining items that put the person's authority or private names at risk.
-2. A packaged build looked at screen by screen with `pnpm review`, and a polish pass.
-3. Browsing, workspaces and the space; canvases, Git, terminals and remote planes; layout,
+1. A packaged build looked at screen by screen with `pnpm review`, and a polish pass.
+2. Browsing, workspaces and the space; canvases, Git, terminals and remote planes; layout,
    fabrication and media; the Trash and operations screens; interface controls and developer tools;
    the improvements from the interface audit.
-4. The remaining documentation items.
+3. The remaining documentation items.
 
 See the [roadmap](../research/roadmap.md) for features after these fixes.
 
@@ -75,93 +74,13 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
 
 ## Windows, saved state and the app shell
 
-- **S2** Backup relinking updates Layout sources but leaves quantities and thicknesses unmapped.
-  `src/desktop/persistence/backup-state.ts:116-117` Confirmed.
-- **S2** Restoring a backup with an agent session plane breaks it and blocks all future backups.
-  `src/desktop/persistence/backup-state.ts:60-72` Confirmed.
-- **S3** Backup restore writes all documents before validating config, stranding copies on failure.
-  `src/desktop/persistence/backup.ts:470-478`
-- **S3** Closing or quitting traps Viewer in a Retry loop when saved state is newer or unmovable.
-  `src/desktop/persistence/storage.ts:471-498`
-- **S3** ModelPermissions and Updates overwrite unreadable or newer-version files without backup.
-  `src/desktop/models/model-permissions.ts:67-76`
-- **S3** Names of 92-100 characters fail to save for profiles, layouts and themes via slugID.
-  `src/domain/ids.ts:15-26`
-- **S3** Non-atomic backup writes leave corrupt files that block later backups; check index races.
-  `src/desktop/persistence/backup.ts:322-331`
-- **S3** One failed DocumentStore save poisons all later load() calls for the rest of the session.
-  `src/desktop/persistence/document-store.ts:16-17`
-- **S3** Storage.save checks UTF-16 length while load checks UTF-8 bytes, quarantining valid state.
-  `src/desktop/persistence/storage.ts:538`
+- **S3** An interrupted save of a revision-checked private store leaves it unreadable until the kept
+  file is put back by hand. `src/desktop/persistence/metadata-publication.ts:53`
 
 ## CLI, updates, license and the build
 
-- **S2** CLI exits with code 1 instead of 3 on disconnect and 1 instead of 124 on 120 s timeout.
-  `src/desktop/cli/client.ts:40` Confirmed.
-- **S2** Compiled binary assets/viewer-image-preview is tracked in Git and rewritten by builds.
-  `tools/build-helpers.ts:47-61` Confirmed.
-- **S2** forge.config.ts omits continueOnError: false, so pnpm package and make succeed unsigned.
-  `forge.config.ts:42-60` Confirmed.
-- **S2** processors.ts and speech-runtime.ts reuse old binaries after sharp, libvips or C++ edits.
-  `tools/processors.ts:124-137` Confirmed.
-- **S3** DiagnosticLog rotates by UTF-16 characters against a UTF-8 byte limit and rewrites on every
-  entry. `src/desktop/diagnostics/diagnostics.ts:62`
-- **S3** eslint.config.mjs omits src/report-preload.ts from Electron 45 sandboxed preload rules.
-  `eslint.config.mjs:109-134`
-- **S3** Overlapping Check for Updates and launch check open two update dialogs.
-  `src/desktop/updates/updates.ts:187`
-- **S3** pnpm make and forge osxNotarize permanently delete prior ZIPs and notarization archives.
-  `package.json:56`
-- **S3** redactCredentials erases the rest of a log entry after an empty credential value.
-  `src/domain/diagnostics/secrets.ts:89`
-- **S3** tools/build-preserving.ts packs @napi-rs inside app.asar and writes stale mic text.
-  `tools/build-preserving.ts:226`
-- **S3** VIEWER_BUILD_ARCH=x64 packs x64 helpers into an arm64 app and skips Trash for it.
-  `package.json:55-56`
-
-## Settings and keys
-
-- **S2** Exported recipes cannot be re-imported because Import Recipes appends duplicate IDs.
-  `src/renderer/ui/settings/RecipeSettings.tsx:191-226` Confirmed.
-- **S2** KeyCapture records Shift+punctuation as the shifted symbol, bypassing conflict checks.
-  `src/renderer/ui/settings/KeyCapture.tsx:5-21` Confirmed.
-- **S2** Multi-key root bindings and non-canonical leader keys pass validation but never run.
-  `src/renderer/keys/sequences.ts:170,179` Confirmed.
-- **S2** Reset a section for Search indexes / or keeps a custom root instead of resetting to Home.
-  `src/renderer/ui/settings/AutomationSettings.tsx:725-731` Confirmed.
-- **S2** Shortcut hints and Speech Settings still show shipped keys yielded under Own Keys.
-  `src/renderer/keys/hints.ts:9-13` Confirmed.
-- **S3** Go to Folder alternate Cmd+Shift+G never yields under Own Keys or when turned Off.
-  `src/domain/preferences/shortcuts.ts:70,404-408`
-- **S3** normalizePreferences truncates ui.list.order to 6 columns, dropping the 7th column.
-  `src/domain/preferences/ui.ts:222`
-- **S3** Reset All Shortcuts, Prefix Keys, Remove Mode and Reset Navigation act without asking.
-  `src/renderer/ui/settings/ShortcutSettings.tsx:91`
-- **S3** Session Keep and Discard in Settings report errors to the unrendered workspace store.
-  `src/renderer/ui/settings/KeymapSettings.tsx:30-66`
-- **S3** validate_config and propose_config succeed while config.jsonc is broken, then Apply fails.
-  `src/desktop/preferences/settings.ts:375-407`
-
-## Commands and the palette
-
-- **S2** :set termlinespace=<value> always fails validation because :set sends a string.
-  `src/domain/command-line/set.ts:105-119` Confirmed.
-- **S2** In a preview plane, Copy Path (⌥⌘C and ⌘K), Inspect File and Suggested do not work.
-  `src/renderer/commands/copy-path.ts:4-10` Confirmed.
-- **S2** Plane toolbar appears twice in Settings search and neither row applies Essential or Full.
-  `src/renderer/commands/window-commands/settings.ts:110-124` Confirmed.
-- **S2** Typing %/ or %:h/ in the command line without an active plane path crashes the window.
-  `src/renderer/command-line/complete.ts:144-147` Confirmed.
-- **S3** Custom action folders in ⌘K hide the Recent heading and copy the first child's shortcut.
-  `src/renderer/commands/folders.ts:24-36`
-- **S3** Found workspace roots in ⌘K and Change Workspace skip PathLabel and cut the folder name.
-  `src/renderer/commands/window-commands/catalog.ts:76-87`
-- **S3** Model approval dialogs label their buttons in sentence case while Viewer's own review uses
-  Title Case. `src/desktop/native/native-confirmation.ts:102-105`
-- **S3** Open non-file planes in ⌘K ignore paneTitle and show raw folder names instead.
-  `src/renderer/commands/window-commands/catalog.ts:107-132`
-- **S3** Smart palette Go to row shows raw home path and passes command text through FileName.
-  `src/renderer/commands/CommandPalette.tsx:597-635`
+- **S3** pnpm package and pnpm make move the previous build to the Trash before the checks that can
+  still fail. `tools/trash-previous-build.ts`
 
 ## Browsing and search
 

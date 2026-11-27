@@ -159,7 +159,7 @@ covers folder access, updates and removal. Windows and Linux are in progress; se
 [platform status](docs/reference/platforms.md).
 
 To run Viewer from source, you need macOS with the Xcode command-line tools, Node 22.22 or later,
-and pnpm 11:
+and pnpm 12:
 
 ```sh
 git clone https://github.com/plurid/viewer.git
