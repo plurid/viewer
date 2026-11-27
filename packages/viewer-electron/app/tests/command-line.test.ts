@@ -238,6 +238,14 @@ it.each([':e viewer:/', ':e viewer://tr', ':e viewer://trash', ':cd "viewer://tr
 );
 
 it.each([
+  [':e ~', '/work', '~'],
+  [':e %', '/work', '%:h'],
+  [':e -', '/work', '--'],
+  [':e ~/My Docs/F', '/home/My Docs', 'Field.txt'],
+  [':cd -- ~/My Docs/F', '/home/My Docs', 'Field.txt'],
+  [':write My Docs/My ', '/work/My Docs', 'My File.txt'],
+  [':e "~/My" Docs/F', '/work/~/My Docs', 'Field.txt'],
+  [':e viewer://trash notes/F', '/work/viewer:/trash notes', 'Field.txt'],
   [':e viewer:/notes/F', '/work/viewer:/notes', 'Field.txt'],
   [':e ./viewer:/notes/F', '/work/viewer:/notes', 'Field.txt'],
   [':e viewer://tracks/F', '/work/viewer:/tracks', 'Field.txt'],
@@ -258,7 +266,8 @@ it.each([
   });
   expect(result.directory).toBe(directory);
   expect(result.completions.map((row) => row.label)).toEqual([name]);
-  const completed = parseLine(result.completions[0]!.insert)[0]!.words[0]!;
+  const [step] = parseLine(result.completions[0]!.insert);
+  const completed = bindStep(step!, findVerb(step!.name)!).args[0]!;
   expect(expandPath(completed, places)).toBe(directory + '/' + name);
 });
 

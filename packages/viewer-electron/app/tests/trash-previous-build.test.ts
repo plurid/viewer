@@ -176,7 +176,11 @@ it.each(['zip,./windows.mjs', './windows.mjs,zip'])(
     const child = vi.fn();
     const move = vi.fn(toTrash);
     await localBuild(app(), ['make', '--targets', targets], 'darwin', 'arm64', {}, child, move);
-    expect(child).toHaveBeenLastCalledWith('electron-forge', ['make', '--targets', targets], expect.any(Object));
+    expect(child).toHaveBeenLastCalledWith(
+      'electron-forge',
+      ['make', '--targets', targets],
+      expect.any(Object),
+    );
     expect(move).toHaveBeenCalledTimes(2);
   },
 );

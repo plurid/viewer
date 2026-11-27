@@ -17,6 +17,7 @@ import { PathLabel, usePathCopy } from './PathLabel';
 import { FileName } from './FileName';
 import type { PathLabelLayout } from './PathLabel';
 import { errorMessage } from '../../domain/errors';
+import { knownPreviewProblem } from '../../domain/previews/reader-problem';
 import { diagnosticFailure } from '../../domain/diagnostics/failure';
 import { boundedDiagnosticInput } from '../../domain/diagnostics/license-key';
 import { getState, report } from '../state/core';
@@ -359,10 +360,10 @@ export function NameDialog({
     </Dialog>
   );
 }
-export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
+export class ErrorBoundary extends Component<{ children: ReactNode }, { detail: string | null }> {
+  state = { detail: null as string | null };
+  static getDerivedStateFromError(error: unknown) {
+    return { detail: knownPreviewProblem(error) ?? '' };
   }
   componentDidCatch(error: Error, info: { componentStack?: string | null }) {
     const failure = diagnosticFailure(error);
@@ -370,8 +371,12 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: 
     void window.viewer?.diagnosticReport?.(failure).catch(() => {});
   }
   render() {
-    return this.state.failed ? (
-      <Failure title="This view couldn't load" onRetry={() => this.setState({ failed: false })} />
+    return this.state.detail !== null ? (
+      <Failure
+        title="This view couldn't load"
+        detail={this.state.detail}
+        onRetry={() => this.setState({ detail: null })}
+      />
     ) : (
       this.props.children
     );

@@ -6,8 +6,8 @@ import {
   parseLine,
   quoteWord,
 } from '../../domain/command-line/lex';
-import type { CompleteKind } from '../../domain/command-line/verbs';
-import { findVerb, verbName, verbs } from '../../domain/command-line/verbs';
+import type { CompleteKind, Verb } from '../../domain/command-line/verbs';
+import { bindStep, findVerb, verbName, verbs } from '../../domain/command-line/verbs';
 import { settingByName, settingNames, settingText } from '../../domain/command-line/set';
 import { overridable } from '../../domain/preferences/overrides';
 import { trashLocation } from '../../domain/files/trash';
@@ -127,7 +127,7 @@ export function lineCompletions(text: string, sources: CompletionSources): LineC
   const verb = findVerb(name);
   if (!verb?.complete) return { completions: [] };
   if (verb.complete === 'path' || verb.complete === 'location')
-    return completePath(text, start, verb.complete, sources);
+    return completePath(text, start, verb, sources);
   const rest = text.slice(start + matched.length);
   const cut = Math.max(rest.lastIndexOf(' ') + 1, 0);
   const partial = rest.slice(cut);
@@ -137,21 +137,26 @@ export function lineCompletions(text: string, sources: CompletionSources): LineC
 function completePath(
   text: string,
   start: number,
-  kind: 'path' | 'location',
+  verb: Verb,
   sources: CompletionSources,
 ): LineCompletions {
   try {
-    const last = parseLine(text.slice(start))[0]?.words.at(-1);
-    const word = last && start + last.end === text.length ? last : undefined;
-    const path = word?.text ?? '';
+    const [step] = parseLine(text.slice(start));
+    if (!step) return { completions: [] };
+    const end = text.length - start;
+    if (step.words.at(-1)?.end !== end) step.words.push({ text: '', quoted: false, at: end, end });
+    const { args, flags } = bindStep(step, verb);
+    const word = typeof flags.c === 'object' ? flags.c : args[0];
+    if (!word || word.end !== end) return { completions: [] };
+    const path = word.text;
     const slash = path.lastIndexOf('/');
-    if (kind === 'location' && slash >= 0 && trashLocation.startsWith(path))
+    if (verb.complete === 'location' && slash >= 0 && trashLocation.startsWith(path))
       return { completions: [] };
 
-    const prefix = word ? text.slice(0, start + word.at) : text;
+    const prefix = text.slice(0, start + word.at);
     const folder = path.slice(0, slash + 1);
     const base = path.slice(slash + 1);
-    const directory = expandPath({ text: folder || '.', quoted: !!word?.quoted }, sources.places);
+    const directory = expandPath({ text: folder || '.', quoted: word.quoted }, sources.places);
     if (sources.listing?.directory !== directory) return { directory, completions: [] };
     const entries = sources.listing.entries.filter(
       (entry) =>
@@ -165,10 +170,11 @@ function completePath(
         .map((entry) => {
           const label = entry.name + (entry.directory ? '/' : '');
           const target = folder + label;
+          const literal = word.quoted || (!folder && /^(?:~|%|--)$|^%:h/.test(entry.name));
           return {
             label,
             detail: entry.directory ? 'Folder' : undefined,
-            insert: prefix + (word?.quoted ? quoteWord(target, true) : escapeWord(target)),
+            insert: prefix + (literal ? quoteWord(target, true) : escapeWord(target)),
           };
         }),
     };

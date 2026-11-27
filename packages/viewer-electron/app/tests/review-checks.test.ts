@@ -113,6 +113,105 @@ it('checks the displayed rows of the current textarea value as it scrolls away a
   expect(reported()).toEqual([]);
 });
 
+// jsdom has no line layout. Each row here has 2 px above its text and 3 px below.
+function measureTextRows() {
+  vi.spyOn(Range.prototype, 'getClientRects').mockImplementation(function (this: Range) {
+    const node = this.startContainer as Text;
+    const origin = node.parentElement!.getBoundingClientRect();
+    const rects: DOMRect[] = [];
+    let start = 0;
+    for (const [row, line] of node.data.split('\n').entries()) {
+      const from = Math.max(start, this.startOffset);
+      const to = Math.min(start + line.length, this.endOffset);
+      if (from < to)
+        rects.push(
+          new DOMRect(
+            origin.left + (from - start) * 10,
+            origin.top + row * 21 + 2,
+            (to - from) * 10,
+            16,
+          ),
+        );
+      start += line.length + 1;
+    }
+    return rects as unknown as DOMRectList;
+  });
+}
+
+it('checks the text boxes at both partially scrolled textarea edges', () => {
+  const field = document.createElement('textarea');
+  field.rows = 4;
+  field.style.cssText = 'line-height:21px; padding:0; border:0';
+  field.value = 'undefined\nReady\nReady\nReady\nENOENT';
+  field.getBoundingClientRect = () => new DOMRect(20, 20, 180, 84);
+  Object.defineProperties(field, {
+    clientWidth: { value: 180 },
+    scrollWidth: { value: 180 },
+    clientHeight: { value: 84 },
+    scrollHeight: { value: 105 },
+  });
+  document.body.append(field);
+  measureTextRows();
+  const reported = (scrollTop: number) => {
+    field.scrollTop = scrollTop;
+    return findings()
+      .filter(({ selector }) => selector === 'textarea')
+      .map(({ check }) => check);
+  };
+  expect([0, 2, 3, 17, 18, 20, 21, 0].map(reported)).toEqual([
+    ['broken-value'],
+    ['broken-value'],
+    ['broken-value', 'wording'],
+    ['broken-value', 'wording'],
+    ['wording'],
+    ['wording'],
+    ['wording'],
+    ['broken-value'],
+  ]);
+});
+
+it.each(['value', 'placeholder', 'label'] as const)(
+  'keeps disjoint parts of a clipped %s separate when checking wording',
+  async (source) => {
+    const clip = document.createElement('section');
+    clip.style.overflowX = 'hidden';
+    clip.getBoundingClientRect = () => new DOMRect(20, 20, 90, 42);
+    const subject = document.createElement(source === 'label' ? 'div' : 'textarea');
+    subject.style.cssText = 'line-height:21px; white-space:pre; padding:0; border:0';
+    subject.getBoundingClientRect = () => new DOMRect(20, 20, 200, 42);
+    Object.defineProperties(subject, {
+      clientWidth: { value: 200 },
+      scrollWidth: { value: 200 },
+      clientHeight: { value: 42 },
+      scrollHeight: { value: 42 },
+    });
+    clip.append(subject);
+    document.body.append(clip);
+    if (source === 'placeholder') {
+      const computed = window.getComputedStyle.bind(window);
+      vi.spyOn(window, 'getComputedStyle').mockImplementation((element) => computed(element));
+    }
+    measureTextRows();
+    const reported = (value: string) => {
+      if (source === 'label') subject.textContent = value;
+      else (subject as HTMLTextAreaElement)[source] = value;
+      return findings()
+        .filter(({ check }) => check === 'broken-value' || check === 'plural')
+        .map(({ check, text }) => [check, text]);
+    };
+    expect.soft(reported('undefined message\nCleared')).toEqual([['broken-value', 'undefined']]);
+    expect.soft(reported('Ready    undefined\nOK')).toEqual([]);
+    expect.soft(reported('Status 1 hidden\nfiles')).toEqual([]);
+    expect.soft(reported('Status unfinished\ndefined')).toEqual([]);
+    if (source === 'label') {
+      expect(await reviewPage().shows('Status undefined')).toBe(false);
+      expect(await reviewPage().shows('defined')).toBe(true);
+    } else {
+      expect(reported('1\nfiles')).toEqual([]);
+    }
+  },
+);
+
 it.each(['value', 'placeholder'] as const)(
   'reads only the visible horizontal slice of an input %s',
   (property) => {
@@ -207,6 +306,15 @@ it('follows soft-wrapped textarea lines while its scrolling parent clips the bot
   expect(broken()).toEqual(['undefined']);
   field.scrollTop = 0;
   expect(broken()).toEqual([]);
+
+  const clip = field.parentElement!;
+  clip.style.overflowX = 'hidden';
+  clip.getBoundingClientRect = () => new DOMRect(20, 20, 90, 40);
+  field.value = 'Status unXdefined    Cleared';
+  expect(broken()).toEqual([]);
+  clip.getBoundingClientRect = () => new DOMRect(20, 20, 100, 40);
+  field.value = 'Ready undefined'.padEnd(20) + 'Cleared';
+  expect(broken()).toEqual(['Ready undefined']);
 });
 
 it('checks a visible count across inline-block fragments without joining separate controls', () => {

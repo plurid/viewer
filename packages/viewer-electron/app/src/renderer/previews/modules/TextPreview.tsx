@@ -1,3 +1,4 @@
+import { resourceStatusMessage } from '../../../domain/previews/resource-status';
 import { previewProblem, reportPreviewProblem } from '../preview-problem';
 import { effectiveWindowSettings } from '../../state/effective-ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -144,7 +145,12 @@ export interface TextPreviewProps extends PreviewContext {
 const plistLimit = 8 * 1024 * 1024;
 async function binaryPlist(url: string, size: number, signal: AbortSignal) {
   if (size > plistLimit) throw new Error('The property list is too large.');
-  const bytes = new Uint8Array(await (await fetch(url, { signal })).arrayBuffer());
+  const response = await fetch(url, { signal });
+  if (!response.ok)
+    throw new Error(
+      resourceStatusMessage(response.status) ?? "Viewer couldn't read the text in this file.",
+    );
+  const bytes = new Uint8Array(await response.arrayBuffer());
   if (bytes.length > plistLimit) throw new Error('The property list is too large.');
   return JSON.stringify(decodeBinaryPlist(bytes), null, 2);
 }

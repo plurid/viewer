@@ -14,7 +14,7 @@ How to read an item:
 - Findings about security, an agent acting beyond its grant, or losing files are kept out of this
   page until they are fixed.
 
-Open here: 178 (S1 0, S2 54, S3 124); 52 confirmed.
+Open here: 171 (S1 0, S2 53, S3 118); 52 confirmed.
 
 ## Decisions the owner made
 
@@ -74,22 +74,13 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
 
 ## Windows, saved state and the app shell
 
-- **S3** A request the desktop refuses can reach the person as a raw validation message such as '0:
-  Invalid input'.
-- **S3** An interrupted save of a revision-checked private store leaves it unreadable until the kept
-  file is put back by hand. `src/desktop/persistence/metadata-publication.ts:53`
-
-## CLI, updates, license and the build
-
-- **S3** pnpm package and pnpm make move the previous build to the Trash before the checks that can
-  still fail. `tools/trash-previous-build.ts`
+- **S3** A profile copied while a private store's recovery is interrupted can stay unreadable.
+  `src/desktop/persistence/metadata-publication.ts:172`
 
 ## Commands and the palette
 
-- **S2** Choosing Trash in the command palette shows '0: Invalid input' and the Trash never opens.
-  `src/renderer/commands/window-commands/catalog.ts:141`
-- **S3** The palette's Go to row shows its command with the full home path under the label.
-  `src/renderer/commands/CommandPalette.tsx`
+- **S3** Command-line completion reads a path with ~ or a space from the wrong folder.
+  `src/renderer/command-line/complete.ts:144`
 
 ## Browsing and search
 
@@ -115,8 +106,6 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
   `src/renderer/explorer/CollectionExplorer.tsx:202`
 - **S3** First-run tips ignore the Own Keys rule and show stolen default shortcuts.
   `src/renderer/explorer/FolderInsights.tsx:101-108`
-- **S3** Go to Folder opens with the current folder as a full path, not from ~.
-- **S3** In Grid view a long picture name ends in an ellipsis and loses its extension.
 - **S3** MapView retains a stale creating promise if unmounted before the new lens arrives.
   `src/renderer/explorer/map/MapView.tsx:63`
 - **S3** Select by Pattern globs use backtracking JS RegExp with no length cap, bypassing RE2.
@@ -140,6 +129,8 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
   `src/renderer/workspace/WorkspaceSurface.tsx:330-358` Confirmed.
 - **S3** Agent open-path on a project or tour file reports success before reading it.
   `src/renderer/workspace/agent-navigation.ts:80-89`
+- **S3** Closing a folder-only workspace can leave Manage Workspaces closed after the replacement
+  workspace is saved.
 - **S3** Explicit collision with an opened found key breaks fresh opens on unreadable memory.
   `src/desktop/workspaces/defined-workspaces.ts:221-251`
 - **S3** Long file or tour names in TourStops footer buttons overflow the 380 px panel.
@@ -286,11 +277,6 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
 - **S3** PDFPagePreview never clears its 15 s slow-load error if the PDF finishes loading later.
   `src/renderer/pdf-tools/PDFPagePreview.tsx:35-37`
 
-## Previews
-
-- **S3** The 3D error card shows a raw program error: 'Offset is outside the bounds of the
-  DataView'.
-
 ## Interface controls and styles
 
 - **S2** NumberField turns comma-grouped integers like 1,920 into 2.
@@ -334,11 +320,6 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
   `tools/review/page.ts:81-101`
 - **S3** Review sheet blocks keyboard zoom, hides mark state and leaves empty headings on filter.
   `tools/review/sheet-script.ts:189-220`
-- **S3** The review tool's checks lag the interface: 27 false home-path alarms, a stale file-name
-  selector, two-line grid names and two hidden elements counted as shown.
-  `tools/review/checks.ts:550`
-- **S3** Timing-bound tests fail when the machine is busy: the binary plist bound and the
-  Ghostscript cancellation and render tests. `tests/plist.test.ts:117`
 - **S3** Wildcard covers.commands entries never match runtime command IDs in coverage.
   `tools/review/coverage.ts:189-193`
 

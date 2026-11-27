@@ -43,3 +43,7 @@ it('bounds expansion and handles aliases, cycles, unusual keys and invalid synta
   expect(invalid.error).toBe('Invalid JSONC at line 1, column 8. Source is shown below.');
   expect(invalid.diagnostic).toContain('InvalidSymbol');
 });
+
+it('preserves the property list reader’s explanation when it shows source', () => {
+  expect(inspectStructured('<other/>', 'plist').error).toBe('This XML is not a property list.');
+});

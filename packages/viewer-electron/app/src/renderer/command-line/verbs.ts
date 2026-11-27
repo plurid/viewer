@@ -12,6 +12,7 @@ import {
 import { folderHandle } from '../explorer/folder-handles';
 import { browseSession, updateBrowseSession } from '../workspace/sessions';
 import { expandPath, type Step, type Word } from '../../domain/command-line/lex';
+import type { BoundFlags, BoundStep } from '../../domain/command-line/verbs';
 import { didYouMean, parseCommandLine } from '../../domain/command-line/verbs';
 import { canonicalKey, keyGlyphs, rootKey } from '../../domain/preferences/keymap';
 import type { SessionAlias, SessionBinding } from '../../domain/preferences/session-keys';
@@ -41,10 +42,8 @@ import { Stopped, type LineHost } from './host';
 import { taskLineDraft } from '../../domain/command-line/task';
 import { sendWindowEvent } from '../app/window-events';
 
-export interface VerbInput {
+export interface VerbInput extends BoundStep {
   step: Step;
-  flags: Record<string, string | true>;
-  args: Word[];
   bang: boolean;
 }
 /** A verb's work: a message to show, or nothing; an Error says why it could not. */
@@ -253,13 +252,7 @@ export const verbRuns: Record<string, VerbRun> = {
   split: async ({ args }, host) => split(host, 'down', args[0]),
   vsplit: async ({ args }, host) => split(host, 'right', args[0]),
   'split-window': async ({ flags }, host) =>
-    split(
-      host,
-      flags.h ? 'right' : 'down',
-      typeof flags.c === 'string'
-        ? { text: flags.c, quoted: false, at: 0, end: flags.c.length }
-        : undefined,
-    ),
+    split(host, flags.h ? 'right' : 'down', typeof flags.c === 'object' ? flags.c : undefined),
   mkdir: async ({ args }, host) => create(host, 'mkdir', args[0]!.text),
   touch: async ({ args }, host) => create(host, 'mkfile', args[0]!.text),
   mv: async ({ args }, host) => {
@@ -455,7 +448,7 @@ function readQuery(text: string): void {
   }
 }
 /** Where `:bind` and `:unbind` put keys: the prefix's table, the root (-n) or a mode's (-T). */
-function bindingPlace(flags: Record<string, string | true>, word: Word) {
+function bindingPlace(flags: BoundFlags, word: Word) {
   const table = flags.n ? 'root' : typeof flags.T === 'string' ? flags.T : 'prefix';
   if (!/^(prefix|root|[a-z][a-z0-9-]{0,30})$/.test(table))
     throw new Error('A mode’s name is lowercase: resize, panes.');

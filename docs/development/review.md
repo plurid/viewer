@@ -93,7 +93,9 @@ reports the same text.
 The checks run in the page right after each capture. Text checks read rendered labels, details and
 field text. They read a control's visible label across inline or flex items. For an input or text
 area, they check the portion of its value or placeholder that is in view at its current scroll
-position. Hidden content includes the full path a shortened path label keeps for screen readers.
+position. A word can continue across a soft wrap while its letters are visible. A clipped gap or an
+explicit line break in a field separates the text on either side. Hidden content includes the full
+path a shortened path label keeps for screen readers.
 
 | Check                    | Flags                                                                                                                                               |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -1,3 +1,4 @@
+import { resourceStatusMessage } from '../../../domain/previews/resource-status';
 import { parseDrawing } from '../../../domain/previews/drawings/dxf/geometry';
 import { DXF_MAX_BYTES, type Drawing } from '../../../domain/previews/drawings/dxf/math';
 import { decodeDXF, DXFReadError } from '../../../domain/previews/drawings/dxf/decode';
@@ -7,7 +8,9 @@ self.onmessage = async (event: MessageEvent<{ url: string }>) => {
   try {
     const response = await fetch(event.data.url);
     if (!response.ok || !response.body)
-      throw new DXFReadError("Viewer couldn't read this drawing.");
+      throw new DXFReadError(
+        resourceStatusMessage(response.status) ?? "Viewer couldn't read this drawing.",
+      );
     if (Number(response.headers.get('content-length')) > DXF_MAX_BYTES)
       throw new DXFReadError('Viewer shows drawings up to 32 MB.');
     const reader = response.body.getReader(),

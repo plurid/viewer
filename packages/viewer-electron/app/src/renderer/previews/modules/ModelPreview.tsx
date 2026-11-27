@@ -1,3 +1,4 @@
+import { resourceStatusMessage } from '../../../domain/previews/resource-status';
 import { previewProblem } from '../preview-problem';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
@@ -560,7 +561,8 @@ export default function ModelPreview(context: PreviewContext) {
       const response = await fetch(resource.url, { signal: abort.signal });
       if (!response.ok)
         throw new Error(
-          "Couldn't read this model file. Check that it's still there, then try again.",
+          resourceStatusMessage(response.status) ??
+            "Couldn't read this model file. Check that it's still there, then try again.",
         );
       const ext = resource.entry.extension;
       if (ext === 'gltf' || ext === 'glb') {

@@ -29,7 +29,7 @@ export interface Verb {
   /** What `!` does; without it, `!` is an error. */
   bang?: string;
   /** Flags: a switch (`-h`), or one taking the next word (`-T resize`). */
-  flags?: Readonly<Record<string, 'switch' | 'value'>>;
+  flags?: Readonly<Record<string, 'switch' | 'value' | 'path'>>;
   /** Positional words after the flags: at least, at most. */
   args?: readonly [number, number];
   complete?: CompleteKind;
@@ -114,7 +114,7 @@ export const verbs: readonly Verb[] = [
     key: 'split-window',
     names: ['split-window', 'splitw'],
     usage: '[-h] [-c path]',
-    flags: { h: 'switch', v: 'switch', c: 'value' },
+    flags: { h: 'switch', v: 'switch', c: 'path' },
     complete: 'location',
     help: 'Split Down, or Split Right with -h',
     tmux: true,
@@ -366,16 +366,19 @@ export function resolveName(name: string): ResolvedName {
   return verb ? { kind: 'verb', verb } : { kind: 'id', id: name };
 }
 
+/** Path flags keep the word's quoting and source span for both expansion and completion. */
+export type BoundFlags = Record<string, string | true | Word>;
+
 /** A step's words after its verb's flags. */
 export interface BoundStep {
-  flags: Record<string, string | true>;
+  flags: BoundFlags;
   args: Word[];
 }
 /** Splits a step's flags from its words and checks both, and `!`, against the verb. */
 export function bindStep(step: Step, verb: Verb): BoundStep {
   const name = verbName(verb);
   if (step.bang && !verb.bang) throw new LineError(`:${name} does not take !.`, step.at);
-  const flags: Record<string, string | true> = {};
+  const flags: BoundFlags = {};
   const words = [...step.words];
   // a verb without flags takes `-word` as a word: `:filter -draft`
   while (verb.flags && words[0] && !words[0].quoted && /^-[A-Za-z]+$/.test(words[0].text)) {
@@ -387,7 +390,7 @@ export function bindStep(step: Step, verb: Verb): BoundStep {
       else {
         const value = words.shift();
         if (!value) throw new LineError(`-${letter} needs a value.`, word.end);
-        flags[letter] = value.text;
+        flags[letter] = kind === 'path' ? value : value.text;
       }
     }
   }

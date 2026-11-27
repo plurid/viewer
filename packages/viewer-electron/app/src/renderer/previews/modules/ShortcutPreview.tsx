@@ -1,3 +1,4 @@
+import { resourceStatusMessage } from '../../../domain/previews/resource-status';
 import { previewProblem } from '../preview-problem';
 import { useEffect, useMemo, useState } from 'react';
 import type { PreviewContext } from '../contracts';
@@ -36,7 +37,10 @@ export default function ShortcutPreview(context: PreviewContext) {
         headers: { Range: `bytes=0-${size - 1}` },
         signal,
       });
-      if (!response.ok) throw new Error('The shortcut could not be read.');
+      if (!response.ok)
+        throw new Error(
+          resourceStatusMessage(response.status) ?? 'The shortcut could not be read.',
+        );
       return new Uint8Array(await response.arrayBuffer()).slice(0, shortcutLimit);
     };
     read()

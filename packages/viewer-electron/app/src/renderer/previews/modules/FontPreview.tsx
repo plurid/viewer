@@ -1,3 +1,4 @@
+import { resourceStatusMessage } from '../../../domain/previews/resource-status';
 import { previewProblem } from '../preview-problem';
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
@@ -199,7 +200,10 @@ function formatText({ format, faces }: FontInfo): string {
 /** The file's bytes, refused past the preview limit even when it grew after it was listed. */
 async function fontBytes(url: string, signal: AbortSignal): Promise<Uint8Array<ArrayBuffer>> {
   const response = await fetch(url, { signal });
-  if (!response.ok || !response.body) throw new Error("Viewer couldn't read the font file.");
+  if (!response.ok || !response.body)
+    throw new Error(
+      resourceStatusMessage(response.status) ?? "Viewer couldn't read the font file.",
+    );
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;

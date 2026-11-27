@@ -149,7 +149,7 @@ it('describes an unreadable gzip file without showing the decoder exception', as
   const { context, services } = fixture('notes.txt.gz', {});
   services.archiveEntry.mockRejectedValueOnce(new Error('Z_DATA_ERROR: invalid block type'));
   render(<CompressedPreview {...context} />);
-  await screen.findByText("Viewer couldn't read the compressed data in this file.");
+  await screen.findByText('The compressed data is damaged or incomplete.');
   expect(screen.queryByText(/Z_DATA_ERROR/)).toBeNull();
 });
 

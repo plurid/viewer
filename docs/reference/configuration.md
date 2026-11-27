@@ -70,15 +70,20 @@ only in Settings or in the file.
 Permissions and update state use separate private files. An existing current file takes precedence.
 When it is missing, Viewer checks for an interrupted save named `<filename>.publishing-<uuid>`. On
 macOS, Viewer locks the directory and checks that exactly one save is pending. It validates the
-file's contents and size, then restores the verified bytes under the vacant current name. Retries
-reuse the private `.bak` copy for that save. Recovery stops and leaves the evidence on disk if
-several saves are pending or the predecessor has changed or fails validation.
+file's contents and size, then restores the verified bytes under the vacant current name. If space
+runs out while writing the recovery copy, the next read checks the saved prefix and resumes in the
+same staging file. Viewer publishes the private `.bak` after the complete copy syncs. If a private
+`.bak` already holds only the start of the document, Viewer keeps it and uses a separate name for
+the complete copy. Recovery stops and leaves the evidence on disk if several saves are pending or
+the predecessor has changed or fails validation.
 
 Viewer records the predecessor and its verification copy as hard links in
-`<filename>.history-<uuid>`. Both original names stay in place. If writing history fails after
-restoration, the saved state is available immediately. The next revision-checked save must finish
-the history before replacing the current file. A directory or symlink in a pending file's place
-stops that save and stays at its original path.
+`<filename>.history-<uuid>` and records each file's SHA-256 there. Both original names stay in
+place. A file-by-file copy of the profile stays writable when the saved bytes match their history.
+Conflicting history stops a revision-checked save before the current file changes. If writing
+history fails after restoration, the saved state is available immediately. The next revision-checked
+save must finish the history before replacing the current file. A directory or symlink in a pending
+file's place stops that save and stays at its original path.
 
 On Windows and Linux another process may still be saving. Viewer leaves the pending file in place
 and reports the interruption.

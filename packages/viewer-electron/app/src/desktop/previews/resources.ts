@@ -68,6 +68,7 @@ interface Grant {
   root?: string;
   file?: string;
   data?: Buffer;
+  origin?: 'archive';
   archiveChildren: Set<string>;
   assets?: Set<string>;
   /** A format the file's own bytes confirmed, for a file whose name does not say it, and the
@@ -465,6 +466,18 @@ export class Resources {
     if (grant.bundle) throw new Error('A document package is edited in its own app.');
     return grant.file;
   }
+  /** Only a file on disk has a folder from which the page can load its local assets. */
+  pageFile(id: string, owner: number): string {
+    const grant = this.get(id, owner);
+    if (!grant.file || grant.data)
+      throw new Error(
+        grant.origin === 'archive'
+          ? 'Archived HTML has no local page to render.'
+          : 'This HTML has no local page to render.',
+      );
+    if (grant.bundle) throw new Error('Viewer reads only the saved picture of a document package.');
+    return grant.file;
+  }
   documentSource(id: string, owner?: number): string {
     const grant = this.get(id, owner);
     if (!grant.file) throw new Error('Viewer can’t open a document inside this file here.');
@@ -721,7 +734,7 @@ export class Resources {
         throw new Error('This book illustration has unsupported or oversized dimensions.');
     }
     this.get(id, owner); // A parent closed while its entry was loading cannot leave an orphan grant.
-    return this.dataChild(id, path.basename(name), `${grant.file} → ${name}`, data);
+    return this.dataChild(id, path.basename(name), `${grant.file} → ${name}`, data, 'archive');
   }
   /** A preview of a file Chromium cannot decode, produced by a private decoder. */
   async rendition(id: string, request?: ImageRenditionRequest, owner?: number): Promise<Resource> {
@@ -951,7 +964,13 @@ export class Resources {
     return this.dataChild(id, name, grant.resource.entry.path, data);
   }
   /** Serves in-memory bytes derived from a granted file; released with that file's grant. */
-  private dataChild(id: string, basename: string, label: string, data: Buffer): Resource {
+  private dataChild(
+    id: string,
+    basename: string,
+    label: string,
+    data: Buffer,
+    origin?: 'archive',
+  ): Resource {
     const grant = this.get(id);
     if (this.grants.size >= 256) throw new Error('Close some previews before opening more files.');
     const held = new Set(
@@ -980,6 +999,7 @@ export class Resources {
       },
     };
     this.grants.set(childID, {
+      origin,
       owner: grant.owner,
       resource,
       data,
@@ -1113,7 +1133,9 @@ export class Resources {
       }
       opened = undefined; // The stream now owns and closes the descriptor, including cancellation.
       return new Response(body, { status: partial ? 206 : 200, headers });
-    } catch {
+    } catch (error) {
+      if (needsFolderAccess((error as NodeJS.ErrnoException)?.code))
+        return new Response(null, { status: 403 });
       return new Response('The file was moved or deleted, or this preview has expired.', {
         status: 404,
       });

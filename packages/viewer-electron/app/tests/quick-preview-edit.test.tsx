@@ -206,7 +206,7 @@ describe('QuickPreview Cmd+E routing', () => {
     await waitFor(
       () => {
         expect(document.querySelectorAll('.held-preview-layer')).toHaveLength(1);
-        expect(document.body.textContent).toContain('Permission denied');
+        expect(document.body.textContent).toContain('Viewer needs permission to read this file.');
       },
       { timeout: 2500 },
     );

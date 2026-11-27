@@ -284,7 +284,7 @@ it('keeps a current file that appears while the predecessor is being verified', 
   expect(await readFile(kept, 'utf8')).toBe(older);
 });
 
-it.each(['intact', 'changed history', 'changed matching pair'])(
+it.each(['intact', 'unmarked history', 'changed history', 'changed matching pair'])(
   'checks a file-by-file profile copy with %s before the next revisioned save',
   async (condition) => {
     const source = path.join(root, 'source');
@@ -301,7 +301,13 @@ it.each(['intact', 'changed history', 'changed matching pair'])(
       return;
     }
     expect(await originalStore.load()).toEqual(value);
-    await cp(source, copy, { recursive: true, errorOnExist: true, force: false });
+    await cp(source, copy, {
+      recursive: true,
+      errorOnExist: true,
+      force: false,
+      filter: (entry) =>
+        condition !== 'unmarked history' || !path.basename(entry).includes('.sha256-'),
+    });
     const previous = path.join(copy, name);
     const archived = path.join(copy, 'state.json.history-' + generation, name);
     expect((await stat(previous, { bigint: true })).ino).not.toBe(
@@ -311,7 +317,7 @@ it.each(['intact', 'changed history', 'changed matching pair'])(
     const current = await copiedStore.loadSnapshot();
     expect(current.value).toEqual(value);
     const next = { ...value, value: 'updated' };
-    if (condition === 'intact') {
+    if (condition === 'intact' || condition === 'unmarked history') {
       await copiedStore.save(next, current.revision);
       expect(await copiedStore.load()).toEqual(next);
       expect(await originalStore.load()).toEqual(value);
@@ -319,7 +325,9 @@ it.each(['intact', 'changed history', 'changed matching pair'])(
       const changed = JSON.stringify({ ...value, value: 'modified' });
       await writeFile(archived, changed);
       if (condition === 'changed matching pair') await writeFile(previous, changed);
-      await expect(copiedStore.save(next, current.revision)).rejects.toThrow('interrupted metadata');
+      await expect(copiedStore.save(next, current.revision)).rejects.toThrow(
+        'interrupted metadata',
+      );
       expect(await copiedStore.loadSnapshot()).toEqual(current);
       expect(await readFile(archived, 'utf8')).toBe(changed);
       expect(await readFile(previous, 'utf8')).toBe(
@@ -405,24 +413,27 @@ it('recovers in a fresh reader after repeated short snapshot writes', async () =
   await store.save({ ...value, value: 'next' }, snapshot.revision);
 });
 
-it.each(['', '{'])('preserves a partial fixed backup containing %j while restoring the store', async (prefix) => {
-  const file = path.join(root, 'state.json');
-  const generation = crypto.randomUUID();
-  const previous = file + '.publishing-' + generation;
-  const backup = file + '.recovery-' + generation + '.bak';
-  const value = { version: 1 as const, value: 'complete' };
-  await writeFile(previous, JSON.stringify(value), { mode: 0o600 });
-  await writeFile(backup, prefix, { mode: 0o600 });
-  const store = new DocumentStore(file, parse);
-  if (process.platform === 'darwin') {
-    expect(await store.load()).toEqual(value);
-    expect(await readFile(file, 'utf8')).toBe(JSON.stringify(value));
-  } else {
-    await expect(store.load()).rejects.toThrow('interrupted metadata');
-  }
-  expect(await readFile(backup, 'utf8')).toBe(prefix);
-  expect(await readFile(previous, 'utf8')).toBe(JSON.stringify(value));
-});
+it.each(['', '{'])(
+  'preserves a partial fixed backup containing %j while restoring the store',
+  async (prefix) => {
+    const file = path.join(root, 'state.json');
+    const generation = crypto.randomUUID();
+    const previous = file + '.publishing-' + generation;
+    const backup = file + '.recovery-' + generation + '.bak';
+    const value = { version: 1 as const, value: 'complete' };
+    await writeFile(previous, JSON.stringify(value), { mode: 0o600 });
+    await writeFile(backup, prefix, { mode: 0o600 });
+    const store = new DocumentStore(file, parse);
+    if (process.platform === 'darwin') {
+      expect(await store.load()).toEqual(value);
+      expect(await readFile(file, 'utf8')).toBe(JSON.stringify(value));
+    } else {
+      await expect(store.load()).rejects.toThrow('interrupted metadata');
+    }
+    expect(await readFile(backup, 'utf8')).toBe(prefix);
+    expect(await readFile(previous, 'utf8')).toBe(JSON.stringify(value));
+  },
+);
 
 it('reuses one private snapshot across failed directory syncs and a successful retry', async () => {
   const file = path.join(root, 'state.json');

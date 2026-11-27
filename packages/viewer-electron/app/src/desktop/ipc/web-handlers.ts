@@ -31,7 +31,7 @@ interface WebPorts {
     | 'dispose'
     | 'get'
   >;
-  resources: Pick<Resources, 'editableFile' | 'documentFormat' | 'signal'>;
+  resources: Pick<Resources, 'pageFile' | 'documentFormat' | 'signal'>;
   files: Pick<FileServices, 'page'>;
   openURL(url: string): Promise<void>;
   copyURL(url: string): Promise<void>;
@@ -51,7 +51,7 @@ export function createWebHandlers(ports: WebPorts): WebHandlers {
       : work();
   return {
     htmlPreview: async ([resourceID, message], owner) => {
-      const file = ports.resources.editableFile(resourceID, owner);
+      const file = ports.resources.pageFile(resourceID, owner);
       const format = await ports.resources.documentFormat(resourceID, owner);
       // an email or web archive is a page made of the file's own parts, read in the preview worker
       const preview = savedPageFormats.includes(format)
@@ -65,7 +65,7 @@ export function createWebHandlers(ports: WebPorts): WebHandlers {
           )
         : await ports.previews.openHtml(owner, file, resourceID);
       try {
-        if (ports.resources.editableFile(resourceID, owner) !== file)
+        if (ports.resources.pageFile(resourceID, owner) !== file)
           throw new Error('This HTML preview resource has changed. Open it again.');
       } catch (error) {
         await ports.previews.closeHtml(owner, preview.id);

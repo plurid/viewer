@@ -194,3 +194,16 @@ it('never adds a face whose bytes arrive after the preview closed', async () => 
   await waitFor(() => expect(FakeFontFace.created).toHaveLength(1));
   expect(fonts.add).not.toHaveBeenCalled();
 });
+
+it.each([
+  [403, 'Viewer needs permission to read this file.'],
+  [404, 'The file has moved or is no longer available.'],
+  [413, 'The file is too large for this preview.'],
+] as const)('shows the reason for a refused font read (%s)', async (status, message) => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(null, { status })),
+  );
+  render(<FontPreview {...fontContext('Fixture.ttf', 4096)} />);
+  await screen.findByText(message);
+});

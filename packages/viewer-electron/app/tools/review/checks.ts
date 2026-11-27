@@ -541,12 +541,10 @@ function pageChecks(visibility: ReviewVisibility, options: PageCheckOptions): Pa
   // What the visible text says, line by line, fields included.
   for (const field of document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
     'input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="range"], [type="color"]), textarea',
-  ))
-    if (!inContent(field) && visibility.boxVisible(field))
-      texts.push({
-        element: field,
-        text: visibility.fieldText(field),
-      });
+  )) {
+    if (inContent(field) || !visibility.boxVisible(field)) continue;
+    for (const text of visibility.fieldText(field)) texts.push({ element: field, text });
+  }
   const homes = options.homes.filter(Boolean);
   const plural = /(?<![\d.,])1 ([A-Za-z]{3,}s)\b/;
   const singularEndings = /(ss|us|is|as|ics|ies|ws)$/i;

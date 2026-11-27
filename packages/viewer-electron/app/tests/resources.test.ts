@@ -16,6 +16,28 @@ afterEach(async () => {
   await trashTemporary(root);
 });
 describe('scoped preview resources', () => {
+  it('keeps archived HTML readable and refuses a local page for that entry', async () => {
+    const archive = path.join(root, 'pages.zip');
+    await writeFile(archive, zipSync({ 'page.html': strToU8('<p>Page</p>') }));
+    const parent = await resources.grant(archive, undefined, 1);
+    const page = await resources.archiveEntry(parent.id, 'page.html', 1);
+    expect(() => resources.pageFile(page.id, 1)).toThrow(
+      'Archived HTML has no local page to render.',
+    );
+    expect(() => resources.pageFile(page.id, 2)).toThrow('expired');
+    expect(await resources.read(page.id, undefined, 1)).toMatchObject({ text: '<p>Page</p>' });
+  });
+
+  it('returns a permission refusal when file access is lost before a resource fetch', async () => {
+    const access = vi.fn(async () => {});
+    resources = new Resources(access);
+    const resource = await resources.grantBytes(root, 'page.html', Buffer.from('page'), 1);
+    access.mockRejectedValueOnce(Object.assign(new Error('private path'), { code: 'EACCES' }));
+    const response = await resources.response(new Request(resource.url));
+    expect(response.status).toBe(403);
+    expect(await response.text()).not.toContain('private path');
+  });
+
   it('retains EPUB chapter identity, authorizes local illustrations and rejects oversized images', async () => {
     const file = path.join(root, 'Book.epub');
     await writeFile(file, readerBookFixture());

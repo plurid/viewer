@@ -46,12 +46,11 @@ approval. [AGENTS.md](../../AGENTS.md)
 
 Before retrying `pnpm make`, preserve the previous `out/make` and `out/make-results` directories
 elsewhere. If you already moved their files, the empty `out/make/zip/darwin/<architecture>`
-hierarchy can stay. Use `--targets` with a comma-separated list of configured maker names,
-installed maker packages or local maker modules. Before moving either build folder, make checks
-the output locations and resolves every requested maker. It skips makers for other platforms,
-requires at least one for macOS and checks each applicable maker's host support and required tools.
-Use `pnpm direct:release` to notarize and retain
-the submitted archive.
+hierarchy can stay. Use `--targets` with a comma-separated list of configured maker names, installed
+maker packages or local maker modules. Before moving either build folder, make checks the output
+locations and resolves every requested maker. It skips makers for other platforms, requires at least
+one for macOS and checks each applicable maker's host support and required tools. Use
+`pnpm direct:release` to notarize and retain the submitted archive.
 
 Run one package, make or Store build at a time in a checkout. Each command keeps a numbered record
 in `out/package-runs` and marks it `finished` when it exits. If a build was interrupted, wait for

@@ -28,7 +28,7 @@ import {
 import { registerEditingPlane } from '../src/renderer/editing/planes';
 import { agentCommandID } from '../src/domain/agents/safety';
 import { receiveJob } from '../src/renderer/state/jobs';
-import type { OperationJob } from '../src/domain/contracts';
+import type { FileEntry, OperationJob } from '../src/domain/contracts';
 
 const settingsPatch = vi.fn(async (patches: { path: string; value: unknown }[]) => {
   const snapshot = structuredClone(getState().settings);
@@ -129,6 +129,26 @@ beforeEach(() => {
 });
 
 describe('a line', () => {
+  it.each([
+    [':split-window -c "~/F"', '/work/~'],
+    [":splitw -hc '%:h/F'", '/work/%:h'],
+    [':split-window -c ~/F', '/fixtures'],
+  ])('opens the path offered by completion for %s', async (line, directory) => {
+    const pane = addRootFolder({ path: '/work', workspaceID: activeWorkspace().id })!;
+    setActivePane(pane.id);
+    const { completions } = lineCompletions(line, {
+      commands: [],
+      family: () => [],
+      workspaces: [],
+      value: () => undefined,
+      places: { home: '/fixtures', folder: '/work', current: '/work' },
+      listing: { directory, entries: [{ name: 'Field.txt', directory: false } as FileEntry] },
+    });
+    expect(completions).toHaveLength(1);
+    expect((await runLine(completions[0]!.insert, host())).ok).toBe(true);
+    expect(viewer.stat).toHaveBeenCalledExactlyOnceWith(directory + '/Field.txt');
+  });
+
   it.each([
     ':e viewer://trash',
     ':e viewer\\://trash',

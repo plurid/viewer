@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Resources } from '../src/desktop/previews/resources';
 import { createWebHandlers } from '../src/desktop/ipc/web-handlers';
 import type { LocalServer } from '../src/domain/previews/web';
 import { schemas } from '../src/desktop/ipc/schemas';
@@ -45,7 +46,7 @@ function ports() {
       }),
     },
     resources: {
-      editableFile: vi.fn(() => '/fixtures/project/index.html'),
+      pageFile: vi.fn(() => '/fixtures/project/index.html'),
       documentFormat: vi.fn(async () => 'html'),
       signal: vi.fn(() => new AbortController().signal),
     },
@@ -62,9 +63,26 @@ function ports() {
 }
 
 describe('native web preview handlers', () => {
+  it('explains why HTML from a comparison can only show its source', async () => {
+    const host = ports();
+    const resources = new Resources();
+    const snapshot = await resources.grantBytes(
+      '/fixtures',
+      'page.html',
+      Buffer.from('<p>A</p>'),
+      owner,
+    );
+    const handlers = createWebHandlers({ ...host, resources });
+    await expect(handlers.htmlPreview([snapshot.id], owner)).rejects.toThrow(
+      'This HTML has no local page to render.',
+    );
+    expect(host.previews.openHtml).not.toHaveBeenCalled();
+    resources.release(snapshot.id, owner);
+  });
+
   it('closes a late capability when its source resource expired while opening', async () => {
     const host = ports();
-    host.resources.editableFile
+    host.resources.pageFile
       .mockReturnValueOnce('/fixtures/project/index.html')
       .mockImplementationOnce(() => {
         throw new Error('Resource expired.');
@@ -76,7 +94,7 @@ describe('native web preview handlers', () => {
 
   it('serves an email or web archive as a page of its own parts, never as a folder', async () => {
     const host = ports();
-    host.resources.editableFile.mockReturnValue('/fixtures/mail/Archive.mbox');
+    host.resources.pageFile.mockReturnValue('/fixtures/mail/Archive.mbox');
     host.resources.documentFormat.mockResolvedValue('mbox');
     const handlers = createWebHandlers(host);
     await expect(handlers.htmlPreview(['resource', 3], owner)).resolves.toMatchObject({

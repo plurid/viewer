@@ -2,9 +2,10 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { constants } from 'node:fs';
 import { link, lstat, mkdir, open, readdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { versionIdentity } from '../../domain/files/item-identity';
 import { fileStat } from '../files/stats';
+import type { FileStats } from '../files/stats';
 import { discardOwnTemporaryFile } from '../operations/removal';
 import { inspectReviewedFile, sameReviewedFile, verifyReviewedFile } from '../native/reviewed-file';
 import type { InspectedFile, ReviewedFile } from '../native/reviewed-file';
@@ -68,20 +69,22 @@ async function requireHistoryDirectory(directory: string) {
     throw new Error(`Expected a private metadata history directory at ${directory}.`);
 }
 
-async function isArchived(
+async function verifyArchiveEntry(
   source: string,
   destination: string,
   limit: number,
   locked: boolean,
-  linking?: ReviewedFile,
+  linkedFrom?: ReviewedFile,
 ) {
   const directory = path.dirname(destination);
   const prefix = source.endsWith('.verifying') ? 'verification.sha256-' : 'predecessor.sha256-';
   const markers = (await readdir(directory)).filter((name) => name.startsWith(prefix));
-  const archived = await inspectReviewedFile(destination, limit).catch((error: NodeJS.ErrnoException) => {
-    if (error.code === 'ENOENT') return null;
-    throw error;
-  });
+  const archived = await inspectReviewedFile(destination, limit).catch(
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    },
+  );
   if (!archived) {
     if (markers.length) throw interrupted(path.basename(source));
     return false;
@@ -90,14 +93,17 @@ async function isArchived(
   const marker = prefix + archived.reviewed.sha256;
   if (
     current.reviewed.sha256 !== archived.reviewed.sha256 ||
-    (linking && (!sameReviewedFile(linking, current.reviewed) || !sameReviewedFile(linking, archived.reviewed))) ||
+    (linkedFrom &&
+      (!sameReviewedFile(linkedFrom, current.reviewed) ||
+        !sameReviewedFile(linkedFrom, archived.reviewed))) ||
     markers.some((name) => name !== marker)
   )
     throw interrupted(path.basename(source));
   // A directory copy can give each hard link its own inode. Keep the verified digest in
   // an empty file's name so recording it cannot leave a partially written digest.
   if (markers.length) await inspectReviewedFile(path.join(directory, marker), 0);
-  else if (locked) await writeFile(path.join(directory, marker), '', { flag: 'wx', mode: 0o600, flush: true });
+  else if (locked)
+    await writeFile(path.join(directory, marker), '', { flag: 'wx', mode: 0o600, flush: true });
   return true;
 }
 
@@ -118,7 +124,7 @@ async function publicationLeftovers(file: string, limit: number, locked: boolean
     if (present.has(path.basename(archive))) {
       await requireHistoryDirectory(archive);
       const archived = path.join(archive, name);
-      if (await isArchived(path.join(path.dirname(file), name), archived, limit, locked)) {
+      if (await verifyArchiveEntry(path.join(path.dirname(file), name), archived, limit, locked)) {
         // Finish any directory sync interrupted after the archival link was created.
         await syncParentDirectory(archived);
         await syncParentDirectory(file);
@@ -142,26 +148,32 @@ function allowExisting(error: NodeJS.ErrnoException) {
 
 type RecoveryCopyState = 'staging' | 'complete' | 'witnessed';
 
+function privateRecoveryFile(info: Pick<FileStats, 'isFile' | 'mode' | 'uid'>) {
+  return info.isFile() && (info.mode & 0o777) === 0o600 && info.uid === process.getuid?.();
+}
+
+function isPartialCopy(bytes: Buffer, complete: Buffer) {
+  return bytes.length < complete.length && bytes.equals(complete.subarray(0, bytes.length));
+}
+
 async function syncRecoveryCopy(copy: string, kept: InspectedFile, state: RecoveryCopyState) {
-  const access = state === 'staging'
-    ? constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND
-    : constants.O_RDONLY;
+  const access =
+    state === 'staging'
+      ? constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND
+      : constants.O_RDONLY;
   const handle = await open(copy, access | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
   try {
     const info = await fileStat(handle);
     const identity = versionIdentity(info);
     if (
-      !info.isFile() ||
-      (info.mode & 0o777) !== 0o600 ||
-      info.uid !== process.getuid?.() ||
+      !privateRecoveryFile(info) ||
       identity === kept.reviewed.version.identity ||
       (state === 'witnessed' ? info.nlink < 2 : info.nlink !== 1)
     )
       throw new Error('Expected an independent private recovery file.');
     const { reviewed, bytes } = await inspectReviewedFile(copy, kept.bytes.length);
     if (reviewed.version.identity !== identity) throw new Error('The recovery copy changed.');
-    if (state === 'staging' && bytes.length < kept.bytes.length &&
-      bytes.equals(kept.bytes.subarray(0, bytes.length))) {
+    if (state === 'staging' && isPartialCopy(bytes, kept.bytes)) {
       await handle.writeFile(kept.bytes.subarray(bytes.length));
     } else if (reviewed.sha256 !== kept.reviewed.sha256) {
       throw new Error('The recovery copy changed.');
@@ -173,22 +185,45 @@ async function syncRecoveryCopy(copy: string, kept: InspectedFile, state: Recove
   }
 }
 
-async function prepareRecoveryWitness(snapshot: string, witness: string, kept: InspectedFile) {
-  const entries = await readdir(path.dirname(snapshot));
-  const prefix = path.basename(snapshot) + '.writing-';
+async function recoverySnapshot(
+  backup: string,
+  witness: string,
+  kept: InspectedFile,
+  witnessed: boolean,
+) {
+  const directory = path.dirname(backup);
+  const entries = await readdir(directory);
+  const generationKey = createHash('sha256').update(path.basename(backup)).digest('hex');
+  const prefix = '.recovery-' + generationKey + '.writing-';
   const stagingName = prefix + kept.reviewed.sha256;
   // A short write can leave even an empty file. Its name binds all retries to the first
   // verified contents, and only the missing suffix may be appended.
   if (entries.some((entry) => entry.startsWith(prefix) && entry !== stagingName))
     throw new Error('The predecessor changed during recovery.');
-  if (entries.includes(path.basename(snapshot))) {
-    await syncRecoveryCopy(snapshot, kept, 'complete');
-    await link(snapshot, witness);
-  } else {
-    const staging = path.join(path.dirname(snapshot), stagingName);
-    await syncRecoveryCopy(staging, kept, 'staging');
-    await link(staging, witness);
+  let snapshot = backup;
+  if (entries.includes(path.basename(backup))) {
+    // A fixed-name backup written directly can already hold a short write. Preserve its
+    // bytes and use a separate name only when the entire fragment matches the predecessor.
+    const info = await lstat(backup);
+    if (privateRecoveryFile(info) && info.nlink === 1 && info.size < kept.bytes.length) {
+      const fragment = await inspectReviewedFile(backup, kept.bytes.length);
+      if (isPartialCopy(fragment.bytes, kept.bytes))
+        snapshot = path.join(directory, '.recovery-' + generationKey + '.complete.bak');
+    }
   }
+  if (!witnessed) {
+    const complete = entries.includes(path.basename(snapshot));
+    const source = complete ? snapshot : path.join(directory, stagingName);
+    await syncRecoveryCopy(source, kept, complete ? 'complete' : 'staging');
+    await link(source, witness);
+  }
+  const identity = await syncRecoveryCopy(witness, kept, 'witnessed');
+  // A recovery started with a randomly named backup can resume from its verifying link.
+  await link(witness, snapshot).catch(allowExisting);
+  if ((await syncRecoveryCopy(snapshot, kept, 'witnessed')) !== identity)
+    throw new Error('The recovery copy no longer matches its verification file.');
+  await syncParentDirectory(snapshot);
+  return snapshot;
 }
 
 /** Only a directory lock held across the missing-name check rules out another live publisher. */
@@ -211,14 +246,12 @@ export async function recoverMetadata(
     validate(kept.bytes);
     const witnessed = pending.includes(name + '.verifying');
     const generation = name.slice(previousPrefix(file).length);
-    const snapshot = file + '.recovery-' + generation + '.bak';
-    if (!witnessed) await prepareRecoveryWitness(snapshot, witness, kept);
-    const identity = await syncRecoveryCopy(witness, kept, 'witnessed');
-    // A recovery started with a randomly named backup can resume from its verifying link.
-    await link(witness, snapshot).catch(allowExisting);
-    if ((await syncRecoveryCopy(snapshot, kept, 'witnessed')) !== identity)
-      throw new Error('The recovery copy no longer matches its verification file.');
-    await syncParentDirectory(snapshot);
+    const snapshot = await recoverySnapshot(
+      file + '.recovery-' + generation + '.bak',
+      witness,
+      kept,
+      witnessed,
+    );
     await verifyReviewedFile(kept.reviewed, limit);
     // Publish the private snapshot. Replacing the predecessor's name after verification
     // cannot substitute different bytes at the current name.
@@ -257,7 +290,7 @@ async function archivePredecessors(file: string, pending: string[], limit: numbe
       // An external writer can replace the source after inspection. Linking leaves that
       // path in place even when a directory or symlink appears in the meantime.
       await link(source, destination);
-      if (!(await isArchived(source, destination, limit, true, reviewed)))
+      if (!(await verifyArchiveEntry(source, destination, limit, true, reviewed)))
         throw interrupted(name);
       await syncParentDirectory(destination);
       await syncParentDirectory(file);
@@ -287,7 +320,8 @@ export async function publishMetadata(
   }
   const changed = () => new Error('Application metadata changed on disk. Reopen it before saving.');
   if ((await inspectReviewedFile(file, limit)).reviewed.sha256 !== expected) throw changed();
-  if (locked) await archivePredecessors(file, await publicationLeftovers(file, limit, locked), limit);
+  if (locked)
+    await archivePredecessors(file, await publicationLeftovers(file, limit, locked), limit);
   const previous = path.join(path.dirname(file), previousPrefix(file) + randomUUID());
   // Exercise exclusive linking on this volume and reserve our own recovery name before
   // displacing anything. A backend that cannot link leaves the current document in place.

@@ -60,33 +60,41 @@ function visibility() {
     );
   }
 
-  function visibleText(node: Text, boxes?: DOMRect[], clip = clipAt(node.parentElement)): string {
+  function visibleRanges(node: Text, boxes?: DOMRect[], clip = clipAt(node.parentElement)) {
+    const spans: { start: number; end: number }[] = [];
     const range = document.createRange();
-    function read(start: number, end: number, rects?: DOMRect[]): string {
+    function read(start: number, end: number, rects?: DOMRect[]) {
       if (!rects) {
         range.setStart(node, start);
         range.setEnd(node, end);
         rects = [...range.getClientRects()];
       }
-      if (!rects.some((rect) => intersects(rect, clip))) return '';
+      if (!rects.some((rect) => intersects(rect, clip))) return;
       // Most labels fit. Subdivide only ranges with hidden lines or a horizontal cut.
       if (
         end - start <= 1 ||
         rects.every(
           (rect) => intersects(rect, clip) && rect.left >= clip.left && rect.right <= clip.right,
         )
-      )
-        return node.data.slice(start, end);
+      ) {
+        // A word can cross a soft wrap, but never a gap in its source characters.
+        const previous = spans.at(-1);
+        if (previous?.end === start) previous.end = end;
+        else spans.push({ start, end });
+        return;
+      }
       const middle = start + Math.floor((end - start) / 2);
-      return read(start, middle) + read(middle, end);
+      read(start, middle);
+      read(middle, end);
     }
-    return read(0, node.length, boxes);
+    read(0, node.length, boxes);
+    return spans;
   }
 
-  function fieldText(field: HTMLInputElement | HTMLTextAreaElement): string {
-    if (field.type === 'password' && field.value) return '';
+  function fieldText(field: HTMLInputElement | HTMLTextAreaElement): string[] {
+    if (field.type === 'password' && field.value) return [];
     const value = field.value || field.placeholder;
-    if (!value) return '';
+    if (!value) return [];
     const multiline = field instanceof HTMLTextAreaElement;
     const style = getComputedStyle(field);
     const textStyle = field.value ? style : getComputedStyle(field, '::placeholder');
@@ -96,7 +104,7 @@ function visibility() {
       textStyle.color === 'transparent' ||
       /^rgba\([^)]*,\s*0\)$/.test(textStyle.color)
     )
-      return '';
+      return [];
     const outer = outerClip(field, style);
     const rect = field.getBoundingClientRect();
     const scaleX = field.offsetWidth ? rect.width / field.offsetWidth : 1;
@@ -112,7 +120,7 @@ function visibility() {
     const right = Math.min(width, (outer.right - x) / scaleX);
     const top = Math.max(0, (outer.top - y) / scaleY);
     const bottom = Math.min(height, (outer.bottom - y) / scaleY);
-    if (right <= left || bottom <= top) return '';
+    if (right <= left || bottom <= top) return [];
 
     if (
       field.value &&
@@ -127,21 +135,20 @@ function visibility() {
         !field.scrollTop &&
         field.scrollHeight <= field.clientHeight
       )
-        return value;
-      // An exact line count means every newline is a row and none of those rows soft-wrap.
-      const lines = value.split('\n');
+        return value.split('\n');
       const lineHeight = px(style.lineHeight);
-      if (
-        multiline &&
-        lineHeight &&
-        Math.abs(lines.length * lineHeight + paddingY - field.scrollHeight) < 1
-      )
-        return lines
-          .slice(
-            Math.max(0, Math.floor((field.scrollTop + top) / lineHeight)),
-            Math.max(0, Math.ceil((field.scrollTop + bottom) / lineHeight)),
-          )
-          .join('\n');
+      if (multiline && lineHeight > 0) {
+        const firstRow = (field.scrollTop + top) / lineHeight;
+        const endRow = (field.scrollTop + bottom) / lineHeight;
+        const lines = value.split('\n');
+        // Only whole, unwrapped rows can be read without measuring their text boxes.
+        if (
+          Number.isInteger(firstRow) &&
+          Number.isInteger(endRow) &&
+          Math.abs(lines.length * lineHeight + paddingY - field.scrollHeight) < 1
+        )
+          return lines.slice(Math.max(0, firstRow), Math.max(0, endRow));
+      }
     }
 
     // Native editors keep their text in a private shadow tree. Lay it out at the same width
@@ -187,43 +194,48 @@ function visibility() {
       const layout = mirror.getBoundingClientRect();
       const originX = layout.left + field.scrollLeft;
       const originY = layout.top + field.scrollTop - (multiline ? 0 : (height - layout.height) / 2);
-      return visibleText(text, undefined, {
+      const spans = visibleRanges(text, undefined, {
         left: originX + left,
         right: originX + right,
         top: originY + top,
         bottom: originY + bottom,
       });
+      return spans.flatMap(({ start, end }) => value.slice(start, end).split('\n'));
     } finally {
       mirror.remove();
     }
   }
 
   function appendText(labels: VisibleLabel[], node: Text, boxes: DOMRect[]) {
-    const text = visibleText(node, boxes);
+    const spans = visibleRanges(node, boxes);
     let element = node.parentElement;
-    if (!element || !text) return;
+    if (!element || !spans.length) return;
     while (element.parentElement && !element.matches('button, label, summary, [role], a[href]')) {
       const display = getComputedStyle(element).display;
       if (!display.startsWith('inline') && display !== 'contents') break;
       element = element.parentElement;
     }
-    const previous = labels.at(-1);
-    const previousBox = previous?.lastBox;
     const box = boxes[0]!;
-    const sameLine = previousBox && box.bottom > previousBox.top && box.top < previousBox.bottom;
     const controls =
       'button, label, summary, a[href], [role="button"], [role="tab"], [role="option"], [role^="menuitem"]';
     const control = element.closest(controls);
-    const sharedControl = sameLine && control && previous?.element.closest(controls) === control;
-    if (previous && (previous.lastBlock === element || sharedControl)) {
-      const gap =
-        sameLine && Math.max(previousBox.left - box.right, box.left - previousBox.right) > 1;
-      if (sharedControl) previous.element = control;
-      previous.text += (gap ? ' ' : '') + text;
-      previous.lastBox = boxes.at(-1);
-      previous.lastBlock = element;
-    } else {
-      labels.push({ element, text, lastBox: boxes.at(-1), lastBlock: element });
+    for (const { start, end } of spans) {
+      const text = node.data.slice(start, end);
+      const previous = start === 0 ? labels.at(-1) : undefined;
+      const previousBox = previous?.lastBox;
+      const lastBox = end === node.length ? boxes.at(-1) : undefined;
+      const sameLine = previousBox && box.bottom > previousBox.top && box.top < previousBox.bottom;
+      const sharedControl = sameLine && control && previous?.element.closest(controls) === control;
+      if (previous && previousBox && (previous.lastBlock === element || sharedControl)) {
+        const gap =
+          sameLine && Math.max(previousBox.left - box.right, box.left - previousBox.right) > 1;
+        if (sharedControl) previous.element = control;
+        previous.text += (gap ? ' ' : '') + text;
+        previous.lastBox = lastBox;
+        previous.lastBlock = element;
+      } else {
+        labels.push({ element, text, lastBox, lastBlock: element });
+      }
     }
   }
 

@@ -3,6 +3,7 @@ import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
 import { parseAllDocuments } from 'yaml';
 import { xmlPlistValue } from './plist';
 import { parseXML, type XMLNode } from './xml';
+import { knownPreviewProblem } from '../reader-problem';
 import { errorMessage } from '../../errors';
 import { plural } from '../../plural';
 
@@ -135,15 +136,14 @@ export function inspectStructured(
     if (pending.length) result.limited = true;
   } catch (error) {
     const message = errorMessage(error);
-    if (
-      [
-        'Files over 1 MB show as text only.',
-        'Files with over 100 YAML documents show as text only.',
-        'XML this large shows as text only.',
-        'XML declarations and external entities are not supported.',
-      ].includes(message)
-    ) {
-      result.error = message;
+    const reason = knownPreviewProblem(error, [
+      'Files over 1 MB show as text only.',
+      'Files with over 100 YAML documents show as text only.',
+      'XML this large shows as text only.',
+    ]);
+    if (reason) {
+      result.error = reason;
+      if (reason !== message) result.diagnostic = message;
     } else {
       const location =
         /\bline (\d+),? column (\d+)\b/i.exec(message) ?? /\bat (\d+):(\d+)\b/.exec(message);

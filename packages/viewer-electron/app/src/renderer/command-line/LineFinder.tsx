@@ -67,7 +67,7 @@ function helpRows(topic: string): Row[] {
         : []),
       ...Object.entries(verb.flags ?? {}).map(([flag, kind]) => ({
         id: `help:flag:${flag}`,
-        label: `-${flag}${kind === 'value' ? ' {value}' : ''}`,
+        label: kind === 'switch' ? `-${flag}` : `-${flag} {${kind}}`,
         detail: 'Flag',
         icon: 'info' as const,
         insert: `${name} -${flag} `,

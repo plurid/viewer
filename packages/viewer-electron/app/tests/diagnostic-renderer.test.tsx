@@ -30,11 +30,14 @@ it.each([
     function BrokenView(): never {
       throw error;
     }
-    render(
+    const view = render(
       <ErrorBoundary>
         <BrokenView />
       </ErrorBoundary>,
     );
+    if (code === 'ENOENT')
+      expect(view.getByText('The file has moved or is no longer available.')).toBeTruthy();
+    expect(view.queryByText('Private render document')).toBeNull();
     expect(diagnosticReport).toHaveBeenCalledOnce();
     const captured = diagnosticReport.mock.calls[0]![0];
     expect(captured).toMatchObject({

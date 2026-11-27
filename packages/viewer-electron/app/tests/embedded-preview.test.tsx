@@ -211,7 +211,7 @@ it('says a damaged document could not be read', async () => {
   services.read.mockResolvedValue({ text: '', binary: true, truncated: false });
   render(<EmbeddedPreview {...context} />);
   await screen.findByText("Can't read this document");
-  expect(screen.getByText("Viewer couldn't read the preview stored in this file.")).toBeTruthy();
+  expect(screen.getByText('The archive is damaged or incomplete.')).toBeTruthy();
   expect(screen.queryByText('ZIP directory was not found.')).toBeNull();
   expect(screen.getByText(/Open .*Broken\.pages in its app/)).toBeTruthy();
 });

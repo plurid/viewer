@@ -61,6 +61,7 @@ and they do not reopen after quitting.
 
 Selecting an `.html`, `.htm` or `.xhtml` file shows **Preview** and **Source** tabs and **Reload**,
 which reads the saved file and its local files again. Editing the source uses the ordinary editor.
+For HTML inside an archive or comparison, choose **View Source** to read the page.
 
 | Rule          | Behavior                                                                                                     |
 | ------------- | ------------------------------------------------------------------------------------------------------------ |
