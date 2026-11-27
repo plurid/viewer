@@ -6,29 +6,26 @@ directions, not a release schedule.
 
 ## Now
 
-Fix waves 1 to 3 are complete across agents and actions, operations and the Trash engine, previews,
-windows and saved state, files and native helpers, models and speech, settings and commands, the
-CLI, license, updates and build, and persistence. No finding of the highest severity is open. Work
-continues through the remaining review waves and release close; open problems live in
-[Review findings](../development/findings.md):
+The review's fix waves are over. They closed every finding of the highest severity and most of the
+next, across agents and actions, operations and the Trash engine, previews, windows and saved state,
+files and native helpers, models and speech, settings and commands, the CLI, license, updates and
+build, persistence, the explorer and workspaces, and canvases, Git and runtimes. What remains is
+listed in [Review findings](../development/findings.md) and is fixed when a person meets it or when
+it blocks a release. The layout, fabrication and media items are the largest group left.
 
-1. **Packaged screen review and polish pass.** Build a packaged app, run every
-   [review scene](../development/review.md) across wide, narrow, light and dark views, inspect every
-   changed screen by eye and fix what the captures show.
-2. **Fix waves 4 and 5: browsing, workspaces, runtimes, tools and interface polish.** Resolve open
-   items in explorer, workspaces and the space, canvases, Git and runtimes, layout, fabrication and
-   media, the Trash and operations screens, and interface controls and developer tools. Include the
-   interface audit improvements: dragging to reorder PDF Tools pages, tour times with their unit,
-   readable megapixel choices, hiding the update row in Store builds, turning off the Git column
-   option while Git is off, one place for Tree and Source in the structured tree header, and
-   disabled menu-button rows ([Review findings](../development/findings.md)).
-3. **Fix wave 6: documentation and remaining review checks.** Close the remaining documentation
-   findings, clear fixed items from [Review findings](../development/findings.md) and finish the two
-   tool reviews and three documentation checks left from the review.
-4. **Close and qualify the build.** Rerun the hidden-window native scenarios and `electron-smoke`,
-   qualify a signed Mac App Store build with dictation (the Store entitlement and sandboxed helper
-   are written and unit-tested, not yet run signed) and deliver the packaged build to the owner
-   ([Testing](../development/testing.md), [Release gates](../development/releases.md)).
+1. **Keep every push green.** The source checks on GitHub run types, lint, formatting and the whole
+   suite; a red run is fixed before anything else.
+2. **Use the packaged build.** Each build is run through every
+   [review scene](../development/review.md) and its changed screens are looked at before it is
+   handed over; what the owner meets in daily use goes to the findings page or is fixed at once.
+3. **Qualify what only a real run can.** The hidden-window native scenarios and `electron-smoke`,
+   and a signed Mac App Store build with dictation (the Store entitlement and sandboxed helper are
+   written and unit-tested, not yet run signed) ([Testing](../development/testing.md),
+   [Release gates](../development/releases.md)).
+4. **The improvements left from the interface audit**, when there is room: dragging to reorder PDF
+   Tools pages, tour times with their unit, readable megapixel choices, hiding the update row in
+   Store builds, turning off the Git column option while Git is off, one place for Tree and Source
+   in the structured tree header, and disabled menu-button rows.
 
 ## Next
 

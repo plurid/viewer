@@ -14,7 +14,7 @@ How to read an item:
 - Findings about security, an agent acting beyond its grant, or losing files are kept out of this
   page until they are fixed.
 
-Open here: 180 (S1 0, S2 55, S3 125); 52 confirmed.
+Open here: 128 (S1 0, S2 28, S3 100); 26 confirmed.
 
 ## Decisions the owner made
 
@@ -24,20 +24,28 @@ Open here: 180 (S1 0, S2 55, S3 125); 52 confirmed.
 - **What an agent may read from the configuration.** Decision: configuration reads show only paths
   inside the agent's granted folders. Done.
 
-## What is being fixed, and in what order
+## How the open items are handled
 
-Fixes run in waves. Each item gets a test that fails first, an independent review of the fix, and a
-check of the whole app before the wave is committed. Done: agents and actions, operations and the
-Trash engine, previews, windows and saved state, files and native helpers, models and speech,
-settings and commands, the CLI with license, updates and the build, and persistence.
+The fix waves ended on 27 November 2026. They closed every finding of the highest severity and most
+of the next: agents and actions, operations and the Trash engine, previews, windows and saved state,
+files and native helpers, models and speech, settings and commands, the CLI with license, updates
+and the build, persistence, the explorer and workspaces, canvases, Git and runtimes. Each fix has a
+test, and the whole suite runs on every push.
 
-1. A packaged build looked at screen by screen with `pnpm review`, and a polish pass.
-2. Browsing, workspaces and the space; canvases, Git, terminals and remote planes; layout,
-   fabrication and media; the Trash and operations screens; interface controls and developer tools;
-   the improvements from the interface audit.
-3. The remaining documentation items.
+What is listed below stays open on purpose. An item is fixed when a person meets it or when it
+blocks a release; a new problem is added here first. Layout, fabrication and media hold the largest
+group, because their wave was not finished.
 
-See the [roadmap](../research/roadmap.md) for features after these fixes.
+Open decisions for the owner:
+
+- **The search field in menus.** DESIGN.md gives long lists a field reading "Search" and gives menus
+  of 8 or fewer choices none; an older checklist asks for "Search speech language…".
+- **The Trash address.** `viewer://trash` now opens the Trash from Go to Folder, the command line
+  and the terminal, and the reference says so. It can stay documented or become internal.
+- **The file index.** It is now compacted and its stored text is bounded per file. Showing its size
+  in Settings, or giving it an overall budget, is not built.
+
+See the [roadmap](../research/roadmap.md) for what comes next.
 
 ## Files, operations and the Trash
 
@@ -84,126 +92,17 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
 
 ## Browsing and search
 
-- **S2** CollectionExplorer selection is O(N^2) and Check Files Again stats 10,000 items serially.
-  `src/renderer/explorer/CollectionExplorer.tsx:135-140` Confirmed.
-- **S2** Editing a search plane query keeps invisible prior selections active for file actions.
-  `src/renderer/explorer/SearchExplorer.tsx:45-47` Confirmed.
-- **S2** Incomplete query with Subfolders on pops error notice and claims 1 item not readable.
-  `src/renderer/explorer/useSearch.ts:17-18` Confirmed.
-- **S2** Live scan mismatches small keys and folder symlinks and hides Spotlight tag errors.
-  `src/desktop/search/search.ts:160-180` Confirmed.
-- **S2** One unreadable entry (such as ~/.Trash) stops deleted files leaving the search index.
-  `src/desktop/search/index-core.ts:723-753` Confirmed.
-- **S2** search_files drops scanLimited and root coverage so agents misread partial results.
-  `src/desktop/agents/agent-broker.ts:1091-1100` Confirmed.
 - **S2** Viewer's file index grows without a stated bound: 4.9 GB on the owner's Mac.
   `src/desktop/files/file-services.ts:91`
-- **S2** z jump suggestions stay empty and checking forever if an unknown rank precedes ten known.
-  `src/renderer/explorer/useFolderSuggestions.ts:53-62` Confirmed.
 - **S3** A long name in Grid view breaks its first line inside a word, and one name shows a space
   after the ellipsis.
-- **S3** aria-activedescendant points to nonexistent IDs in Grid, Gallery, and Map views.
-  `src/renderer/explorer/FolderExplorer.tsx:577`
-- **S3** CollectionExplorer double-click ignores nativeOpening and blank space fails to clear.
-  `src/renderer/explorer/CollectionExplorer.tsx:202`
 - **S3** First-run tips ignore the Own Keys rule and show stolen default shortcuts.
   `src/renderer/explorer/FolderInsights.tsx:101-108`
-- **S3** MapView retains a stale creating promise if unmounted before the new lens arrives.
-  `src/renderer/explorer/map/MapView.tsx:63`
-- **S3** Select by Pattern globs use backtracking JS RegExp with no length cap, bypassing RE2.
-  `src/domain/search/query.ts:527-550`
 
 ## Workspaces and the space
 
-- **S2** Choosing a non-folder plane from Overview or minimap drops keyboard focus.
-  `src/renderer/workspace/WorkspaceSurface.tsx:488-495` Confirmed.
-- **S2** Creating a project fails on external collections and binds terminal parents.
-  `src/renderer/workspace/projects.tsx:160-198` Confirmed.
-- **S2** Editing or opening evidence in a project or tour file runs it instead of opening it.
-  `src/renderer/workspace/controller.ts:772-785` Confirmed.
-- **S2** Hidden or plain definition hides a second definition sharing the same root from offers.
-  `src/domain/workspaces/ownership.ts:12-41` Confirmed.
-- **S2** Missing terminal subfolder reports “This terminal changed in the definition.”.
-  `src/desktop/workspaces/definition-commands.ts:105-112` Confirmed.
-- **S2** Saving a project arrangement with any non-portable plane open silently drops it.
-  `src/renderer/workspace/projects.tsx:500-515` Confirmed.
-- **S2** Started deferred terminals revert to Start Terminal after culling or workspace switch.
-  `src/renderer/workspace/WorkspaceSurface.tsx:330-358` Confirmed.
-- **S3** Agent open-path on a project or tour file reports success before reading it.
-  `src/renderer/workspace/agent-navigation.ts:80-89`
 - **S3** Closing a folder-only workspace can leave Manage Workspaces closed after the replacement
   workspace is saved.
-- **S3** Explicit collision with an opened found key breaks fresh opens on unreadable memory.
-  `src/desktop/workspaces/defined-workspaces.ts:221-251`
-- **S3** Long file or tour names in TourStops footer buttons overflow the 380 px panel.
-  `src/renderer/workspace/tours/TourStops.tsx:71-78`
-- **S3** Manage Defined tab and DefinitionDialog match links by key alone, ignoring found source.
-  `src/renderer/ui/workspace/WorkspacesDialog.tsx:530`
-- **S3** Manage Workspaces Defined search input does not fill its row and ignores Enter.
-  `src/renderer/ui/workspace/WorkspacesDialog.tsx:502-526`
-- **S3** Minimap and Overview label non-file planes by folder name and root / as folder.
-  `src/renderer/workspace/WorkspaceSurface.tsx:477-487`
-- **S3** Rekeying a found key named like Object.prototype breaks all definition commands.
-  `src/desktop/workspaces/defined-workspaces.ts:227`
-- **S3** ViewsDialog Escape closes the whole dialog during rename and row buttons omit view names.
-  `src/renderer/ui/workspace/ViewsDialog.tsx:30-72`
-
-## Canvases
-
-- **S2** Disabling a tool does not stop a running model turn and allows later model writes.
-  `src/desktop/bridge.ts:2631-2643` Confirmed.
-- **S2** Invalid canvas action definitions and outputs hide validation details from the agent.
-  `src/renderer/canvases/CanvasPlane.tsx:171-176` Confirmed.
-- **S2** Stopping a canvas while an action runs leaves the canvas body permanently inert.
-  `src/renderer/canvases/CanvasPlane.tsx:41` Confirmed.
-- **S3** Mounting scripts still match the old Open saved file button label.
-  `tools/mounting/qualify.ts:174`
-- **S3** One unreadable file in reconstruction-jobs blocks listing and resuming paid jobs.
-  `src/desktop/canvases/reconstruction.ts:183-200`
-- **S3** Photo to 3D shows raw states including UK cancelled and blank empty choice buttons.
-  `src/renderer/canvases/ReconstructionPanel.tsx:108-126`
-
-## Git and task areas
-
-- **S2** Comparing SVG, TIFF or ICO files fails with "Images too large to compare".
-  `src/renderer/diff/useComparisonSession.ts:122` Confirmed.
-- **S2** Create Worktree and New Task from Branch clip their footer off-screen with no scroll.
-  `src/renderer/git/worktrees/worktrees.css:6` Confirmed.
-- **S2** New Task from Branch auto-starts terminal and Git changes instead of waiting.
-  `src/renderer/tasks/controller.ts:134` Confirmed.
-- **S2** New Task from Branch hides creationProblem, flashes list view and creates untitled tasks.
-  `src/renderer/git/worktrees/WorktreesDialog.tsx:51` Confirmed.
-- **S2** Repo-wide Git actions fail when folder selection changes or exceeds 1,000 paths.
-  `src/desktop/comparison/git-actions.ts:453` Confirmed.
-- **S3** Find Duplicates prints "0 items couldn't be read" on scan cap and leaks stale results.
-  `src/renderer/ui/comparison/Duplicates.tsx:140`
-- **S3** Git Changes "Against base" fails completely when any file has a merge conflict.
-  `src/desktop/comparison/review.ts:324`
-- **S3** Git hunk review blocks text files whose path or blob hash contains 120000 or 160000.
-  `src/desktop/comparison/review.ts:433`
-- **S3** Task overview, worktree dialogs and Git commands show raw paths instead of PathLabel.
-  `src/renderer/tasks/TaskPlane.tsx:333`
-
-## Terminals, servers and remote planes
-
-- **S2** Linked browser plane misses stopped-server banner and Start Server fails after restart.
-  `src/renderer/browser/BrowserPlane.tsx:46-49` Confirmed.
-- **S2** Makefile targets below blank comment lines are omitted from declared commands.
-  `src/domain/terminals/declared-commands.ts:166-176` Confirmed.
-- **S2** Ninth browser plane replaces limit error with closed error and breaks Try Again.
-  `src/renderer/browser/BrowserPlane.tsx:51-54` Confirmed.
-- **S2** Open in tmux drops default profile environment and fails if unused shell is missing.
-  `src/desktop/terminals/terminal-launch.ts:116-120` Confirmed.
-- **S3** AskpassRelay caches failed socket setup forever and drops server error listener.
-  `src/desktop/remote/askpass.ts:88-115`
-- **S3** Browser plane never reattaches CDP debugger after renderer crash or hung reload.
-  `src/desktop/browser/browser-planes.ts:252-261`
-- **S3** Definition command approval mounts blank terminal instead of waiting state.
-  `src/renderer/terminals/definition-command-session.ts:285-337`
-- **S3** Failed terminal start caches rejection and quiesce cancel marks dead session started.
-  `src/renderer/terminals/TerminalPlane.tsx:71-92`
-- **S3** Missing custom terminal app path throws raw ENOENT instead of Settings guidance.
-  `src/desktop/terminals/terminal-launch.ts:188-198`
 
 ## Layout and fabrication
 
@@ -282,12 +181,8 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
 
 ## Previews
 
-- **S2** A preview resource whose private access was withdrawn answers 500 instead of 404, and its
-  test fails. `src/desktop/previews/resources.ts`
 - **S2** A supplied preview resource still has no Try Again action after a transient read failure.
   `src/renderer/previews/PreviewHost.tsx:544`
-- **S3** A typed worker refusal resolves as a successful undefined result when its diagnostic text
-  is empty. `src/renderer/previews/worker-client.ts:20`
 - **S3** The grant card drops the file provider’s instruction to refresh the folder when a file
   moves during coordination. `src/renderer/previews/useResource.ts:62`
 - **S3** The registry table can pass when a registered sentence is dropped by the action that
