@@ -14,7 +14,7 @@ How to read an item:
 - Findings about security, an agent acting beyond its grant, or losing files are kept out of this
   page until they are fixed.
 
-Open here: 128 (S1 0, S2 28, S3 100); 26 confirmed.
+Open here: 132 (S1 0, S2 28, S3 104); 26 confirmed.
 
 ## Decisions the owner made
 
@@ -85,6 +85,11 @@ See the [roadmap](../research/roadmap.md) for what comes next.
 - **S3** A profile copied while a private store's recovery is interrupted can stay unreadable.
   `src/desktop/persistence/metadata-publication.ts:172`
 
+## CLI, updates, license and the build
+
+- **S3** The three GitHub workflows install pnpm 11.3.0 while package.json pins pnpm 12.23.0.
+  `.github/workflows/source-checks.yml:36`
+
 ## Commands and the palette
 
 - **S3** Command-line completion reads a path with ~ or a space from the wrong folder.
@@ -96,6 +101,8 @@ See the [roadmap](../research/roadmap.md) for what comes next.
   `src/desktop/files/file-services.ts:91`
 - **S3** A long name in Grid view breaks its first line inside a word, and one name shows a space
   after the ellipsis.
+- **S3** A search plane opened from Find File keeps its first query as its title after the query is
+  changed. `src/domain/workspaces/planes.ts:59`
 - **S3** First-run tips ignore the Own Keys rule and show stolen default shortcuts.
   `src/renderer/explorer/FolderInsights.tsx:101-108`
 
@@ -103,6 +110,10 @@ See the [roadmap](../research/roadmap.md) for what comes next.
 
 - **S3** Closing a folder-only workspace can leave Manage Workspaces closed after the replacement
   workspace is saved.
+
+## Git and task areas
+
+- **S3** The branch task form shows the new folder as a full home path.
 
 ## Layout and fabrication
 
@@ -232,6 +243,8 @@ See the [roadmap](../research/roadmap.md) for what comes next.
   `tools/review/page.ts:81-101`
 - **S3** Review sheet blocks keyboard zoom, hides mark state and leaves empty headings on filter.
   `tools/review/sheet-script.ts:189-220`
+- **S3** Scenes added in wave 4 were written without a run and several of their checks misfire.
+  `tools/review/scenes/wave4-explorer.ts`
 - **S3** The review run cannot show the Trash's rows: its sample Trash 'could not be verified'.
 - **S3** Wildcard covers.commands entries never match runtime command IDs in coverage.
   `tools/review/coverage.ts:189-193`
