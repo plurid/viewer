@@ -1,4 +1,4 @@
-import { boundedDiagnosticInput, DiagnosticLicenseKey } from '../../domain/diagnostics/license-key';
+import { boundedDiagnosticInput } from '../../domain/diagnostics/license-key';
 import { StringDecoder } from 'node:string_decoder';
 import { WorkerRecordBoundary } from './worker-record';
 import { boundedText } from '../../domain/diagnostics/text';
@@ -70,19 +70,10 @@ export function recordConsoleErrors(
 export class WorkerOutput {
   private decoder = new StringDecoder('utf8');
   private partial = '';
+  private afterCR = false;
   private overlong = false;
   private skipped = 0;
-  private line = 0;
-  private omitLicenseLine = false;
-  private pending: { line: number; detail: string; source: string }[] = [];
-  private license = new DiagnosticLicenseKey((start, markerEnd, last) => {
-    if (start === last) return;
-    for (const row of this.pending) {
-      if (row.line >= markerEnd && row.line <= last) row.detail = '[Worker continuation omitted]';
-    }
-    this.omitLicenseLine ||= this.line === last;
-  });
-  private boundary = new WorkerRecordBoundary((ch) => this.license.scan(ch, this.line));
+  private boundary = new WorkerRecordBoundary();
 
   constructor(
     private name: string,
@@ -92,44 +83,32 @@ export class WorkerOutput {
 
   write(chunk: Buffer | string): void {
     const text = typeof chunk === 'string' ? this.decoder.end() + chunk : this.decoder.write(chunk);
-    let start = 0;
+    if (!text) return;
+    const breaks = /\r\n?|\n/g;
+    let start = this.afterCR && text.startsWith('\n') ? 1 : 0;
+    this.afterCR = text.endsWith('\r');
+    breaks.lastIndex = start;
     while (start < text.length) {
-      const newline = text.indexOf('\n', start);
-      const end = newline < 0 ? text.length : newline;
+      const newline = breaks.exec(text);
+      const end = newline?.index ?? text.length;
       if (this.partial.length + end - start > 2000) this.overlong = true;
       const part = text.slice(start, end);
       this.boundary.scan(part);
       if (!this.overlong) this.partial += part;
-      if (newline < 0) {
-        if (this.pending.length) this.flush(this.license.pendingLine());
-        return;
-      }
+      if (!newline) return;
       this.recordLine();
-      this.flush(this.license.pendingLine());
-      this.line++;
-      this.omitLicenseLine = false;
       this.partial = '';
       this.overlong = false;
-      start = end + 1;
+      start = breaks.lastIndex;
     }
   }
 
   end(): void {
     this.write(this.decoder.end() + '\n');
-    this.license.finish();
-    this.flush();
-  }
-
-  private flush(pendingLine = Infinity): void {
-    while (this.pending.length && this.pending[0]!.line < pendingLine) {
-      const row = this.pending.shift()!;
-      this.record(row.detail, row.source);
-    }
   }
 
   private recordLine(): void {
     const disposition = this.boundary.finishLine();
-    const raw = this.partial.replace(/\r$/, '');
     if (!this.overlong && disposition === 'empty') return;
     if (!this.budget.take('worker:' + this.name)) {
       this.skipped++;
@@ -141,10 +120,10 @@ export class WorkerOutput {
     this.skipped = 0;
     const detail = this.overlong
       ? '[Long worker line omitted]'
-      : disposition === 'omit' || this.omitLicenseLine
+      : disposition === 'omit'
         ? '[Worker continuation omitted]'
-        : raw;
-    this.pending.push({ line: this.line, detail, source: this.name + omitted });
+        : this.partial;
+    this.record(detail, this.name + omitted);
   }
 }
 

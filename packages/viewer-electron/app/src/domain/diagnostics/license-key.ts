@@ -8,7 +8,7 @@ import {
   licenseSignatureLength,
 } from '../license/license';
 
-const alphabet = /^[A-Za-z0-9_-]$/;
+const signature = /^[A-Za-z0-9_-]{85}[AQgw]$/;
 
 function issuerPayload(encoded: string): boolean {
   try {
@@ -42,7 +42,7 @@ function jsonTokenSuffix(text: string, error: ParseError): string | undefined {
   }
 }
 
-/** Only defer a physical line while the decoded bytes can still be a license JSON object. */
+/** A partial issuer payload can be recognized before its final JSON bytes arrive. */
 function possiblePayload(encoded: string): boolean {
   if (!encoded) return true;
   // The first sextet must allow a JSON space, an opening brace or a UTF-8 BOM.
@@ -70,114 +70,61 @@ function possiblePayload(encoded: string): boolean {
   return remaining.every((error) => error.offset === completed.length);
 }
 
-interface KeyCandidate {
-  start: number;
-  markerEnd: number;
-  size: number;
-  payload: string;
-  checkedLength: number;
-  signature?: string;
-  last: number;
+type Candidate = 'complete' | 'partial';
+
+function candidate(body: string): Candidate | undefined {
+  if (body.length > licenseLimits.key) return;
+  const dot = body.indexOf('.');
+  if (dot < 0) return possiblePayload(body) ? 'partial' : undefined;
+  if (!issuerPayload(body.slice(0, dot))) return;
+  const tail = body.slice(dot + 1);
+  if (signature.test(tail)) return 'complete';
+  if (tail.length < licenseSignatureLength && /^[A-Za-z0-9_-]*$/.test(tail)) return 'partial';
 }
 
-/** Positions are character offsets for text and physical line numbers for worker stderr. */
-export class DiagnosticLicenseKey {
-  private prefix = 0;
-  private prefixStart = 0;
-  private prefixSize = 0;
-  private candidate?: KeyCandidate;
-
-  constructor(private matched: (start: number, markerEnd: number, last: number) => void) {}
-
-  pendingLine(): number | undefined {
-    const candidate = this.candidate;
+/** A physical record supplies all of the evidence for each match. */
+export function scanLicenseRecord(line: string, mask: (start: number, end: number) => void): void {
+  const atom = /^[ \t"'“‘]*([A-Za-z0-9_.-]+)[ \t"'”’]*$/.exec(line)?.[1];
+  if (atom && !atom.startsWith(licenseKeyMarker)) {
+    const dot = atom.lastIndexOf('.');
     if (
-      candidate &&
-      candidate.signature === undefined &&
-      candidate.checkedLength !== candidate.payload.length
+      signature.test(atom.slice(dot + 1)) ||
+      issuerPayload(dot === atom.length - 1 ? atom.slice(0, dot) : atom)
     ) {
-      candidate.checkedLength = candidate.payload.length;
-      if (!possiblePayload(candidate.payload)) this.candidate = undefined;
-    }
-    return this.candidate?.markerEnd;
-  }
-
-  scan(ch: string, position: number): void {
-    const wrapping = /\s/.test(ch);
-    if (this.candidate) this.scanBody(this.candidate, ch, position, wrapping);
-
-    if (this.prefix && ++this.prefixSize > licenseLimits.key) this.prefix = 0;
-    if (wrapping) return;
-    if (this.prefix && ch === licenseKeyMarker[this.prefix]) {
-      if (++this.prefix === licenseKeyMarker.length) {
-        this.candidate = {
-          start: this.prefixStart,
-          markerEnd: position,
-          size: this.prefixSize,
-          payload: '',
-          checkedLength: 0,
-          last: position,
-        };
-        this.prefix = 0;
-      }
-    } else {
-      this.prefix = ch === licenseKeyMarker[0] ? 1 : 0;
-      this.prefixStart = position;
-      this.prefixSize = 1;
-    }
-  }
-
-  private scanBody(candidate: KeyCandidate, ch: string, position: number, wrapping: boolean): void {
-    if (candidate.signature?.length === licenseSignatureLength) {
-      if (alphabet.test(ch)) this.candidate = undefined;
-      else this.finish();
+      const at = line.indexOf(atom);
+      mask(at, at + atom.length);
       return;
     }
-    if (++candidate.size > licenseLimits.key) {
-      this.candidate = undefined;
-      return;
-    }
-    if (wrapping) return;
-    if (alphabet.test(ch)) {
-      if (candidate.signature !== undefined) {
-        candidate.signature += ch;
-        candidate.last = position;
-      } else candidate.payload += ch;
-    } else if (ch === '.' && candidate.signature === undefined && issuerPayload(candidate.payload))
-      candidate.signature = '';
-    else this.candidate = undefined;
   }
-
-  finish(): void {
-    const candidate = this.candidate;
-    // A canonical 64-byte Ed25519 signature has four possible final base64url characters.
-    if (
-      candidate?.signature?.length === licenseSignatureLength &&
-      /[AQgw]$/.test(candidate.signature)
-    )
-      this.matched(candidate.start, candidate.markerEnd, candidate.last);
-    this.candidate = undefined;
+  const compact = line.replace(/[ \t]/g, '');
+  if (!compact.includes(licenseKeyMarker)) return;
+  const positions: number[] = [];
+  for (let index = 0; index < line.length; index++)
+    if (!/[ \t]/.test(line[index]!)) positions.push(index);
+  const tokens = /viewer-license-1\.([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]{0,86})?)/g;
+  for (const match of compact.matchAll(tokens)) {
+    const end = positions[match.index + match[0].length - 1]! + 1;
+    if (/[A-Za-z0-9_-]/.test(line[end] ?? '')) continue;
+    const kind = candidate(match[1]!);
+    if (kind === 'complete' || (kind === 'partial' && /^[ \t"'”’]*$/.test(line.slice(end))))
+      mask(positions[match.index]!, end);
   }
 }
 
-/** Before IPC or display truncates a message, keep a complete key from becoming a visible fragment. */
+/** Before IPC or display truncates a message, keep a key from becoming a visible fragment. */
 export function boundedDiagnosticInput(input: string): string {
   const head = boundedText(input);
   if (input.length <= diagnosticTextLimit) return head;
-  const visibleHead = withoutTerminalSequences(head);
-  const cut = visibleHead.length;
+  const visible = withoutTerminalSequences(head);
   const sample = withoutTerminalSequences(
     boundedText(input, diagnosticTextLimit + licenseLimits.key + 1),
   );
   let result = head;
-  const scanner = new DiagnosticLicenseKey((start, _markerEnd, last) => {
-    if (start < cut && last >= cut)
-      result = boundedText(visibleHead.slice(0, start) + '[redacted]');
-  });
-  for (let index = Math.max(0, cut - licenseLimits.key); index < sample.length; index++) {
-    const ch = sample[index]!;
-    if (!/\p{Cf}/u.test(ch)) scanner.scan(/\p{Cc}/u.test(ch) ? ' ' : ch, index);
+  for (const line of sample.matchAll(/[^\r\n]+/g)) {
+    scanLicenseRecord(line[0], (start, end) => {
+      if (line.index + start < visible.length && line.index + end >= visible.length)
+        result = boundedText(visible.slice(0, line.index + start) + '[redacted]');
+    });
   }
-  scanner.finish();
   return result;
 }

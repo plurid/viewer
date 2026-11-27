@@ -167,11 +167,11 @@ it.each(['thread', 'process'] as const)(
     const environment =
       'exec /usr/bin/env DB_PASSWORD=' + shellQuote("SAMPLE_NINE's\nSAMPLE_TEN\\") + " 'viewer'";
     const chunks = [
-      'first warning\n{"db_password":\r\n   "SAMPLE_ONE"}\n',
+      'first warning\n{"db_password":"start\r\n   SAMPLE_ONE"}\n',
       '{"client_se',
-      'cret"\n : \n [\n {"value":"SAMPLE_TWO"}\n ]}\n',
-      '"password":\n',
-      '   "SAMP',
+      'cret" : [{"value":"start\nSAMPLE_TWO"}]}\n',
+      '"password":"start\n',
+      '   SAMP',
       'LE_THREE"\n',
       'DB_PASSWORD=' + 'x'.repeat(2300),
       'SAMPLE_FOUR',

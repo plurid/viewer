@@ -3,12 +3,15 @@ import {
   closingQuotes,
   CredentialField,
   isCredentialLabel,
+  isCredentialOption,
+  privateKeyHeader,
+  pemLineLimit,
   unclosedLabelQuote,
 } from '../../domain/diagnostics/secrets';
 
 type LineDisposition = 'empty' | 'record' | 'omit';
 type ValuePosition = 'outside' | 'field-name' | 'before' | 'inside';
-type QueryPosition = 'outside' | 'fragment' | 'name' | 'query' | 'value' | 'private-value';
+type QueryPosition = 'outside' | 'fragment' | 'query';
 type TerminalSequence = 'escape' | 'intermediate' | 'csi' | 'string' | 'string-escape';
 
 /** Retain the beginning of a quoted option and the normalized suffix used by the classifier. */
@@ -23,8 +26,9 @@ function appendLabel(label: string, ch: string): string {
 export class WorkerRecordBoundary {
   private label = '';
   private field?: CredentialField;
-  private keyBlock = false;
-  private markerTail = '';
+  private pemFooter = '';
+  private pemRemaining = 0;
+  private marker: string | undefined = '';
   private value: ValuePosition = 'outside';
   private quote = '';
   private nextOption?: string;
@@ -33,22 +37,16 @@ export class WorkerRecordBoundary {
   private terminal?: TerminalSequence;
 
   private member?: 'colon' | 'value';
-  private awaitingMemberLine = false;
-  private scalarLine?: string;
+  private memberField = false;
+  private memberBoundary = true;
   private memberName?: string;
   private json?: WorkerJsonValue;
   private hasText = false;
 
   private colorParameters = '';
-  private trailingCR = false;
   private query: QueryPosition = 'outside';
 
-  constructor(private scanLicense: (ch: string) => void) {}
-
   scan(text: string): void {
-    if (this.trailingCR) text = '\r' + text;
-    this.trailingCR = text.endsWith('\r');
-    if (this.trailingCR) text = text.slice(0, -1);
     for (const raw of text) {
       if (this.skipControl(raw)) continue;
       const ch = /\p{Cc}/u.test(raw) ? ' ' : raw;
@@ -77,44 +75,29 @@ export class WorkerRecordBoundary {
 
   private visible(ch: string): void {
     if (!/\s/.test(ch)) this.hasText = true;
-    if (this.scalarLine !== undefined && this.scalarLine.length <= 2000) this.scalarLine += ch;
-    const queryValue = this.query === 'value' || this.query === 'private-value';
-    const claimed = this.field || this.json || this.value === 'before' || this.value === 'inside' || this.query === 'private-value';
-    if (this.keyBlock) {
-      this.scanKeyBlock(ch);
-      return;
+    if (this.marker !== undefined) {
+      if (this.marker || !/[ \t]/.test(ch)) {
+        if ((!this.marker && ch !== '-') || this.marker.length > 64) this.marker = undefined;
+        else if (!(this.marker.endsWith('KEY-----') && /[ \t]/.test(ch))) this.marker += ch;
+      }
     }
-    if (claimed) {
-      this.scanLicense('\0');
-      this.markerTail = '';
-    } else {
-      this.scanLicense(ch);
-      this.scanKeyBlock(ch);
-      if (this.keyBlock) return;
-    }
-    if (queryValue && !/[\s&#]/.test(ch)) return;
+    if (this.pemRemaining) return;
     if (this.value === 'before' || this.value === 'inside') {
       this.scanOptionValue(ch);
       return;
     }
-    const literal = this.field?.scan(ch);
+    if (!this.field && !this.json && this.inQuery(ch)) return;
     if (this.inJsonValue(ch)) return;
+    const memberStart = !this.field || (this.memberBoundary && !this.field.continues);
+    this.memberBoundary = !this.field || /[ \t,{]/.test(ch);
+    this.field?.scan(ch);
     if (ch === '"' && !this.quote) {
       if (this.memberName && isCredentialLabel(this.memberName)) this.member = 'colon';
-      this.memberName = literal ? undefined : '';
+      this.memberName = memberStart ? '' : undefined;
     } else if (this.memberName !== undefined) {
       this.memberName = /[A-Za-z0-9_-]/.test(ch) ? appendLabel(this.memberName, ch) : undefined;
     }
     if (!this.field) this.scanArgument(ch);
-  }
-
-  private scanKeyBlock(ch: string): void {
-    // PEM boundaries can occur past the retained portion of a line or across chunks.
-    this.markerTail = this.markerTail.slice(-64) + ch;
-    if (ch === '-' && this.markerTail.endsWith('-----')) {
-      if (/-----BEGIN [A-Z ]{0,32}PRIVATE KEY-----$/.test(this.markerTail)) this.keyBlock = true;
-      if (/-----END [A-Z ]{0,32}PRIVATE KEY-----$/.test(this.markerTail)) this.keyBlock = false;
-    }
   }
 
   /** Brackets are structural only inside the value of a recognized JSON member. */
@@ -122,17 +105,16 @@ export class WorkerRecordBoundary {
     if (this.json) {
       if (this.json.scan(ch)) return true;
       this.json = undefined;
+      if (ch === '"' || ch === '}' || ch === ']') return true;
     }
     if (this.member && !/\s/.test(ch)) {
       if (this.member === 'colon' && ch === ':') this.member = 'value';
       else {
         const structured = this.member === 'value' && (ch === '{' || ch === '[' || ch === '"');
-        if (this.member === 'value' && this.awaitingMemberLine) {
-          if (structured) this.continuedValue = true;
-          else if (/[tfn\d-]/.test(ch)) this.scalarLine = ch;
-        }
         this.member = undefined;
         if (structured) {
+          if (this.memberField) this.field = undefined;
+          this.memberField = false;
           this.json = new WorkerJsonValue(ch);
           this.value = 'outside';
           this.label = '';
@@ -145,30 +127,31 @@ export class WorkerRecordBoundary {
 
   /** Advance even for omitted and rate-limited physical lines. */
   finishLine(): LineDisposition {
-    this.trailingCR = false;
     this.flushColorParameters();
     this.query = 'outside';
-    this.scanLicense('\n');
-    if (this.json && !this.json.scan('\n')) this.json = undefined;
-    const openValue = Boolean(this.quote || this.escaped);
-    const openRecord =
-      openValue ||
-      Boolean(
-        this.field?.continues ||
-        this.terminal ||
-        this.json ||
-        this.keyBlock,
-      );
+    const inBlock = this.pemRemaining > 0;
+    if (inBlock) {
+      this.pemRemaining--;
+      if (this.marker === this.pemFooter) this.pemRemaining = 0;
+    } else if (!this.continuedValue && this.marker) {
+      const header = privateKeyHeader.exec(this.marker);
+      if (header) {
+        this.pemRemaining = pemLineLimit - 1;
+        this.pemFooter = '-----END ' + header[1] + '-----';
+      }
+    }
+    this.marker = '';
+    if (!this.json?.finishLine()) this.json = undefined;
+    const openValue = Boolean(this.quote);
+    const openRecord = openValue || !!this.field?.continues || !!this.json;
     if (this.field?.continues) this.field.scan('\n');
     else this.field = undefined;
-    this.markerTail = '';
+    this.memberField = false;
     this.memberName = undefined;
-    const scalar = this.scalarLine !== undefined &&
-      /^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)[ \t]*(?:[,}\]]|$)/.test(this.scalarLine);
-    const omit = this.continuedValue || openRecord || scalar;
+    this.member = undefined;
+    this.terminal = undefined;
+    const omit = this.continuedValue || openRecord || inBlock || this.pemRemaining > 0;
     this.continuedValue = openRecord;
-    this.awaitingMemberLine = this.member === 'value';
-    this.scalarLine = undefined;
     this.nextOption = undefined;
     if (!openValue) this.value = 'outside';
     this.escaped = false;
@@ -207,7 +190,7 @@ export class WorkerRecordBoundary {
     } else if (/\s/.test(ch)) {
       // A missing operand can put another credential option in its place.
       const name = this.nextOption ?? '';
-      const next = name === '-u' || (name.startsWith('--') && isCredentialLabel(name.slice(2)));
+      const next = isCredentialOption(name);
       this.value = next ? 'before' : 'outside';
       this.nextOption = next ? '' : undefined;
       return;
@@ -218,16 +201,17 @@ export class WorkerRecordBoundary {
     }
   }
 
+  private inQuery(ch: string): boolean {
+    if (/\s/.test(ch)) this.query = 'outside';
+    else if (ch === '#') this.query = 'fragment';
+    else if (ch === '?' && this.query !== 'fragment') this.query = 'query';
+    if (this.query !== 'query') return false;
+    this.label = '';
+    return true;
+  }
+
   private scanArgument(ch: string): void {
     const space = /\s/.test(ch);
-    const queryEquals = this.query === 'name' && ch === '=';
-    if (space) this.query = 'outside';
-    else if (ch === '#') this.query = 'fragment';
-    else if (this.query !== 'fragment') {
-      if (ch === '?' || (ch === '&' && this.query !== 'outside')) this.query = 'name';
-      else if (queryEquals) this.query = this.credentialLabel() ? 'private-value' : 'value';
-      else if (this.query === 'name' && !/[A-Za-z0-9_-]/.test(ch)) this.query = 'query';
-    }
     if (this.value === 'field-name') {
       if (space) return;
       this.value = 'outside';
@@ -244,7 +228,10 @@ export class WorkerRecordBoundary {
         this.value = option ? (space ? 'before' : 'inside') : space ? 'field-name' : 'outside';
         this.nextOption = option && space ? '' : undefined;
         if (!option && space) return;
-        if (!option && !queryEquals) this.field ??= new CredentialField(this.label);
+        if (!option) {
+          this.field = new CredentialField(this.label);
+          this.memberField = this.member === 'value';
+        }
         if (option && ch === '=') this.quote = unclosedLabelQuote(this.label);
       }
       this.label = '';

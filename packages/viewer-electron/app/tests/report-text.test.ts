@@ -135,14 +135,20 @@ describe('readable optional report text', () => {
   });
 
   it.each(['\n', '\r\n', '\r', '\t', ' '])(
-    'redacts a bearer credential across its separator (%j)',
+    'redacts a quoted bearer header across its separator and preserves ordinary text (%j)',
     (separator) => {
-      const input = 'Bearer' + separator + 'abcdef123456\nnext line kept';
+      const input = 'Authorization: "Bearer' + separator + 'abcdef123456"\nnext line kept';
+      const expected = 'Authorization: [redacted]\nnext line kept';
+      expect(redactSecrets(input)).toBe(expected);
+      expect(redactReport(input, values)).toBe(expected);
+      const prose = 'plan Bearer' + separator + 'worker ready\nnext line kept';
       const logSeparator = separator === '\t' ? ' ' : separator;
-      expect(redactSecrets(input)).toBe('Bearer' + logSeparator + '[redacted]\nnext line kept');
+      expect(redactSecrets(prose)).toBe(
+        'plan Bearer' + logSeparator + 'worker ready\nnext line kept',
+      );
       const normalized = separator === '\t' ? ' ' : separator.replace(/\r\n?/g, '\n');
-      expect(redactReport(input, values)).toBe(
-        'Bearer' + normalized + '[redacted]\nnext line kept',
+      expect(redactReport(prose, values)).toBe(
+        'plan Bearer' + normalized + 'worker ready\nnext line kept',
       );
     },
   );
@@ -188,10 +194,12 @@ describe('readable optional report text', () => {
     const log = new DiagnosticLog(path.join(root, 'diagnostics.log'));
     await log.record(
       'renderer-error',
-      'می‌خواهم\ntoken=abc\nnext line kept?\nBearer\nabcdef123456',
+      'می‌خواهم\ntoken=abc\nnext line kept?\nProxy-Authorization: Bearer "abc\ndef123456"\nworker ready',
     );
     const entry = JSON.parse((await readFile(log.file, 'utf8')).trim());
-    expect(entry.detail).toBe('می‌خواهم\ntoken=[redacted]\nnext line kept?\nBearer\n[redacted]');
+    expect(entry.detail).toBe(
+      'می‌خواهم\ntoken=[redacted]\nnext line kept?\nProxy-Authorization: [redacted]\nworker ready',
+    );
   });
 
   it('redacts the reported control rows after an actual log write', async () => {

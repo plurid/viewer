@@ -100,12 +100,13 @@ describe('what the log keeps', () => {
     [`'--db-password=two words' --json`, `'--db-password=[redacted]' --json`],
     ['--db-password= --json', '--db-password= --json'],
     ['?db-password=&page=2', '?db-password=&page=2'],
-    ['{"password":\r\n   "SAMPLE_ONLY","ok":true}', '{"password":\r\n   [redacted],"ok":true}'],
-    ['{"client_secret"\n :\n "SAMPLE\\"ONLY"}', '{"client_secret"\n :\n [redacted]}'],
-    ['{"Cookie":\n "SAMPLE_ONLY", "ok":true}', '{"Cookie":\n [redacted], "ok":true}'],
-    ['{"token":\n 1234,"ok":true}', '{"token":\n [redacted],"ok":true}'],
-    ['{"token":\n {"value":["SAMPLE_ONLY}"]},"ok":true}', '{"token":\n [redacted],"ok":true}'],
-    ['{"token":\n ["SAMPLE_ONLY",{"id":1}],"ok":true}', '{"token":\n [redacted],"ok":true}'],
+    ['{"password": "SAMPLE\r\n_ONLY","ok":true}', '{"password": [redacted],"ok":true}'],
+    ['{"client_secret": "SAMPLE\\"ONLY"}', '{"client_secret": [redacted]}'],
+    ['{"Cookie": "SAMPLE_ONLY", "ok":true}', '{"Cookie": [redacted], "ok":true}'],
+    ['{"token": 1234,"ok":true}', '{"token": [redacted],"ok":true}'],
+    ['{"token": {"value":["SAMPLE_ONLY}"]},"ok":true}', '{"token": [redacted],"ok":true}'],
+    ['{"token": ["SAMPLE_ONLY",{"id":1}],"ok":true}', '{"token": [redacted],"ok":true}'],
+    ['{"token":\n42\n{"ok":true}', '{"token":\n42\n{"ok":true}'],
     ['--token=;EXAMPLE_ONLY', '--token=[redacted]'],
     ['-u a,b&EXAMPLE_ONLY', '-u [redacted]'],
     ['--password prefix" EXAMPLE_ONLY" --json', '--password [redacted] --json'],
@@ -273,7 +274,7 @@ describe('what the log keeps', () => {
     "'--db-password=first\nSAMPLE_ONLY'",
     "DB_PASSWORD= 'first\nSAMPLE_ONLY'",
     "--db-password prefix'first\nSAMPLE_ONLY'",
-    '-u first\\\nSAMPLE_ONLY',
+    '-u "first\\\nSAMPLE_ONLY"',
   ])('resumes a complete worker record after the quoted credential in %j', (command) => {
     for (const padding of ['', 'x'.repeat(2500) + ' ']) {
       const records: string[] = [];
@@ -335,7 +336,7 @@ describe('what the log keeps', () => {
       command +
       '\n[warning] recovered\n' +
       'x'.repeat(10000) +
-      ' {"password":\n  ["SAMPLE_SIX"]}\n{"status":"ready"}\n';
+      ' {"password":["secret\nSAMPLE_SIX"]}\n{"status":"ready"}\n';
     for (let offset = 0; offset < stderr.length; offset += 7)
       worker.write(stderr.slice(offset, offset + 7));
     expect(records.join('\n')).not.toMatch(/SAMPLE|last secret/);
@@ -363,7 +364,7 @@ describe('what the log keeps', () => {
     ]);
   });
 
-  it('tracks a JSON member across a worker line skipped by the rate limit', () => {
+  it('tracks an open JSON string across a worker line skipped by the rate limit', () => {
     let now = 0;
     const records: string[] = [];
     const output = new WorkerOutput(
@@ -371,9 +372,9 @@ describe('what the log keeps', () => {
       (detail, source) => records.push(source + ': ' + detail),
       new DiagnosticBudget(1, 1000, () => now),
     );
-    output.write('ordinary message\n{"password":\n');
+    output.write('ordinary message\n{"password":"start\n');
     now = 1000;
-    output.write('  "SAMPLE_ONLY"}\n');
+    output.write('  SAMPLE_ONLY"}\n');
     now = 2000;
     output.write('{"status":"ready"}\n');
     expect(records).toEqual([

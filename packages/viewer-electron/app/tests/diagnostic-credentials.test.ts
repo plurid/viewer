@@ -12,6 +12,7 @@ import {
 } from '../src/desktop/diagnostics/failures';
 import { readLicenseKey } from '../src/desktop/license/signature';
 import { shellQuote } from '../src/desktop/terminals/terminal-launch';
+import { cliCommands, cliGlobalOptions } from '../src/domain/cli/catalog';
 import { issueLicenseKey } from '../tools/license-key';
 import { temporaryRoot } from '../tools/temporary';
 
@@ -30,7 +31,7 @@ async function persisted(route: Route, messages: string[]): Promise<string[]> {
       const worker = new WorkerOutput(
         route === 'named-worker' ? 'Token' : '',
         (detail, source) => writes.push(log.record('worker-output', detail, undefined, source)),
-        new DiagnosticBudget(),
+        new DiagnosticBudget(100),
       );
       const bytes = Buffer.from(message + '\n');
       for (let offset = 0; offset < bytes.length; offset += 7)
@@ -49,6 +50,116 @@ interface GeneratedCredential {
   message: string;
   value: string;
   open?: boolean;
+}
+
+function* recordBoundaries(): Generator<[string, string]> {
+  const base = 'https://outer.invalid/?next=';
+  for (const name of ['token', 'client_secret', '%74oken']) {
+    for (const secret of [true, false]) {
+      const field = secret ? name : 'mode';
+      let url = 'https://inner.invalid/p?' + field + '=J7qxZ8mw';
+      for (let depth = 0; depth <= 2; depth++) {
+        const masked = url.replace('J7qxZ8mw', '[redacted]');
+        yield [base + url + '&ok=1', base + (secret ? masked : url) + '&ok=1'];
+        url = encodeURIComponent(url);
+      }
+    }
+  }
+  const inner = 'https://second.invalid/p?mode=simple&pwd=J7qxZ8mw&theme=light#section';
+  for (const destination of [
+    inner,
+    'https://first.invalid/?continue=' + encodeURIComponent(inner),
+  ]) {
+    const encoded = encodeURIComponent(destination);
+    yield [base + encoded + '&ok=1', base + encoded.replace('J7qxZ8mw', '[redacted]') + '&ok=1'];
+  }
+  const encodeBytes = (value: string) =>
+    Array.from(Buffer.from(value), (byte) => '%' + byte.toString(16).padStart(2, '0')).join('');
+  for (const encode of [encodeBytes, (value: string) => encodeURIComponent(encodeBytes(value))]) {
+    const target = encode(inner);
+    yield [
+      base + target + '&ok=1',
+      base + target.replace(encode('J7qxZ8mw'), '[redacted]') + '&ok=1',
+    ];
+  }
+  for (const target of [
+    'https://inner.invalid/p%3Ftoken%3DJ7qxZ8mw',
+    'https://inner.invalid/p?to%256Ben%253DJ7qxZ8mw',
+  ]) {
+    yield [base + target + '&ok=1', base + target.replace('J7qxZ8mw', '[redacted]') + '&ok=1'];
+  }
+  for (const target of [
+    'viewer:open?access_token=J7qxZ8mw',
+    'mailto:help@example.invalid?auth_token=J7qxZ8mw',
+  ]) {
+    yield [base + target + '&ok=1', base + target.replace('J7qxZ8mw', '[redacted]') + '&ok=1'];
+  }
+  for (const field of ['pwd', 'mode']) {
+    const destination = ' ' + inner.replace('pwd=', field + '=');
+    for (const query of [
+      'next=' + encodeURIComponent(destination),
+      new URLSearchParams({ next: destination }).toString(),
+    ]) {
+      const url = 'https://outer.invalid/?' + query + '&ok=1';
+      yield [url, field === 'pwd' ? url.replace('J7qxZ8mw', '[redacted]') : url];
+    }
+  }
+  const encoded = encodeURIComponent(encodeURIComponent(encodeURIComponent(inner)));
+  yield [base + encoded + '&ok=1', base + '[redacted]&ok=1'];
+  const malformed = 'https://broken%xx.invalid/?token=J7qxZ8mw';
+  yield [base + malformed + '&ok=1', base + '[redacted]&ok=1'];
+  for (const literal of ['caption%3Dtoken%3Dready', "label=token=can't", 'Basic']) {
+    yield [base + literal + '&ok=1', base + literal + '&ok=1'];
+  }
+  for (const field of ['token=', '--auth-token ', '--auth-token=', 'Authorization: '])
+    yield [field + 'J7qxZ8mw\\', field + '[redacted]'];
+  yield [
+    "https://outer.invalid/?x%5ftoken=can't&ok=1",
+    'https://outer.invalid/?x%5ftoken=[redacted]&ok=1',
+  ];
+  yield ['{"token":[}', '{"token":[redacted]'];
+  for (const label of ['token', 'Authorization', 'private_key'])
+    yield ['{"' + label + '":', '{"' + label + '":'];
+  for (const text of [
+    'Missing -----BEGIN PRIVATE KEY-----',
+    'Help: -----BEGIN RSA PRIVATE KEY----- is missing.',
+    'format viewer-license-1.',
+    'code-signing',
+    'file-watching',
+    'worktree-pending',
+    'unknown-setting',
+    'shared-setting',
+    'clean-exit',
+    'main-exception',
+    'main-rejection',
+    'main-error',
+    'service-error',
+    'renderer-error',
+    'renderer-gone',
+    'renderer-unresponsive',
+    'process-gone',
+    'worker-output',
+  ])
+    yield [text, text];
+  const catalog = [...cliGlobalOptions, ...cliCommands.flatMap((command) => command.options ?? [])];
+  const options = new Set([
+    '--debug',
+    '--trace',
+    '--version',
+    '--new-window',
+    '--terminal',
+    '--provider',
+    ...catalog.map((option) => '--' + option.name),
+  ]);
+  for (const option of options) {
+    yield [option, option];
+    yield ['--password J7qxZ8mw ' + option, '--password [redacted] ' + option];
+  }
+  // An 86-character option can have the shape of a signature when it occupies the whole line.
+  const longOption = '--debug'.padEnd(licenseSignature.length, 'g');
+  yield [longOption, '[redacted]'];
+  yield ['--password J7qxZ8mw ' + longOption, '--password [redacted] ' + longOption];
+  yield ['token=viewer-license-1.', 'token=[redacted]'];
 }
 
 function* assignments(): Generator<GeneratedCredential> {
@@ -83,6 +194,9 @@ function* assignments(): Generator<GeneratedCredential> {
       }
     }
   }
+  for (const [message, expected] of recordBoundaries()) {
+    if (message.includes('J7qxZ8mw') && message !== expected) yield { message, value: 'J7qxZ8mw' };
+  }
   for (const name of ['_ACCESS_KEY', '__PRIVATE_KEY', 'ssh_askpass_require']) {
     for (const literal of [':part', '=part', 'plain']) {
       const value = words.join("'\n");
@@ -102,17 +216,23 @@ function* assignments(): Generator<GeneratedCredential> {
     yield { message: name + '= "' + words.join('\n'), value: words.join('\n'), open: true };
   }
   for (const message of [
-    'token=first {"secret":\n  ["' + words.join(' ') + '"]}',
+    'token=first {"secret":  ["' + words.join(' ') + '"]}',
     'token=first nested_token:"' + words.join('\n') + '"',
     'fragment#anchor?token=' + words.join(' ') + ' still on the line',
     '?token=' + "'" + words[0] + "'" + words[1] + '&mode=1',
     '{"_AUTH_TOKEN":{"job":["' + words.join(' ') + '"]},"ok":true}',
-    '{"_AUTH_TOKEN"\n :\n "' + words.join('\n') + '"}',
-    '{"_AUTH_TOKEN":\n[\n"' + words.join(' ') + '"\n]}',
-    '{"_AUTH_TOKEN":[false,true,null,-123456789.123e-9,\n{"a":"\\u0041","b":"' +
+    '{"_AUTH_TOKEN" : "' + words.join('\n') + '"}',
+    '{"_AUTH_TOKEN": ["' + words.join('\n') + '"]}',
+    '{"_AUTH_TOKEN":[false,true,null,-123456789.123e-9,{"a":"\\u0041","b":"prefix\n' +
       words.join(' ') +
       '"}]}',
-    '{"_AUTH_TOKEN":' + '['.repeat(270) + '\n"' + words.join(' ') + '"\n' + ']'.repeat(270) + '}',
+    '{"_AUTH_TOKEN":' +
+      '['.repeat(270) +
+      '"prefix\n' +
+      words.join(' ') +
+      '"' +
+      ']'.repeat(270) +
+      '}',
     '{"_AUTH_TOKEN":["' + words[0] + '\\Q\n' + words[1] + '"]}',
     '_auth_token=“' + words.join("'\r\n") + '” trailing text',
     'Authorization: Bearer "' + words.join('\n') + '"',
@@ -168,6 +288,17 @@ function* assignments(): Generator<GeneratedCredential> {
     message: 'viewer-license-1.\n' + licensePayload + '.\n' + licenseSignature,
     value: licensePayload,
   };
+  yield {
+    message: 'token=viewer-license-1.' + licensePayload + '.\n' + licenseSignature,
+    value: licenseSignature,
+  };
+  yield {
+    message:
+      'env PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n' + body + '\n-----END PRIVATE KEY-----"',
+    value: body,
+  };
+  for (const label of ['env "PRIVATE_KEY=', '"--private-key='])
+    yield { message: label + '-----BEGIN PRIVATE KEY-----\n' + body + '"', value: body };
   for (const type of ['PRIVATE KEY', 'RSA PRIVATE KEY'])
     yield {
       message: '-----BEGIN ' + type + '-----\n' + body + '\n-----END ' + type + '-----',
@@ -187,7 +318,7 @@ function* segmentWords(prefix = '', depth = 0): Generator<string> {
     ['“', '”'],
     ['‘', '’'],
   ]) {
-    for (const join of ['', open ? '\n' : '\\\n']) {
+    for (const join of ['', open ? '\n' : '\\ ']) {
       const word = prefix + open + before + join + after + close;
       yield word;
       if (depth < 2) yield* segmentWords(word, depth + 1);
@@ -217,23 +348,39 @@ function mixedAssignments(word: string): string[] {
 }
 
 /** Check each submitted case against its own persisted records, including the trusted source prefix. */
-async function persistedWithRecovery(route: Route, cases: {message: string; open?: boolean}[]): Promise<string[]> {
-  const statuses = (index: number) => ['worker ready ' + index, JSON.stringify({state: 'idle', record: index})];
-  const rows = await persisted(route, cases.map(({message, open}, index) =>
-    open ? message : [message, ...statuses(index)].join('\n')));
+async function persistedWithRecovery(
+  route: Route,
+  cases: { message: string; open?: boolean }[],
+): Promise<string[]> {
+  const statuses = (index: number) => {
+    const plain = 'worker ready ' + index;
+    const json = JSON.stringify({ state: 'idle', record: index });
+    return index % 3 === 0
+      ? [json, plain]
+      : index % 3 === 1
+        ? [String(index), json]
+        : [plain, json];
+  };
+  const rows = await persisted(
+    route,
+    cases.map(({ message, open }, index) =>
+      open ? message : [message, ...statuses(index)].join('\n'),
+    ),
+  );
   const worker = route === 'worker' || route === 'named-worker';
   const prefix = route === 'named-worker' ? 'Token: ' : '';
   const details: string[] = [];
   const missing: number[] = [];
   let offset = 0;
-  for (const [index, {message, open}] of cases.entries()) {
+  for (const [index, { message, open }] of cases.entries()) {
     if (worker) {
       const end = offset + message.split('\n').length;
       details.push(...rows.slice(offset, end));
       offset = end;
       if (open) continue;
       const [plain, structured] = statuses(index);
-      if (rows[offset] !== prefix + plain || rows[offset + 1] !== prefix + structured) missing.push(index);
+      if (rows[offset] !== prefix + plain || rows[offset + 1] !== prefix + structured)
+        missing.push(index);
       offset += 2;
     } else {
       const row = rows[offset++]!;
@@ -245,7 +392,7 @@ async function persistedWithRecovery(route: Route, cases: {message: string; open
       }
     }
   }
-  expect(missing.slice(0, 5).map(index => cases[index]?.message)).toEqual([]);
+  expect(missing.slice(0, 5).map((index) => cases[index]?.message)).toEqual([]);
   expect(offset).toBe(rows.length);
   return details;
 }
@@ -263,75 +410,251 @@ function containsFragment(fragments: Set<string>, row: string): boolean {
 }
 
 describe('persisted credential boundaries', () => {
-  it.each(routes)('keeps statuses after literal field names in adjoining quoted segments via %s', async route => {
-    const messages: string[] = [];
-    for (const [open, close] of [['"', '"'], ["'", "'"], ['\x60', '\x60'], ['“', '”'], ['‘', '’']]) {
-      for (const head of ['caption', "'caption'", 'plain' + open + ' first' + close + 'more']) {
-        for (const literal of [' note token=', ' --password ', ' a: Authorization:', ' note\nclient_secret=']) {
-          messages.push('env API_TOKEN=' + head + open + literal + close + ' viewer');
+  it.each(routes)('checks generated physical record boundaries via %s', async (route) => {
+    const cases = Array.from(recordBoundaries());
+    const prefix = route === 'service' || route === 'named-worker' ? 'Token: ' : '';
+    for (const after of [
+      ['worker ready', '{"state":"idle"}'],
+      ['{"state":"idle"}', '42'],
+      ['42', 'worker ready'],
+    ]) {
+      const rows = await persisted(
+        route,
+        cases.map(([line]) => [line, ...after].join('\n')),
+      );
+      const expected = cases.flatMap(([, masked]) =>
+        route === 'direct' || route === 'service'
+          ? [prefix + [masked, ...after].join('\n')]
+          : [masked, ...after].map((line) => prefix + line),
+      );
+      expect(rows).toEqual(expected);
+    }
+  });
+
+  it.each(routes)(
+    'bounds unterminated PEM blocks and recognizes only the matching footer via %s',
+    async (route) => {
+      const header = '  -----BEGIN RSA PRIVATE KEY-----';
+      const body = 'J7qxZ8mw';
+      const statuses = ['{"state":"idle"}', 'worker ready'];
+      const blocks = [
+        [header, body, '-----END PRIVATE KEY-----', body, '-----END RSA PRIVATE KEY-----'],
+        [header, ...Array<string>(63).fill(body)],
+      ];
+      for (const block of blocks) {
+        const rows = await persisted(route, [[...block, ...statuses].join('\n')]);
+        const prefix = route === 'named-worker' || route === 'service' ? 'Token: ' : '';
+        if (route === 'worker' || route === 'named-worker') {
+          expect(rows.slice(-2)).toEqual(statuses.map((line) => prefix + line));
+        } else expect(rows[0]).toBe(prefix + '[redacted]\n' + statuses.join('\n'));
+        expect(rows.join('\n')).not.toContain(body);
+      }
+    },
+  );
+
+  it.each(routes)(
+    'ends records on CR, LF and CRLF and protects spaced license keys via %s',
+    async (route) => {
+      const prefix = route === 'named-worker' || route === 'service' ? 'Token: ' : '';
+      const worker = route === 'worker' || route === 'named-worker';
+      for (const separator of ['\r', '\n', '\r\n']) {
+        const lines = ['API_TOKEN=J7qxZ8mw\\', '{"state":"idle"}', '42'];
+        const actual = await persisted(route, [lines.join(separator)]);
+        const expected = ['API_TOKEN=[redacted]', ...lines.slice(1)];
+        expect(actual).toEqual(
+          worker ? expected.map((line) => prefix + line) : [prefix + expected.join(separator)],
+        );
+      }
+      const key =
+        'viewer- license-1. ' +
+        licensePayload +
+        '. ' +
+        licenseSignature.slice(0, 12) +
+        '\t' +
+        licenseSignature.slice(12);
+      const rows = await persisted(route, [key + '\nworker ready\n{"ok":true}']);
+      expect(rows).toEqual(
+        worker
+          ? ['[redacted]', 'worker ready', '{"ok":true}'].map((line) => prefix + line)
+          : [prefix + '[redacted]\nworker ready\n{"ok":true}'],
+      );
+    },
+  );
+
+  it.each(['', 'Preview'])(
+    'publishes each finished %j worker record before another write',
+    async (name) => {
+      const root = await temporaryRoot('viewer-live-boundaries-');
+      const log = new DiagnosticLog(path.join(root, 'rows.jsonl'));
+      const writes: Promise<void>[] = [];
+      const worker = new WorkerOutput(
+        name,
+        (row, source) => writes.push(log.record('worker-output', row, undefined, source)),
+        new DiagnosticBudget(200),
+      );
+      const expected: string[] = [];
+      for (const [line, masked] of [
+        ['start', 'start'],
+        ['format viewer-license-1.', 'format viewer-license-1.'],
+        ['token=viewer-license-1.', 'token=[redacted]'],
+        ['token=viewer-license-1.ey', 'token=[redacted]'],
+        ['viewer-license-1.' + licensePayload + '.' + licenseSignature.slice(0, -7), '[redacted]'],
+        ['running', 'running'],
+        [
+          'Help: -----BEGIN PRIVATE KEY----- is missing.',
+          'Help: -----BEGIN PRIVATE KEY----- is missing.',
+        ],
+        ['{"token":', '{"token":'],
+        ['42', '42'],
+        ['worker ready', 'worker ready'],
+      ]) {
+        worker.write(line + '\n');
+        expected.push((name ? name + ': ' : '') + masked);
+        await Promise.all(writes);
+        const rows = (await readFile(log.file, 'utf8'))
+          .trimEnd()
+          .split('\n')
+          .map((raw) => JSON.parse(raw).detail);
+        expect(rows).toEqual(expected);
+      }
+      worker.end();
+    },
+  );
+
+  it.each(routes)(
+    'keeps statuses after literal field names in adjoining quoted segments via %s',
+    async (route) => {
+      const messages: string[] = [];
+      for (const [open, close] of [
+        ['"', '"'],
+        ["'", "'"],
+        ['\x60', '\x60'],
+        ['“', '”'],
+        ['‘', '’'],
+      ]) {
+        for (const head of ['caption', "'caption'", 'plain' + open + ' first' + close + 'more']) {
+          for (const literal of [
+            ' note token=',
+            ' --password ',
+            ' a: Authorization:',
+            ' note\nclient_secret=',
+          ]) {
+            messages.push('env API_TOKEN=' + head + open + literal + close + ' viewer');
+          }
         }
       }
-    }
-    const prefix = route === 'service' || route === 'named-worker' ? 'Token: ' : '';
-    const statuses = ['worker ready', '{"state":"idle"}'];
-    const actual = await persisted(route, messages.map(m => [m, ...statuses].join('\n')));
-    const expected = messages.flatMap(message => {
-      if (route === 'direct' || route === 'service') return [prefix + 'env API_TOKEN=[redacted]\n' + statuses.join('\n')];
-      const entries = message.includes('\n') ? ['[Worker continuation omitted]', '[Worker continuation omitted]'] : ['env API_TOKEN=[redacted]'];
-      return [...entries, ...statuses].map(line => prefix + line);
-    });
-    expect(actual).toEqual(expected);
-  });
+      const prefix = route === 'service' || route === 'named-worker' ? 'Token: ' : '';
+      const statuses = ['worker ready', '{"state":"idle"}'];
+      const actual = await persisted(
+        route,
+        messages.map((m) => [m, ...statuses].join('\n')),
+      );
+      const expected = messages.flatMap((message) => {
+        if (route === 'direct' || route === 'service')
+          return [prefix + 'env API_TOKEN=[redacted]\n' + statuses.join('\n')];
+        const entries = message.includes('\n')
+          ? ['[Worker continuation omitted]', '[Worker continuation omitted]']
+          : ['env API_TOKEN=[redacted]'];
+        return [...entries, ...statuses].map((line) => prefix + line);
+      });
+      expect(actual).toEqual(expected);
+    },
+  );
 
-  it.each(routes)('keeps credential-looking text inside its original value via %s', async route => {
-    const messages = [
-      ["env API_TOKEN=caption' -----BEGIN PRIVATE KEY-----' viewer", 'env API_TOKEN=[redacted]'],
-      ['--password "note -----BEGIN PRIVATE KEY-----" --ok', '--password [redacted] --ok'],
-      ["--password part:token=x --ok couldn't connect", "--password [redacted] --ok couldn't connect"],
-      ["--password= couldn't connect", "--password= couldn't connect"],
-      ['{"token":"-----BEGIN PRIVATE KEY-----","ok":true}', '{"token":[redacted],"ok":true}'],
-      ["https://local.invalid/?plan=token=can't&ok=1","https://local.invalid/?plan=token=can't&ok=1"],
-      ["https://local.invalid/?plan=x&token=token=can't&ok=1","https://local.invalid/?plan=x&token=[redacted]&ok=1"],
-    ] as const;
-    const last = ['worker ready', '{"state":"idle"}'];
-    const prefix = route === 'service' || route === 'named-worker' ? 'Token: ' : '';
-    const rows = await persisted(route, messages.map(([message]) => [message,...last].join('\n')));
-    expect(rows).toEqual(messages.flatMap(([,line]) => route === 'direct' || route === 'service'
-      ? [prefix + [line,...last].join('\n')] : [line,...last].map(value => prefix + value)));
-  });
+  it.each(routes)(
+    'keeps credential-looking text inside its original value via %s',
+    async (route) => {
+      const messages = [
+        ["env API_TOKEN=caption' -----BEGIN PRIVATE KEY-----' viewer", 'env API_TOKEN=[redacted]'],
+        ['env API_TOKEN=caption"token":', 'env API_TOKEN=[redacted]'],
+        ['--password "note -----BEGIN PRIVATE KEY-----" --ok', '--password [redacted] --ok'],
+        [
+          "--password part:token=x --ok couldn't connect",
+          "--password [redacted] --ok couldn't connect",
+        ],
+        [
+          "--password -part:token=x --ok couldn't connect",
+          "--password [redacted] --ok couldn't connect",
+        ],
+        ["--password= couldn't connect", "--password= couldn't connect"],
+        ['{"token":"-----BEGIN PRIVATE KEY-----","ok":true}', '{"token":[redacted],"ok":true}'],
+        ['{"token":"abc"} couldn\'t connect', '{"token":[redacted]} couldn\'t connect'],
+        [
+          "https://local.invalid/?plan=token=can't&ok=1",
+          "https://local.invalid/?plan=token=can't&ok=1",
+        ],
+        [
+          "https://local.invalid/?plan=x&token=token=can't&ok=1",
+          'https://local.invalid/?plan=x&token=[redacted]&ok=1',
+        ],
+      ] as const;
+      const last = ['{"state":"idle"}', 'worker ready'];
+      const prefix = route === 'service' || route === 'named-worker' ? 'Token: ' : '';
+      const rows = await persisted(
+        route,
+        messages.map(([message]) => [message, ...last].join('\n')),
+      );
+      expect(rows).toEqual(
+        messages.flatMap(([, line]) =>
+          route === 'direct' || route === 'service'
+            ? [prefix + [line, ...last].join('\n')]
+            : [line, ...last].map((value) => prefix + value),
+        ),
+      );
+    },
+  );
 
-  it.each(routes)('recognizes authorization schemes only in credential fields via %s', async route => {
-    const cases: [string,string][] = [];
-    for (const scheme of ['Basic', 'Bearer', 'bAsIc', 'BEARER']) {
-      for (const tail of ['', ' ', ' is available']) {
-        for (const key of ['plan', 'token']) {
-          const url = 'https://example.invalid/?p=1&' + key + '=';
-          cases.push([url + scheme + tail, url + (key === 'token' ? '[redacted]' : scheme) + tail]);
+  it.each(routes)(
+    'recognizes authorization schemes only in credential fields via %s',
+    async (route) => {
+      const cases: [string, string][] = [];
+      for (const scheme of ['Basic', 'Bearer', 'bAsIc', 'BEARER']) {
+        for (const tail of ['', ' ', ' is available']) {
+          for (const key of ['plan', 'token']) {
+            const url = 'https://example.invalid/?p=1&' + key + '=';
+            cases.push([
+              url + scheme + tail,
+              url + (key === 'token' ? '[redacted]' : scheme) + tail,
+            ]);
+          }
+          for (const text of [scheme + tail, 'plan ' + scheme + tail]) cases.push([text, text]);
         }
-        for (const text of [scheme + tail, 'plan ' + scheme + tail]) cases.push([text,text]);
+        for (const name of ['Authorization', 'Proxy-Authorization']) {
+          cases.push([name + ': ' + scheme, name + ': [redacted]']);
+          cases.push([name + ': ' + scheme + ' J7qxZ8mw', name + ': [redacted]']);
+        }
       }
-      for (const name of ['Authorization', 'Proxy-Authorization']) {
-        cases.push([name + ': ' + scheme, name + ': [redacted]']);
-        cases.push([name + ': ' + scheme + ' J7qxZ8mw', name + ': [redacted]']);
-      }
-    }
-    const prefix = route === 'service' || route === 'named-worker' ? 'Token: ' : '';
-    const statuses = ['worker ready', '{"state":"idle"}'];
-    const rows = await persisted(route, cases.map(([text]) => [text,...statuses].join('\n')));
-    const expected = cases.flatMap(([,line]) => route === 'direct' || route === 'service'
-      ? [prefix + [line,...statuses].join('\n')] : [line,...statuses].map(value => prefix + value));
-    expect(rows).toEqual(expected);
-  });
+      const prefix = route === 'service' || route === 'named-worker' ? 'Token: ' : '';
+      const statuses = ['worker ready', '{"state":"idle"}'];
+      const rows = await persisted(
+        route,
+        cases.map(([text]) => [text, ...statuses].join('\n')),
+      );
+      const expected = cases.flatMap(([, line]) =>
+        route === 'direct' || route === 'service'
+          ? [prefix + [line, ...statuses].join('\n')]
+          : [line, ...statuses].map((value) => prefix + value),
+      );
+      expect(rows).toEqual(expected);
+    },
+  );
 
-  it.each(routes)('preserves statuses after a credential member with a missing value via %s', async route => {
-    const statuses = ['worker ready', '{"state":"idle"}'];
-    const first = '{"Authorization":';
-    const prefix = route === 'service' || route === 'named-worker' ? 'Token: ' : '';
-    const rows = await persisted(route, [[first, ...statuses].join('\n')]);
-    expect(rows).toEqual(route === 'direct' || route === 'service'
-      ? [prefix + [first, ...statuses].join('\n')]
-      : [first, ...statuses].map(line => prefix + line));
-  });
+  it.each(routes)(
+    'preserves statuses after a credential member with a missing value via %s',
+    async (route) => {
+      const first = '{"Authorization":';
+      const prefix = route === 'service' || route === 'named-worker' ? 'Token: ' : '';
+      for (const status of ['worker ready', 'failed to start', '42 workers ready']) {
+        const lines = [first, status, '{"state":"idle"}'];
+        const rows = await persisted(route, [lines.join('\n')]);
+        expect(rows).toEqual(
+          route === 'direct' || route === 'service'
+            ? [prefix + lines.join('\n')]
+            : lines.map((line) => prefix + line),
+        );
+      }
+    },
+  );
 
   it.each(routes)(
     'protects a quoted environment operand through its last line via %s',
@@ -424,15 +747,15 @@ describe('persisted credential boundaries', () => {
       }
       const first = 'loading viewer-license-1.ey';
       worker.write(first + '\n');
-      worker.write('aml');
       await Promise.all(writes);
       const last = (await readFile(log.file, 'utf8')).trimEnd().split('\n').at(-1)!;
-      expect(JSON.parse(last).detail).toBe(prefix + first);
+      expect(JSON.parse(last).detail).toBe(prefix + 'loading [redacted]');
+      worker.write('aml');
       worker.end();
       await Promise.all(writes);
       const closed = (await readFile(log.file, 'utf8')).trimEnd().split('\n');
       expect(closed.map((line) => JSON.parse(line).detail)).toEqual(
-        [...expected, first, 'aml'].map((detail) => prefix + detail),
+        [...expected, 'loading [redacted]', 'aml'].map((detail) => prefix + detail),
       );
     },
   );
@@ -440,7 +763,7 @@ describe('persisted credential boundaries', () => {
   it.each(routes)(
     'follows a structured member at the start of a free-text value via %s',
     async (route) => {
-      const messages = ['token= "nested_secret":\n  ["J7qxZ8mw"]\nworker ready'];
+      const messages = ['token= "nested_secret": ["J7qx\nZ8mw"]\nworker ready'];
       const rows = await persisted(route, messages);
       expect(rows.join('\n')).not.toMatch(/J7qx|Z8mw/);
       expect(rows.at(-1)).toMatch(/worker ready$/);
@@ -478,20 +801,23 @@ describe('persisted credential boundaries', () => {
       );
       const prefix = route === 'service' || route === 'named-worker' ? 'Token: ' : '';
       const rows = await persisted(route, messages);
-      const expected =
-        route === 'worker' || route === 'named-worker'
-          ? ['[Worker continuation omitted]', '[Worker continuation omitted]', 'worker ready']
-          : ['[redacted]\nworker ready'];
-      expect(rows).toEqual(messages.flatMap(() => expected.map((detail) => prefix + detail)));
+      const worker = route === 'worker' || route === 'named-worker';
+      const mask = '[redacted]';
+      expect(rows).toEqual(
+        messages.flatMap((_, cut) => {
+          const lines = [cut ? mask : marker, mask, 'worker ready'];
+          return worker ? lines.map((line) => prefix + line) : [prefix + lines.join('\n')];
+        }),
+      );
     },
   );
 
   it.each(routes)(
-    'keeps exact query boundaries and escaped CRLF continuations via %s',
+    'keeps exact query boundaries and quoted CRLF continuations via %s',
     async (route) => {
       const messages = [
-        '_AUTH_TOKEN=plain\\\r\nJ7qxB5nv\nworker ready',
-        '--auth-token=plain\\\r\nJ7qxB5nv --ok\nworker ready',
+        '_AUTH_TOKEN="plain\\\r\nJ7qxB5nv"\nworker ready',
+        '--auth-token="plain\\\r\nJ7qxB5nv" --ok\nworker ready',
         "https://host/?auth-token=can't&ok=1\nworker ready",
         'https://host/?auth-token=part%20two&ok=1\nworker ready',
       ];
@@ -545,10 +871,12 @@ describe('persisted credential boundaries', () => {
           shellQuote(word).slice(1, -1),
         ])
           addFragments(fragments, spelling);
-        for (const assignment of mixedAssignments(word))
-          messages.push(assignment);
+        for (const assignment of mixedAssignments(word)) messages.push(assignment);
       }
-      const rows = await persistedWithRecovery(route, messages.map(message => ({message})));
+      const rows = await persistedWithRecovery(
+        route,
+        messages.map((message) => ({ message })),
+      );
       expect(rows.filter((row) => containsFragment(fragments, row)).slice(0, 5)).toEqual([]);
     },
     120000,
@@ -569,11 +897,7 @@ describe('persisted credential boundaries', () => {
         );
       }
       const body = marker + '.' + licensePayload + '.';
-      for (const signature of [
-        licenseSignature.slice(1),
-        licenseSignature + 'A',
-        licenseSignature.slice(0, -1) + 'B',
-      ]) {
+      for (const signature of [licenseSignature + 'A', licenseSignature.slice(0, -1) + 'B']) {
         ordinary.push(body + signature);
       }
       for (const separator of ['/', '+', '=']) {
@@ -582,14 +906,14 @@ describe('persisted credential boundaries', () => {
         );
       }
       const messages = ordinary.map((line) => [line, ...statuses].join('\n'));
-      // Separate log submissions and separate worker streams cannot complete one another's key.
-      messages.push(body, licenseSignature);
       const prefix = route === 'named-worker' || route === 'service' ? 'Token: ' : '';
-      const expected =
-        route === 'worker' || route === 'named-worker'
-          ? messages.flatMap((message) => message.split('\n'))
-          : messages;
+      const worker = route === 'worker' || route === 'named-worker';
+      const expected = worker ? messages.flatMap((message) => message.split('\n')) : messages;
       expect(await persisted(route, messages)).toEqual(expected.map((row) => prefix + row));
+      // These independent submissions are each a plausible key fragment at the instant of delivery.
+      const partial = [body + licenseSignature.slice(1), body, licenseSignature];
+      const mask = '[redacted]';
+      expect(await persisted(route, partial)).toEqual(partial.map(() => prefix + mask));
     },
   );
 
@@ -637,40 +961,45 @@ describe('persisted credential boundaries', () => {
     }
   });
 
-  it.each(routes)(
-    'masks a wrapped version-one key and resumes after its signature via %s',
-    async (route) => {
-      const { publicKey, privateKey } = generateKeyPairSync('ed25519');
-      const key = issueLicenseKey(
-        {
-          product: 'viewer',
-          email: 'fixture@example.invalid',
-          order: 'fixture',
-          issued: '2026-11-18',
-        },
-        privateKey,
-        {
-          publicKey: publicKey.export({ format: 'der', type: 'spki' }).toString('base64'),
-          purchaseURL: 'https://purchase.example.invalid/viewer',
-        },
+  it.each(routes)('masks a signed key in a path or across a line break via %s', async (route) => {
+    const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+    const key = issueLicenseKey(
+      {
+        product: 'viewer',
+        email: 'fixture@example.invalid',
+        order: 'fixture',
+        issued: '2026-11-18',
+      },
+      privateKey,
+      {
+        publicKey: publicKey.export({ format: 'der', type: 'spki' }).toString('base64'),
+        purchaseURL: 'https://purchase.example.invalid/viewer',
+      },
+    );
+    const prefix = route === 'named-worker' || route === 'service' ? 'Token: ' : '';
+    const paths = ['/licenses/' + key + '/details.json', '/licenses/' + key + '/'];
+    expect(
+      await persistedWithRecovery(
+        route,
+        paths.map((message) => ({ message })),
+      ),
+    ).toEqual(paths.map((message) => prefix + message.replace(key, '[redacted]')));
+    const statuses = ['worker ready', '[warning] retry complete', '{"state":"idle"}'];
+    const markerEnd = key.indexOf('.') + 1;
+    for (const split of [4, markerEnd - 1, markerEnd, key.lastIndexOf('.'), key.length - 1]) {
+      const context = 'İşlem ';
+      const lines = [context + key.slice(0, split), key.slice(split), ...statuses];
+      const rows = await persisted(route, [lines.join('\n')]);
+      const worker = route === 'worker' || route === 'named-worker';
+      const mask = '[redacted]';
+      const first = split <= markerEnd ? lines[0]! : context + mask;
+      const second = split === key.length - 1 ? key.slice(split) : mask;
+      const expected = [first, second, ...statuses];
+      expect(rows).toEqual(
+        worker ? expected.map((line) => prefix + line) : [prefix + expected.join('\n')],
       );
-      const statuses = ['worker ready', '[warning] retry complete', '{"state":"idle"}'];
-      const markerEnd = key.indexOf('.') + 1;
-      for (const split of [4, markerEnd - 1, markerEnd, key.lastIndexOf('.'), key.length - 1]) {
-        const context = 'İşlem ';
-        const lines = [context + key.slice(0, split), key.slice(split), ...statuses];
-        const rows = await persisted(route, [lines.join('\n')]);
-        const prefix = route === 'named-worker' || route === 'service' ? 'Token: ' : '';
-        if (route === 'direct' || route === 'service')
-          expect(rows).toEqual([prefix + context + '[redacted]\n' + statuses.join('\n')]);
-        else {
-          const omitted = '[Worker continuation omitted]';
-          const first = split < markerEnd ? lines[0]! : omitted;
-          expect(rows).toEqual([first, omitted, ...statuses].map((line) => prefix + line));
-        }
-      }
-    },
-  );
+    }
+  });
 
   it.each(routes)(
     'keeps no four-character fragment of generated credential values via %s',
