@@ -21,12 +21,13 @@ export interface WorkspaceController {
   setupTaskArea(id: string): Promise<void>;
   openTaskArea(id: string): void;
   refreshTaskArea(id: string): Promise<void>;
-  openTaskMember(areaID: string, memberID: string): Promise<string>;
+  openTaskMember(areaID: string, memberID: string, deferStart?: boolean): Promise<string>;
   addTaskTool(
     areaID: string,
     kind:
       'folder' | 'note' | 'checklist' | 'terminal' | 'chat' | 'git-changes' | 'browser' | 'server',
     url?: string,
+    deferStart?: boolean,
   ): Promise<string>;
   attachTaskPlane(areaID: string, paneID: string): void;
   arrangeTaskArea(areaID: string): void;
@@ -133,7 +134,7 @@ export interface WorkspaceController {
       /** A document package opens as the folder it is (Show Package Contents). */
       browse?: boolean;
     },
-  ): void;
+  ): void | Promise<void>;
   openPath(
     path: string,
     target?: {

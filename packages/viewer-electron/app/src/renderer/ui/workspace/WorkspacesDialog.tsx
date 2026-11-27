@@ -7,6 +7,7 @@ import { canCaptureDefinition } from '../../../domain/workspaces/definitions/cap
 import { openDefinition, receiveDefinitions } from '../../state/definitions';
 import { ProjectManagerOffer } from './ProjectManagerOffer';
 import {
+  definitionLinkMatches,
   definitionSourceNotice,
   definitionWasRemoved,
   linkedDefinition,
@@ -473,6 +474,15 @@ function DefinedRows({
       .catch(report)
       .finally(() => setBusy(false));
   };
+  const original = (item: WorkspaceDefinition) =>
+    catalog?.definitions.find(
+      (definition) => definition.key === item.key && definition.source === item.source,
+    );
+  const open = (item: WorkspaceDefinition) =>
+    action(async () => {
+      await openDefinition(item.key);
+      onClose();
+    });
   const notWorkspace = (item: WorkspaceDefinition) =>
     action(async () => {
       receiveDefinitions(
@@ -500,17 +510,30 @@ function DefinedRows({
         />
       )}
       <div className="workspace-catalog-controls">
-        <input
-          data-autofocus
-          type="search"
-          aria-label="Search definitions"
-          placeholder="Search definitions…"
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setPage(0);
-          }}
-        />
+        <div className="workspace-catalog-search">
+          <Icon name="search" size={16} />
+          <input
+            data-autofocus
+            type="search"
+            aria-label="Search definitions"
+            placeholder="Search definitions…"
+            value={query}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' || event.nativeEvent.isComposing || busy) return;
+              const first = rows.find(
+                (item) => !original(item)?.hidden && item.rootState !== 'missing',
+              );
+              if (first) {
+                event.preventDefault();
+                open(first);
+              }
+            }}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(0);
+            }}
+          />
+        </div>
         <ChoiceButton
           label="Sort definitions"
           value={sort}
@@ -526,8 +549,8 @@ function DefinedRows({
       </div>
       <ul className="workspace-catalog-list" aria-label="Defined workspaces">
         {rows.map((item) => {
-          const written = catalog?.definitions.find((definition) => definition.key === item.key);
-          const opened = saved.workspaces.some((space) => space.definition?.key === item.key);
+          const written = original(item);
+          const opened = saved.workspaces.some((space) => definitionLinkMatches(space, item));
           const found = item.source === 'found';
           return (
             <li key={item.key}>
@@ -554,12 +577,7 @@ function DefinedRows({
                       ? 'Its root folder is missing.'
                       : undefined
                 }
-                onClick={() =>
-                  action(async () => {
-                    await openDefinition(item.key);
-                    onClose();
-                  })
-                }
+                onClick={() => open(item)}
               >
                 {opened ? 'Switch' : 'Open'}
               </button>

@@ -182,18 +182,26 @@ export class Reconstructions {
       });
     if (request.kind === 'list') {
       await this.ports.canvases.read(owner, request.canvasID);
-      const names = await readdir(path.join(this.root, 'reconstruction-jobs')).catch(
-        (error: NodeJS.ErrnoException) => {
-          if (error.code === 'ENOENT') return [];
-          throw error;
-        },
-      );
+      const entries = await readdir(path.join(this.root, 'reconstruction-jobs'), {
+        withFileTypes: true,
+      }).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return [];
+        throw error;
+      });
       const jobs: ReconstructionSummary[] = [];
-      for (const name of names
-        .filter((name) => name.endsWith('.json') && z.uuid().safeParse(name.slice(0, -5)).success)
+      for (const { name } of entries
+        .filter(
+          (entry) =>
+            entry.isFile() &&
+            entry.name.endsWith('.json') &&
+            z.uuid().safeParse(entry.name.slice(0, -5)).success,
+        )
         .slice(0, 1000)) {
-        const job = await this.store(name.slice(0, -5)).load();
-        if (job?.canvasID === request.canvasID)
+        // An unreadable record stays on disk and cannot hide the other paid requests.
+        const job = await this.store(name.slice(0, -5))
+          .load()
+          .catch(() => null);
+        if (job?.id === name.slice(0, -5) && job.canvasID === request.canvasID)
           jobs.push({ id: job.id, prompt: job.prompt, state: job.state, created: job.created });
       }
       return { configured, jobs: jobs.toSorted((a, b) => b.created - a.created).slice(0, 20) };

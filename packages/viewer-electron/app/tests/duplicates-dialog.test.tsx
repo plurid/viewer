@@ -118,3 +118,37 @@ it('reads copies on a volume from the folder they share there', async () => {
   expect(heading(backupYears!)).toBe('/Volumes/Backup');
   expect(copies(backupYears!)).toEqual(['2023/z.jpg', '2024/z.jpg']);
 });
+
+it('discards an old search after reopening and explains a scan limit', async () => {
+  let finish!: (value: DuplicateResult) => void;
+  const late = new Promise<DuplicateResult>((resolve) => {
+    finish = resolve;
+  });
+  const limited: DuplicateResult = {
+    id: 'new',
+    roots: [home],
+    groups: [],
+    scanned: 3,
+    coverage: 'partial',
+    errors: [],
+    created: 1,
+    depthLimited: true,
+  };
+  vi.mocked(window.viewer.duplicates).mockImplementation(async (request) =>
+    request.kind === 'cancel' ? null : request.roots[0] === home ? late : limited,
+  );
+  render(<DuplicateControls />);
+  act(() => sendWindowEvent('viewer:duplicates', [home]));
+  fireEvent.click(screen.getByRole('button', { name: 'Find Duplicates' }));
+  fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!);
+  act(() => sendWindowEvent('viewer:duplicates', [home + '/Pictures']));
+  await act(async () => {
+    finish({ ...limited, scanned: 999 });
+  });
+  expect(screen.queryByText(/999 checked/)).toBeNull();
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Find Duplicates' }));
+  });
+  expect(screen.getByRole('status').textContent).toMatch(/64/);
+  expect(screen.getByRole('status').textContent).not.toMatch(/0 items/);
+});

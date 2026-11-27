@@ -49,3 +49,7 @@ export const readOnlyGitAction = (kind: GitActionKind): boolean =>
 export function humanGitCommand(id: string): boolean {
   return id.startsWith('git-action.') || id.startsWith('git-action-');
 }
+
+export function gitActionTarget(kind: GitActionKind, target: CapturedTarget): CapturedTarget {
+  return kind === 'stage-selected' ? target : { ...target, selection: [] };
+}

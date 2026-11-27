@@ -28,6 +28,9 @@ const sectionRules: Record<string, readonly string[]> = {
     'A recorded ⌘+ or ⌘ß displays the pressed key. An unsupported key keeps the recorder listening.',
   ],
   Speech: ['The hosted provider’s policy is one line; Name sits at the shared edge.'],
+  Search: [
+    'The exclusion editor shows home paths beginning with ~/ and keeps folder names as entered.',
+  ],
   Agents: ['A grant’s folder button shows the folder’s name, its path once below.'],
 };
 

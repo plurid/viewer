@@ -15,6 +15,14 @@
   container-type: size;
   pointer-events: none;
 }
+
+.tour-stops-footer button {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
 .space-overlay:has(> [data-collapsed]) {
   grid-template-rows: minmax(min-content, 1fr);
 }

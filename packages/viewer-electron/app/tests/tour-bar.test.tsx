@@ -9,6 +9,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { FileEntry } from '../src/domain/contracts';
 import type { TourDocument, TourRequest, TourStop } from '../src/domain/tours/tour';
 import type { WorkspaceController } from '../src/renderer/workspace/context';
+import { TourStops } from '../src/renderer/workspace/tours/TourStops';
+import { WorkspaceContext } from '../src/renderer/workspace/context';
 import { TourBar } from '../src/renderer/workspace/tours/TourBar';
 import { activeWorkspace, addPane, initialize, setActivePane } from '../src/renderer/state/store';
 import {
@@ -270,4 +272,26 @@ it('keeps the draft being edited when Edit stops is chosen at the end of playing
   fireEvent.click(screen.getByRole('button', { name: 'Edit Stops' }));
   expect(tourPlayback()).toBeNull();
   expect(tourDraft()?.stops[0]?.caption).toBe('Edited');
+});
+
+it('fits the full file and tour names into their footer actions', () => {
+  const stem = 'Quarterly review '.repeat(9).trim();
+  const name = stem + '.pdf';
+  setActivePane(addPane('/Jobs/' + name, 'preview', true).id);
+  editTour({
+    file: '/Jobs/' + stem + '.viewer-tour.jsonc',
+    root: '/Jobs',
+    revision: 'r',
+    definition: { version: 1, name: stem, stops: [] },
+  });
+  const view = render(
+    <WorkspaceContext.Provider value={workspace}>
+      <TourStops />
+    </WorkspaceContext.Provider>,
+  );
+  for (const button of [
+    view.getByRole('button', { name: /^Add / }),
+    view.getByRole('button', { name: /^Save / }),
+  ])
+    expect(button.querySelector('[data-file-name]')).toBeTruthy();
 });

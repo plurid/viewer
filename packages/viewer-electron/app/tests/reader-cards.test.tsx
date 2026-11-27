@@ -29,6 +29,7 @@ import {
 import { layoutFailures } from '../src/domain/previews/documents/layout';
 import { restoreApiErrors } from '../src/renderer/api-boundary';
 import { newModelProvider } from '../src/domain/models/providers';
+import { PreviewRecovery } from '../src/renderer/previews/PreviewRecovery';
 import { PreviewHost } from '../src/renderer/previews/PreviewHost';
 import { CommandRegistry } from '../src/renderer/commands/registry';
 import { CommandsContext } from '../src/renderer/commands/context';
@@ -237,6 +238,7 @@ it.each(cases)('renders the $card reader refusal "$sentence"', async ({ card, se
   const viewer = {
     ...window.viewer,
     resource: read,
+    list: read,
     identifyFile: read,
     release: async () => {},
     watch: async () => {},
@@ -291,6 +293,9 @@ it.each(cases)('renders the $card reader refusal "$sentence"', async ({ card, se
         <PreviewHost path="/fixture/file" />
       </CommandsContext>
     ),
+    recovery: () => (
+      <PreviewRecovery path="/fixture/old.pdf" entry={{ ...context('pdf', {}).resource.entry, identity: 'fixture' }} retry={() => {}} locate={() => {}} />
+    ),
     image: () => <RenderedImagePreview {...context('tiff', services)} />,
     media: () => <MediaPreview {...context('ogv', services)} />,
     archive: () => <ArchivePreview {...context('zip', services)} />,
@@ -317,6 +322,7 @@ it.each(cases)('renders the $card reader refusal "$sentence"', async ({ card, se
     layout: () => <OfficePreview {...context('docx', { ...services, officeLayout: read })} />,
   } satisfies Record<ReaderCard, () => ReactNode>;
   const view = render(<PreviewFrameFixture>{views[card]()}</PreviewFrameFixture>);
+  if (card === 'recovery') fireEvent.click(screen.getByRole('button', {name: 'Find Renamed File'}));
   if (card === 'media') fireEvent.error(view.container.querySelector('video')!);
   if (card === 'identify')
     fireEvent.click(screen.getByRole('button', { name: 'Ask Fixture model' }));

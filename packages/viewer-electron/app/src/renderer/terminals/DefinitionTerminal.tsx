@@ -70,7 +70,7 @@ export function DefinitionTerminal({ pane }: { pane: TerminalPane }) {
     );
   return (
     <div className="definition-terminal">
-      {choice.phase === 'starting' || choice.phase === 'started' ? (
+      {choice.phase === 'started' ? (
         <>
           {choice.error ? (
             <p className="definition-command-error" role="alert">
@@ -94,9 +94,11 @@ export function DefinitionTerminal({ pane }: { pane: TerminalPane }) {
             definitionRunReason([pane.id]) ??
             (presentation.kind === 'checking'
               ? 'Checking the terminal folder…'
-              : presentation.kind === 'unavailable'
-                ? 'This terminal’s command is no longer in the definition. Choose Shell only.'
-                : undefined)
+              : presentation.kind === 'folder-unavailable'
+                ? 'The terminal folder is missing or cannot be accessed.'
+                : presentation.kind === 'unavailable'
+                  ? 'This terminal’s command is no longer in the definition. Choose Shell only.'
+                  : undefined)
           }
           onRun={() => start(true)}
           onShellOnly={() => start(false)}

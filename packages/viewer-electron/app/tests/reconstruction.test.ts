@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import { inflateSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -210,4 +210,17 @@ describe('reconstruction assets', () => {
     ])
       expect(() => reconstructionAssetURL(url)).toThrow();
   });
+});
+
+it('lists healthy reconstruction jobs alongside unreadable records', async () => {
+  const folder = path.join(root, 'reconstruction-jobs');
+  const broken = path.join(folder, randomUUID() + '.json');
+  await writeFile(broken, 'broken');
+  await symlink(
+    path.join(folder, prepared.id + '.json'),
+    path.join(folder, randomUUID() + '.json'),
+  );
+  const reply = await service.handle(1, { kind: 'list', canvasID: prepared.canvasID });
+  expect(reply.jobs?.map((job) => job.id)).toEqual([prepared.id]);
+  expect(await readFile(broken, 'utf8')).toBe('broken');
 });

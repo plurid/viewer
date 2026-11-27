@@ -14,7 +14,7 @@ How to read an item:
 - Findings about security, an agent acting beyond its grant, or losing files are kept out of this
   page until they are fixed.
 
-Open here: 175 (S1 0, S2 54, S3 121); 52 confirmed.
+Open here: 180 (S1 0, S2 55, S3 125); 52 confirmed.
 
 ## Decisions the owner made
 
@@ -100,6 +100,8 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
   `src/desktop/files/file-services.ts:91`
 - **S2** z jump suggestions stay empty and checking forever if an unknown rank precedes ten known.
   `src/renderer/explorer/useFolderSuggestions.ts:53-62` Confirmed.
+- **S3** A long name in Grid view breaks its first line inside a word, and one name shows a space
+  after the ellipsis.
 - **S3** aria-activedescendant points to nonexistent IDs in Grid, Gallery, and Map views.
   `src/renderer/explorer/FolderExplorer.tsx:577`
 - **S3** CollectionExplorer double-click ignores nativeOpening and blank space fails to clear.
@@ -276,9 +278,12 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
   `src/renderer/pdf-tools/PDFToolsDialog.tsx:152-166`
 - **S3** PDFPagePreview never clears its 15 s slow-load error if the PDF finishes loading later.
   `src/renderer/pdf-tools/PDFPagePreview.tsx:35-37`
+- **S3** The Optimize dialog's result table scrolls sideways with long names.
 
 ## Previews
 
+- **S2** A preview resource whose private access was withdrawn answers 500 instead of 404, and its
+  test fails. `src/desktop/previews/resources.ts`
 - **S2** A supplied preview resource still has no Try Again action after a transient read failure.
   `src/renderer/previews/PreviewHost.tsx:544`
 - **S3** A typed worker refusal resolves as a successful undefined result when its diagnostic text
@@ -306,6 +311,7 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
   `src/renderer/styles/base.css:160-164`
 - **S3** NumberField inside FormField stretches full width instead of staying compact.
   `src/renderer/ui/form-fields.css:23-33`
+- **S3** Seven screens show full home paths instead of ~.
 - **S3** Text CopyButton hides failure reasons from sighted users, especially in Settings.
   `src/renderer/ui/primitives.tsx:391-394`
 - **S3** The speech language menu's search field reads 'Search' where its checklist expects 'Search
@@ -331,6 +337,7 @@ See the [roadmap](../research/roadmap.md) for features after these fixes.
   `tools/review/page.ts:81-101`
 - **S3** Review sheet blocks keyboard zoom, hides mark state and leaves empty headings on filter.
   `tools/review/sheet-script.ts:189-220`
+- **S3** The review run cannot show the Trash's rows: its sample Trash 'could not be verified'.
 - **S3** Wildcard covers.commands entries never match runtime command IDs in coverage.
   `tools/review/coverage.ts:189-193`
 

@@ -198,20 +198,17 @@
   padding: 9px var(--gap-panel);
   border-bottom: 1px solid var(--line);
 }
-.optimize-results td:first-child {
+.optimize-results td:nth-child(2) {
   overflow-wrap: anywhere;
 }
-.optimize-results td:nth-child(2),
-.optimize-results td:nth-child(3) {
+.optimize-results td:nth-child(3),
+.optimize-results td:nth-child(4) {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.optimize-results td:last-child {
+.optimize-results td:nth-child(5) {
   max-width: 300px;
   overflow-wrap: anywhere;
-}
-.optimize-results td button {
-  margin-inline-start: var(--gap-inline);
 }
 .optimize-savings {
   color: var(--accent);

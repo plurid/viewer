@@ -146,14 +146,20 @@ marks the column. A folder filter keeps its last valid query while you correct i
 The index stores each file's name, path, extension, kind, size and modification time, locally.
 Indexing never runs OCR and never sends data to a model. Offline drives keep their last results.
 Removing a location removes its rows and its **Contents** grant. Turning **Contents** off removes
-the stored text for that location, also while indexing is paused.
+the stored text for that location, also while indexing is paused. Index size depends on the number
+of files and enabled content locations. Each file has one metadata record. File names and enabled
+text have a trigram index for substring matching. Each text-indexed file keeps up to 150,000
+characters of searchable text and up to 150,000 characters of source passages with their locations.
+Rebuilding rereads the files and returns unused database pages to disk.
 
 ### Excluded names and paths
 
 A name matches any path component: `node_modules` skips every folder of that name. A full path
-excludes that location and everything inside it. Rules are not glob patterns. Matching folders are
-skipped before they are read, in indexing, document text, subfolder searches of unindexed folders
-and Spotlight-assisted results. They still show in ordinary folder browsing.
+excludes that location and everything inside it. In the exclusion editor, `~/` refers to your home
+folder and `~/Library` refers to the Library folder inside it. A bare `~` matches a folder named
+`~`. Rules are not glob patterns. Matching folders are skipped before they are read, in indexing,
+document text, subfolder searches of unindexed folders and Spotlight-assisted results. They still
+show in ordinary folder browsing.
 
 New configurations exclude `~/Library` and these names: `.git`, `node_modules`, `.venv`, `venv`,
 `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.tox`, `.nox`, `.cache`, `.vite`,
@@ -167,8 +173,8 @@ With **Document text** on, the words at the top level of the query match a file'
 indexed text (including non-adjacent multi-word queries and `OR` queries, preferring passages that
 contain every query word); `name:` still matches the name only, and every other filter still applies
 to the file. Select a match to see its passage (**Page**, **Chapter**, **Line** or **Passage**) and
-open the document there. Changing the query or scope hides old results and passages until the new
-answer arrives.
+open the document there. Changing the query or scope clears the selection and hides old results and
+passages until the new answer arrives. Paging within a search keeps its selection.
 
 | Read for document text                                                                  | Limit                                    |
 | --------------------------------------------------------------------------------------- | ---------------------------------------- |

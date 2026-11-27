@@ -251,6 +251,12 @@ it('sets up checkout, note, terminal and Git views once and reopens the same res
   const f = fixture();
   const id = await f.methods.newTaskArea(f.target, 'Branch task');
   await f.methods.setupTaskArea(id);
+  const terminal = activeWorkspace().panes.find((pane) => pane.type === 'terminal')!;
+  expect(terminal.startOnOpen).toBe(false);
+  expect(terminalStartDeferred(terminal.id)).toBe(true);
+  expect(activeWorkspace().panes.find((pane) => pane.type === 'git-changes')?.activation).toBe(
+    'manual',
+  );
   const first = activeWorkspace().taskAreas![0]!;
   expect(first.members.map((member) => member.reference.kind).sort()).toEqual([
     'folder',
@@ -260,7 +266,6 @@ it('sets up checkout, note, terminal and Git views once and reopens the same res
   ]);
   expect(f.documents.size).toBe(1);
   const note = activeWorkspace().panes.find((pane) => pane.type === 'note')!;
-  const terminal = activeWorkspace().panes.find((pane) => pane.type === 'terminal')!;
   removePanes([note.id, terminal.id]);
   await f.methods.setupTaskArea(id);
   const next = activeWorkspace().taskAreas![0]!;

@@ -26,6 +26,7 @@ import {
   defaultSheet,
   inchSheetPresets,
   nestingDefaults,
+  nestingLimits,
   rotationAngles,
   rotationLabels,
   sheetAllowance,
@@ -575,8 +576,9 @@ export function NestingPanel({
     (grouped && group?.thickness !== undefined ? `, ${thicknessText(group.thickness)}` : '');
   const job = jobs.find((item) => item.id === saving.job);
   // What Save nesting writes, and what a fabrication handoff saves as its cut sheets.
+  const overLimit = best && (best.placed > nestingLimits.pieces || best.sheets > nestingLimits.sheets);
   const savable = useMemo(() => {
-    if (!best || !problem) return undefined;
+    if (!best?.sheets || overLimit || !problem) return undefined;
     const used = read.filter((file) => active.some((row) => row.file.key === file.key));
     const source = new Map(used.map((file, index) => [file.key, index]));
     const plan: NestingTransform = {
@@ -613,7 +615,7 @@ export function NestingPanel({
       units,
     };
     return { plan, used };
-  }, [best, problem, read, active, choices, formats, settings, title, units]);
+  }, [best, overLimit, problem, read, active, choices, formats, settings, title, units]);
   useEffect(() => {
     if (savable && settled && verification?.ok)
       prepareNesting({
@@ -690,12 +692,12 @@ export function NestingPanel({
                   : boxFormat !== undefined
                     ? `About ${countText(boxes[boxFormat]!.sheets.length, 'sheet')}`
                     : ''}
-                {best
+                {best?.sheets
                   ? ` · ${formatsUsed(
                       best.layout.sheets.map((sheet) => formats[sheet.format]!),
                       units,
                     )}`
-                  : boxFormat !== undefined
+                  : !best && boxFormat !== undefined
                     ? ` · ${formatsUsed([formats[boxFormat]!], units)}`
                     : ''}
               </h2>
@@ -722,7 +724,9 @@ export function NestingPanel({
                 <span className={search.status === 'failed' ? 'nesting-problem' : 'muted'}>
                   {best ? status : `Boxes estimate. ${status}`}
                 </span>
-                {verification && (
+                {overLimit && <span>Save up to {nestingLimits.pieces.toLocaleString()} pieces on {nestingLimits.sheets} sheets.</span>}
+                {best?.sheets === 0 && <span>No parts fit the available sheets.</span>}
+                {best && best.sheets > 0 && verification && (
                   <span className={verification.ok ? 'muted' : 'nesting-problem'}>
                     {verification.ok
                       ? Number.isFinite(verification.closest)
@@ -744,7 +748,7 @@ export function NestingPanel({
                 <button
                   type="button"
                   className="primary"
-                  disabled={!best || !!saving.busy || (verification && !verification.ok)}
+                  disabled={!savable || !!saving.busy || (verification && !verification.ok)}
                   onClick={() => void save()}
                 >
                   Save Nesting

@@ -59,10 +59,20 @@ export function offeredDefinition(
  * inner roots included, as it already is that workspace.
  */
 export function workspaceOffer(input: WorkspaceOfferInput): WorkspaceOffer | undefined {
-  const definition = offeredDefinition(input.folder, input.definitions);
-  if (!definition) return;
-  if (linkedTo(input.current, definition)) return;
-  if (mostlyInside(input.current, definition.root)) return;
+  const owner = offeredDefinition(input.folder, input.definitions);
+  if (!owner || mostlyInside(input.current, owner.root)) return;
+  const definition = owningDefinition(
+    owner.root,
+    input.definitions,
+    (item) =>
+      item.root === owner.root &&
+      searchableDefinition(item) &&
+      (owner.source === 'found' || item.source !== 'found') &&
+      (richDefinition(item) ||
+        !!item.remembered?.planes ||
+        input.workspaces.some((space) => linkedTo(space, item))),
+  );
+  if (!definition || linkedTo(input.current, definition)) return;
   const open = input.workspaces.find(
     (space) => space.id !== input.current.id && linkedTo(space, definition),
   );

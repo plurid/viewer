@@ -30,6 +30,7 @@ import { unitInfo } from '../../../domain/previews/drawings/dxf/units';
 import { getState } from '../../state/store';
 import { defaultChoice, startingChoices } from './NestingPanel';
 import { prepareNesting } from './prepared';
+import { eachLimited } from '../measure';
 import { PartsClient, baseName, defaultUnits } from './useNestingFiles';
 import { nestingWorkers } from './workers';
 
@@ -92,16 +93,23 @@ export async function nestWithoutPlane(
   const chosen = groups.filter((group) => wanted.has(group.key));
   const files = chosen.flatMap((group) => group.items);
   progress(`Reading ${countText(files.length, 'drawing')}…`);
+  signal.throwIfAborted();
   const reader = new PartsClient();
+  const cancel = () => reader.close();
+  signal.addEventListener('abort', cancel, {once: true});
   try {
-    // every read ends, releasing its file, before the worker closes
-    const reads = await Promise.allSettled(files.map((path) => readDrawing(reader, path)));
-    const failed = reads.find((item) => item.status === 'rejected');
-    if (failed) throw failed.reason;
+    const read = new Map<string, Drawing>();
+    let failure: Error | undefined;
+    await eachLimited(files, 6, async (path) => {
+      if (failure || signal.aborted) return;
+      try {
+        read.set(path, await readDrawing(reader, path));
+      } catch (error) {
+        failure = new Error(errorMessage(error));
+      }
+    });
     signal.throwIfAborted();
-    const read = new Map(
-      reads.flatMap((item) => (item.status === 'fulfilled' ? [[item.value.path, item.value]] : [])),
-    );
+    if (failure) throw failure;
     const made: HeadlessNesting[] = [];
     for (const group of chosen) {
       const item = await nestGroup(
@@ -117,6 +125,7 @@ export async function nestWithoutPlane(
     }
     return made;
   } finally {
+    signal.removeEventListener('abort', cancel);
     reader.close();
   }
 }

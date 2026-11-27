@@ -3,6 +3,7 @@ import { bindGitTarget, type GitTargetWindow } from '../comparison/git-target';
 import type { GitReader } from '../comparison/git';
 import type { GitWorktrees } from '../comparison/worktrees';
 import type { GitReviews } from '../comparison/review';
+import { gitActionTarget } from '../../domain/comparison/git-actions';
 import type { GitActions } from '../comparison/git-actions';
 import type { Resources } from '../previews/resources';
 import type { JournalActivity } from '../journal/activity';
@@ -56,7 +57,10 @@ export function createGitHandlers(ports: GitPorts): GitHandlers {
     },
     gitAction: async ([request], owner) => {
       if (ports.isAgent(owner)) throw new Error('Agents cannot run Git program actions.');
-      const target = await bindGitTarget(request.target, ports.window(owner));
+      const target = await bindGitTarget(
+        gitActionTarget(request.kind, request.target),
+        ports.window(owner),
+      );
       return ports.activity.at({ workspaceID: target.workspaceID, planeID: target.paneID }, () =>
         ports.activity.git(request.id, request.kind, () =>
           ports.actions.start({ ...request, target }, owner),

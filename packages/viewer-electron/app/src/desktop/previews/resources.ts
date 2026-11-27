@@ -1037,13 +1037,24 @@ export class Resources {
       return resourceFailure(500);
     }
   }
+  private async checkResponseAccess(file: string) {
+    try {
+      await this.access([file]);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | null)?.code;
+      // A private grant that no longer permits access is indistinguishable from an expired URL.
+      if (!code || code === 'FILE_ACCESS_REQUIRED')
+        throw new WebPreviewError(404, 'This preview resource has expired.');
+      throw error;
+    }
+  }
   private async respond(request: Request, scope: PreviewScope): Promise<Response> {
     let opened: FileHandle | undefined;
     let claim: Awaited<ReturnType<typeof fileCoordination.acquire>> | undefined;
     try {
       const url = new URL(request.url);
       const grant = this.get(url.hostname);
-      if (grant.authority) await this.access([grant.authority]);
+      if (grant.authority) await this.checkResponseAccess(grant.authority);
       if (!['GET', 'HEAD'].includes(request.method)) return resourceFailure(405);
       const relative = decodeURIComponent(url.pathname.replace(/^\/asset\//, ''));
       if (
@@ -1070,7 +1081,7 @@ export class Resources {
           return resourceFailure(429);
         grant.assets?.add(file);
       }
-      if (!grant.data) await this.access([file!]);
+      if (!grant.data) await this.checkResponseAccess(file!);
       if (file && !grant.data) {
         claim = await fileCoordination.acquire(
           [{ path: file, mode: 'read', stream: true }],
@@ -1079,7 +1090,7 @@ export class Resources {
         claim.signal?.throwIfAborted();
         scope.check();
         file = claim.path(file);
-        await this.access([file]);
+        await this.checkResponseAccess(file);
         this.get(url.hostname);
       }
       const info = grant.data ? null : await stat(file!);

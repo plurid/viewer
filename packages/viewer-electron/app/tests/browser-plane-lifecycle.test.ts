@@ -10,7 +10,11 @@ const fixture = vi.hoisted(() => ({
       forcefullyCrashRenderer: ReturnType<typeof vi.fn>;
       reload: ReturnType<typeof vi.fn>;
       getZoomFactor(): number;
-      debugger: { sendCommand: ReturnType<typeof vi.fn> };
+      debugger: {
+        attached: boolean;
+        attach: ReturnType<typeof vi.fn>;
+        sendCommand: ReturnType<typeof vi.fn>;
+      };
     };
     destroy(): void;
     gone: boolean;
@@ -39,7 +43,16 @@ vi.mock('electron', () => ({
       navigationHistory: { canGoBack: () => false, canGoForward: () => false },
       setFrameRate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
-      debugger: { attach: vi.fn(), sendCommand: vi.fn(async () => {}) },
+      debugger: {
+        attached: false,
+        isAttached() {
+          return this.attached;
+        },
+        attach: vi.fn(function (this: { attached: boolean }) {
+          this.attached = true;
+        }),
+        sendCommand: vi.fn(async () => {}),
+      },
       crashed: false,
       isCrashed() {
         return this.crashed;
@@ -213,4 +226,20 @@ it('destroys page windows at Quit, so a page cannot hold it', async () => {
   await browsers.closeAll();
   expect(native.close).not.toHaveBeenCalled();
   expect(native.gone).toBe(true);
+});
+
+it('restores the debugger and focus before input after a renderer crash', async () => {
+  const { browsers, guest } = await opened();
+  const debug = guest.webContents.debugger;
+  debug.attached = false;
+  guest.webContents.emit('render-process-gone', {}, { reason: 'crashed' });
+  await browsers.request(1, { kind: 'action', id: 'page', action: 'reload' });
+  debug.sendCommand.mockClear();
+  await browsers.request(1, { kind: 'input', id: 'page', event: { type: 'text', text: 'a' } });
+  expect(debug.attach).toHaveBeenCalledTimes(2);
+  expect(debug.sendCommand.mock.calls.map(([command]) => command)).toEqual([
+    'Emulation.setFocusEmulationEnabled',
+    'Input.insertText',
+  ]);
+  await browsers.closeAll();
 });

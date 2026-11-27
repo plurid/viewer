@@ -261,9 +261,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
     ...(plan.segments.every((segment) => draft.sources[segment.source]?.info.video)
       ? ['mp4', 'mov']
       : []),
-    'm4a',
-    'wav',
-    'flac',
+    ...(plan.segments.every(segment => draft.sources[segment.source]?.info.audio) ? ['m4a', 'wav', 'flac'] : []),
   ];
   const mediaProps = {
     src: granted.resource?.url,
@@ -500,10 +498,20 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
             <button
               disabled={plan.segments.length >= 32}
               onClick={() => {
+                const segments = [...plan.segments, { source, ...selectedRange }];
+                const video = segments.every(segment => draft.sources[segment.source]?.info.video);
+                const audio = segments.every(segment => draft.sources[segment.source]?.info.audio);
+                if (!video && !audio) {
+                  setMessage('These segments share neither a video stream nor an audio stream. Choose another source.');
+                  return;
+                }
+                const videoFormat = plan.format === 'mp4' || plan.format === 'mov';
+                const format = videoFormat && !video ? 'm4a' : !videoFormat && !audio ? 'mp4' : plan.format;
+                setMessage('');
                 session.plan((plan) => ({
-                  ...plan,
-                  cut: 'exact',
-                  segments: [...plan.segments, { source, ...selectedRange }],
+                  ...plan, format,
+                  audio: !video && plan.audio.mode === 'mute' ? {...plan.audio, mode: 'keep'} : plan.audio,
+                  cut: 'exact', segments,
                 }));
                 setSelected(plan.segments.length);
               }}
@@ -769,7 +777,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
             <input
               type="checkbox"
               checked={separate}
-              onChange={(event) => setSeparate(event.target.checked)}
+              onChange={(event) => {setSeparate(event.target.checked); if(event.target.checked) setFrame(false);}}
             />
             Export each segment
           </label>
@@ -778,7 +786,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
               <input
                 type="checkbox"
                 checked={frame}
-                onChange={(event) => setFrame(event.target.checked)}
+                onChange={(event) => {setFrame(event.target.checked); if(event.target.checked) setSeparate(false);}}
               />
               Export current frame as PNG
             </label>
@@ -789,7 +797,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
             onChange={setName}
             folder={folder}
             disabled={busy || !!runningExport}
-            numberedSuffix={separate ? ' 1' : ''}
+            numberedSuffix={separate ? ` ${plan.segments.length}` : ''}
           />
           <DestinationField path={folder} onChange={setFolder} disabled={busy || !!runningExport} />
           {separate && (
@@ -802,7 +810,7 @@ export default function MediaPlane({ pane, active }: { pane: Pane; active: boole
             disabled={
               busy ||
               snapshot.saving ||
-              !!fileNameError(name, extension, separate ? ' 1' : '') ||
+              !!fileNameError(name, extension, separate ? ` ${plan.segments.length}` : '') ||
               !folder.trim()
             }
             onClick={() => void exportMedia()}

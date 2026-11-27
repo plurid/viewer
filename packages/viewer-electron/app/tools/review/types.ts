@@ -74,6 +74,8 @@ export interface SceneSetup {
   titlebar?: boolean;
   /** A second workspace for the switcher and Manage, with this name. */
   otherWorkspace?: string;
+  /** A defined workspace with a command whose working folder is missing. */
+  missingTerminalFolder?: boolean;
   /** This many more workspaces, for long switcher lists. */
   extraWorkspaces?: number;
   /** Sample commands local to this capture's configuration. */

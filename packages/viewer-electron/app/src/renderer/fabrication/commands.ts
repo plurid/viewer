@@ -7,8 +7,9 @@ import { folderContents, jobContents } from '../../domain/fabrication/job-files'
 import { listText } from '../../domain/fabrication/plan';
 import { countText } from '../../domain/layout/nesting/format';
 import { fileName } from '../../domain/tours/tour';
-import { activeWorkspace } from '../state/store';
+import { activeWorkspace, getState } from '../state/store';
 import {
+  canRetryExport,
   checkSession,
   clockText,
   exportHandoff,
@@ -202,7 +203,7 @@ function notGraded(): string {
 const unsaved = () => {
   const current = graded();
   return (current?.result?.findings ?? []).filter(
-    (item) => item.correction && !current?.corrections[item.finding.id],
+    (item) => item.correction && canRetryExport(getState().jobs.find(job => job.id === current?.corrections[item.finding.id])),
   );
 };
 /** A spoken plan names each after "check this job": the check's result is what they act on. */
@@ -317,7 +318,7 @@ export function checkResultCommands(workspace: WorkspaceController): CommandDefi
         const current = graded();
         return (
           !!current &&
-          !current.handoff &&
+          canRetryExport(context.jobs.find(job => job.id === current.handoff)) &&
           !current.handoffProgress &&
           !handoffNestings(current, context.jobs).hold
         );
@@ -325,7 +326,7 @@ export function checkResultCommands(workspace: WorkspaceController): CommandDefi
       unavailable: (context) => {
         const current = graded();
         if (!current) return notGraded();
-        if (current.handoff) return 'The handoff is saved.';
+        if (context.jobs.some(job => job.id === current.handoff && job.status === 'completed')) return 'The handoff is saved.';
         return handoffNestings(current, context.jobs).hold ?? 'The handoff is being exported.';
       },
       run: () => exportHandoff(),

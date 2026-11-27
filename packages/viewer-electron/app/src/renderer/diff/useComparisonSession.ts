@@ -121,7 +121,8 @@ export function useComparisonSession(
       const resources = [a, b].filter((value): value is Resource => !!value);
       const image =
         resources.length > 0 &&
-        resources.every((resource) => resource.entry.mime.startsWith('image/'));
+        resources.every((resource) => resource.entry.mime.startsWith('image/')) &&
+        !resources.every((resource) => resource.entry.mime === 'image/svg+xml');
       const texts = image
         ? ['', '']
         : await Promise.all(

@@ -150,3 +150,15 @@ it.each(['commit', 'push'] as const)(
     expect(terminal().options.disableStdin).toBe(true);
   },
 );
+
+it('retries a failed terminal start on remount', async () => {
+  fake.session.started = false;
+  const start = vi.fn().mockRejectedValueOnce(new Error('Declined')).mockResolvedValue(undefined);
+  Object.assign(window.viewer, { terminalStart: start, terminalResize: vi.fn(async () => {}) });
+  const first = show();
+  await first.view.findByText('Declined');
+  first.view.unmount();
+  show();
+  await waitFor(() => expect(start).toHaveBeenCalledTimes(2));
+  expect(fake.session.started).toBe(true);
+});

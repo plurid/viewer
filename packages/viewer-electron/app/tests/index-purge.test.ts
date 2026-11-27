@@ -4,7 +4,7 @@
  * now purged when the exclusions change, so the count needs the roots alone; and the purges, which
  * read every row, run only when the configuration they apply has changed.
  */
-import { mkdir } from 'node:fs/promises';
+import { chmod, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -20,6 +20,63 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks();
   await trashTemporary(root);
+});
+
+it('compacts an existing database and keeps surviving names and passages on the same rows', async () => {
+  const file = path.join(root, 'existing.db');
+  const previous = new DatabaseSync(file);
+  previous.exec('PRAGMA auto_vacuum=NONE; CREATE TABLE original_marker(n INTEGER)');
+  previous.close();
+  const index = new FileIndex(file);
+  const config = { ...search(), contentRoots: [files()] };
+  index.configure(config);
+  await index.settled();
+  await rows(
+    index,
+    Array.from({ length: 400 }, (_, i) => 'old/file-' + i),
+  );
+  const item = {
+    ...(await entry(files())),
+    name: 'Kept.txt',
+    path: path.join(files(), 'Kept.txt'),
+    directory: false,
+  };
+  index.put(item, files(), 1, 'passage marker');
+  index.configure({ ...config, exclusions: ['old'] }, true);
+  await index.settled();
+  expect(index.query({ query: 'marker', content: true }).evidence?.[0]?.path).toBe(item.path);
+  await index.close();
+  const db = new DatabaseSync(file);
+  try {
+    expect(db.prepare('PRAGMA auto_vacuum').get()?.auto_vacuum).toBe(2);
+  } finally {
+    db.close();
+  }
+});
+
+it('keeps searchable text and its passage without storing the full preview document', async () => {
+  const index = new FileIndex(path.join(root, 'search.db'));
+  const item = await entry(files());
+  const extra = 'irrelevant preview data'.repeat(50000);
+  index.put(item, files(), 1, {
+    path: item.path,
+    text: 'find this passage',
+    evidence: [{ source: 'text', text: 'find this passage' }],
+    metadata: { extra },
+    truncated: false,
+  });
+  expect(index.query({ query: 'passage', content: true }).evidence?.[0]?.quote).toContain(
+    'passage',
+  );
+  await index.close();
+  const db = new DatabaseSync(path.join(root, 'search.db'));
+  try {
+    expect(db.prepare('SELECT length(document) AS n FROM source_documents').get()?.n).toBeLessThan(
+      1024,
+    );
+  } finally {
+    db.close();
+  }
 });
 
 const files = () => path.join(root, 'Files');
@@ -91,4 +148,39 @@ it('skips the purges when a reopened index is configured as it was', async () =>
   await same.settled();
   expect(purges()).toBeGreaterThan(0);
   await same.close();
+});
+
+it('prunes stale files beside an unreadable subtree and retains rows inside it', async () => {
+  const blocked = path.join(files(), 'blocked');
+  await mkdir(blocked, { mode: 0o000 });
+  const index = new FileIndex(':memory:');
+  try {
+    await rows(index, ['gone.txt', 'blocked/kept.txt']);
+    index.configure({ ...search(), paused: false }, true);
+    await index.settled();
+    expect(index.status().roots[0]?.errors).toBeGreaterThan(0);
+    expect(found(index, 'gone')).toEqual([]);
+    expect(found(index, 'kept')).toEqual(['blocked/kept.txt']);
+  } finally {
+    await index.close();
+    await chmod(blocked, 0o700);
+  }
+});
+
+it('returns unused database pages after a rebuild of a smaller scope', async () => {
+  const database = path.join(root, 'index.sqlite');
+  const index = new FileIndex(database);
+  await rows(
+    index,
+    Array.from({ length: 3000 }, (_, i) => 'large-index-name-' + i + '.txt'),
+  );
+  index.configure({ ...search(), roots: [] }, true);
+  await index.settled();
+  await index.close();
+  const db = new DatabaseSync(database);
+  try {
+    expect(db.prepare('PRAGMA freelist_count').get()?.freelist_count).toBeLessThan(16);
+  } finally {
+    db.close();
+  }
 });

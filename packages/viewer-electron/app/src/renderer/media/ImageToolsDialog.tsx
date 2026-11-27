@@ -13,6 +13,7 @@ import { DestinationField } from '../ui/DestinationField';
 import { FileNameField, fileNameError } from '../ui/FileNameField';
 import { FormField } from '../ui/FormField';
 import { NumberField } from '../ui/NumberField';
+import { statusLabel } from '../ui/status-labels';
 import { useHomeText } from '../ui/PathLabel';
 import { measureLocalPoint } from '../ui/projectedResize';
 import type { Point } from '../ui/projectedResize';
@@ -218,8 +219,8 @@ export function ImageToolsDialog({
   };
   const crop = plan.crop;
   const output = inspection ? exportDimensions(width, height, plan) : undefined;
-  const shownError = useHomeText(error);
-  const status = useHomeText(job ? `${job.status}${job.detail ? ' · ' + job.detail : ''}` : '');
+  const shownError = useHomeText([error, ...(job?.errors.map(item => item.message) ?? [])].filter(Boolean).join('\n'));
+  const status = useHomeText(job ? `${statusLabel(job.status)}${job.detail ? ' · ' + job.detail : ''}` : '');
   return (
     <Dialog
       title={
@@ -486,7 +487,7 @@ export function ImageToolsDialog({
           <DestinationField path={folder} onChange={setFolder} disabled={working} />
         </div>
       </div>
-      {error && (
+      {shownError && (
         <p className="dialog-error" role="alert">
           {shownError}
         </p>

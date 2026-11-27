@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FileEntry } from '../../domain/contracts';
 import { useIndexedSearch } from './useIndexedSearch';
 import { report } from '../state/store';
 import type { SearchBatch } from '../../domain/contracts';
 import { pathContains } from '../../domain/files/paths';
-import { queryTooLong } from '../../domain/search/query';
+import { parseFileQuery, QueryError } from '../../domain/search/query';
 import { plural } from '../../domain/plural';
 const emptyEntries: FileEntry[] = [];
 /** How often streamed results reach the view while a search runs. */
@@ -12,10 +12,18 @@ const resultInterval = 100;
 
 /** Search lifetime belongs to a files plane, independently of its view mode. */
 export function useSearch(path: string, query: string, enabled: boolean, showHidden: boolean) {
-  const indexed = useIndexedSearch(query, path, enabled && !!query.trim(), showHidden);
-  // a query too long for the index is too long for the walk: the filter says what to shorten
-  const fallback =
-    enabled && !queryTooLong(query) && (indexed.result?.indexed === false || !!indexed.error);
+  const valid = useMemo(() => {
+    if (!enabled || !query.trim()) return false;
+    try {
+      parseFileQuery(query);
+      return true;
+    } catch (error) {
+      if (error instanceof QueryError) return false;
+      throw error;
+    }
+  }, [enabled, query]);
+  const indexed = useIndexedSearch(query, path, valid, showHidden);
+  const fallback = valid && (indexed.result?.indexed === false || !!indexed.error);
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [running, setRunning] = useState(false);
   const [summary, setSummary] = useState('');
@@ -47,7 +55,8 @@ export function useSearch(path: string, query: string, enabled: boolean, showHid
       setRunning(!batch.done);
       setCoverage(batch);
       setSummary(
-        `${plural(batch.visited, 'item')} checked${batch.errors ? ` · ${plural(batch.errors, 'item')} not readable` : ''}${batch.truncated ? ' · stopped at the result limit' : ''}`,
+        batch.error ??
+          `${plural(batch.visited, 'item')} checked${batch.errors ? ` · ${plural(batch.errors, 'item')} not readable` : ''}${batch.truncated ? ' · stopped at the result limit' : ''}`,
       );
     };
     const remove = window.viewer.onEvent((event) => {
@@ -85,21 +94,20 @@ export function useSearch(path: string, query: string, enabled: boolean, showHid
     streamed: fallback ? coverage : undefined,
     cancelled,
     partial: fallback
-      ? cancelled || !!coverage?.errors || !!coverage?.truncated
+      ? cancelled || !!coverage?.error || !!coverage?.errors || !!coverage?.truncated
       : !!indexed.result?.scanLimited ||
         indexed.result?.status.roots.some(
           (root) => pathContains(root.path, path) && (root.status !== 'ready' || root.errors > 0),
         ),
-    summary:
-      !enabled || !query.trim()
-        ? ''
-        : fallback
-          ? summary
-          : indexed.result?.more
-            ? 'More matches in a search plane'
-            : indexed.result?.status.running
-              ? 'Still indexing: some matches may be missing'
-              : 'Indexed search',
+    summary: !valid
+      ? ''
+      : fallback
+        ? summary
+        : indexed.result?.more
+          ? 'More matches in a search plane'
+          : indexed.result?.status.running
+            ? 'Still indexing: some matches may be missing'
+            : 'Indexed search',
     cancel: () => {
       if (search.current) void window.viewer.cancelSearch(search.current).catch(report);
       setCancelled(true);

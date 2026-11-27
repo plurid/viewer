@@ -13,7 +13,7 @@ export interface DefinitionCommandStart extends DefinitionCommandReference {
 
 export type DefinitionCommandPresentation =
   | { kind: 'available'; command: string; cwd: string; reference: DefinitionCommandReference }
-  | { kind: 'changed' | 'unavailable' };
+  | { kind: 'changed' | 'unavailable' | 'folder-unavailable' };
 
 export type DefinitionCommandOutcome = DefinitionCommandReference & { terminalID: string } & (
     { kind: 'started' | 'running' | 'declined' } | { kind: 'failed'; message: string }

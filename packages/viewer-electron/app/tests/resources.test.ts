@@ -63,6 +63,16 @@ describe('scoped preview resources', () => {
     expect(await retry.text()).toBe('drawing');
   });
 
+  it('conceals a withdrawn private grant for cached bytes', async () => {
+    const access = vi.fn(async () => {});
+    resources = new Resources(access);
+    const grant = await resources.grantBytes(root, 'private.txt', Buffer.from('private'));
+    access.mockRejectedValueOnce(new Error('revoked'));
+    const response = await resources.response(new Request(grant.url));
+    expect(response.status).toBe(404);
+    expect(await response.text()).not.toContain('private');
+  });
+
   it('reports a saturated resource queue and serves the same grant once a slot opens', async () => {
     let resume!: () => void;
     const waiting = new Promise<void>((resolve) => {

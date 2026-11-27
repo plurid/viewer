@@ -30,9 +30,10 @@ checker. The [ownership decision](../adr/0015-generated-tool-host.md) defines th
 **Tool Library** is a persistent Plurid plane, available from commands, Chat and a canvas toolbar.
 It lists saved canvas documents without starting them. Each entry has a name, project, revision,
 source and asset counts and enabled state. Rename and enable changes require the current revision.
-Disabling invalidates live registrations, cancels pending work and stops the visible frame. A late
-result cannot change saved inputs. Enabling permits a fresh frame; it does not resume a canceled
-model request.
+Disabling stops the linked model request, cancels running actions and stops the visible frame. A
+late result cannot change saved inputs. Enable the tool to revise its HTML, attach assets or refresh
+sources. An open canvas loads a fresh frame when enabled. Send a new message to start another model
+request.
 
 **Duplicate** creates a new conversation and canvas with copied inputs, sources and asset
 references. It makes no model request. **Show Source Code**, **Undo Revision**, quoted alternatives

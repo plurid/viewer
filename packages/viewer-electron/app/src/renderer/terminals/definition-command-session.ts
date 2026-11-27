@@ -11,7 +11,7 @@ import { getState } from '../state/core';
 import { terminalSession, terminalStarted } from './sessions';
 import { allowTerminalStart, definitionRunReason } from './start-authority';
 
-type CommandPhase = 'checking' | 'approval' | 'waiting' | 'preparing' | 'starting' | 'started';
+type CommandPhase = 'checking' | 'approval' | 'waiting' | 'preparing' | 'started';
 type StartIntent = 'run' | 'shell';
 type CommandPresentation = DefinitionCommandPresentation | { kind: 'checking' };
 interface CommandChoice {
@@ -313,7 +313,7 @@ export async function chooseDefinitionTerminals(
           item.session.starting = undefined;
         });
       item.session.starting = start;
-      set(workspace, item.pane, { phase: 'starting' });
+      set(workspace, item.pane, { phase: 'approval' });
       return start;
     });
     try {

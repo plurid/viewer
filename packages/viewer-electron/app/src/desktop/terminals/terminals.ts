@@ -333,9 +333,14 @@ export class Terminals {
     options: TerminalStartOptions,
   ): Promise<void> {
     assertLocalPath(request.cwd);
+    const checkStart = () => {
+      if (this.closed || this.pending.get(request.id)?.cancelled)
+        throw new Error('The terminal start was canceled.');
+    };
     const existing = this.sessions.get(request.id);
     if (existing) {
       await this.match(request, owner, existing, options);
+      checkStart();
       return;
     }
     if (this.full()) throw new Error('Close a terminal before opening another.');
@@ -351,19 +356,20 @@ export class Terminals {
       throw new Error('Terminal profile no longer exists. Choose a profile in Settings.');
     // Definition command approval already binds this exact profile. Ordinary shells,
     // including restored planes, still require the profile's own native approval.
+    checkStart();
     if (options.initialInput === undefined) await this.confirm(profile);
-    if (this.closed || this.pending.get(request.id)?.cancelled) return;
+    checkStart();
     const executable = await executablePath(
       profile.executable ||
         process.env.SHELL ||
         (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh'),
     );
-    if (this.closed || this.pending.get(request.id)?.cancelled) return;
+    checkStart();
     await this.access([request.cwd, cwd]);
-    if (this.closed || this.pending.get(request.id)?.cancelled) return;
+    checkStart();
     if (options.initialInput !== undefined) {
       const currentCwd = await fs.realpath(request.cwd);
-      if (this.closed || this.pending.get(request.id)?.cancelled) return;
+      checkStart();
       options.validate?.();
       const current = this.profile(request.profileID);
       if (
@@ -532,7 +538,8 @@ export class Terminals {
     for (const pending of this.pending.values())
       if (related(pending.request.cwd)) {
         pending.cancelled = true;
-        work.push(pending.promise);
+        // A canceled preparation never acquired a PTY. Active session cleanup below still reports failures.
+        work.push(pending.promise.catch(() => {}));
       }
     for (const [id, session] of this.sessions)
       if (related(session.cwd)) {

@@ -50,6 +50,7 @@ export function WorktreesDialog({
   const [reload, setReload] = useState(0);
   const [creating, setCreating] = useState(taskMode);
   const [taskName, setTaskName] = useState('');
+  const [createdCheckout, setCreatedCheckout] = useState<string>();
   const [partialTask, setPartialTask] = useState<string>();
   const enabled = useViewer((state) => state.settings.settings.git.enabled);
   const panes = useViewer(
@@ -171,7 +172,8 @@ export function WorktreesDialog({
       !catalog ||
       !catalog.worktrees.find((tree) => tree.id === id)?.available ||
       pending.current ||
-      partialTask
+      partialTask ||
+      (taskMode && !taskName.trim())
     )
       return;
     pending.current = true;
@@ -193,7 +195,8 @@ export function WorktreesDialog({
     }
   };
   const create = async (checkout: WorktreeCreation['checkout'], destination: string) => {
-    if (!catalog || pending.current || partialTask) return;
+    if (!catalog || catalog.creationProblem || pending.current || partialTask || createdCheckout)
+      return;
     pending.current = true;
     setBusy(true);
     setError('');
@@ -219,7 +222,8 @@ export function WorktreesDialog({
       if (mounted.current) {
         setCatalog(result.catalog);
         setSelectedID(result.worktreeID);
-        setCreating(false);
+        if (taskMode) setCreatedCheckout(result.worktreeID);
+        else setCreating(false);
       }
       if (previous)
         void window.viewer
@@ -294,7 +298,7 @@ export function WorktreesDialog({
         </div>
       )}
       <p className="worktrees-repository" title={catalog?.repository ?? target.directory}>
-        {catalog?.repository ?? target.directory}
+        <PathLabel path={catalog?.repository ?? target.directory} />
       </p>
       {error && (
         <p className="worktrees-error" role="alert">
@@ -322,14 +326,46 @@ export function WorktreesDialog({
           </button>
         </div>
       )}
-      {!partialTask && creating && catalog ? (
+      {createdCheckout && !partialTask && (
+        <div className="worktree-create">
+          <p>The checkout was created. Open it to finish setting up the task.</p>
+          <footer>
+            <button disabled={busy} onClick={onClose}>
+              Cancel
+            </button>
+            <button disabled={busy} onClick={() => void open(false, createdCheckout)}>
+              Finish Task Setup
+            </button>
+          </footer>
+        </div>
+      )}
+      {!createdCheckout && !partialTask && creating && (!catalog || catalog.creationProblem) && (
+        <>
+          <p role="status" className="worktrees-creation-problem">
+            {loading ? 'Loading worktrees…' : catalog?.creationProblem}
+          </p>
+          <footer>
+            <button onClick={onClose}>Cancel</button>
+            <button
+              disabled={loading}
+              onClick={() => {
+                setLoading(true);
+                setReload((value) => value + 1);
+              }}
+            >
+              Try Again
+            </button>
+          </footer>
+        </>
+      )}
+      {!createdCheckout && !partialTask && creating && catalog && !catalog.creationProblem ? (
         <CreateWorktree
           key={catalog.id}
           catalog={catalog}
           busy={busy}
           task={taskMode ? { name: taskName, change: setTaskName } : undefined}
           create={create}
-          cancel={() => setCreating(false)}
+          cancel={taskMode ? onClose : () => setCreating(false)}
           show={(id) => {
             if (taskMode) {
               void open(false, id);
@@ -341,7 +377,8 @@ export function WorktreesDialog({
           }}
         />
       ) : (
-        !partialTask && (
+        !partialTask &&
+        !creating && (
           <>
             {catalog?.creationProblem && (
               <p className="worktrees-creation-problem">{catalog.creationProblem}</p>

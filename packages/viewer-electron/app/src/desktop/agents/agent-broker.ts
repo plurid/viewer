@@ -66,6 +66,7 @@ import { nativeTestRemovalsBlocked } from '../native/test-removal-policy';
 import { agentTools } from './agent-tools';
 import { isToolIn, parseToolInput, toolCapability, writeTerminalInput } from './tool-catalog';
 import type { AgentSessions } from './sessions';
+import { indexedCoverage } from '../../domain/search/coverage';
 import { containsPath } from '../files/containment';
 import { realHome } from '../native/home';
 import { officeFamily, readsOfficeContent } from '../../domain/previews/documents/layout';
@@ -1464,15 +1465,25 @@ export class AgentBroker {
         await this.clients.require('content');
         if (!client) throw new Error('Use a named client with content permission.');
       }
-      const result = await this.files.query(
-        {
-          ...input,
-          content:
-            input.content ??
-            (client?.capabilities ?? (await this.access.capabilities())).includes('content'),
-        } as IndexedQuery,
-        signal,
+      const content =
+        input.content ??
+        (client?.capabilities ?? (await this.access.capabilities())).includes('content');
+      const result = await this.files.query({ ...input, content } as IndexedQuery, signal);
+      const coverage = indexedCoverage(
+        result,
+        { root: input.root, content },
+        this.settings().search.contentRoots,
       );
+      const roots: typeof coverage.roots = [];
+      for (const root of coverage.roots) {
+        if (!containsPath(input.root, root.path)) continue;
+        try {
+          await this.authorize(root.path);
+          roots.push(root);
+        } catch {
+          // A configured root can resolve outside the client's grant.
+        }
+      }
       const entries: typeof result.entries = [];
       for (const item of result.entries) {
         try {
@@ -1482,16 +1493,19 @@ export class AgentBroker {
           /* Filter symlinks crossing grants. */
         }
       }
-      if (input.content) await this.clients.require('content');
+      await this.authorize(input.root);
+      if (content) await this.clients.require('content');
       value = {
         entries,
+        scanLimited: !!result.scanLimited,
+        coverage: { ...coverage, roots },
         evidence:
           input.content && client
             ? result.evidence?.filter((item) => entries.some((entry) => entry.path === item.path))
             : undefined,
         more: result.more,
         indexed: result.indexed,
-        running: result.status.running,
+        running: coverage.roots.some((root) => root.status === 'indexing'),
       };
     } else if (call.name === 'run_action') {
       value = await this.admitTask(async () => {

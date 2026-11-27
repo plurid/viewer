@@ -7,6 +7,7 @@ import {
   type FileQuery,
 } from '../../domain/search/query';
 import type { QuerySnapshot } from '../../domain/workspaces/collections';
+import { Worker } from 'node:worker_threads';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import { opendir, mkdir, rename } from 'node:fs/promises';
@@ -24,11 +25,16 @@ import { absolute, entryForScan as entry } from '../files/filesystem';
 import { HiddenPaths } from '../files/hidden-paths';
 import { searchExclusions, searchExclusionRules } from './exclusions';
 import { containsPath } from '../files/containment';
+const maxIndexedCharacters = 150_000;
+
 interface IndexedEntry extends FileEntry {
   hiddenRoot?: string;
 }
 export class FileIndex {
   private db: DatabaseSync;
+  private compaction?: Promise<void>;
+  private scopePending = false;
+  private scopeReady = Promise.resolve();
   /**
    * Each stamp is later than the last, even within one millisecond: a crawl compares its stamp
    * with the rows', and one in the same millisecond as the crawl before could not tell that crawl's
@@ -54,7 +60,7 @@ export class FileIndex {
   private active?: Promise<void>;
   private updates: Promise<void> = Promise.resolve();
   constructor(
-    file: string,
+    private file: string,
     private emit: (value: IndexStatus) => void = () => {},
     private extract?: (file: string) => Promise<string | DocumentData>,
     initialScope?: ApplicationSettings['search'],
@@ -64,7 +70,9 @@ export class FileIndex {
     this.db = new DatabaseSync(file);
     try {
       this.db.exec(`
+        PRAGMA auto_vacuum=INCREMENTAL;
         PRAGMA journal_mode=WAL;
+        PRAGMA journal_size_limit=8388608;
         PRAGMA busy_timeout=2000;
         CREATE TABLE IF NOT EXISTS files(
           path TEXT PRIMARY KEY, root TEXT, name TEXT, extension TEXT, size INTEGER,
@@ -170,7 +178,12 @@ export class FileIndex {
           item.modified,
           +item.hidden,
           +item.directory,
-          JSON.stringify(item),
+          JSON.stringify({
+            ...item,
+            path: undefined,
+            parent: item.parent === path.dirname(item.path) ? undefined : item.parent,
+            name: item.name === path.basename(item.path) ? undefined : item.name,
+          }),
           seen,
         );
         if (content === undefined) continue;
@@ -181,36 +194,34 @@ export class FileIndex {
                 metadata: {},
                 evidence: content ? [{ source: 'text', text: content }] : [],
                 text: content,
-                truncated: content.length > 150000,
+                truncated: content.length > maxIndexedCharacters,
               }
             : content;
         name.run(
           item.path,
           foldText(item.name),
-          foldText(original.text.slice(0, 150000)),
-          item.path,
+          foldText(original.text.slice(0, maxIndexedCharacters)),
+          original.text ? item.path : null,
         );
         this.db.prepare('DELETE FROM source_documents WHERE path=?').run(item.path);
         if (original.text) {
-          let remaining = 150000;
+          let remaining = maxIndexedCharacters;
           const evidence = original.evidence.flatMap((part) => {
             const text = part.text.slice(0, remaining);
             remaining -= text.length;
-            return text ? [{ ...part, text }] : [];
+            return text ? [{ source: part.source, anchor: part.anchor, text }] : [];
           });
           this.db.prepare('INSERT INTO source_documents VALUES(?,?,?)').run(
             item.path,
             JSON.stringify(sourceVersion(item)),
             JSON.stringify({
-              ...original,
               evidence,
-              text: '',
-              chapters: undefined,
-              epub: undefined,
-              office: undefined,
+              coverageReason: original.coverageReason,
               truncated:
                 original.truncated ||
-                original.evidence.reduce((n, item) => n + item.text.length, 0) > 150000,
+                original.text.length > maxIndexedCharacters ||
+                original.evidence.reduce((n, item) => n + item.text.length, 0) >
+                  maxIndexedCharacters,
             }),
           );
         }
@@ -261,6 +272,19 @@ export class FileIndex {
     return { where, params };
   }
   status(): IndexStatus {
+    if (this.scopePending && this.config) {
+      const { roots, paused } = this.config;
+      return {
+        roots: roots.map((path) => ({
+          path,
+          status: paused ? 'paused' : 'indexing',
+          count: 0,
+          errors: 0,
+        })),
+        count: 0,
+        running: !paused && roots.length > 0,
+      };
+    }
     const crawling = this.roots.some((root) => root.status === 'indexing');
     if (
       this.count === undefined ||
@@ -296,10 +320,11 @@ export class FileIndex {
   query(request: IndexedQuery, limitCap = 500, includeEvidence = true): IndexedResult {
     const root = request.root;
     const indexed =
-      !root ||
-      !!this.config?.roots.some(
-        (indexedRoot) => containsPath(indexedRoot, root) && !this.excluded(root),
-      );
+      !this.scopePending &&
+      (!root ||
+        !!this.config?.roots.some(
+          (indexedRoot) => containsPath(indexedRoot, root) && !this.excluded(root),
+        ));
     // THE FILE QUERY LANGUAGE: domain/search/query.ts, as the folder filter reads it
     let parsed: FileQuery;
     try {
@@ -309,6 +334,7 @@ export class FileIndex {
       throw error;
     }
     const { where, params } = this.scope();
+    if (this.scopePending) where.push('0=1');
     // SQL narrows by what every match has, the terms side by side at the top; the query then
     // decides each row, so OR, -, patterns, tags and created dates read as they do elsewhere
     const top = !parsed.root ? [] : parsed.root.kind === 'and' ? parsed.root.nodes : [parsed.root];
@@ -413,18 +439,21 @@ export class FileIndex {
     const select = (count: number, from: number) =>
       this.db
         .prepare(
-          'SELECT files.data FROM files' +
+          'SELECT files.path,files.data FROM files' +
             join +
             ' WHERE ' +
             where.join(' AND ') +
             ' ORDER BY files.name,files.path LIMIT ? OFFSET ?',
         )
-        .all(...params, count, from) as { data: string }[];
+        .all(...params, count, from) as { path: string; data: string }[];
     let entries: FileEntry[];
     let more: boolean;
     let scanLimited = false;
-    const decode = (row: { data: string }): FileEntry => {
+    const decode = (row: { path: string; data: string }): FileEntry => {
       const { hiddenRoot, ...item } = JSON.parse(row.data) as IndexedEntry;
+      item.path = row.path;
+      item.parent ??= path.dirname(row.path);
+      item.name ??= path.basename(row.path);
       if (root && hiddenRoot) item.hidden = hiddenRoot !== root && containsPath(root, hiddenRoot);
       return item;
     };
@@ -502,14 +531,14 @@ export class FileIndex {
       coverage: 'indexed-matches',
     };
   }
-  configure(config: ApplicationSettings['search'], rebuild = false): void {
+  configure(config: ApplicationSettings['search'], rebuild = false): Promise<void> {
     // An unchanged configuration crawls again only the roots it could not read, which a folder pick
     // may have made readable: every pick configured the index anew, and every configuration crawled
     // every root from the start. A rebuild crawls everything and extracts every document again.
     const applied = JSON.stringify(config);
     if (!rebuild && applied === this.applied) {
       this.retryOffline();
-      return;
+      return this.scopeReady;
     }
     this.applied = applied;
     this.rebuilding = rebuild;
@@ -522,16 +551,34 @@ export class FileIndex {
       config.contentRoots,
       [...config.exclusions].sort(),
     ]);
-    if (rebuild || this.meta('purged') !== purge) {
-      this.purge(config);
-      this.setMeta('purged', purge);
-    }
+    const generation = ++this.generation;
+    const applyScope = () => {
+      if (generation !== this.generation) return;
+      this.scopePending = true;
+      try {
+        if (this.meta('purged') !== purge) {
+          this.purge(config);
+          this.setMeta('purged', purge);
+        }
+        this.scopePending = false;
+      } catch (error) {
+        this.applied = undefined;
+        throw error;
+      }
+    };
     this.count = undefined;
-    this.generation++;
-    const generation = this.generation;
+    if (this.compaction) {
+      this.scopePending = true;
+      this.scopeReady = this.compaction.catch(() => {}).then(applyScope);
+    } else {
+      applyScope();
+      this.scopeReady = Promise.resolve();
+    }
+    const ready = this.scopeReady;
     this.active = (this.active ?? Promise.resolve())
       .catch(() => {})
       .then(async () => {
+        await ready;
         if (generation !== this.generation) return;
         this.roots = config.roots.map((path) => ({
           path,
@@ -540,11 +587,55 @@ export class FileIndex {
           errors: 0,
         }));
         this.emit(this.status());
-        if (config.paused) return;
-        for (const root of this.roots) await this.crawl(root, generation);
+        if (!config.paused) for (const root of this.roots) await this.crawl(root, generation);
         // the rebuild is done: a later crawl of a changed folder keeps what it extracted
-        if (generation === this.generation) this.rebuilding = false;
+        if (generation !== this.generation) return;
+        this.rebuilding = false;
+        try {
+          await this.reclaim(generation, rebuild);
+        } catch {
+          // Space recovery can need extra disk space. Searches and watcher updates still work.
+          console.warn('The file index could not reclaim unused disk space.');
+        }
       });
+    return ready;
+  }
+  private async reclaim(generation: number, rebuild: boolean): Promise<void> {
+    const free = this.db.prepare('PRAGMA freelist_count');
+    const available = () => Number(free.get()?.freelist_count);
+    if (available() < (rebuild ? 1 : 256)) return;
+    if (Number(this.db.prepare('PRAGMA auto_vacuum').get()?.auto_vacuum) === 2) {
+      // Return up to a MiB of 4 KiB pages at a time so the worker can answer searches.
+      while (generation === this.generation && available() > 0) {
+        this.db.exec('PRAGMA incremental_vacuum(256)');
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    } else if (this.file !== ':memory:') {
+      // SQLite needs one full VACUUM to enable incremental recovery on an existing database.
+      // Its separate WAL connection leaves queries available; scope changes wait to write.
+      const worker = new Worker(
+        `
+        const { workerData } = require('node:worker_threads');
+        const { DatabaseSync } = require('node:sqlite');
+        const db = new DatabaseSync(workerData);
+        try { db.exec('PRAGMA auto_vacuum=INCREMENTAL; VACUUM'); }
+        finally { db.close(); }
+      `,
+        { eval: true, workerData: this.file },
+      );
+      this.compaction = new Promise<void>((resolve, reject) => {
+        worker.once('error', reject);
+        worker.once('exit', (code) =>
+          code === 0 ? resolve() : reject(new Error('The index could not be compacted.')),
+        );
+      });
+      try {
+        await this.compaction;
+      } finally {
+        this.compaction = undefined;
+      }
+    }
+    this.db.exec('PRAGMA wal_checkpoint(PASSIVE)');
   }
   /**
    * Removes what the configuration no longer allows: rows outside the folders, body text outside
@@ -660,6 +751,7 @@ export class FileIndex {
     };
     const seen = this.stamp();
     const queue = [absolute(root.path)];
+    const unreadable = new Set<string>();
     let cursor = 0;
     let tick = 0;
     while (cursor < queue.length && generation === this.generation) {
@@ -698,6 +790,7 @@ export class FileIndex {
             root.count++;
             if (child.isDirectory()) queue.push(file);
           } catch {
+            unreadable.add(file);
             root.errors++;
           }
           if (Date.now() - tick > 500) {
@@ -706,6 +799,7 @@ export class FileIndex {
           }
         }
       } catch {
+        unreadable.add(folder);
         root.errors++;
         if (folder === root.path) {
           flush();
@@ -721,23 +815,29 @@ export class FileIndex {
     }
     if (generation !== this.generation) return;
     flush();
-    const stale = root.errors
-      ? []
-      : (this.db
-          .prepare('SELECT path FROM files WHERE root=? AND seen<? AND substr(path,1,?)=?')
-          .all(
-            ownerRoot,
-            seen,
-            root.path.replace(/\/$/, '').length + 1,
-            root.path.replace(/\/$/, '') + '/',
-          ) as { path: string }[]);
-    // in transactions of 500, yielding between them: one commit per row took seconds after a
-    // large folder moved, and kept previews waiting in this worker
-    for (let start = 0; start < stale.length; start += 500) {
-      if (generation !== this.generation) return;
+    const prefix = root.path.replace(/\/$/, '') + '/';
+    const unseen = this.db.prepare(
+      'SELECT rowid,path FROM files WHERE root=? AND seen<? AND substr(path,1,?)=? AND rowid>? ORDER BY rowid LIMIT 500',
+    );
+    // An unreadable directory protects its old descendants. Readable siblings can still expire.
+    const protectedPath = (file: string) => {
+      if (!unreadable.size) return false;
+      for (let at = file; at !== path.dirname(at); at = path.dirname(at))
+        if (unreadable.has(at)) return true;
+      return false;
+    };
+    let after = 0;
+    while (generation === this.generation) {
+      const stale = unseen.all(ownerRoot, seen, prefix.length, prefix, after) as {
+        rowid: number;
+        path: string;
+      }[];
+      if (!stale.length) break;
+      after = stale[stale.length - 1]!.rowid;
       this.db.exec('BEGIN');
       try {
-        for (const file of stale.slice(start, start + 500)) {
+        for (const file of stale) {
+          if (protectedPath(file.path)) continue;
           this.db
             .prepare('DELETE FROM names WHERE rowid=(SELECT rowid FROM files WHERE path=?)')
             .run(file.path);

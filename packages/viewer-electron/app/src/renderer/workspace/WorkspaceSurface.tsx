@@ -36,15 +36,21 @@ import { Sidebar } from '../ui/navigation/Sidebar';
 import { PlaneHeader } from './PlaneHeader';
 import { PinnedHeader } from './PinnedHeader';
 import { frameWorkspace, refitWorkspace } from './framing';
-import { focusFiles } from './sessions';
+import { focusPlane } from './sessions';
 import { applyTiling, reconcileTiling } from './tiling';
 import { useWorkspace } from './context';
+import { paneTitle } from '../../domain/workspaces/planes';
 import { minimapShown, surfaceConfiguration } from './surface-configuration';
 import { placeRoots } from './root-placement';
 import { routeFileKeyboard } from '../explorer/selection';
 
 import { flattenTree, hostID } from './tree';
-import { allowTerminalStart, terminalStartDeferred } from '../terminals/sessions';
+import {
+  allowTerminalStart,
+  terminalStartAllowed,
+  terminalStartDeferred,
+  useTerminalAuthority,
+} from '../terminals/start-authority';
 import { surfaceRoutes } from './tree';
 export { frameWorkspace } from './framing';
 export { flattenTree, hostID } from './tree';
@@ -332,24 +338,29 @@ export function TerminalContent() {
   const pane = useViewer((state) =>
     activeWorkspace(state).panes.find((pane) => pane.id === plane.parameters.id),
   );
-  const [started, setStarted] = useState(false);
-  const definitionKey = useViewer((state) => activeWorkspace(state).definition?.key);
-  if (pane?.type === 'terminal' && pane.definitionPlane !== undefined && definitionKey)
+  useTerminalAuthority();
+  const space = useViewer(activeWorkspace);
+  const scope = JSON.stringify([
+    space.id,
+    space.epoch,
+    pane?.path,
+    pane?.type === 'terminal' && pane.profileID,
+  ]);
+  if (pane?.type === 'terminal' && pane.definitionPlane !== undefined && space.definition?.key)
     return <DefinitionTerminal pane={pane} />;
   if (
     pane?.type === 'terminal' &&
     !pane.gitAction &&
     pane.profileID !== gitTerminalProfileID &&
     (pane.startOnOpen === false || terminalStartDeferred(pane.id)) &&
-    !started
+    !terminalStartAllowed(pane.id, scope)
   )
     return (
       <Empty icon="terminal" title="Terminal ready" detail={pane.path}>
         <button
           className="primary"
           onClick={() => {
-            allowTerminalStart(pane.id);
-            setStarted(true);
+            allowTerminalStart(pane.id, scope);
           }}
         >
           Start Terminal
@@ -459,11 +470,15 @@ export function WorkspaceSurface({
   const minimapVisible = minimapShown(preferences, space.panes.length);
   const [size, setSize] = useState({ width: 992, height: 692 });
   const [api, setApi] = useState<PluridApi | null>(null);
+  const labelsVersion = useMemo(
+    () => [space.panes, space.collections],
+    [space.panes, space.collections],
+  );
   const overview = useSpatialOverview({
     root: surface,
     enabled: !!api,
     epoch: space.id + ':' + (space.epoch ?? 0),
-    labelsVersion: space.panes,
+    labelsVersion,
     subscribeEngine: (listener) => workspace.subscribeEngine(listener),
     isDocked: () => workspace.isDocked(),
     hasPlanes: () => {
@@ -480,9 +495,18 @@ export function WorkspaceSurface({
         : undefined;
       const pane = node ? space.panes.find((item) => item.id === hostID(node)) : undefined;
       if (!pane) return undefined;
+      const collection =
+        pane.type === 'collection'
+          ? space.collections?.find((item) => item.id === pane.collectionID)
+          : undefined;
       return {
-        label: pane.path.split('/').filter(Boolean).at(-1) ?? pane.type,
-        path: pane.path,
+        label: paneTitle(pane, collection?.name),
+        path:
+          pane.type === 'browser'
+            ? pane.url
+            : ['tools', 'overview', 'journal'].includes(pane.type)
+              ? undefined
+              : pane.path,
       };
     },
     onNavigate: (engineID) => {
@@ -491,7 +515,7 @@ export function WorkspaceSurface({
         : undefined;
       if (!node || !activeWorkspace().panes.some((item) => item.id === hostID(node))) return;
       setActivePane(hostID(node));
-      focusFiles(hostID(node));
+      focusPlane(hostID(node), true);
     },
   });
   const minimap = minimapVisible || overview.requested;
@@ -692,7 +716,7 @@ export function WorkspaceSurface({
         );
         if (node && activeWorkspace().panes.some((pane) => pane.id === hostID(node))) {
           setActivePane(hostID(node));
-          if (event.detail) focusFiles(hostID(node));
+          if (event.detail) focusPlane(hostID(node), true);
         }
         // Native minimap navigation frames the plane. Only bind the host context here;
         // issuing a second camera command would interrupt the engine's tween.

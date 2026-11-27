@@ -33,7 +33,8 @@
   font-size: var(--text-section);
   font-weight: 600;
 }
-.nesting-panel input[type='number'] {
+.nesting-panel .number-field,
+.nesting-custom input[inputmode='decimal'] {
   width: 76px;
 }
 .nesting-file + .nesting-file {
@@ -146,6 +147,7 @@
   font-size: var(--text-compact);
   font-variant-numeric: tabular-nums;
 }
+.nesting-format [role='cell'] input {width:100%;}
 .nesting-format-head {
   color: var(--muted);
 }

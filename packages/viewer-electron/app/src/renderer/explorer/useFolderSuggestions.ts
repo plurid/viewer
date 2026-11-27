@@ -91,7 +91,7 @@ export function useFolderSuggestions(
     const initial = jump
       ? candidates.filter((path) => known.has(path)).slice(0, limit)
       : emptyPaths;
-    if (jump && (initial.length === limit || initial.length === candidates.length)) return;
+    if (jump && candidates.slice(0, limit).every((path) => known.has(path))) return;
     const controller = new AbortController();
     const timer = setTimeout(
       () => {

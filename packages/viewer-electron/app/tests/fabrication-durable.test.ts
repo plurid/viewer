@@ -217,6 +217,25 @@ describe('durable fabrication checks', () => {
     expect(stored?.verification?.texts[`${page.ref}:1`]).toContain('50');
   });
 
+  it('settles only checks under the withdrawn folder before quiescence completes', async () => {
+    const checks = service(), opening = await open(checks);
+    let started!: () => void;
+    const reading = new Promise<void>((resolve) => { started = resolve; });
+    generate.mockImplementation(async (...args) => {
+      const signal = args[4] as AbortSignal;
+      started();
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+      return jobAnswer(opening);
+    });
+    const work = checks.request({kind:'run', id:opening.id, providerID:meta.id, pages:[await drawingPage(opening)]},1);
+    const settled = work.catch((error: Error) => error.message);
+    await reading;
+    await checks.quiesce(path.join(folder, 'unrelated'));
+    await checks.quiesce(folder);
+    expect(await settled).toContain('canceled');
+    expect(await checks.request({kind:'read',id:opening.id},1)).toMatchObject({status:'cancelled'});
+  });
+
   it('detaches a view without cancelling the paid request', async () => {
     const checks = service(),
       opening = await open(checks);

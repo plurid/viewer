@@ -431,7 +431,7 @@ try {
       measured,
     });
     mark('saved-dxf');
-    await click('.canvas-plane button', 'Open saved file', 'Open saved drawing');
+    await click('.canvas-plane button', 'Open Saved File', 'Open saved drawing');
     await until(
       () => main.evaluate(pageCall(() => !!document.querySelector('.dxf-viewer'))),
       Boolean,
@@ -600,7 +600,7 @@ try {
       drawingHash: retainedQuote.attachment.sha256,
     });
     mark('saved-quote');
-    await click('.canvas-plane button', 'Open saved file', 'Open saved quote');
+    await click('.canvas-plane button', 'Open Saved File', 'Open saved quote');
     await delay(2100);
     await screenshot(main, path.join(root, 'saved-quote.png'));
   });

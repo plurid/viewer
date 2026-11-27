@@ -45,7 +45,7 @@ export async function openWorkspacePath(
     navigate(pane.id, entry.path);
     controller.focusPane(pane.id);
   } else
-    controller.open(entry, pane?.id, {
+    await controller.open(entry, pane?.id, {
       another: target?.another,
       link: target?.link,
       activate: target?.activate,

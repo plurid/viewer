@@ -145,6 +145,7 @@ function best(
 ): CollageLayout | undefined {
   let chosen: CollageLayout | undefined;
   for (const slots of variants) {
+    if (slots.some(({rect}) => rect.width <= 0 || rect.height <= 0)) continue;
     const layout = place(slots, photos, box, options);
     if (!chosen || layout.metrics.score > chosen.metrics.score + 1e-9) chosen = layout;
   }

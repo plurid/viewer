@@ -8,7 +8,48 @@ import { normalizePreferences } from '../src/domain/preferences/ui';
 import { saveSettingsChange } from '../src/renderer/ui/settings/settings-edits';
 import { settingsDiscovery } from '../src/renderer/ui/settings/discovery';
 
+import { PathHome } from '../src/renderer/ui/PathLabel';
+
 afterEach(cleanup);
+it('shows home-relative exclusions and saves absolute paths while keeping bare folder names', () => {
+  const home = '/sample/home';
+  const settings = defaultSettings(home);
+  settings.search.exclusions = [home + '/Library', '~', home, 'node_modules'];
+  Object.assign(window, {
+    viewer: {
+      indexStatus: vi.fn(async () => ({ roots: [], count: 0, running: false })),
+      onEvent: () => () => {},
+    },
+  });
+  const editor: SettingsEditor = {
+    snapshot: {
+      revision: 1,
+      settings,
+      look: 'dark',
+      credentials: [],
+      ui: normalizePreferences({}),
+    },
+    error: vi.fn(),
+    patch: vi.fn(),
+    patches: vi.fn(),
+    save: vi.fn(),
+  };
+  render(
+    <PathHome.Provider value={home}>
+      <SearchSettings editor={editor} />
+    </PathHome.Provider>,
+  );
+  const input = screen.getByRole<HTMLTextAreaElement>('textbox', {
+    name: 'Excluded search names and paths',
+  });
+  expect(input.value).toBe('~/Library\n~\n~/\nnode_modules');
+  fireEvent.change(input, { target: { value: input.value + '\n~/Cache' } });
+  fireEvent.blur(input);
+  expect(editor.patch).toHaveBeenCalledWith('settings.search.exclusions', [
+    ...settings.search.exclusions,
+    home + '/Cache',
+  ]);
+});
 it('merges common exclusions after a preceding textarea blur has saved, without losing custom rules', async () => {
   const current = {
     revision: 0,

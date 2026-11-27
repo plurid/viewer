@@ -124,3 +124,16 @@ describe('the private launch folder (2026-10-30)', () => {
     expect(await fs.readdir(elsewhere)).toEqual([]);
   });
 });
+
+it('directs a missing custom application back to terminal settings', async () => {
+  const config = defaultSettings(root);
+  config.terminals.application = path.join(root, 'Missing.app');
+  const terminals = new ExternalTerminals(root, () => config, '', {
+    discover: async () => [],
+    open: vi.fn(),
+    run: vi.fn(),
+  });
+  await expect(terminals.application()).rejects.toThrow(
+    'Viewer can’t find the terminal app chosen in Settings → Terminals. Choose another there.',
+  );
+});

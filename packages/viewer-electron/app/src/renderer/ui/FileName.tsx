@@ -61,7 +61,9 @@ export function FileName({
     return watchFit(element, refit);
   }, [name, fit]);
   const text = fit !== 'wrap' && fitted.name === name ? fitted.text : name;
-  const cut = (fit === 'two-lines' ? text.replace('\n', '') : text) !== name;
+  const cut =
+    text !== name &&
+    (fit !== 'two-lines' || (text.replace('\n', '') !== name && text.replace('\n', ' ') !== name));
   return (
     <span
       ref={root}

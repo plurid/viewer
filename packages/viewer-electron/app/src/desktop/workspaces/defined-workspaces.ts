@@ -224,10 +224,10 @@ export class DefinedWorkspaces {
       ({ from }) =>
         this.current.closed.some(
           (entry) => entry.key === from && entry.workspace.definition?.source === 'found',
-        ) || this.current.opened[from] !== undefined,
+        ) || Object.hasOwn(this.current.opened, from),
     );
     if (!relevant.length) return;
-    await this.change((current) => {
+    const rekey = (current: WorkspaceMemory) => {
       for (const change of relevant) {
         const entry = current.closed.find(
           (item) => item.key === change.from && item.workspace.definition?.source === 'found',
@@ -240,14 +240,21 @@ export class DefinedWorkspaces {
           entry.key = change.to;
           entry.workspace.definition = { ...entry.workspace.definition!, key: change.to };
         }
-        const at = current.opened[change.from];
-        if (at !== undefined) {
-          current.opened[change.to] = Math.max(at, current.opened[change.to] ?? 0);
+        if (Object.hasOwn(current.opened, change.from)) {
+          const at = current.opened[change.from]!;
+          const previous = Object.hasOwn(current.opened, change.to)
+            ? current.opened[change.to]!
+            : 0;
+          current.opened = { ...current.opened, [change.to]: Math.max(at, previous) };
           delete current.opened[change.from];
         }
       }
       return current;
-    });
+    };
+    if (this.retained) {
+      rekey(this.current);
+      for (const listener of this.listeners) listener();
+    } else await this.change(rekey);
   }
   async close(): Promise<void> {
     await this.queue.catch(() => {});

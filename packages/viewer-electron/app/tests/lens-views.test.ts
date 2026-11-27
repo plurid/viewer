@@ -31,6 +31,8 @@ import {
   useLenses,
   lensDirectory,
 } from '../src/renderer/state/lenses';
+import { initialize } from '../src/renderer/state/store';
+import { fileRowID } from '../src/renderer/explorer/views';
 import { MapView, type MapControls } from '../src/renderer/explorer/map/MapView';
 import { revealFile } from '../src/renderer/explorer/anchors';
 
@@ -166,6 +168,7 @@ describe('lens editing', () => {
   });
   beforeEach(() => {
     vi.useFakeTimers();
+    initialize({ home: '/Clients', platform: 'darwin', state: null, locations: [], openPaths: [] });
     current = base;
     requests.length = 0;
     vi.stubGlobal(
@@ -180,6 +183,7 @@ describe('lens editing', () => {
         onEvent: () => () => {},
         watch: vi.fn(async () => {}),
         unwatch: vi.fn(async () => {}),
+        save: async () => {},
         thumbnail: vi.fn(async () => ''),
         lens: vi.fn(async (request: LensRequest) => {
           requests.push(request);
@@ -390,6 +394,47 @@ describe('lens editing', () => {
     );
     await expect(revealFile('p-zoom', items[1]!.path)).resolves.toBeTruthy();
     expect(view.container.querySelectorAll('[role=option]')).toHaveLength(1);
+  });
+  it('identifies the cursor option by its explorer prefix', () => {
+    const items = [entry('Acme')];
+    const view = render(
+      createElement(MapView, mapProps(items, { cursor: items[0]!.path, idPrefix: 'map' })),
+    );
+    expect(view.getByRole('option').id).toBe(fileRowID('map', items[0]!.path));
+  });
+  it('starts a new Map lens after the first creation resolved while unmounted', async () => {
+    let finish!: (doc: LensDocument) => void;
+    window.viewer.lens = vi.fn(async (request: LensRequest) => {
+      requests.push(request);
+      if (request.kind === 'create')
+        return new Promise<LensDocument>((resolve) => {
+          finish = resolve;
+        });
+      if (request.kind === 'list')
+        return { folder, lenses: [], broken: [], shared: true, collapsed: {} };
+      return null;
+    }) as typeof window.viewer.lens;
+    const items = [entry('Acme')],
+      controls = { current: null as MapControls | null };
+    const map = () =>
+      render(
+        createElement(
+          MapView,
+          mapProps(items, {
+            path: '/TransientMap',
+            selection: [items[0]!.path],
+            selectionSet: new Set([items[0]!.path]),
+            controls,
+          }),
+        ),
+      );
+    const first = map();
+    act(() => controls.current!.nudge('right', 8));
+    first.unmount();
+    await act(async () => finish(document()));
+    map();
+    act(() => controls.current!.nudge('right', 8));
+    expect(requests.filter((r) => r.kind === 'create')).toHaveLength(2);
   });
   it('creates one lens for the first edits on a Map without one (2026-10-20)', async () => {
     // Each edit before the new lens arrived created another: “Map 2”, “Map 3”.

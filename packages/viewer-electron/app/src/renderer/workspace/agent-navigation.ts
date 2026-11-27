@@ -96,7 +96,12 @@ export async function executeAgentNavigation(
     if (request.placement === 'current' && entry.directory && pane?.type === 'folder') {
       navigate(pane.id, entry.path);
       controller.focusPane(pane.id);
-    } else controller.open(entry, pane?.id, { another: !pane || request.placement === 'root' });
+    } else {
+      await withAgentDispatch(dispatchID, () =>
+        controller.open(entry, pane?.id, { another: !pane || request.placement === 'root' }),
+      );
+      checkDeadline();
+    }
     return;
   }
   if (pane?.type !== 'folder') throw new Error('Focus a files plane before selecting files.');

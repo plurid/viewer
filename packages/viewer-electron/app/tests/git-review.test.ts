@@ -3,7 +3,8 @@ import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GitReviews } from '../src/desktop/comparison/review';
+import * as gitModule from '../src/desktop/comparison/git';
+import { GitReviews, textPatchHeader } from '../src/desktop/comparison/review';
 import { gitEnvironment, gitSafeOptions } from '../src/desktop/comparison/git';
 import { parseReviewPatch, type ReviewMode } from '../src/domain/comparison/review';
 import { temporaryRoot } from '../tools/temporary';
@@ -229,4 +230,67 @@ describe('Git hunk review', () => {
     expect(parsed.hunks[0]?.lines.at(-1)).toBe('\\ No newline at end of file');
     expect(() => parseReviewPatch('bad\0patch')).toThrow();
   });
+});
+
+it('reads text hunks when filenames or object names contain special mode digits', async () => {
+  const f = await fixture();
+  const git = gitModule.runGit;
+  for (const mode of ['120000', '160000']) {
+    for (const position of ['path', 'object', 'mode']) {
+      const raw = [
+        'diff --git a/file b/file',
+        'index ' +
+          (position === 'object' ? mode : 'aaaaaa') +
+          '..bbbbbb ' +
+          (position === 'mode' ? mode : '100644'),
+        '--- a/' + (position === 'path' ? mode : 'file'),
+        '+++ b/file',
+        '@@ -1 +1 @@',
+        '-old',
+        '+new',
+        '',
+      ].join('\n');
+      const spy = vi
+        .spyOn(gitModule, 'runGit')
+        .mockImplementation(async (cwd, args, ...rest) =>
+          args.includes('--unified=3') ? Buffer.from(raw) : git(cwd, args, ...rest),
+        );
+      try {
+        const file = await f.read('unstaged');
+        expect(file.hunks.length).toBe(position === 'mode' ? 0 : 1);
+      } finally {
+        spy.mockRestore();
+      }
+    }
+  }
+});
+it('keeps branch comparisons readable when Git reports an unmerged path', async () => {
+  const f = await fixture();
+  const git = gitModule.runGit;
+  const spy = vi
+    .spyOn(gitModule, 'runGit')
+    .mockImplementation(async (cwd, args, ...rest) =>
+      args.includes('--name-status')
+        ? Buffer.from('U\0two changes.txt\0')
+        : git(cwd, args, ...rest),
+    );
+  try {
+    const base = f.opened.branches[0]!.id;
+    expect((await f.snapshot('branch', base)).files[0]?.status).toBe('!');
+    expect((await f.read('branch', base)).problem).toMatch(/whole-file/);
+  } finally {
+    spy.mockRestore();
+  }
+});
+it('classifies file modes only in patch metadata fields', () => {
+  for (const mode of ['100644', '100755', '120000', '160000', '100600', 'unknown']) {
+    const ordinary = mode === '100644' || mode === '100755';
+    for (const prefix of ['new file mode', 'deleted file mode', 'index aaaaaa..bbbbbb']) {
+      expect(textPatchHeader(prefix + ' ' + mode)).toBe(ordinary);
+    }
+    for (const prefix of ['old mode', 'new mode', 'similarity index'])
+      expect(textPatchHeader(prefix + ' ' + mode)).toBe(false);
+    for (const prefix of ['diff --git a/', '--- a/', '+++ b/'])
+      expect(textPatchHeader(prefix + mode)).toBe(true);
+  }
 });

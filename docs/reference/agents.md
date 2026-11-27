@@ -54,7 +54,9 @@ refused. Every path argument must be inside the client's folders.
 | `read_terminal`         | `terminal-read` and a [terminal read grant](#terminal-output) | A terminal's folder and the last 128,000 characters it showed. `id` is the terminal plane's ID from `list_planes`                                                                                                                                                                                                              |
 
 When `search_files` omits `content`, it searches document text if the client holds `content`, and
-returns no passages.
+returns no passages. Read `coverage.state` and `coverage.reasons` before treating an empty result as
+complete. `scanLimited` reports the 20,000-candidate limit. `coverage.roots` includes only
+authorized indexed roots within the requested folder.
 
 `git_status` and `git_diff` run system Git 2.36 or later inside a macOS sandbox that denies writes,
 network access and child processes. A repository that configures `filter.*.clean`, `smudge` or

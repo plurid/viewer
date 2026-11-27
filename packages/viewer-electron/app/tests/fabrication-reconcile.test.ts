@@ -13,7 +13,8 @@ import type {
 } from '../src/domain/fabrication/answer';
 import type { GradeJob } from '../src/domain/fabrication/grade';
 import { reconcileJob } from '../src/domain/fabrication/reconcile';
-import { partValuesText } from '../src/domain/fabrication/part-values';
+import { quantityText, partValuesText } from '../src/domain/fabrication/part-values';
+it('reads zero requested pieces without division by zero', () => expect(quantityText({pieces:0,sets:0})).toBe('0 pieces'));
 
 const version = { identity: temporalIdentity('1:2'), modified: 1, size: 1 };
 const sources: InventorySource[] = [

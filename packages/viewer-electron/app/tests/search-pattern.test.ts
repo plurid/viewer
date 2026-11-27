@@ -6,7 +6,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RE2JS } from 're2js';
 import { requiredLiteral, searchPattern } from '../src/domain/search/pattern';
-import { matchesQuery, parseFileQuery } from '../src/domain/search/query';
+import {
+  matchesQuery,
+  parseFileQuery,
+  parsePattern,
+  maxQueryLength,
+} from '../src/domain/search/query';
 
 it('preserves unanchored, grouped, Unicode and case-insensitive name patterns', () => {
   for (const [source, value, expected] of [
@@ -116,4 +121,29 @@ describe('the prefiltered pattern', () => {
     expect(pattern.test('absent')).toBe(true);
     expect(matches).toHaveBeenCalledExactlyOnceWith('absent');
   });
+});
+
+it('bounds selection globs and matches whole Unicode filenames', () => {
+  expect(() => parsePattern('a'.repeat(maxQueryLength) + '*')).toThrow('1,000');
+  const atoms = ['a', '?', '*', '.', '[', '+', 'é', '📘'];
+  for (const left of atoms)
+    for (const right of atoms) {
+      const glob = left + right + '*';
+      const pattern = parsePattern(glob);
+      const escape = (unit: string) =>
+        unit === '*' ? '.*' : unit === '?' ? '.' : '\\u{' + unit.codePointAt(0)!.toString(16) + '}';
+      const reference = new RegExp('^' + Array.from(glob, escape).join('') + '$', 'iu');
+      for (const name of ['', 'A', 'a.', '[+', 'É📘', '📘a', 'a\na'])
+        expect(
+          matchesQuery(pattern, {
+            name,
+            path: '/file',
+            extension: '',
+            kind: 'file',
+            hidden: false,
+            directory: false,
+          }),
+          glob,
+        ).toBe(reference.test(name));
+    }
 });

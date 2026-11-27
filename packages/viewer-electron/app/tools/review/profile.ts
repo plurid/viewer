@@ -156,6 +156,22 @@ export async function writeProfile(
     JSON.stringify({ version: 1, settings, ui }, null, 2),
     { flag: 'wx' },
   );
+  if (setup.missingTerminalFolder) {
+    const definitions = {
+      version: 1,
+      sources: { projectManager: { enabled: false } },
+      workspaces: {
+        service: {
+          name: 'Review service',
+          root: folder,
+          planes: [{ kind: 'terminal', path: 'not-created', command: 'npm test' }],
+        },
+      },
+    };
+    await writeFile(path.join(directory, 'workspaces.jsonc'), JSON.stringify(definitions), {
+      flag: 'wx',
+    });
+  }
   await writeFile(path.join(directory, 'viewer-state-v1.json'), JSON.stringify(state), {
     flag: 'wx',
   });

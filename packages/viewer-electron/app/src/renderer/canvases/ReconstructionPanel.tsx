@@ -11,6 +11,18 @@ import { providerSegmentation } from '../../domain/models/providers';
 import { useViewer } from '../state/store';
 import { ChoiceButton } from '../ui/ChoiceMenu';
 
+const jobStateLabels: Record<ReconstructionJob['state'], string> = {
+  prepared: 'Prepared',
+  submitting: 'Submitting',
+  'submission-unknown': 'Submission unknown',
+  queued: 'Queued',
+  running: 'Running',
+  'cancel-requested': 'Cancellation requested',
+  cancelled: 'Canceled',
+  succeeded: 'Succeeded',
+  failed: 'Failed',
+};
+
 export function ReconstructionPanel({
   document,
   onClose,
@@ -109,6 +121,8 @@ export function ReconstructionPanel({
         Photo
         <ChoiceButton
           label="Source photo"
+          placeholder="No photos"
+          disabled={!photos.length}
           value={assetID}
           choices={photos.map((asset) => ({ value: asset.id, label: asset.name }))}
           onChoose={setAssetID}
@@ -119,11 +133,14 @@ export function ReconstructionPanel({
         Selection model
         <ChoiceButton
           label="Selection model"
+          placeholder="No selection models"
+          disabled={!providers.length}
           value={providerID}
           choices={providers.map((provider) => ({ value: provider.id, label: provider.name }))}
           onChoose={setProviderID}
         />
       </label>
+      {!providers.length && <p>Add a selection model in Model Settings.</p>}
       <label>
         Object
         <input
@@ -163,7 +180,11 @@ export function ReconstructionPanel({
         <ChoiceButton
           label="Saved reconstructions"
           value={job?.id ?? ''}
-          choices={jobs.map((item) => ({ value: item.id, label: item.prompt, detail: item.state }))}
+          choices={jobs.map((item) => ({
+            value: item.id,
+            label: item.prompt,
+            detail: jobStateLabels[item.state],
+          }))}
           onChoose={(id) => void run(() => window.viewer.reconstruction({ kind: 'get', id }))}
         />
       )}
@@ -178,7 +199,7 @@ export function ReconstructionPanel({
             />
           </figure>
           <p role="status">
-            {job.prompt} · {job.state}
+            {job.prompt} · {jobStateLabels[job.state]}
           </p>
           {job.state === 'prepared' && (
             <button

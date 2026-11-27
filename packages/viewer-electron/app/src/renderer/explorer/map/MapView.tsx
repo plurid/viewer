@@ -39,7 +39,7 @@ import { announce, getState, report, updateFolderPresentation } from '../../stat
 import { effectiveWindowSettings } from '../../state/effective-ui';
 import { resolvedShortcut, shortcutGlyphs } from '../../../domain/preferences/shortcuts';
 import { plural } from '../../../domain/plural';
-import { FileIcon, Thumbnail, type FileViewProps } from '../views';
+import { fileRowID, FileIcon, Thumbnail, type FileViewProps } from '../views';
 import { useMarquee } from '../marquee';
 import { useFileReveal } from '../anchors';
 import { Icon } from '../../ui/Icon';
@@ -183,9 +183,6 @@ export const MapView = memo(function MapView({
     };
   }, []);
 
-  useEffect(() => {
-    if (document) creating.delete(path);
-  }, [document, path]);
   const commit = (ops: LensOp[], label: string, spoken: string) => {
     if (!ops.length) return;
     setMessage(spoken);
@@ -217,9 +214,9 @@ export const MapView = memo(function MapView({
             (undo ? ` ${undo} undoes it.` : ''),
         );
       })
-      .catch((error) => {
-        creating.delete(path);
-        report(error);
+      .catch(report)
+      .finally(() => {
+        if (creating.get(path) === created) creating.delete(path);
       });
   };
   /** Follows the pointer in map units; measured once per gesture, so rotated planes work. */
@@ -623,6 +620,7 @@ export const MapView = memo(function MapView({
               return (
                 <div
                   key={tile.entry.path}
+                  id={props.idPrefix ? fileRowID(props.idPrefix, tile.entry.path) : undefined}
                   className={`map-tile ${selected ? 'is-selected' : ''} ${dragged ? 'is-dragging' : ''} ${props.cursor === tile.entry.path ? 'is-cursor' : ''}`}
                   role="option"
                   aria-selected={selected}

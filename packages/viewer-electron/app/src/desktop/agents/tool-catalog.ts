@@ -1,7 +1,7 @@
 import type { AgentCapability } from '../../domain/agents/clients';
 import { z } from 'zod';
 import { sessionReportSchema } from '../../domain/agents/sessions';
-import { transformPlanSchema } from '../../domain/operations/transforms';
+import { agentTransformPlanSchema } from '../../domain/operations/transforms';
 import { drawingGeometryOptionsSchema } from '../../domain/previews/drawings/geometry';
 import { sqliteLimits } from '../../domain/previews/data/sqlite';
 import { maxQueryLength } from '../../domain/search/query';
@@ -59,14 +59,14 @@ export const agentToolCatalog = {
   },
   propose_transform: {
     description:
-      'Propose a typed image or media export for user review. Sources and output folder must be granted; content permission is required. Creates new files and keeps existing ones. No executable, flags, filter graph, authenticated browser state or direct apply route is available.',
+      'Propose a typed image, PDF, PDF pages, media or layout export for user review. Sources and output folder must be granted; content permission is required. Creates new files and keeps existing ones. No executable, flags, filter graph, authenticated browser state or direct apply route is available.',
     capability: 'propose',
     input: z
       .object({
         sources: z.array(path).min(1).max(16),
         destination: path,
         name: z.string().min(1).max(255),
-        plan: transformPlanSchema,
+        plan: agentTransformPlanSchema,
       })
       .strict(),
   },

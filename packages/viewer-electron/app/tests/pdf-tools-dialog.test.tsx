@@ -39,7 +39,7 @@ const files = ['First.pdf', 'Second.pdf'].map(
       hidden: false,
     }) as FileEntry,
 );
-function setup(operate: ViewerAPI['operate']) {
+function setup(operate: ViewerAPI['operate'], overrides: Partial<ViewerAPI> = {}) {
   Object.assign(window, {
     viewer: {
       operate,
@@ -49,11 +49,20 @@ function setup(operate: ViewerAPI['operate']) {
         version: { identity: temporalIdentity(file), modified: 7, size: 100 },
       })),
       save: vi.fn(async () => {}),
+      ...overrides,
     },
   });
   initialize({ home: '/fixture', platform: 'darwin', state: null, locations: [], openPaths: [] });
   render(<PDFToolsDialog files={files} onClose={vi.fn()} />);
 }
+it('selects the first added page after the initial PDF failed to open',async () => {
+  const inspect = vi.fn<ViewerAPI['pdfInspect']>().mockRejectedValueOnce(new Error('Unreadable PDF')).mockResolvedValue({pages:2, version:{identity:temporalIdentity('added'),size:100,modified:1}});
+  setup(vi.fn(),{pdfInspect:inspect,choosePDFs:async()=>[files[1]!.path],stat:async()=>files[1]!});
+  await screen.findByText('Unreadable PDF');
+  fireEvent.click(screen.getByRole('button',{name:'Add PDFs…'}));
+  await screen.findByText('Page preview');
+  expect(screen.getByLabelText<HTMLInputElement>('PDF page range').value).toBe('1-2');
+});
 it('submits the reordered extraction with source versions from inspection and one combined PDF output', async () => {
   const operate = vi.fn<ViewerAPI['operate']>(async () => 'export-job');
   setup(operate);

@@ -1290,6 +1290,7 @@ export class Desktop {
     );
     this.watchers = new Watchers(emit);
     this.canvases = new Canvases(dataPath, {
+      disabled: (conversationID) => this.chats.cancelTurn(conversationID),
       observe: true,
       action: (owner, event) => {
         const window = this.windows.get(owner)?.window;
@@ -1577,6 +1578,7 @@ export class Desktop {
       this.resources.quiesce(root),
       this.webPreviews.quiesce(root),
       this.transforms.quiesce(root),
+      this.fabrication.quiesce(root),
       this.optimizationReviews.invalidate(root),
       this.thumbnails.quiesce(root),
       this.watchers.revoke(root),

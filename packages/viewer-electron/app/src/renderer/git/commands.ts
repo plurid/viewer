@@ -1,4 +1,5 @@
 import type { CapturedTarget } from '../../domain/automation/actions';
+import { pathText } from '../../domain/files/path-label';
 import type { GitActionKind } from '../../domain/comparison/git-actions';
 import type { CommandContext, CommandDefinition } from '../commands/registry';
 import type { WindowScopes } from '../commands/window-commands/scope';
@@ -39,7 +40,7 @@ export function gitCommands(
     else await commands.start(kind, target);
   };
   const repository = (context: CommandContext) =>
-    `Repository containing the current folder: ${context.directory}`;
+    `Repository containing the current folder: ${pathText(context.directory ?? '', state.bootstrap.home)}`;
 
   return [
     {

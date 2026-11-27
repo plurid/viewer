@@ -19,6 +19,21 @@ import {
 import { inspectReviewedFile } from '../native/reviewed-file';
 import { GitReader, runGit, gitEnvironment, gitSafeOptions } from './git';
 
+// Only ordinary-file modes in Git's metadata permit hunk staging. Paths and object IDs
+// are opaque; unknown headers require whole-file review.
+export function textPatchHeader(header: string): boolean {
+  return header
+    .split('\n')
+    .every(
+      (line) =>
+        !line ||
+        line.startsWith('diff --git ') ||
+        line.startsWith('--- ') ||
+        line.startsWith('+++ ') ||
+        /^(?:new file mode|deleted file mode) 100(?:644|755)$/.test(line) ||
+        /^index [a-f0-9]+\.\.[a-f0-9]+(?: 100(?:644|755))?$/.test(line),
+    );
+}
 const digest = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
 const identity = versionIdentity;
 const diffOptions = [
@@ -327,16 +342,24 @@ export class GitReviews {
         ['diff', ...diffOptions, '--name-status', '-z', baseCommit!, '--'],
         signal,
       );
+      const conflicts = new Set(
+        status.snapshot.changes
+          .filter((change) => change.status === 'conflict')
+          .map((change) => change.path),
+      );
       const fields = output.split('\0');
       if (fields.at(-1) !== '') throw new Error('Incomplete changed-file list.');
       files = [];
       for (let i = 0; i < fields.length - 1; i += 2) {
         const status = fields[i]!,
           file = fields[i + 1];
-        if (!/^[MADT]$/.test(status) || !file || !gitRelativePath(file))
+        // With renames off, each NUL-delimited path has exactly one supported change code.
+        if (!/^[MADTU]$/.test(status) || !file || !gitRelativePath(file))
           throw new Error('Invalid changed-file list.');
-        files.push({ path: file, status });
+        files.push({ path: file, status: status === 'U' || conflicts.has(file) ? '!' : status });
+        conflicts.delete(file);
       }
+      for (const file of conflicts) files.push({ path: file, status: '!' });
       for (const item of status.snapshot.changes.filter((item) => item.status === 'untracked'))
         if (!files.some((file) => file.path === item.path))
           files.push({ path: item.path, status: '?', untracked: true });
@@ -430,11 +453,7 @@ export class GitReviews {
     if (index !== lease.index) throw new Error('The index changed. Refresh review.');
     const raw = await this.patch(lease, snapshot, entry, signal);
     const patch = parseReviewPatch(raw);
-    const unsupported =
-      ['!', 'R'].includes(entry.status) ||
-      /^(?:old mode|new mode|GIT binary patch|Binary files|.*(?:120000|160000))/m.test(
-        patch.header,
-      );
+    const unsupported = ['!', 'R'].includes(entry.status) || !textPatchHeader(patch.header);
     const problem =
       patch.hunks.reduce((count, hunk) => count + hunk.lines.length, 0) > 20000
         ? 'This file exceeds the 20,000-line hunk review limit. Open diff to inspect the file.'

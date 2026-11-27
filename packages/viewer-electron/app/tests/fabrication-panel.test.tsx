@@ -1337,13 +1337,19 @@ it('reviews the exact source and records a typed human confirmation separately f
   );
   fireEvent.click(screen.getByRole('button', { name: 'Confirm from Source…' }));
   const input = screen.getByRole('textbox', { name: 'Value (mm)' }) as HTMLInputElement;
-  expect(input.value).toBe('');
-  expect(document.activeElement).toBe(input);
+  fireEvent.keyDown(input,{key:'Escape'});
+  expect(screen.queryByRole('textbox',{name:'Value (mm)'})).toBeNull();
+  const opener=screen.getByRole('button',{name:'Confirm from Source…'});
+  expect(document.activeElement).toBe(opener);
+  fireEvent.click(opener);
+  const reopened=screen.getByRole('textbox',{name:'Value (mm)'}) as HTMLInputElement;
+  expect(reopened.value).toBe('');
+  expect(document.activeElement).toBe(reopened);
   expect(
     (screen.getByRole('button', { name: 'Confirm Value' }) as HTMLButtonElement).disabled,
   ).toBe(true);
-  fireEvent.change(input, { target: { value: '60' } });
-  await act(async () => fireEvent.submit(input.closest('form')!));
+  fireEvent.change(reopened, { target: { value: '60' } });
+  await act(async () => fireEvent.submit(reopened.closest('form')!));
   expect(fabrication).toHaveBeenCalledWith({
     kind: 'confirm',
     id: opening.id,
@@ -1375,4 +1381,17 @@ it('leaves embedded check lifetime and Escape to its plane', async () => {
   fireEvent.keyDown(body, { key: 'Escape' });
   expect(checkSession()?.opening?.id).toBe(opening.id);
   expect(kinds().filter((kind) => kind === 'close' || kind === 'cancel')).toEqual([]);
+});
+
+it('keeps a stale check inside its plane while relisting an empty job', async () => {
+  level = 'images';
+  await act(() => openCheck([folder], activeWorkspace().id));
+  const current = checkSession()!;
+  let finish!: (value:unknown)=>void;
+  fabrication.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+  const work = runCheck({...current, stale:[{name:'part.dxf',change:'changed'}],viewPaneID:'review-plane'});
+  expect(checkSession()?.viewPaneID).toBe('review-plane');
+  finish({kind:'nothing',job:'Empty job',reason:'No DXF files.'});
+  await work;
+  expect(checkSession()?.viewPaneID).toBe('review-plane');
 });

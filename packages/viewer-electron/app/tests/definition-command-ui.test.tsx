@@ -903,3 +903,19 @@ describe('definition commands in workspace planes', () => {
     },
   );
 });
+
+it('shows the pending approval until the person declines', async () => {
+  const view = await show();
+  let decline!: () => void;
+  fake.start.mockReturnValueOnce(
+    new Promise((resolve) => {
+      decline = () => resolve({ kind: 'declined' });
+    }),
+  );
+  fireEvent.click(view.getByRole('button', { name: 'Run echo sample-0' }));
+  await waitFor(() => expect(fake.start).toHaveBeenCalledOnce());
+  expect(view.queryByText('Waiting for terminal approval…')).toBeTruthy();
+  expect(fake.mounted).not.toHaveBeenCalled();
+  await act(async () => decline());
+  expect(view.getByRole('button', { name: 'Run echo sample-0' })).toBeTruthy();
+});

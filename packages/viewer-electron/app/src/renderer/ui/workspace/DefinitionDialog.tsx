@@ -9,7 +9,8 @@ import {
   saveDefinition,
   workspaceShells,
 } from '../../state/definitions';
-import { getState } from '../../state/store';
+import { linkedDefinition } from '../../../domain/workspaces/catalog';
+import { useViewer } from '../../state/store';
 import { Dialog, tryAgainLabel } from '../primitives';
 import { errorMessage } from '../../../domain/errors';
 import { flushState } from '../../state/persistence';
@@ -96,9 +97,7 @@ export function DefinitionDialog({
       live = false;
     };
   }, [kind, workspace.id]);
-  const definition = getState().bootstrap.definitions?.definitions.find(
-    (item) => item.key === workspace.definition?.key,
-  );
+  const definition = useViewer((state) => linkedDefinition(workspace, state.bootstrap.definitions));
   const terminals =
     definition?.planes.filter(
       (item) => item.plane.kind === 'terminal' && item.plane.command !== undefined,

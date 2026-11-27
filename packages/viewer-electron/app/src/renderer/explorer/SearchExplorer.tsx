@@ -1,5 +1,5 @@
 import { chooseOpening } from './opening';
-import { memo, useId, useMemo, useRef, useState } from 'react';
+import { memo, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FileEntry, SearchPane } from '../../domain/contracts';
 import {
   activeWorkspace,
@@ -45,6 +45,14 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
   const [selection, select] = useBrowseField(id, pane?.path || '', 'selection');
   const session = browseSession(id, pane?.path || '');
   const selecting = useFileSelection(session, select);
+  const scope = JSON.stringify([pane?.query, pane?.content, pane?.recursive, pane?.allLocations]);
+  useLayoutEffect(() => {
+    if (session.searchScope !== undefined && session.searchScope !== scope) {
+      selecting.clear();
+      setOffset(0);
+    }
+    session.searchScope = scope;
+  }, [scope, selecting, session]);
   const drops = useFileDrop(() => (pane?.allLocations ? undefined : pane?.path));
   const registry = useCommands();
   const opening = useViewer((state) => state.settings.settings.fileOpening);
@@ -130,8 +138,11 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
                 recursive: pane.recursive ?? true,
                 showHidden: true,
               })
-              .then((snapshot) => selecting.all(snapshot.entries))
+              .then((snapshot) => {
+                if (session.searchScope === scope) selecting.all(snapshot.entries);
+              })
               .catch((error) => {
+                if (session.searchScope !== scope) return;
                 selecting.all(entries);
                 report(error);
               });
@@ -140,7 +151,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
         }),
       valid: (context) => context.workspaceID === activeWorkspace().id,
     },
-    [selected, recipes, opening, offset, search.result?.more],
+    [scope, selected, recipes, opening, offset, search.result?.more],
   );
   useContextPublish(id, active === id, selected);
   const handleKey = useFileKeyboard(id, (event) =>
@@ -177,7 +188,7 @@ export const SearchExplorer = memo(function SearchExplorer({ id }: { id: string 
       setActivePane(id);
       selecting.region(found, base);
     },
-    open: (entry) => openEntry(entry),
+    open: openEntry,
     context: (entry, event) => {
       event.preventDefault();
       void refreshClipboard(true);

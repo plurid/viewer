@@ -13,6 +13,7 @@ export const valueSourceLabels: Record<ValueSource, string> = {
 };
 /** "4 pieces", or "2 sets × 2 pieces = 4 pieces" for a drawing of several separate pieces. */
 export function quantityText(quantity: Pick<PartQuantity, 'sets' | 'pieces'>): string {
+  if (quantity.sets === 0) return countText(quantity.pieces, 'piece');
   const each = quantity.pieces / quantity.sets;
   return each === 1
     ? countText(quantity.pieces, 'piece')

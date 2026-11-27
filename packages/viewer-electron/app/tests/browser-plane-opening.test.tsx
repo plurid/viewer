@@ -103,3 +103,80 @@ it('does not let a delayed open reply replace a newer loaded-page event', async 
     action: 'native-window',
   });
 });
+
+it('retains the open error and retries opening when a slot is available', async () => {
+  const pane = {
+    id: 'ninth',
+    type: 'browser' as const,
+    path: '/fixture',
+    url: 'https://example.org/',
+  };
+  const browser = vi
+    .fn(async (request: BrowserRequest) => {
+      if (request.kind !== 'open') throw new Error('Browser closed');
+      return {
+        id: pane.id,
+        url: pane.url,
+        title: 'Page',
+        loading: false,
+        back: false,
+        forward: false,
+        zoom: 1,
+        transport: 'bitmap',
+      };
+    })
+    .mockRejectedValueOnce(new Error('Browser limit reached'));
+  Object.assign(window, {
+    viewer: { browser, save: vi.fn(async () => {}), onEvent: () => () => {} },
+  });
+  initialize({ home: '/fixture', platform: 'darwin', locations: [], openPaths: [], state: null });
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  render(<BrowserPlane pane={pane} active />);
+  await act(async () => {});
+  expect(screen.getByRole('alert').textContent).toContain('Browser limit reached');
+  expect(browser.mock.calls.map(([r]) => r.kind)).toEqual(['open']);
+  fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
+  await act(async () => {});
+  expect(browser.mock.calls.filter(([r]) => r.kind === 'open')).toHaveLength(2);
+});
+it('hides a page whose successful open arrives after unmount', async () => {
+  let finish!: () => void;
+  const acquired = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const browser = vi.fn((request: BrowserRequest) =>
+    request.kind === 'open' ? acquired : Promise.resolve(),
+  );
+  Object.assign(window, {
+    viewer: { browser, save: vi.fn(async () => {}), onEvent: () => () => {} },
+  });
+  initialize({ home: '/fixture', platform: 'darwin', locations: [], openPaths: [], state: null });
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  const pane = {
+    id: 'pending',
+    type: 'browser' as const,
+    path: '/fixture',
+    url: 'http://localhost/',
+  };
+  const view = render(<BrowserPlane pane={pane} active />);
+  view.unmount();
+  await act(async () => {
+    finish();
+    await acquired;
+  });
+  expect(browser).toHaveBeenCalledWith(
+    expect.objectContaining({ kind: 'viewport', id: pane.id, visible: false }),
+  );
+});

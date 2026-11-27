@@ -541,7 +541,7 @@ export const PreviewHost = memo(function PreviewHost({
                           .catch(report)
                     : undefined
                 }
-                retry={!supplied ? () => setRetry((value) => value + 1) : undefined}
+                retry={() => setRetry((value) => value + 1)}
                 showHex={() => setHexFor(resource.id)}
                 allowHex={allowHex}
                 openInApp={

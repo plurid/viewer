@@ -128,3 +128,9 @@ export interface CanvasActionRun {
 export type CanvasActionEvent =
   | { kind: 'invoke'; run: CanvasActionRun; state: Record<string, unknown> }
   | { kind: 'settled'; run: CanvasActionRun };
+
+export function canvasActionIssue(error: z.ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) return 'Invalid canvas action.';
+  return [issue.path.join('.'), issue.message].filter(Boolean).join(': ').slice(0, 1000);
+}

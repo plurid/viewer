@@ -1,5 +1,6 @@
 import type { FileEntry } from '../contracts';
-import { searchPattern, type SearchPattern } from './pattern';
+import type { SearchPattern } from './pattern';
+import { searchPattern, globPattern } from './pattern';
 import { errorMessage } from '../errors';
 import { officeFormats } from '../previews/documents/layout';
 import { privateKeyNames } from '../previews/keys/certificates';
@@ -525,21 +526,15 @@ export function withoutTopWords(query: FileQuery): FileQuery {
  * (`*.md *.txt`, `IMG_????.jpg`), or else a query (`ext:md modified<7d`).
  */
 export function parsePattern(text: string, now = Date.now()): FileQuery {
+  const long = queryTooLong(text);
+  if (long) throw new QueryError(long, maxQueryLength);
   const words = text.trim().split(/\s+/).filter(Boolean);
   const glob =
     words.length > 0 && words.every((word) => /[*?]/.test(word) && !/^[-~(]|[:<>="]/.test(word));
   if (!glob) return parseFileQuery(text, now);
   const nodes: QueryNode[] = words.map((word) => ({
     kind: 'regex',
-    regex: new RegExp(
-      '^' +
-        word
-          .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-          .replace(/\*/g, '.*')
-          .replace(/\?/g, '.') +
-        '$',
-      'iu',
-    ),
+    regex: globPattern(word),
     source: word,
   }));
   return {

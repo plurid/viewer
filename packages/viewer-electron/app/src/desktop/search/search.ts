@@ -81,8 +81,16 @@ export class Search {
       truncated = false;
     let entries: FileEntry[] = [];
     let tick = Date.now();
-    const flush = (done: boolean) => {
-      this.emit({ id: request.id, entries, done, visited, errors, truncated });
+    const flush = (done: boolean, error?: string) => {
+      this.emit({
+        id: request.id,
+        entries,
+        done,
+        visited,
+        errors,
+        truncated,
+        ...(error ? { error } : {}),
+      });
       entries = [];
       tick = Date.now();
     };
@@ -96,9 +104,11 @@ export class Search {
       for (const tag of query.tags)
         tags.set(tag, new Set(await this.tagged(request.root, tag, abort.signal)));
     } catch (error) {
-      errors++;
-      flush(true);
-      throw error;
+      flush(
+        true,
+        'Finder tag lookup failed: ' + (error instanceof Error ? error.message : String(error)),
+      );
+      return;
     }
     const facts = { tagged: (tag: string) => tags.get(tag) };
     const hiddenPart = (relative: string) =>
@@ -169,12 +179,19 @@ export class Search {
                     ? 'directory'
                     : 'file',
               };
-              if (query.needsStat || matchesQuery(query, light, facts))
+              // Link targets and size-dependent document kinds cannot be decided from a dirent.
+              if (
+                query.needsStat ||
+                child.isSymbolicLink() ||
+                light.extension === 'key' ||
+                light.extension === 'pub' ||
+                matchesQuery(query, light, facts)
+              )
                 try {
                   await this.authorize(file);
                   const item = await entry(file);
                   item.hidden ||= childHidden;
-                  if (!query.needsStat || matchesQuery(query, item, facts)) {
+                  if (matchesQuery(query, item, facts)) {
                     entries.push(item);
                     found++;
                   }

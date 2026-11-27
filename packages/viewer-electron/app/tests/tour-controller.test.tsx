@@ -16,6 +16,7 @@ import type { TourRequest, TourStop } from '../src/domain/tours/tour';
 import { activeWorkspace, flushState, getState, initialize } from '../src/renderer/state/store';
 import { useWorkspaceController } from '../src/renderer/workspace/controller';
 import { frameWorkspace } from '../src/renderer/workspace/framing';
+import { executeAgentNavigation } from '../src/renderer/workspace/agent-navigation';
 import { playTour, stopTour, tourPlayback } from '../src/renderer/workspace/tour';
 
 vi.mock('../src/renderer/workspace/framing', async (original) => ({
@@ -60,6 +61,10 @@ beforeEach(() => {
     new Proxy(
       {
         save: async () => {},
+        stat: async (path: string) => file(path),
+        project: async () => {
+          throw new Error('Unreadable project');
+        },
         tour: async (request: TourRequest) => {
           requests.push(request);
           if (request.kind !== 'stat') throw new Error(`A tour asked to ${request.kind}.`);
@@ -251,3 +256,41 @@ describe('a tour through the controller', () => {
     expect(requests).toEqual([{ kind: 'stat', root: '/Jobs', path: 'Plate.dxf', hash: false }]);
   });
 });
+
+it.each(['viewer.project.jsonc', 'walk.viewer-tour.jsonc'])(
+  'opens %s as content for edit and evidence',
+  (name) => {
+    const { controller } = mount();
+    const path = '/Jobs/' + name;
+    controller.open(file(path), undefined, { edit: true });
+    expect(paneAt(path)).toBeDefined();
+    controller.open(file(path), undefined, { evidence: evidence(path) });
+    expect(paneAt(path)?.evidence).toEqual(evidence(path));
+    expect(ipc).not.toContain('project');
+    expect(requests).toEqual([]);
+  },
+);
+
+it.each(['viewer.project.jsonc', 'walk.viewer-tour.jsonc'])(
+  'returns the definition read failure to an agent opening %s',
+  async (name) => {
+    const { controller } = mount();
+    const current = activeWorkspace();
+    const pane = current.panes[0]!;
+    await expect(
+      executeAgentNavigation(
+        { kind: 'open-path', path: '/Jobs/' + name, placement: 'root' },
+        {
+          workspaceID: current.id,
+          rootID: controller.rootID(pane.id)!,
+          paneID: pane.id,
+          panePath: pane.path,
+          directory: pane.path,
+          selection: [],
+        },
+        controller,
+        async () => {},
+      ),
+    ).rejects.toThrow(/Unreadable project|asked to read/);
+  },
+);

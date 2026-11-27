@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { DuplicateGroup, DuplicateResult } from '../../../domain/comparison/duplicates';
 import { sourceVersion } from '../../../domain/files/inspection';
 import { formatBytes } from '../../../domain/files/entries';
@@ -42,7 +42,15 @@ export function DuplicateControls() {
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [shown, setShown] = useState(page);
   const [error, setError] = useState('');
+  const activeRun = useRef('');
+  const cancelRun = () => {
+    const id = activeRun.current;
+    activeRun.current = '';
+    setRunning('');
+    if (id) void window.viewer.duplicates({ kind: 'cancel', id }).catch(() => {});
+  };
   useWindowEvent('viewer:duplicates', (folders) => {
+    cancelRun();
     setRoots(folders);
     setResult(undefined);
     setChosen(new Set());
@@ -52,22 +60,26 @@ export function DuplicateControls() {
   });
   if (!open) return null;
   const close = () => {
-    if (running) void window.viewer.duplicates({ kind: 'cancel', id: running });
+    cancelRun();
     setOpen(false);
   };
   const search = async () => {
     const id = crypto.randomUUID();
+    activeRun.current = id;
     setRunning(id);
     setError('');
     setResult(undefined);
     setChosen(new Set());
     try {
       const value = await window.viewer.duplicates({ kind: 'run', id, roots });
-      if (value) setResult(value);
+      if (activeRun.current === id && value) setResult(value);
     } catch (value) {
-      setError(errorMessage(value));
+      if (activeRun.current === id) setError(errorMessage(value));
     } finally {
-      setRunning('');
+      if (activeRun.current === id) {
+        activeRun.current = '';
+        setRunning('');
+      }
     }
   };
   const choose = async () => {
@@ -137,7 +149,9 @@ export function DuplicateControls() {
               {result.groups.length
                 ? `${plural(result.groups.length, 'group')} of identical files among ${result.scanned.toLocaleString('en-US')} checked; removing the copies frees ${formatBytes(reclaimable(result.groups))}.`
                 : `No identical files among ${result.scanned.toLocaleString('en-US')} checked.`}
-              {result.coverage === 'partial' &&
+              {result.fileLimited && ' Search stopped at 100,000 files.'}
+              {result.depthLimited && ' Folders more than 64 levels deep were skipped.'}
+              {result.errors.length > 0 &&
                 ` ${plural(result.errors.length, 'item')} couldn’t be read, so some duplicates may be missing.`}
             </p>
             {result.groups.length > 0 && (

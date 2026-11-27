@@ -3,7 +3,7 @@ import type { IndexStatus } from '../../../domain/services';
 import { Field } from './SettingField';
 import { IconButton, PathField } from '../primitives';
 import { useHome } from '../PathLabel';
-import { pathText } from '../../../domain/files/path-label';
+import { pathFromInput, pathInputText, pathText } from '../../../domain/files/path-label';
 import type { SettingsEditor } from './editor';
 import { commonSearchExclusions } from '../../../domain/search/exclusions';
 import type { DesktopEvent } from '../../../domain/contracts';
@@ -132,13 +132,16 @@ export function SearchSettings({ editor }: { editor: SettingsEditor }) {
       <Field
         multiline
         label="Excluded search names and paths"
-        value={settings.search.exclusions.join('\n')}
+        value={settings.search.exclusions
+          .map((rule) => (rule === home ? '~/' : pathInputText(rule, home)))
+          .join('\n')}
         save={(value) =>
           patch(
             'settings.search.exclusions',
             value
               .split('\n')
               .map((value) => value.trim())
+              .map((rule) => (rule.startsWith('~/') ? pathFromInput(rule, home) : rule))
               .filter(Boolean),
           )
         }

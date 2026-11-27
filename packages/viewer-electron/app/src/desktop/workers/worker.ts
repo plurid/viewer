@@ -31,14 +31,14 @@ async function configureNow(value: ApplicationSettings['search'], rebuild = fals
   // The same configuration again (every folder pick sends one): the index crawls only the roots it
   // could not read, and the watchers stay unless one of them failed.
   if (!rebuild && !watchFailures.size && JSON.stringify(value) === JSON.stringify(config)) {
-    index!.configure(value);
+    await index!.configure(value);
     return;
   }
   const retired = watcher?.stop();
   watcher = undefined;
   watchFailures.clear();
   config = value;
-  index!.configure(config, rebuild);
+  await index!.configure(config, rebuild);
   await retired;
   if (value.paused || !value.roots.length) {
     watcher = undefined;

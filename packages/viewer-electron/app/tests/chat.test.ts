@@ -1253,3 +1253,26 @@ describe('read-only Chat', () => {
     ).resolves.toBeUndefined();
   });
 });
+
+it('stops the linked model turn when its canvas is disabled and leaves it stopped on enable', async () => {
+  const canvases = new Canvases(path.join(root, 'private'), {
+    changed() {},
+    disabled: (id) => chat.cancelTurn(id),
+  });
+  ports.canvases = canvases;
+  const conversation = await create();
+  const linked = document(await chat.request({ kind: 'canvas', id: conversation.id }, 1));
+  const canvas = await canvases.read(1, linked.canvasID!);
+  generate.mockImplementation(
+    async (_provider, _instructions, _input, _schema, signal: AbortSignal) =>
+      new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      }),
+  );
+  await send(conversation.id);
+  await vi.waitFor(() => expect(generate).toHaveBeenCalledOnce());
+  const disabled = await canvases.configure(1, canvas.id, canvas.revision, canvas.title, false);
+  await canvases.configure(1, canvas.id, disabled.revision, canvas.title, true);
+  expect((await settled(conversation.id)).status).toBe('stopped');
+  expect(generate).toHaveBeenCalledOnce();
+});

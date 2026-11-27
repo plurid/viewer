@@ -17,7 +17,7 @@ export class PreviewWorker {
     ) => {
       const reply = event.data;
       this.pending.get(reply.id)?.(
-        reply.error ? restoreReaderError(reply.error, reply) : undefined,
+        reply.error !== undefined ? restoreReaderError(reply.error, reply) : undefined,
         reply.value,
       );
     };

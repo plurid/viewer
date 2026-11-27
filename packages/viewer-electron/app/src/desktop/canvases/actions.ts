@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { CanvasDocument } from '../../domain/canvases/document';
 import {
   canvasActionsSchema,
+  canvasActionIssue,
   canvasActionOutputSchema,
   validateCanvasActionInput,
 } from '../../domain/canvases/actions';
@@ -167,7 +168,7 @@ export class CanvasActions {
     }
     const parsed = canvasActionOutputSchema.safeParse(output);
     if (!parsed.success) {
-      this.finish(id, runID, 'failed', undefined, 'The action returned an invalid result.');
+      this.finish(id, runID, 'failed', undefined, canvasActionIssue(parsed.error));
       return;
     }
     pending.received = true;

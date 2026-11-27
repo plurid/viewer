@@ -479,12 +479,13 @@ const FileTile = memo(function FileTile({
 }: {
   entry: FileEntry;
   selected: boolean;
-  actions: Pick<FileViewProps, 'select' | 'open' | 'context' | 'drag' | 'paneID'>;
+  actions: Pick<FileViewProps, 'select' | 'open' | 'context' | 'drag' | 'paneID' | 'idPrefix'>;
 }) {
   return (
     <div
       role="option"
       aria-selected={selected}
+      id={actions.idPrefix ? fileRowID(actions.idPrefix, entry.path) : undefined}
       className={`file-tile ${selected ? 'is-selected' : ''}`}
       data-file-path={entry.path}
       data-directory-path={browsable(entry) ? entry.path : undefined}
@@ -508,8 +509,8 @@ const FileTile = memo(function FileTile({
 export function GridView(props: FileViewProps) {
   const actions = useRowActions(props);
   const tileActions = useMemo(
-    () => ({ ...actions, paneID: props.paneID }),
-    [actions, props.paneID],
+    () => ({ ...actions, paneID: props.paneID, idPrefix: props.idPrefix }),
+    [actions, props.paneID, props.idPrefix],
   );
   const scroll = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
@@ -872,11 +873,12 @@ const GalleryItem = memo(function GalleryItem({
   left: number;
   selected: boolean;
   section?: string;
-  actions: Pick<FileViewProps, 'select' | 'open' | 'context' | 'drag' | 'paneID'>;
+  actions: Pick<FileViewProps, 'select' | 'open' | 'context' | 'drag' | 'paneID' | 'idPrefix'>;
 }) {
   return (
     <div className="gallery-item-container" style={{ position: 'absolute', left, height: '100%' }}>
       <button
+        id={actions.idPrefix ? fileRowID(actions.idPrefix, entry.path) : undefined}
         className={`gallery-item ${selected ? 'is-selected' : ''}`}
         style={{ height: '100%' }}
         data-file-path={entry.path}
@@ -906,8 +908,8 @@ const GalleryItem = memo(function GalleryItem({
 export function GalleryView(props: FileViewProps) {
   const actions = useRowActions(props);
   const itemActions = useMemo(
-    () => ({ ...actions, paneID: props.paneID }),
-    [actions, props.paneID],
+    () => ({ ...actions, paneID: props.paneID, idPrefix: props.idPrefix }),
+    [actions, props.paneID, props.idPrefix],
   );
   const activity = useContext(PreviewActivity);
   const current = props.entries.find((entry) => entry.path === props.cursor);

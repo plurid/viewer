@@ -3,7 +3,7 @@ import { errorMessage } from '../../domain/errors';
 import { Button, Empty, PathField } from '../ui/primitives';
 import './definition-commands.css';
 
-type PanelState = 'available' | 'changed' | 'unavailable' | 'checking';
+type PanelState = 'available' | 'changed' | 'unavailable' | 'folder-unavailable' | 'checking';
 
 interface DefinitionStartPanelProps {
   plane: number;
@@ -64,11 +64,13 @@ export function DefinitionStartPanel({
         title={
           state === 'changed'
             ? 'Terminal changed'
-            : state === 'checking'
-              ? 'Checking definition…'
-              : command
-                ? 'Command not started'
-                : 'No command to run'
+            : state === 'folder-unavailable'
+              ? 'Terminal folder unavailable'
+              : state === 'checking'
+                ? 'Checking definition…'
+                : command
+                  ? 'Command not started'
+                  : 'No command to run'
         }
       >
         {state === 'changed' ? <p role="status">This terminal changed in the definition.</p> : null}

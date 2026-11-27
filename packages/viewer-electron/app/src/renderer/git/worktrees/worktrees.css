@@ -19,6 +19,17 @@
 .worktrees-dialog[open] > footer {
   margin-top: auto;
 }
+.worktrees-dialog[open] > .worktree-create {
+  flex: 1;
+  min-height: 0;
+}
+.worktree-create-fields {
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: var(--gap-content);
+}
 .worktree-create {
   padding: var(--gap-small) var(--gap-dialog) 0;
   display: flex;
@@ -64,7 +75,8 @@
   justify-items: start;
 }
 .worktree-create footer {
-  margin: 0;
+  flex: none;
+  margin: auto 0 0;
 }
 .worktree-create-destination button {
   white-space: nowrap;

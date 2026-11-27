@@ -443,25 +443,39 @@ describe('external terminal adapters', () => {
   });
   it('creates one tmux window per invocation and reuses an existing iTerm control client', async () => {
     config.terminals.tmux.executable = '/bin/echo';
+    config.terminals.profiles[0]!.executable = '/missing/profile-shell';
+    const profileValue =
+      Array.from({ length: 127 }, (_, i) => String.fromCharCode(i + 1)).join('') + ' 日本語';
+    config.terminals.profiles[0]!.env = { PROJECT: profileValue };
     const calls: string[][] = [];
+    const commands: string[] = [];
     let session = false;
     const adapter: ExternalTerminalAdapter = {
       discover: async () => apps,
       open: vi.fn(),
-      run: async (_file, args) => {
+      run: async (_file, args, input?: string) => {
         calls.push(args);
+        if (input) commands.push(input);
         if (args.includes('has-session') && !session)
           throw Object.assign(new Error('no session'), { code: 1 });
-        if (args.includes('new-session')) session = true;
+        if (input?.startsWith('new-session ')) session = true;
         return args.includes('list-clients') ? '1\n' : '@1\n';
       },
     };
     const terminals = new ExternalTerminals(root, () => config, '', adapter);
     await terminals.open(root, true);
     await terminals.open(root, true);
-    expect(calls.filter((args) => args.includes('new-session'))).toHaveLength(1);
-    expect(calls.filter((args) => args.includes('new-window'))).toHaveLength(1);
-    expect(calls.find((args) => args.includes('new-window'))).toContain('=viewer');
+    expect(commands.map((command) => command.split(' ')[0])).toEqual(['new-session', 'new-window']);
+    const decodeArgument = (word: string) =>
+      Buffer.from(
+        Array.from(word.matchAll(/\\([0-7]{3})/g), (match) => Number.parseInt(match[1]!, 8)),
+      ).toString();
+    for (const command of commands) {
+      const args = command.trimEnd().split(' ').slice(1).map(decodeArgument);
+      expect(args[args.indexOf('-e') + 1]).toBe('PROJECT=' + profileValue);
+      if (command.startsWith('new-window')) expect(args).toContain('=viewer');
+    }
+    expect(calls.flat().join(' ')).not.toContain('PROJECT=');
     expect(adapter.open).toHaveBeenCalledTimes(1);
   });
   it('hands a configured profile or tmux program to a terminal only once it is confirmed', async () => {

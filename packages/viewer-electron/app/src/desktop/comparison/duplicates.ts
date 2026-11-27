@@ -78,6 +78,7 @@ export class Duplicates {
           );
           for (const name of names) {
             if (result.scanned >= maximumFiles) {
+              result.fileLimited = true;
               result.coverage = 'partial';
               break;
             }
@@ -86,7 +87,10 @@ export class Duplicates {
               const item = await entry(child);
               if (item.kind === 'directory') {
                 if (depth < 64) queue.push({ file: child, depth: depth + 1 });
-                else result.coverage = 'partial';
+                else {
+                  result.depthLimited = true;
+                  result.coverage = 'partial';
+                }
               } else if (item.kind === 'file' && item.size > 0) {
                 result.scanned++;
                 const same = bySize.get(item.size) ?? [];

@@ -49,6 +49,10 @@ it('never overwrites a retained unreadable file, while fresh definitions still o
   try {
     await definitions.load();
     await expect(definitions.opened('sample')).resolves.toBeUndefined();
+    const opened = memory.openedAt('sample');
+    await memory.rekeyFound([{ from: 'sample', to: 'sample-2' }]);
+    expect(memory.openedAt('sample-2')).toBe(opened);
+    expect(memory.openedAt('sample')).toBeUndefined();
     expect(definitions.entry('sample')).toBeDefined();
     expect(definitions.snapshot().diagnostics).toContainEqual(
       expect.objectContaining({
@@ -126,4 +130,16 @@ it('sorts recovered entries by recency before later writes and trimming', async 
   expect(
     JSON.parse(await readFile(file, 'utf8')).closed.map((entry: { at: number }) => entry.at),
   ).toEqual([3, 2, 1]);
+});
+
+it.each(['constructor', 'toString'])('rekeys %s using only recorded open times', async (name) => {
+  const root = await temporaryRoot('viewer-defined-rekey-');
+  const memory = new DefinedWorkspaces(root);
+  await memory.rekeyFound([{ from: name, to: 'project' }]);
+  expect(memory.openedAt('project')).toBeUndefined();
+  await memory.opened('sample');
+  const at = memory.openedAt('sample');
+  await memory.rekeyFound([{ from: 'sample', to: name }]);
+  expect(memory.openedAt(name)).toBe(at);
+  await memory.close();
 });

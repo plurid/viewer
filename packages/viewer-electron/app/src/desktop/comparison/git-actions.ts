@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 import type { CapturedTarget, TerminalStart } from '../../domain/automation/actions';
 import {
   gitActionKinds,
+  gitActionTarget,
   gitActionLabels,
   gitTerminalProfileID,
   gitCommitMessageLimit,
@@ -205,7 +206,10 @@ export class GitActions {
     if (!this.options.direct)
       return Promise.reject(new Error('Git actions are available in the direct build only.'));
     if (this.closed) return Promise.reject(new Error('Git actions have closed.'));
-    const request = structuredClone(input);
+    const request = structuredClone({
+      ...input,
+      target: gitActionTarget(input.kind, input.target),
+    });
     const key = `${owner}:${request.id}`;
     const fingerprint = createHash('sha256').update(JSON.stringify(request)).digest('hex');
     const previous = this.launched.get(key);

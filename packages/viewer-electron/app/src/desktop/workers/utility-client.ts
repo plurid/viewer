@@ -162,7 +162,7 @@ export class UtilityClient<Methods extends WorkerMethods = WorkerMethods> {
       clearTimeout(pending.timer);
       pending.cleanup();
       this.pending.delete(reply.id!);
-      if (reply.error) pending.reject(restoreReaderError(reply.error, reply));
+      if (reply.error !== undefined) pending.reject(restoreReaderError(reply.error, reply));
       else pending.resolve(reply.value);
     });
     let reason = 'exited';

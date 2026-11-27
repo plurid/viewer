@@ -148,8 +148,14 @@ describe('fixed human Git actions', () => {
     const request = {
       id: 'job',
       kind: 'status',
-      target: { directory: '/not-a-repository' },
-    } as GitActionRequest;
+      target: {
+        workspaceID: 'work',
+        rootID: 'folder',
+        paneID: 'folder',
+        directory: '/not-a-repository',
+        selection: [],
+      },
+    } satisfies GitActionRequest;
     await expect(service.start(request, 7)).rejects.toThrow('direct build');
     expect(access).not.toHaveBeenCalled();
     expect(validateTarget).not.toHaveBeenCalled();
@@ -473,4 +479,13 @@ describe('Git preparation and lifetime binding', () => {
       expect(mutation).not.toHaveProperty(key);
     expect(gitActionEnvironment('log', inherited)).not.toHaveProperty('SSH_AUTH_SOCK');
   });
+});
+
+it('ignores unrelated captured files for repository-wide actions', async () => {
+  const f = await fixture();
+  const file = await entry(f.root);
+  f.target.selection = Array.from({ length: 1001 }, () => file);
+  await f.service.start(f.request('stage-all'), 5);
+  expect(f.validateTarget).toHaveBeenCalledWith(5, expect.objectContaining({ selection: [] }));
+  expect(f.program().args).toContain('--all');
 });

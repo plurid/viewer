@@ -171,7 +171,7 @@ try {
     assert.equal(measurement.height, 140);
     assert.equal(measurement.holes.length, 4);
     assert.ok(measurement.holes.every((hole) => Math.abs(hole.diameter - 6.5) < 0.001));
-    await main!.evaluate(pressButton('Open saved file'));
+    await main!.evaluate(pressButton('Open Saved File'));
     await until(
       () => main!.evaluate(pageCall(() => !!document.querySelector('.dxf-viewer'))),
       Boolean,

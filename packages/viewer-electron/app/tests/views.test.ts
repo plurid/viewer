@@ -4,7 +4,9 @@
  * views can be named; Tour flies through them in turn, Escape stops it and a click pauses it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act } from '@testing-library/react';
+import { createElement } from 'react';
+import { ViewsDialog } from '../src/renderer/ui/workspace/ViewsDialog';
+import { act, fireEvent, render } from '@testing-library/react';
 import { windowCommands } from '../src/renderer/commands/window';
 import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
 import type { CommandContext } from '../src/renderer/commands/registry';
@@ -136,4 +138,25 @@ describe('Tour the views', () => {
     expect(tourActive()).toBe(false);
     expect(tourPlayback()).toMatchObject({ status: 'ended', skipped: 0 });
   });
+});
+
+it('names each saved view action and cancels its rename with Escape', () => {
+  views = [{ name: 'work', label: 'My View' }];
+  HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+  };
+  const onClose = vi.fn();
+  const view = render(
+    createElement(ViewsDialog, { workspace: actions.workspace as WorkspaceController, onClose }),
+  );
+  fireEvent.click(view.getByRole('button', { name: 'Rename My View' }));
+  fireEvent.keyDown(view.getByRole('textbox'), { key: 'Escape' });
+  expect(view.queryByRole('textbox')).toBeNull();
+  expect(view.getByRole('button', { name: 'Go to My View' })).toBeTruthy();
+  expect(view.getByRole('button', { name: 'Remove My View' })).toBeTruthy();
+  expect(onClose).not.toHaveBeenCalled();
+  view.unmount();
 });

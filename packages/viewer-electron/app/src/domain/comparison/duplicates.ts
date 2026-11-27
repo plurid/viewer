@@ -13,6 +13,8 @@ export interface DuplicateResult {
   groups: DuplicateGroup[];
   scanned: number;
   coverage: 'complete' | 'partial';
+  fileLimited?: boolean;
+  depthLimited?: boolean;
   errors: { path: string; message: string }[];
   created: number;
 }

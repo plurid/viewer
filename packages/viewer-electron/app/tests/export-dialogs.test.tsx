@@ -706,6 +706,28 @@ it.each(surfaces)(
   },
 );
 
+it('groups Optimize settings and closes the open disclosure on Escape', async () => {
+  const close = vi.fn();
+  render(<OptimizeDialog files={[file]} onClose={close}/>);
+  const first = screen.getByText('Quality and dimensions').closest('summary')!;
+  const second = screen.getByText('Saved batch recipes').closest('summary')!;
+  fireEvent.click(first);
+  fireEvent.click(second);
+  await waitFor(()=>expect(first.closest('details')!.open).toBe(false));
+  fireEvent.keyDown(second,{key:'Escape'});
+  expect(second.closest('details')!.open).toBe(false);
+  expect(close).not.toHaveBeenCalled();
+});
+it('keeps optimization sizes together in the results columns', () => {
+  const table=document.createElement('table');
+  table.className='optimize-results';
+  document.body.append(table);
+  const cells=Array.from({length:6},(_,i)=>i);
+  const row=table.insertRow();
+  cells.forEach(()=>row.insertCell());
+  expect(getComputedStyle(row.cells[1]!).overflowWrap).toBe('anywhere');
+  for(const index of [2,3]) expect(getComputedStyle(row.cells[index]!).fontVariantNumeric).toBe('tabular-nums');
+});
 it('keeps media stems while switching audio formats and PNG frame export', async () => {
   render(
     <MediaPlane
@@ -717,7 +739,10 @@ it('keeps media stems while switching audio formats and PNG frame export', async
   fireEvent.change(input, { target: { value: stem } });
   await choose('Export format', 'AAC audio');
   expect(screen.getByRole('textbox', { name: 'File name: ' + stem + '.m4a' })).toBeTruthy();
+  const separate = screen.getByLabelText<HTMLInputElement>('Export each segment');
+  fireEvent.click(separate);
   fireEvent.click(screen.getByLabelText('Export current frame as PNG'));
+  expect(separate.checked).toBe(false);
   expect(screen.getByRole('textbox', { name: 'File name: ' + stem + '.png' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Export Frame' }));
   await waitFor(() =>

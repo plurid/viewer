@@ -29,6 +29,13 @@ export function ViewsDialog({
             <li key={view.name}>
               {renaming?.name === view.name ? (
                 <form
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setRenaming(null);
+                    }
+                  }}
                   onSubmit={(event) => {
                     event.preventDefault();
                     const to = renaming.text.trim();
@@ -44,12 +51,16 @@ export function ViewsDialog({
                     maxLength={100}
                     onChange={(event) => setRenaming({ ...renaming, text: event.target.value })}
                   />
+                  <button type="button" onClick={() => setRenaming(null)}>
+                    Cancel
+                  </button>
                   <button type="submit">Rename</button>
                 </form>
               ) : (
                 <>
                   <span className="views-name">{view.label}</span>
                   <button
+                    aria-label={`Go to ${view.label}`}
                     onClick={() => {
                       onClose();
                       workspace.goBookmark(view.name);
@@ -57,10 +68,14 @@ export function ViewsDialog({
                   >
                     Go
                   </button>
-                  <button onClick={() => setRenaming({ name: view.name, text: view.label })}>
+                  <button
+                    aria-label={`Rename ${view.label}`}
+                    onClick={() => setRenaming({ name: view.name, text: view.label })}
+                  >
                     Rename
                   </button>
                   <button
+                    aria-label={`Remove ${view.label}`}
                     onClick={() => {
                       workspace.removeBookmark(view.name);
                       changed();

@@ -56,7 +56,7 @@ const gridView: Scene = {
   title: 'Grid view',
   mustBeTrue: [
     ...browsing,
-    'Tiles line up in even rows; a long name takes at most two lines and keeps its extension.',
+    'A long tile name breaks after a whole word when one fits. Its second line keeps the extension and leaves no space beside the ellipsis.',
     'Selecting a tile moves no toolbar or footer.',
   ],
   setup: { folder: samples, view: 'grid', sidebar: false },

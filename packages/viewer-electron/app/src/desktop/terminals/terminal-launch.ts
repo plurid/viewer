@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import type { ApplicationSettings } from '../../domain/services';
 import type { TerminalProfile } from '../../domain/automation/actions';
+import { childEnvironment, reservedEnvironment } from './process-environment';
 import { absolute } from '../files/filesystem';
 import { readApplications } from '../native/applications';
 import { discardOwnTemporaryFile, removePrivateFile } from '../operations/removal';
@@ -88,7 +89,7 @@ export interface TerminalApplication {
 }
 export interface ExternalTerminalAdapter {
   discover(): Promise<TerminalApplication[]>;
-  run(executable: string, args: string[]): Promise<string>;
+  run(executable: string, args: string[], input?: string): Promise<string>;
   open(application: string, file: string): Promise<void>;
   bundledCLI?(application: TerminalApplication): Promise<string | undefined>;
 }
@@ -114,8 +115,18 @@ export class ExternalTerminals {
     private adapter: ExternalTerminalAdapter = {
       discover: async () =>
         (await readApplications(helper, [], ['--terminals'])) as TerminalApplication[],
-      run: async (file, args) =>
-        (await exec(file, args, { timeout: 15000, maxBuffer: 1024 * 1024 })).stdout,
+      run: async (file, args, input) => {
+        const run = exec(file, args, {
+          timeout: 15000,
+          maxBuffer: 1024 * 1024,
+          env: childEnvironment(),
+        });
+        if (input !== undefined) {
+          run.child.stdin?.on('error', () => {});
+          run.child.stdin?.end(input);
+        }
+        return (await run).stdout;
+      },
       bundledCLI: async (app) => {
         if (!/iterm/i.test(app.name)) return;
         // Only use the official executable inside the selected app bundle, never a same-named PATH tool.
@@ -188,7 +199,12 @@ export class ExternalTerminals {
       if (
         path.isAbsolute(configured) &&
         configured.endsWith('.app') &&
-        (await fs.stat(configured)).isDirectory()
+        (
+          await fs.stat(configured).catch((error: NodeJS.ErrnoException) => {
+            if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return undefined;
+            throw error;
+          })
+        )?.isDirectory()
       ) {
         await this.confirm.application(configured);
         return { path: configured, name: path.basename(configured, '.app'), running: false };
@@ -241,7 +257,7 @@ export class ExternalTerminals {
     else await this.confirm.profile(profile);
     await this.access([cwd]);
     if (this.closed) throw new Error('External terminal handoff has closed.');
-    let executable = await executablePath(profile.executable || process.env.SHELL || '/bin/zsh');
+    let executable: string;
     let args = profile.args;
     if (tmux) {
       executable = await executablePath(settings.tmux.executable);
@@ -264,11 +280,11 @@ export class ExternalTerminals {
       }
       await this.access([cwd]);
       if (this.closed) throw new Error('External terminal handoff has closed.');
-      await this.adapter.run(executable, [
-        ...prefix,
-        ...(existing
-          ? ['new-window', '-t', target]
-          : ['new-session', '-d', '-s', settings.tmux.session]),
+      const command = existing ? 'new-window' : 'new-session';
+      const environment = Object.entries(profile.env).filter(([key]) => !reservedEnvironment(key));
+      const options = [
+        ...(existing ? ['-t', target] : ['-d', '-s', settings.tmux.session]),
+        ...environment.flatMap(([key, value]) => ['-e', key + '=' + value]),
         '-n',
         name,
         '-c',
@@ -276,7 +292,26 @@ export class ExternalTerminals {
         '-P',
         '-F',
         '#{window_id}',
-      ]);
+      ];
+      if (environment.length) {
+        // tmux reads the command from stdin so a profile token never appears in process argv.
+        // Its quoted octal syntax preserves every UTF-8 byte as literal argument data.
+        const words = options.map(
+          (value) =>
+            '"' +
+            Array.from(Buffer.from(value), (byte) => '\\' + byte.toString(8).padStart(3, '0')).join(
+              '',
+            ) +
+            '"',
+        );
+        await this.adapter.run(
+          executable,
+          [...prefix, 'start-server', ';', 'source-file', '-'],
+          [command, ...words].join(' ') + '\n',
+        );
+      } else {
+        await this.adapter.run(executable, [...prefix, command, ...options]);
+      }
       if (existing) {
         const clients = await this.adapter.run(executable, [
           ...prefix,
@@ -295,10 +330,19 @@ export class ExternalTerminals {
         '-t',
         target,
       ];
+    } else {
+      executable = await executablePath(profile.executable || process.env.SHELL || '/bin/zsh');
     }
     const folder = await this.launchFolder();
     const file = path.join(folder, randomUUID() + '.command');
-    const script = launcherScript({ file, folder, cwd, env: profile.env, executable, args });
+    const script = launcherScript({
+      file,
+      folder,
+      cwd,
+      env: tmux ? {} : profile.env,
+      executable,
+      args,
+    });
     await fs.writeFile(file, script, { mode: 0o700, flag: 'wx' });
     try {
       const cli = await this.adapter.bundledCLI?.(application);

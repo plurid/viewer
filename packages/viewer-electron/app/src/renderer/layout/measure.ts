@@ -73,7 +73,7 @@ async function readImage(entry: FileEntry, thumbnails: Map<string, string>): Pro
 }
 
 /** Runs `work` on each item, a few at a time, in order of the items. */
-async function eachLimited<Item>(
+export async function eachLimited<Item>(
   items: readonly Item[],
   limit: number,
   work: (item: Item, index: number) => Promise<void>,

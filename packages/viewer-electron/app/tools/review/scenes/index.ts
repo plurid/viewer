@@ -10,14 +10,20 @@ import { kinds } from './kinds';
 import { previews } from './previews';
 import { settings } from './settings';
 
+import { runtimeScenes } from './wave4-runtimes';
+
+import { wave4Explorer } from './wave4-explorer';
+
 export const reviewAreas: readonly ReviewArea[] = [
   mainWindow,
   previews,
   exports,
   navigation,
+  wave4Explorer,
   files,
   settings,
   checklists,
   dialogScenes,
+  runtimeScenes,
   kinds,
 ];

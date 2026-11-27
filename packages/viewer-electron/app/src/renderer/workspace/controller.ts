@@ -769,19 +769,27 @@ export function useWorkspaceController({
           frame?: boolean;
         },
       ) {
-        if (!entry.directory && entry.name === 'viewer.project.jsonc') {
-          void window.viewer
+        const definition =
+          !entry.directory && !options?.edit && !(options && 'evidence' in options);
+        if (definition && entry.name === 'viewer.project.jsonc') {
+          const workspaceID = activeWorkspace().id;
+          const opened = window.viewer
             .project({ kind: 'read', file: entry.path })
             .then((document) => {
-              if (document && typeof document === 'object') return installProject(document);
-            })
-            .catch(report);
-          return;
+              if (activeWorkspace().id !== workspaceID)
+                throw new Error('The workspace changed while the project opened. Open it again.');
+              if (!document || typeof document !== 'object')
+                throw new Error('The project could not be opened.');
+              return installProject(document, undefined, workspaceID);
+            });
+          void opened.catch(report);
+          return opened;
         }
         // A tour file plays: its stops open files and move the camera, and nothing runs.
-        if (!entry.directory && isTourFile(entry.name)) {
-          void openTourFile(controller, entry.path).catch(report);
-          return;
+        if (definition && isTourFile(entry.name)) {
+          const opened = openTourFile(controller, entry.path);
+          void opened.catch(report);
+          return opened;
         }
         const api = engine.current;
         if (!api || !readyRef.current) return;

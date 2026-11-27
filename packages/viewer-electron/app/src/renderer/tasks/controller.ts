@@ -138,8 +138,8 @@ export function taskController(ports: {
       for (const kind of ['folder', 'note', 'terminal', 'git-changes'] as const) {
         check(owner);
         const member = area(id).members.find((member) => member.reference.kind === kind);
-        if (member) await methods.openTaskMember(id, member.id);
-        else await methods.addTaskTool(id, kind);
+        if (member) await methods.openTaskMember(id, member.id, true);
+        else await methods.addTaskTool(id, kind, undefined, true);
       }
       check(owner);
       methods.openTaskArea(id);
@@ -209,7 +209,7 @@ export function taskController(ports: {
       if (!pane) throw new Error('The source plane closed.');
       attachTaskPlane(id, pane);
     },
-    async openTaskMember(id, memberID) {
+    async openTaskMember(id, memberID, deferStart = false) {
       const value = area(id),
         owner = activeWorkspace().id,
         member = value.members.find((member) => member.id === memberID);
@@ -301,11 +301,18 @@ export function taskController(ports: {
             path: ref.path,
             profileID: ref.profileID,
             taskSessionID: ref.sessionID,
+            ...(deferStart ? { startOnOpen: false } : {}),
           };
-          allowTerminalStart(paneID);
+          if (deferStart) deferTerminalStart([paneID]);
+          else allowTerminalStart(paneID);
           break;
         case 'git-changes':
-          pane = { id: paneID, type: 'git-changes', path: ref.path };
+          pane = {
+            id: paneID,
+            type: 'git-changes',
+            path: ref.path,
+            ...(deferStart ? { activation: 'manual' } : {}),
+          };
           break;
         case 'diff':
           pane = { id: paneID, type: 'diff', path: ref.path, left: ref.left, right: ref.right };
@@ -343,7 +350,7 @@ export function taskController(ports: {
       ports.controller().focusPane(pane.id, { activate: true });
       return pane.id;
     },
-    async addTaskTool(id, kind, url) {
+    async addTaskTool(id, kind, url, deferStart = false) {
       const value = area(id),
         owner = activeWorkspace().id;
       let reference: TaskReference, title: string;
@@ -406,7 +413,7 @@ export function taskController(ports: {
       const added = area(id).members.find(
         (member) => taskReferenceKey(member.reference) === taskReferenceKey(reference),
       )!;
-      return methods.openTaskMember(id, added.id);
+      return methods.openTaskMember(id, added.id, deferStart);
     },
     arrangeTaskArea(id) {
       const value = area(id),

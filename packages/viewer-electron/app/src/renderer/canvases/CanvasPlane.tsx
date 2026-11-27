@@ -18,6 +18,7 @@ import { canvasResultSchema } from '../../domain/canvases/results';
 import './canvas.css';
 import {
   canvasActionsSchema,
+  canvasActionIssue,
   canvasActionInputSchema,
   canvasActionOutputSchema,
 } from '../../domain/canvases/actions';
@@ -58,6 +59,8 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
     const unsubscribe = window.viewer.onEvent((event) => {
       if (live && event.type === 'canvas' && event.document.id === pane.canvasID)
         receive(event.document);
+      if (live && event.type === 'canvas-action' && event.event.run.canvasID === pane.canvasID)
+        setActionRun(event.event.run);
     });
     void window.viewer
       .canvas({ kind: 'read', id: pane.canvasID })
@@ -98,7 +101,6 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
         port?.postMessage({ kind: 'state', state: event.document.state });
       if (event.type !== 'canvas-action' || event.event.run.canvasID !== pane.canvasID) return;
       const action = event.event;
-      setActionRun(action.run);
       if (action.run.frameID !== frameID) return;
       if (action.kind === 'invoke')
         port?.postMessage({ kind: 'invoke-action', run: action.run, state: action.state });
@@ -171,7 +173,9 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
         else if (value.kind === 'actions') {
           const parsed = canvasActionsSchema.safeParse(value.actions);
           if (!parsed.success) {
-            observe('error', 'Invalid canvas action definitions.');
+            const message = canvasActionIssue(parsed.error);
+            setError(message);
+            observe('error', message);
             return;
           }
           writes = writes
@@ -200,7 +204,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
                   ? value.error.slice(0, 1000)
                   : output.success
                     ? undefined
-                    : 'The action returned an invalid result.',
+                    : canvasActionIssue(output.error),
             })
             .catch(report);
         } else if (
@@ -605,7 +609,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
           <button onClick={() => setProposal('')}>Dismiss</button>
         </div>
       )}
-      <div className="canvas-body" inert={actionRun?.status === 'running'}>
+      <div className="canvas-body">
         {reconstruct && (
           <ReconstructionPanel document={document} onClose={() => setReconstruct(false)} />
         )}
@@ -642,6 +646,7 @@ export default function CanvasPlane({ pane }: { pane: Pane }) {
         ) : url ? (
           <iframe
             ref={iframe}
+            inert={actionRun?.status === 'running'}
             title={document.title}
             src={url}
             sandbox="allow-scripts"

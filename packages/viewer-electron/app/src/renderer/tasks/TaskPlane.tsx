@@ -14,6 +14,7 @@ import { errorMessage } from '../../domain/errors';
 import { activeWorkspace, useViewer } from '../state/store';
 import { useWorkspace } from '../workspace/context';
 import { ChoiceButton } from '../ui/ChoiceMenu';
+import { PathLabel } from '../ui/PathLabel';
 import { Empty, PathField } from '../ui/primitives';
 import { renameTaskArea } from './state';
 import { receiptOutcome } from './ReceiptPlane';
@@ -326,11 +327,15 @@ export default function TaskPlane({ pane, active }: { pane: Record; active: bool
                 <div>
                   <strong>{live && live.type === 'note' ? live.title : member.title}</strong>
                   <small>
-                    {ref.kind === 'browser'
-                      ? live?.type === 'browser'
-                        ? live.url
-                        : ref.url
-                      : ref.path}
+                    {ref.kind === 'browser' ? (
+                      live?.type === 'browser' ? (
+                        live.url
+                      ) : (
+                        ref.url
+                      )
+                    ) : (
+                      <PathLabel path={ref.path} />
+                    )}
                   </small>
                   <span className="task-tool-kind">
                     {referenceKinds[ref.kind]} · {state}

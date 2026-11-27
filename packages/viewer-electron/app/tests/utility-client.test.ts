@@ -47,6 +47,8 @@ parentPort.on('message', (request) => {
   if (request.method === 'init') {
     attempts += 1;
     parentPort.postMessage(attempts === 1 ? { id: request.id, error: 'Not ready yet.' } : { id: request.id, value: true });
+  } else if (request.method === 'refusal') {
+    parentPort.postMessage({ id: request.id, error: '', readerProblem: 'The file could not be read.' });
   } else parentPort.postMessage({ id: request.id, value: attempts });
 });
 `;
@@ -63,6 +65,7 @@ describe('background worker client', () => {
     try {
       await expect(client.call('attempts')).rejects.toThrow('Not ready yet.');
       await expect(client.call('attempts')).resolves.toBe(2);
+      await expect(client.call('refusal')).rejects.toMatchObject({ readerProblem: 'The file could not be read.' });
     } finally {
       await client.close();
     }

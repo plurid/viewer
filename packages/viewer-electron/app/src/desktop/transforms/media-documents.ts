@@ -189,8 +189,10 @@ export class MediaDocuments {
             const source = draft.sources.findIndex((source) => source.path === files[0]);
             if (!draft.sources[source]?.info.audio)
               throw new Error('The selected source has no audio.');
+            draft.plan.cut = 'exact';
             draft.plan.audio = { ...draft.plan.audio, mode: 'replace', source };
           }
+          validateTransform(draft.plan, draft.sources.length);
           draft.revision++;
           await this.store(draft.id).save(draft);
           return draft;
@@ -252,7 +254,7 @@ export class MediaDocuments {
                 : { source: undefined }),
             },
           };
-          const name = request.separate
+          const name = request.separate && !request.frame
             ? `${path.basename(request.name, path.extname(request.name))} ${index + 1}.${extension}`
             : request.name;
           jobs.push(

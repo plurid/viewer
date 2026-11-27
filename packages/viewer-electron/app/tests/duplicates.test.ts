@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { link, mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileCoordination } from '../src/desktop/files/file-coordination';
 import { Duplicates } from '../src/desktop/comparison/duplicates';
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
@@ -56,4 +57,20 @@ describe('duplicate finder', () => {
     duplicates.cancel(id);
     await expect(running).rejects.toThrow();
   });
+});
+
+it('records incomplete coverage when the folder-depth limit is reached', async () => {
+  await mkdir(path.join(root, ...Array<string>(65).fill('d')), { recursive: true });
+  const coordination = vi
+    .spyOn(fileCoordination, 'run')
+    .mockImplementation(async (_intents, work) => work());
+  try {
+    expect(await new Duplicates(async () => {}).run(crypto.randomUUID(), [root])).toMatchObject({
+      coverage: 'partial',
+      depthLimited: true,
+      errors: [],
+    });
+  } finally {
+    coordination.mockRestore();
+  }
 });

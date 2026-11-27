@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import type { CapturedTarget } from '../src/domain/automation/actions';
 import type { ViewerAPI, FileEntry } from '../src/domain/contracts';
@@ -100,11 +101,12 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-const mount = () =>
+const mount = (taskMode = false) =>
   render(
     createElement(WorktreesDialog, {
       target,
       workspace: { openWorktree: open, openGitChanges: changes } as unknown as WorkspaceController,
+      taskMode,
       onClose: close,
     }),
   );
@@ -115,7 +117,7 @@ describe('existing worktree picker', () => {
     catalog.branches = [{ id: baseID, name: 'main', branch: 'main', commit: 'a'.repeat(40) }];
     catalog.defaultBaseID = baseID;
     const next = { ...catalog, id: crypto.randomUUID() };
-    const treeID = crypto.randomUUID();
+    const treeID = catalog.worktrees[1]!.id;
     const old = api.getMockImplementation()!;
     api.mockImplementation(async (request) =>
       request.kind === 'create'
@@ -129,6 +131,7 @@ describe('existing worktree picker', () => {
     );
     const source = activeWorkspace().panes[0]!;
     if (source.type !== 'folder') throw new Error('Fixture folder unavailable.');
+    open.mockRejectedValueOnce(new Error('Generated open failure'));
     open.mockImplementationOnce(async () => {
       addContentPane({ ...source, id: 'created-checkout', path: '/fixture/task-checkout' });
       return 'created-checkout';
@@ -156,6 +159,9 @@ describe('existing worktree picker', () => {
       target: { value: 'feature/images' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create Task' }));
+    await screen.findByText('Generated open failure');
+    expect(screen.queryByRole('button', { name: 'Create Task' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Finish Task Setup' }));
     await screen.findByText('Generated tool setup failure');
     expect(newTask).toHaveBeenCalledWith(
       expect.objectContaining({ directory: '/fixture/task-checkout', paneID: 'created-checkout' }),
@@ -302,4 +308,27 @@ describe('existing worktree picker', () => {
     expect(request).toHaveBeenCalledWith(expect.objectContaining(target));
     expect(command.group).toBe('Git');
   });
+});
+
+it('keeps checkout browsing out of the task form while loading or blocked', async () => {
+  catalog.creationProblem = 'Create an initial commit before adding a worktree.';
+  mount(true);
+  expect(screen.queryByRole('listbox')).toBeNull();
+  expect(await screen.findByText(catalog.creationProblem)).toBeTruthy();
+  expect(screen.queryByLabelText('Branch task name')).toBeNull();
+});
+it('closes the branch task form on cancel', async () => {
+  mount(true);
+  await screen.findByLabelText('Branch task name');
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(close).toHaveBeenCalledOnce();
+});
+it('keeps worktree fields scrollable above the form actions', () => {
+  const worktreeStyles = readFileSync('src/renderer/git/worktrees/worktrees.css', 'utf8');
+  expect(worktreeStyles).toMatch(/\.worktree-create-fields\s*\{[^}]*overflow(?:-y)?: auto/);
+});
+it('labels the repository path with the home abbreviation', async () => {
+  mount();
+  await screen.findByRole('option', { name: /main.*Current checkout/ });
+  expect(document.querySelector('.worktrees-repository .path-label-text')?.textContent).toBe('~');
 });

@@ -6,6 +6,7 @@ import {
   type WorktreeCatalog,
   type WorktreeCreation,
 } from '../../../domain/comparison/worktrees';
+import { PathLabel } from '../../ui/PathLabel';
 import { ChoiceButton } from '../../ui/ChoiceMenu';
 import { errorMessage } from '../../../domain/errors';
 
@@ -42,6 +43,7 @@ export function CreateWorktree({
   const destination = customDestination ?? suggested;
   const [error, setError] = useState('');
   const occupied = mode === 'existing' && selected?.worktreeID;
+  const occupiedPath = catalog.worktrees.find((tree) => tree.id === occupied)?.path;
   const existingName = mode === 'new' && branches.some((branch) => branch.branch === name);
   const invalidName = mode === 'new' && !!name && !validBranchName(name);
   const valid =
@@ -60,141 +62,145 @@ export function CreateWorktree({
           );
       }}
     >
-      {task && (
-        <label>
-          Task name
-          <input
-            aria-label="Branch task name"
-            value={task.name}
-            maxLength={100}
-            required
-            disabled={busy}
-            onChange={(event) => task.change(event.target.value)}
-          />
-        </label>
-      )}
-      <div className="worktree-create-mode" role="group" aria-label="Worktree branch">
-        <button
-          type="button"
-          aria-pressed={mode === 'new'}
-          disabled={busy}
-          onClick={() => setMode('new')}
-        >
-          New Branch
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode === 'existing'}
-          disabled={busy}
-          onClick={() => setMode('existing')}
-        >
-          Existing Branch
-        </button>
-      </div>
-      {mode === 'new' && (
-        <label>
-          Branch name
-          <input
-            autoFocus
-            aria-label="New branch name"
-            aria-invalid={invalidName || undefined}
-            aria-describedby={invalidName ? 'worktree-branch-error' : undefined}
-            value={name}
-            maxLength={200}
-            disabled={busy}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
-      )}
-      {existingName && (
-        <p className="worktree-create-warning">
-          That branch already exists. Choose Existing Branch to use it.
-        </p>
-      )}
-      {invalidName && (
-        <p className="worktree-create-warning" id="worktree-branch-error">
-          Remove spaces or unsupported symbols; for example, feature/my-task.
-        </p>
-      )}
-      <label>
-        {mode === 'new' ? 'Start from' : 'Branch'}
-        <ChoiceButton
-          label={mode === 'new' ? 'Base branch' : 'Existing branch'}
-          value={mode === 'new' ? baseID : existingID}
-          disabled={busy}
-          choices={branches
-            .filter((branch) => mode === 'new' || branch.branch)
-            .map((branch) => ({
-              value: branch.id,
-              label: branch.name + (branch.worktreeID ? ' · checked out' : ''),
-            }))}
-          onChoose={mode === 'new' ? setBaseID : setExistingID}
-        />
-      </label>
-      {selected && (
-        <p className="worktree-create-revision">{selected.commit.slice(0, 12)} · pinned revision</p>
-      )}
-      {occupied ? (
-        <div className="worktree-create-occupied">
-          <p>
-            This branch already has a checkout at{' '}
-            {catalog.worktrees.find((tree) => tree.id === occupied)?.path}.
-          </p>
+      <div className="worktree-create-fields">
+        {task && (
+          <label>
+            Task name
+            <input
+              aria-label="Branch task name"
+              value={task.name}
+              maxLength={100}
+              required
+              disabled={busy}
+              onChange={(event) => task.change(event.target.value)}
+            />
+          </label>
+        )}
+        <div className="worktree-create-mode" role="group" aria-label="Worktree branch">
           <button
             type="button"
-            disabled={busy || (!!task && !task.name.trim())}
-            onClick={() => show(occupied)}
+            aria-pressed={mode === 'new'}
+            disabled={busy}
+            onClick={() => setMode('new')}
           >
-            {task ? 'Use Checkout for Task' : 'Show Worktree'}
+            New Branch
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === 'existing'}
+            disabled={busy}
+            onClick={() => setMode('existing')}
+          >
+            Existing Branch
           </button>
         </div>
-      ) : (
-        <>
+        {mode === 'new' && (
           <label>
-            Destination
-            <div className="worktree-create-destination">
-              <input
-                aria-label="Worktree destination"
-                disabled={busy}
-                maxLength={32768}
-                value={destination}
-                onChange={(event) => setCustomDestination(event.target.value)}
-              />
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  void window.viewer
-                    .chooseFolder(catalog.repository)
-                    .then((parent) => {
-                      if (parent)
-                        setCustomDestination(
-                          parent.replace(/[\\/]+$/, '') + '/' + destination.split(/[\\/]/).at(-1),
-                        );
-                    })
-                    .catch((value) => setError(errorMessage(value)));
-                }}
-              >
-                Choose Parent…
-              </button>
-            </div>
+            Branch name
+            <input
+              autoFocus
+              aria-label="New branch name"
+              aria-invalid={invalidName || undefined}
+              aria-describedby={invalidName ? 'worktree-branch-error' : undefined}
+              value={name}
+              maxLength={200}
+              disabled={busy}
+              onChange={(event) => setName(event.target.value)}
+            />
           </label>
-          <p className="worktree-create-hint">
-            {task
-              ? 'Opens the checkout, notes, terminal and Git changes together. '
-              : 'Creates a separate checkout. '}
-            The destination must be a new folder.
+        )}
+        {existingName && (
+          <p className="worktree-create-warning">
+            That branch already exists. Choose Existing Branch to use it.
           </p>
-        </>
-      )}
-      {error && (
-        <p role="alert" className="worktree-create-warning">
-          {error}
-        </p>
-      )}
+        )}
+        {invalidName && (
+          <p className="worktree-create-warning" id="worktree-branch-error">
+            Remove spaces or unsupported symbols; for example, feature/my-task.
+          </p>
+        )}
+        <label>
+          {mode === 'new' ? 'Start from' : 'Branch'}
+          <ChoiceButton
+            label={mode === 'new' ? 'Base branch' : 'Existing branch'}
+            value={mode === 'new' ? baseID : existingID}
+            disabled={busy}
+            choices={branches
+              .filter((branch) => mode === 'new' || branch.branch)
+              .map((branch) => ({
+                value: branch.id,
+                label: branch.name + (branch.worktreeID ? ' · checked out' : ''),
+              }))}
+            onChoose={mode === 'new' ? setBaseID : setExistingID}
+          />
+        </label>
+        {selected && (
+          <p className="worktree-create-revision">
+            {selected.commit.slice(0, 12)} · pinned revision
+          </p>
+        )}
+        {occupied ? (
+          <div className="worktree-create-occupied">
+            <p>
+              This branch already has a checkout at{' '}
+              {occupiedPath && <PathLabel path={occupiedPath} />}
+            </p>
+            <button
+              type="button"
+              disabled={busy || (!!task && !task.name.trim())}
+              onClick={() => show(occupied)}
+            >
+              {task ? 'Use Checkout for Task' : 'Show Worktree'}
+            </button>
+          </div>
+        ) : (
+          <>
+            <label>
+              Destination
+              <div className="worktree-create-destination">
+                <input
+                  aria-label="Worktree destination"
+                  disabled={busy}
+                  maxLength={32768}
+                  value={destination}
+                  onChange={(event) => setCustomDestination(event.target.value)}
+                />
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    void window.viewer
+                      .chooseFolder(catalog.repository)
+                      .then((parent) => {
+                        if (parent)
+                          setCustomDestination(
+                            parent.replace(/[\\/]+$/, '') + '/' + destination.split(/[\\/]/).at(-1),
+                          );
+                      })
+                      .catch((value) => setError(errorMessage(value)));
+                  }}
+                >
+                  Choose Parent…
+                </button>
+              </div>
+            </label>
+            <p className="worktree-create-hint">
+              {task
+                ? 'Opens the checkout, notes, terminal and Git changes together. '
+                : 'Creates a separate checkout. '}
+              The destination must be a new folder.
+            </p>
+          </>
+        )}
+        {error && (
+          <p role="alert" className="worktree-create-warning">
+            {error}
+          </p>
+        )}
+      </div>
       <footer>
         <button type="button" disabled={busy} onClick={cancel}>
-          Back
+          {task ? 'Cancel' : 'Back'}
         </button>
         <button
           type="submit"

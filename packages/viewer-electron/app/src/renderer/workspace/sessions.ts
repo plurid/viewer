@@ -9,6 +9,7 @@ export interface BrowseSession {
   path: string;
   selection: string[];
   query: string;
+  searchScope?: string;
   subtree: boolean;
   searchOpen: boolean;
   pathOpen: boolean;
@@ -132,20 +133,7 @@ export function setSelectionCursor(id: string, path: string): void {
   if (session) session.cursor = path;
 }
 export function focusFiles(id: string): void {
-  const until = performance.now() + 1500;
-  const focus = () => {
-    if (
-      dialogOpen() ||
-      document.activeElement?.matches(
-        'input, textarea, select, [contenteditable], [role=separator]',
-      )
-    )
-      return;
-    const target = planeElement(id)?.querySelector<HTMLElement>('.folder-explorer');
-    if (target) target.focus({ preventScroll: true });
-    else if (performance.now() < until) requestAnimationFrame(focus);
-  };
-  requestAnimationFrame(focus);
+  focusPlane(id, true);
 }
 /** A pane's plane on the page, by the id its content carries: headers may be hidden. */
 function planeElement(id: string): HTMLElement | undefined {
@@ -155,10 +143,17 @@ function planeElement(id: string): HTMLElement | undefined {
   return marker?.closest<HTMLElement>('[data-plurid-plane]') ?? undefined;
 }
 /** Moves the keys into a plane's content, any kind: a link followed to it. */
-export function focusPlane(id: string): void {
+export function focusPlane(id: string, preserveInput = false): void {
   const until = performance.now() + 1500;
   const focus = () => {
-    if (dialogOpen()) return;
+    if (
+      dialogOpen() ||
+      (preserveInput &&
+        document.activeElement?.matches(
+          'input, textarea, select, [contenteditable], [role=separator]',
+        ))
+    )
+      return;
     const target = planeElement(id)?.querySelector<HTMLElement>(
       '.folder-explorer, .preview-plane, .terminal-plane',
     );

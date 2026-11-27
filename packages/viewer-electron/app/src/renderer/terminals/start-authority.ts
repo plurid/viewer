@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { getState, update, useViewer } from '../state/core';
 
+const allowed = new Map<string, string>();
 const deferred = new Set<string>();
 const runDeferred = new Set<string>();
 const agents = new Set<string>();
@@ -11,14 +12,22 @@ function changed(): void {
   for (const listener of listeners) listener();
 }
 export function deferTerminal(id: string): void {
+  allowed.delete(id);
   deferred.add(id);
   runDeferred.add(id);
   changed();
 }
-export function allowTerminalStart(id: string): void {
+export function allowTerminalStart(id: string, scope?: string): void {
+  if (scope) allowed.set(id, scope);
   deferred.delete(id);
   runDeferred.delete(id);
   changed();
+}
+export const terminalStartAllowed = (id: string, scope: string) => allowed.get(id) === scope;
+export function forgetTerminalStart(id: string): void {
+  allowed.delete(id);
+  deferred.delete(id);
+  runDeferred.delete(id);
 }
 export const terminalStartDeferred = (id: string) => deferred.has(id);
 export function agentTerminalWork(id: string, active: boolean): void {

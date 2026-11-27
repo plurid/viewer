@@ -159,7 +159,9 @@ describe('generated canvas actions', () => {
       const pending = run(),
         event = await started();
       canvases.actions.complete(1, doc.id, frame, event.run.id, output);
-      expect((await pending).actionRun.status).toBe('failed');
+      const { actionRun } = await pending;
+      expect(actionRun.status).toBe('failed');
+      if (typeof output.result === 'string') expect(actionRun.error).toMatch(/result.*32 KB/);
       expect((await canvases.read(1, doc.id)).state.total).toBe(0);
     }
   });

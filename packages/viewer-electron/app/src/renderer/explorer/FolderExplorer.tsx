@@ -720,7 +720,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
           )}
         </div>
       )}
-      {subtree && query.trim() && (
+      {subtree && query.trim() && !filterQuery.problem && (
         <SearchCoverage
           result={search.indexed}
           streamed={search.streamed}

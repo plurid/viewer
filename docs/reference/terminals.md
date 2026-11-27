@@ -268,10 +268,11 @@ fails, the shell still opens.
 
 **Open in tmux** creates the session when it does not exist, otherwise adds a window, then attaches
 the terminal app to it. iTerm attaches in control mode (`-CC`) and reuses a control-mode client
-already attached. The default profile's environment applies; its program and arguments do not. The
-tmux executable, socket and environment are confirmed natively before first use, except the default:
-`tmux` with no socket path and no profile environment. tmux sessions keep running after Viewer
-quits. Up to 20 handoffs can wait at once.
+already attached. tmux chooses the shell and its arguments. The default profile's environment
+applies to the new session or window. Setting profile variables requires tmux support for the `-e`
+option on `new-session` and `new-window`. The tmux executable, socket and environment are confirmed
+natively before first use, except the default: `tmux` with no socket path and no profile
+environment. tmux sessions keep running after Viewer quits. Up to 20 handoffs can wait at once.
 
 Typography (**Settings → Terminals**, `settings.terminalFont`) is separate from previews and the
 editor; [configuration](configuration.md) lists every terminal setting and default.

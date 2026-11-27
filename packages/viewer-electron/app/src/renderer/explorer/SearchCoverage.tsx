@@ -35,7 +35,7 @@ export function SearchCoverage({
             : streamed
               ? !streamed.done
                 ? 'Searching folders…'
-                : streamed.errors || streamed.truncated
+                : streamed.error || streamed.errors || streamed.truncated
                   ? 'Partial coverage'
                   : 'Search finished'
               : (coverage?.summary ?? 'Searching…')}
@@ -54,6 +54,7 @@ export function SearchCoverage({
             {streamed.truncated ? ' · Stopped at the scan limit. Narrow the query.' : ''}
           </p>
         )}
+        {streamed?.error && <p>{streamed.error}</p>}
         {cancelled && <p>The search stopped before every folder was checked.</p>}
         {coverage?.roots.map((root) => (
           <p key={root.path}>

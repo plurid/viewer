@@ -64,6 +64,11 @@ export const readerProblems = {
     'The source changed during decoding. Reopen its preview.',
     'This source changed. Reopen its preview.',
     'This file exceeds the local preview input limit. Open it in its original app.',
+    'The item moved while waiting for its file provider. Refresh the folder and retry.',
+    'The file provider did not make this item available in time. Check its connection, then retry.',
+    'Too many pending file provider requests.',
+  ],
+  recovery: [
     'Viewer found no single renamed file in this folder. Use Locate File… to choose it.',
     'The file changed as Viewer found it. Try again.',
   ],

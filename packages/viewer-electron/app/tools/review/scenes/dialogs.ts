@@ -89,12 +89,16 @@ const dialogs: DialogScene[] = [
     title: 'Compare Locations',
     command: 'Compare Locations…',
     dialog: 'ComparisonControls',
+    rules: ['Both editable locations show the home folder as ~.'],
   },
   {
     id: 'find-duplicates',
     title: 'Find Duplicates',
     command: 'Find Duplicates…',
     dialog: 'DuplicateControls',
+    rules: [
+      'Opening a new search starts with the current folder and no results from an earlier search.',
+    ],
   },
   {
     id: 'related-files',
@@ -163,7 +167,12 @@ const dialogs: DialogScene[] = [
     id: 'task-from-branch',
     title: 'New Task from Branch',
     command: 'New Task from Branch…',
-    dialog: 'TaskRequestDialog',
+    dialog: 'WorktreesDialog',
+    setup: { folder: gitSample },
+    selector: '.worktrees-creation-problem',
+    rules: [
+      'An unborn branch explains the initial commit requirement and offers Cancel and Try Again.',
+    ],
   },
   {
     id: 'share',
@@ -316,10 +325,7 @@ async function openLens(page: ReviewPage): Promise<void> {
 const dialogScene = (item: DialogScene): Scene => ({
   id: 'dialog-' + item.id,
   title: item.title,
-  mustBeTrue:
-    item.dialog === 'TaskRequestDialog'
-      ? [...dialogRules, 'Create Task… opens the native confirmation with Create Task and Cancel.']
-      : [...dialogRules, ...(item.rules ?? [])],
+  mustBeTrue: [...dialogRules, ...(item.rules ?? [])],
   setup: item.setup ?? { folder: samples, view: 'list' },
   variants: coverageVariants,
   covers: {

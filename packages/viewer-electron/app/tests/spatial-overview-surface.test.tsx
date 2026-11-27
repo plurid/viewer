@@ -155,6 +155,17 @@ afterEach(async () => {
 });
 
 describe('Overview on the real engine', () => {
+  it('names overview planes for their content', async () => {
+    setSpace(
+      { minimap: true, minimapAuto: false },
+      { roots: ['overview'], panes: [{ id: 'overview', type: 'overview', path: '/fixture' }] },
+    );
+    const view = await mount();
+    await settle(200);
+    const button = view.querySelector('[data-plurid-minimap-plane]')!;
+    expect(button?.getAttribute('aria-label')).toBe('Go to File Overview');
+    expect(button.getAttribute('title')).toBe('File Overview');
+  });
   it.each([false, true])('S1 an empty space: Overview from ⌘K, minimap=%s', async (minimap) => {
     setSpace({ minimap, minimapAuto: false }, { roots: [] });
     await mount();

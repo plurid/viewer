@@ -97,6 +97,18 @@ describe('FileName', () => {
     },
   );
 
+  it('breaks grid filenames at the last fitting word and trims the middle cut on line two', () => {
+    const name = 'Quarterly engineering revision for the final approved version.jpg';
+    for (let width = 14; width <= 35; width++) {
+      const [first, second] = twoLineName(name, width, (text) => text.length).split('\n');
+      expect(name.startsWith(first!.trimEnd() + ' '), String(width)).toBe(true);
+      expect(first).not.toContain('…');
+      expect(second, String(width)).toMatch(/\.jpg$/);
+      expect(second).not.toMatch(/\s…|…\s/);
+      expect(second!.length).toBeLessThanOrEqual(width);
+    }
+  });
+
   it('shows a name that fits as it is, with no tooltip', () => {
     const { container } = render(<FileName name="a.txt" />);
     const label = container.querySelector<HTMLElement>('.file-name-label')!;

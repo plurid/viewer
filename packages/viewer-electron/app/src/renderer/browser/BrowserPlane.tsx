@@ -12,7 +12,7 @@ import { browserAddress } from '../../domain/previews/browser';
 import { IconButton, tryAgainLabel } from '../ui/primitives';
 import { measureLocalPoint, type Point } from '../ui/projectedResize';
 import { activeWorkspace, getState, updatePane } from '../state/store';
-import { localServerSessions } from '../local-servers/runtime';
+import { connectLocalServers, localServerSessions } from '../local-servers/runtime';
 import { browserFrames } from './frames';
 import { connectBrowsers } from './runtime';
 import { WorkspaceContext } from '../workspace/context';
@@ -39,7 +39,9 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
   const [url, setURL] = useState(pane.url),
     [problem, setProblem] = useState('');
   const size = useRef({ width: 960, height: 640 });
-  const opening = useRef<Promise<unknown> | undefined>(undefined);
+  const [attempt, setAttempt] = useState(0);
+  const opened = useRef(false);
+  const opening = useRef<Promise<boolean> | undefined>(undefined);
   const projection = useRef<((point: Point) => Point | undefined) | undefined>(undefined);
   const composing = useRef(false);
   const click = useRef({ time: 0, x: 0, y: 0, button: -1, count: 0 });
@@ -47,44 +49,57 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
   useSyncExternalStore(sessions.subscribeAll, sessions.generation);
   const serverSnapshot = pane.serverRuntimeID ? sessions.snapshot(pane.serverRuntimeID) : undefined;
   const server = serverSnapshot?.server;
-  const previousServer = useRef<{ state: string; url: string } | undefined>(undefined);
-  const command = (request: BrowserRequest) =>
-    window.viewer.browser(request).catch((error) => {
+  const canStartServer =
+    pane.serverRuntimeID && (server || sessions.descriptor(pane.serverRuntimeID));
+  const previousServer = useRef<string | undefined>(undefined);
+  const command = (request: BrowserRequest) => {
+    if (!opened.current) return;
+    return window.viewer.browser(request).catch((error) => {
       setProblem(String(error.message || error));
     });
+  };
   const action = (action: Extract<BrowserRequest, { kind: 'action' }>['action']) =>
     void command({ kind: 'action', id: pane.id, action });
   const send = (event: Extract<BrowserRequest, { kind: 'input' }>['event']) =>
     void command({ kind: 'input', id: pane.id, event });
   useEffect(() => {
     connectBrowsers();
+    if (pane.serverRuntimeID) connectLocalServers();
+    opened.current = false;
     let live = true;
     let updates = 0;
     const offFrame = browserFrames(pane.id, canvas.current!);
     const accept = (value: BrowserSnapshot) => {
       if (!live) return;
+      const current = activeWorkspace(getState()).panes.find((item) => item.id === pane.id);
+      const linkedID = current?.type === 'browser' ? current.serverRuntimeID : undefined;
+      const associated = linkedID ? sessions.snapshot(linkedID).server : undefined;
+      const destination = /^https?:/.test(value.url) ? new URL(value.url) : undefined;
+      const local = associated && destination?.origin === new URL(associated.url).origin;
+      // The guest may still report its saved address before React sees the server's new port.
+      if (
+        associated?.state === 'running' &&
+        !local &&
+        destination &&
+        current?.type === 'browser' &&
+        destination.origin === new URL(current.url).origin
+      )
+        return;
       setSnapshot(value);
       if (!value.error && !value.loading) setProblem('');
-      if (!/^https?:/.test(value.url)) return;
+      if (!destination) return;
       setURL(value.url);
-      const current = activeWorkspace(getState()).panes.find((item) => item.id === pane.id);
       if (
         current?.type === 'browser' &&
         (current.url !== value.url || current.title !== value.title)
       ) {
-        const associated =
-          current.serverRuntimeID && sessions.snapshot(current.serverRuntimeID).server;
-        const local = associated && new URL(value.url).origin === new URL(associated.url).origin;
         updatePane(pane.id, {
           url: value.url,
           title: value.title.slice(0, 1000),
           ...(associated
             ? local
               ? {
-                  serverPath:
-                    new URL(value.url).pathname +
-                    new URL(value.url).search +
-                    new URL(value.url).hash,
+                  serverPath: destination.pathname + destination.search + destination.hash,
                 }
               : { serverRuntimeID: undefined, serverPath: undefined }
             : {}),
@@ -96,21 +111,38 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
       updates += 1;
       accept(event.browser);
     });
-    opening.current = command({ kind: 'open', id: pane.id, url: pane.url, ...size.current }).then(
-      (value) => {
-        // Loading/title events may arrive before this initial IPC reply.
-        if (value && updates === 0) accept(value);
-      },
-    );
+    const acquiring = window.viewer
+      .browser({ kind: 'open', id: pane.id, url: pane.url, ...size.current })
+      .then(
+        (value) => {
+          // Loading/title events may arrive before this initial IPC reply.
+          if (live) {
+            opened.current = true;
+            if (value && updates === 0) accept(value);
+          }
+          return true;
+        },
+        (error) => {
+          if (live) setProblem(errorMessage(error));
+          return false;
+        },
+      );
+    opening.current = acquiring;
     return () => {
       live = false;
       off();
       offFrame();
-      void command({ kind: 'viewport', id: pane.id, ...size.current, visible: false });
+      void acquiring.then((ok) => {
+        if (ok && opening.current === acquiring && !opened.current)
+          return window.viewer
+            .browser({ kind: 'viewport', id: pane.id, ...size.current, visible: false })
+            .catch(() => {});
+      });
+      opened.current = false;
     };
     // A saved URL is a navigation result, never a request to recreate this page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pane.id]);
+  }, [pane.id, attempt]);
   useEffect(() => {
     const element = surface.current!;
     let live = true;
@@ -121,31 +153,37 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
       };
       projection.current = undefined;
       void opening.current?.then(() => {
-        if (live)
+        if (live && opened.current)
           return command({ kind: 'viewport', id: pane.id, ...size.current, visible: active });
       });
     });
     observer.observe(element);
     void opening.current?.then(() => {
-      if (live) return command({ kind: 'viewport', id: pane.id, ...size.current, visible: active });
+      if (live && opened.current)
+        return command({ kind: 'viewport', id: pane.id, ...size.current, visible: active });
     });
     return () => {
       live = false;
       observer.disconnect();
     };
-  }, [pane.id, active]);
+  }, [pane.id, active, attempt]);
   useEffect(() => {
     const previous = previousServer.current;
-    if (server) previousServer.current = { state: server.state, url: server.url };
+    previousServer.current = server?.state ?? 'stopped';
     if (!server || server.state !== 'running') return;
     const destination = new URL(pane.serverPath || '/', server.url).href;
-    if (destination !== pane.url || (previous && previous.state !== 'running'))
-      void opening.current?.then(() =>
-        command({ kind: 'navigate', id: pane.id, url: destination }),
-      );
+    if (destination !== pane.url || (previous && previous !== 'running')) {
+      let live = true;
+      void opening.current?.then((ok) => {
+        if (live && ok) return command({ kind: 'navigate', id: pane.id, url: destination });
+      });
+      return () => {
+        live = false;
+      };
+    }
     // only a server's start or move navigates; the page's own navigation changes `pane.url`
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [server?.url, server?.state]);
+  }, [server?.url, server?.state, attempt]);
   const local = (event: { clientX: number; clientY: number }) => {
     projection.current ??= measureLocalPoint(surface.current!);
     const point = projection.current({ x: event.clientX, y: event.clientY });
@@ -181,6 +219,7 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
         onSubmit={(event) => {
           event.preventDefault();
           try {
+            if (!opened.current) return;
             const destination = browserAddress(url);
             setProblem('');
             void command({ kind: 'navigate', id: pane.id, url: destination });
@@ -221,20 +260,26 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
           onClick={() => action('external')}
         />
       </form>
-      {server && server.state !== 'running' && pane.serverRuntimeID && (
+      {pane.serverRuntimeID && server?.state !== 'running' && (
         <div className="browser-error" role="status">
-          <span>The local server is stopped.</span>
-          <button
-            disabled={!!serverSnapshot?.pending}
-            onClick={() => {
-              void sessions
-                .action(pane.serverRuntimeID!, 'restart')
-                .catch((error) => setProblem(String(error.message || error)));
-            }}
-          >
-            Start Server
-          </button>
-          {workspace && (
+          <span>
+            {canStartServer
+              ? 'The local server is stopped.'
+              : 'Open the server folder and choose Start Local Server.'}
+          </span>
+          {canStartServer && (
+            <button
+              disabled={!!serverSnapshot?.pending}
+              onClick={() => {
+                void sessions
+                  .start(pane.serverRuntimeID!)
+                  .catch((error) => setProblem(String(error.message || error)));
+              }}
+            >
+              Start Server
+            </button>
+          )}
+          {canStartServer && workspace && (
             <button onClick={() => workspace.openServer(pane.serverRuntimeID!)}>
               Server Details
             </button>
@@ -247,7 +292,8 @@ export default function BrowserPlane({ pane, active }: { pane: Pane; active: boo
           <button
             onClick={() => {
               setProblem('');
-              action('reload');
+              if (opened.current) action('reload');
+              else setAttempt((value) => value + 1);
             }}
           >
             {tryAgainLabel}

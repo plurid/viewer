@@ -694,6 +694,7 @@ export interface SearchRequest {
   showHidden: boolean;
 }
 export interface SearchBatch {
+  error?: string;
   id: string;
   entries: FileEntry[];
   done: boolean;

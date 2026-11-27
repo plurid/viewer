@@ -107,7 +107,15 @@ export class DefinitionCommands {
         [found.cwd, found.paneCwd, request.cwd].map((cwd) => realpath(cwd)),
       );
       if (folders.some((cwd) => cwd !== folders[0])) return { kind: 'changed' };
-    } catch {
+    } catch (error) {
+      if (
+        found.cwd === request.cwd &&
+        found.paneCwd === request.cwd &&
+        ['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM'].includes(
+          (error as NodeJS.ErrnoException).code ?? '',
+        )
+      )
+        return { kind: 'folder-unavailable' };
       return { kind: 'changed' };
     }
     const current = this.ports.lookup(

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DesktopEvent } from '../src/domain/contracts';
+import type { DesktopEvent, FileEntry } from '../src/domain/contracts';
 import type { GitActionRequest } from '../src/domain/comparison/git-actions';
 import { runGitAction } from '../src/renderer/git/runtime';
 import { terminalSession, trimTerminals } from '../src/renderer/terminals/sessions';
@@ -150,4 +150,13 @@ describe('Git terminal handoff', () => {
     expect(fake.terminals[0]!.disposed).toBe(true);
     expect(startShell).not.toHaveBeenCalled();
   });
+});
+
+it('sends only the repository origin when a repository-wide action exceeds the IPC selection limit', async () => {
+  const input = request('status');
+  input.target.selection = Array<FileEntry>(2001).fill({ path: '/fixture/unrelated' } as FileEntry);
+  git.mockResolvedValue({ id: input.id, root: '/fixture', title: 'Status' });
+  await runGitAction(input, 1000, () => {});
+  expect(git.mock.calls[0]?.[0].target.selection.length).toBe(0);
+  expect(input.target.selection.length).toBe(2001);
 });

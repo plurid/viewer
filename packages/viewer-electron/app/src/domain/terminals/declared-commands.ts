@@ -319,7 +319,11 @@ export function parseDeclaredCommands(
     }
     if (bodies.some((body) => !validTerminalCommand(body))) continue;
     const comment = /^#{1,2}[ ]?([\s\S]*)$/.exec(lines[index - 1] ?? '')?.[1];
-    for (const name of names) rules.push({ name, detail: bodies[0], context: comment });
+    // A blank Make comment contributes no description. Nonblank descriptions still pass
+    // the same command-text checks as the recipe, including invisible characters.
+    const context =
+      comment && !/^[ \t]*$/.test(comment) ? comment.replace(/^ +| +$/g, '') : undefined;
+    for (const name of names) rules.push({ name, detail: bodies[0], context });
   }
   rules.sort((a, b) => {
     return (phony.get(a.name) ?? Infinity) - (phony.get(b.name) ?? Infinity);

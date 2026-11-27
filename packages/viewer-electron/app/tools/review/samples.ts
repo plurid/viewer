@@ -3,6 +3,8 @@
  * names carry the cases that break layouts: a 180-character name, twenty levels of long folder
  * names, spaces and non-Latin scripts.
  */
+import { createHash } from 'node:crypto';
+import { deflateSync } from 'node:zlib';
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chooseFilePreview, filePreviewModules } from '../../src/domain/previews/formats';
@@ -37,6 +39,7 @@ export const lensSample = {
   groupID: 'gnotes',
 } as const;
 export const gitSample = path.join(sampleFolders.projects, 'Git sample');
+export const branchSample = path.join(sampleFolders.projects, 'Branch sample');
 export const journalSample = path.join(sampleFolders.projects, 'Journal events');
 
 export function sampleProject(bindings: Record<string, string>) {
@@ -313,6 +316,32 @@ export async function createSamples(home: string, appRoot: string): Promise<void
   await mkdir(path.join(git, 'refs', 'heads'), { recursive: true });
   await writeFile(path.join(git, 'HEAD'), 'ref: refs/heads/main\n', { flag: 'wx' });
   await writeFile(path.join(home, gitSample, sampleFiles.text), sources.text, { flag: 'wx' });
+  // An empty committed tree gives the branch form a base without relying on a user's Git setup.
+  const branchGit = path.join(home, branchSample, '.git');
+  const object = async (kind: string, body: string) => {
+    const bytes = Buffer.from(kind + ' ' + Buffer.byteLength(body) + '\0' + body);
+    const hash = createHash('sha1').update(bytes).digest('hex');
+    const folder = path.join(branchGit, 'objects', hash.slice(0, 2));
+    await mkdir(folder, { recursive: true });
+    await writeFile(path.join(folder, hash.slice(2)), deflateSync(bytes), { flag: 'wx' });
+    return hash;
+  };
+  const tree = await object('tree', '');
+  const author = 'Viewer Review <review@example.invalid> 1700000000 +0000';
+  const commit = await object(
+    'commit',
+    ['tree ' + tree, 'author ' + author, 'committer ' + author, '', 'Sample', ''].join('\n'),
+  );
+  await mkdir(path.join(branchGit, 'refs', 'heads'), { recursive: true });
+  await writeFile(path.join(branchGit, 'HEAD'), 'ref: refs/heads/main\n', { flag: 'wx' });
+  await writeFile(path.join(branchGit, 'refs', 'heads', 'main'), commit + '\n', { flag: 'wx' });
+  for (const color of ['red', 'blue']) {
+    await writeFile(
+      path.join(home, branchSample, color + '.svg'),
+      '<svg xmlns="http://www.w3.org/2000/svg"><circle r="4" fill="' + color + '"/></svg>\n',
+      { flag: 'wx' },
+    );
+  }
   await mkdir(path.join(home, journalSample));
   await writeFile(path.join(home, journalSample, sampleFiles.text), sources.text, { flag: 'wx' });
   const copies = path.join(home, sampleFolders.copies);

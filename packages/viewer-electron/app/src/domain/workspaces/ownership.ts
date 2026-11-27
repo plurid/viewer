@@ -8,16 +8,18 @@ export interface DefinitionShare {
   share: number;
 }
 type DefinitionSharePurpose = 'ownership' | 'proposal';
-const indexes = new WeakMap<readonly WorkspaceDefinition[], Map<string, WorkspaceDefinition>>();
+const indexes = new WeakMap<readonly WorkspaceDefinition[], Map<string, WorkspaceDefinition[]>>();
 function rootIndex(definitions: readonly WorkspaceDefinition[]) {
   let index = indexes.get(definitions);
   if (!index) {
     index = new Map();
     for (const item of definitions) {
       const previous = index.get(item.root);
-      if (!previous || (previous.source === 'found' && item.source !== 'found'))
-        index.set(item.root, item);
+      if (!previous) index.set(item.root, [item]);
+      else previous.push(item);
     }
+    for (const group of index.values())
+      group.sort((a, b) => Number(a.source === 'found') - Number(b.source === 'found'));
     indexes.set(definitions, index);
   }
   return index;
@@ -33,11 +35,10 @@ export function owningDefinition(
 ): WorkspaceDefinition | undefined {
   const index = rootIndex(definitions);
   for (let root = folder; root !== '/'; root = parentFolder(root)) {
-    const definition = index.get(root);
-    if (definition && accept(definition)) return definition;
+    const definition = index.get(root)?.find(accept);
+    if (definition) return definition;
   }
-  const top = index.get('/');
-  return top && accept(top) ? top : undefined;
+  return index.get('/')?.find(accept);
 }
 export function supportedPlaneFolder(pane: Pane): string | undefined {
   if (pane.type === 'search' && pane.allLocations) return;

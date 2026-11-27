@@ -52,6 +52,7 @@ async function treeFiles(repo: string, commit: string, signal: AbortSignal): Pro
     )
       throw new Error('This repository contains an unsafe checkout path.');
     const size = length === '-' ? 0 : Number(length);
+    if (mode === '120000' && size > 4096) throw new Error('The checkout link target is too long.');
     if (size > maximumFile || (total += size) > maximumTotal || files.length >= 20000)
       throw new Error(
         'Agent task checkout is limited to 20,000 files, 64 MiB per file and 512 MiB total. Use the human worktree dialog for this repository.',
@@ -59,6 +60,85 @@ async function treeFiles(repo: string, commit: string, signal: AbortSignal): Pro
     files.push({ name: name!, mode: mode!, object: object!, size });
   }
   return files;
+}
+
+interface CheckoutLink {
+  name: string;
+  target: string;
+}
+
+// Expand each planned link before interpreting the next component, including "..".
+// Only known directories may be traversed upwards. A dangling leaf is safe, but an
+// unknown parent, an ambiguous filesystem spelling or a chain beyond the OS limit is not.
+export function validateCheckoutLinks(
+  names: readonly string[],
+  links: readonly CheckoutLink[],
+): void {
+  if (!links.length) return;
+  const key = (value: string) =>
+    value
+      .normalize('NFD')
+      .toLowerCase()
+      .replace(/\p{Default_Ignorable_Code_Point}/gu, '');
+  const directories = new Set(['']);
+  const spellings = new Map<string, string | null>();
+  for (const name of names) {
+    const parts = name.split('/');
+    let prefix = '';
+    for (const [index, part] of parts.entries()) {
+      if (key(part) === '.git') throw new Error('An agent checkout cannot link to Git metadata.');
+      prefix = prefix ? prefix + '/' + part : part;
+      const folded = key(prefix);
+      const known = spellings.get(folded);
+      spellings.set(folded, known === undefined || known === prefix ? prefix : null);
+      if (index < parts.length - 1) directories.add(prefix);
+    }
+  }
+  const targets = new Map(links.map((link) => [link.name, link.target]));
+  for (const link of links) {
+    if (
+      !link.target ||
+      path.isAbsolute(link.target) ||
+      link.target.includes('\0') ||
+      Buffer.byteLength(link.target) > 4096
+    )
+      throw new Error('An agent checkout cannot create this link.');
+  }
+  for (const link of links) {
+    const parts = link.name.split('/');
+    let prefix = '';
+    for (const part of parts) {
+      prefix = prefix ? prefix + '/' + part : part;
+      if (spellings.get(key(prefix)) !== prefix)
+        throw new Error('The checkout has ambiguous link paths.');
+    }
+    parts.pop();
+    const pending = link.target.split('/').reverse();
+    let hops = 1;
+    while (pending.length) {
+      const part = pending.pop()!;
+      if (!part || part === '.') continue;
+      if (part === '..') {
+        if (!parts.length || !directories.has(parts.join('/')))
+          throw new Error('An agent checkout cannot create a link outside its working files.');
+        parts.pop();
+        continue;
+      }
+      if (key(part) === '.git') throw new Error('An agent checkout cannot link to Git metadata.');
+      parts.push(part);
+      const name = parts.join('/');
+      const known = spellings.get(key(name));
+      // A differently spelled dependency may resolve differently on another volume.
+      if (known !== undefined && known !== name)
+        throw new Error('The checkout has an ambiguous link target.');
+      const target = targets.get(name);
+      if (target !== undefined) {
+        if (++hops > 40) throw new Error('The checkout link chain is cyclic or too long.');
+        parts.pop();
+        pending.push(...target.split('/').reverse());
+      }
+    }
+  }
 }
 
 /** Fixed writes only: no shell, hook, filter, credential helper, submodule command or network. */
@@ -109,7 +189,7 @@ export async function addAgentWorktree(
         throw new Error('A checkout directory was replaced or linked.');
     }
   };
-  const links: { file: string; target: string }[] = [];
+  const links: CheckoutLink[] = [];
   for (const file of files.filter((file) => file.mode === '160000')) {
     signal.throwIfAborted();
     await check(path.dirname(path.join(root, file.name)));
@@ -125,18 +205,7 @@ export async function addAgentWorktree(
     if (bytes.length !== file.size) throw new Error('A checkout blob has an unexpected size.');
     if (file.mode === '120000') {
       const target = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-      const relative = path.relative(root, path.resolve(path.dirname(output), target));
-      if (
-        !target ||
-        target.includes('\0') ||
-        path.isAbsolute(target) ||
-        relative === '..' ||
-        relative.startsWith('..' + path.sep) ||
-        path.isAbsolute(relative) ||
-        relative.split(path.sep).some((part) => part.toLowerCase() === '.git')
-      )
-        throw new Error('An agent checkout cannot create a link outside its working files.');
-      links.push({ file: output, target });
+      links.push({ name: file.name, target });
       continue;
     }
     const handle = await open(
@@ -151,10 +220,15 @@ export async function addAgentWorktree(
     }
   }
   // Links are created last, so no subsequent materialization traverses a checkout link.
+  validateCheckoutLinks(
+    files.map((file) => file.name),
+    links,
+  );
   for (const link of links) {
     signal.throwIfAborted();
-    await check(path.dirname(link.file));
-    await symlink(link.target, link.file);
+    const output = path.join(root, link.name);
+    await check(path.dirname(output));
+    await symlink(link.target, output);
   }
   signal.throwIfAborted();
   await check(root);

@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { addAgentWorktree, validateCheckoutLinks } from '../src/desktop/comparison/agent-worktree';
 import { mkdir, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -508,4 +509,50 @@ it('returns structured retained worktree recovery when a person task cannot reac
     result: { path: f.input.path, stage: 'worktree-created', terminal: 'stopped' },
   });
   expect(await readFile(path.join(f.input.path, 'Hello.txt'), 'utf8')).toContain('Generated');
+});
+
+it('rejects cyclic links before publishing checkout links', async () => {
+  const f = await fixture();
+  await symlink('second', path.join(f.repo, 'first'));
+  await symlink('first', path.join(f.repo, 'second'));
+  await f.git('add', '--', 'first', 'second');
+  await f.git('commit', '-m', 'Internal cyclic links');
+  const commit = await f.git('rev-parse', 'HEAD');
+  await expect(
+    addAgentWorktree(
+      f.repo,
+      f.input.path,
+      { name: 'internal-cycle', commit, fresh: true },
+      f.context.signal,
+    ),
+  ).rejects.toThrow(/link/);
+});
+it('bounds planned link walks at each component before materialization', () => {
+  expect(() =>
+    validateCheckoutLinks(
+      ['Notes', 'notes', 'alias', 'image'],
+      [{ name: 'alias', target: 'image' }],
+    ),
+  ).not.toThrow();
+  for (let depth = 1; depth <= 5; depth++) {
+    const parent = Array<string>(depth).fill('folder').join('/');
+    for (let up = 0; up <= depth + 1; up++) {
+      const links = [
+        { name: parent + '/ancestor', target: Array<string>(up).fill('..').join('/') || '.' },
+      ];
+      const names = [parent + '/file', ...links.map((link) => link.name), 'alias'];
+      for (let more = 0; more <= depth; more++) {
+        const chain = [
+          ...links,
+          {
+            name: 'alias',
+            target: [parent + '/ancestor', ...Array<string>(more).fill('..'), 'file'].join('/'),
+          },
+        ];
+        const validate = () => validateCheckoutLinks(names, chain);
+        if (up + more > depth) expect(validate).toThrow(/link/);
+        else expect(validate).not.toThrow();
+      }
+    }
+  }
 });

@@ -84,6 +84,22 @@ describe('generated tool host', () => {
       'another window',
     );
     await expect(service.configure(1, doc.id, 0, 'Stale', true)).rejects.toThrow('changed');
+    await expect(service.write(1, doc.id, doc.revision, 'Late', '<p>Late</p>', {})).rejects.toThrow(
+      /enable/i,
+    );
+    await expect(service.attach(1, doc.id, 'late.txt', new Uint8Array())).rejects.toThrow(
+      /enable/i,
+    );
+    await expect(
+      service.source(1, doc.id, doc.revision, {
+        path: root,
+        availability: 'available',
+        version: { identity: temporalIdentity('fixture'), modified: 1, size: 0 },
+        facts: {},
+        evidence: [],
+        coverage: { content: 'complete' },
+      }),
+    ).rejects.toThrow(/enable/i);
     const fresh = new Canvases(root, { changed() {} });
     expect((await fresh.library(2)).entries[0]).toMatchObject({
       title: 'Image crop',
@@ -119,8 +135,10 @@ describe('generated tool host', () => {
   it('cancels a running plugin when disabled and refuses its late result', async () => {
     const root = await temporaryRoot('viewer-disable-tool-');
     const events: CanvasActionEvent[] = [];
+    const disabled = vi.fn();
     const service = new Canvases(root, {
       changed() {},
+      disabled,
       action: (_owner, event) => events.push(event),
     });
     const doc = await service.create(1, randomUUID(), root);
@@ -139,6 +157,7 @@ describe('generated tool host', () => {
     await vi.waitFor(() => expect(events.some((event) => event.kind === 'invoke')).toBe(true));
     const run = events[0]!.run;
     await service.configure(1, doc.id, doc.revision, doc.title, false);
+    expect(disabled).toHaveBeenCalledWith(doc.conversationID);
     expect((await running).actionRun.status).toBe('cancelled');
     expect(() =>
       service.actions.complete(1, doc.id, frameID, run.id, {

@@ -3,6 +3,7 @@ import { describeAnchor, fileName, tourFileName } from '../../../domain/tours/to
 import { activeWorkspace, report, useViewer } from '../../state/store';
 import { DictationButton } from '../../speech/DictationButton';
 import { countText } from '../../../domain/layout/nesting/format';
+import { FileName } from '../../ui/FileName';
 import { Panel } from '../../ui/Panel';
 import { Button, IconButton, Row } from '../../ui/primitives';
 import { useWorkspace } from '../context';
@@ -74,7 +75,13 @@ export function TourStops() {
             title={activeFile ? activeFile : 'Click a file’s plane to add it as a stop.'}
             onClick={() => run(() => recordStop(workspace))}
           >
-            {activeFile ? `Add “${fileName(activeFile)}”` : 'Add a File Plane'}
+            {activeFile ? (
+              <>
+                Add “<FileName name={fileName(activeFile)} />”
+              </>
+            ) : (
+              'Add a File Plane'
+            )}
           </Button>
           <span className="tour-stops-destination muted">{destination}</span>
           <Button
@@ -93,7 +100,13 @@ export function TourStops() {
             disabled={busy || !draft.stops.length || !file}
             onClick={() => run(saveDraft)}
           >
-            {draft.file ? `Save ${tourFileName(draft.file)}` : 'Save Tour'}
+            {draft.file ? (
+              <>
+                Save <FileName name={tourFileName(draft.file)} />
+              </>
+            ) : (
+              'Save Tour'
+            )}
           </Button>
         </>
       }

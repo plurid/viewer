@@ -454,3 +454,18 @@ describe('declared command parsers', () => {
     expect(parseDeclaredCommands('justfile', 'dev:\n  serve\t')).toEqual([]);
   });
 });
+
+it('keeps Make targets independent of optional comment text', () => {
+  for (const prefix of ['#', '##']) {
+    for (const comment of ['', ' ', '   ', '\t', ' detail ', '\u200b', 'x'.repeat(10000)]) {
+      const [target] = parseDeclaredCommands('Makefile', prefix + comment + '\ncheck:\n\techo ok');
+      if (comment === '\u200b' || comment.length > 1000) {
+        expect(target).toBeUndefined();
+        continue;
+      }
+      expect(target?.line).toBe('make check');
+      if (comment.trim() === 'detail') expect(target?.context).toBe('detail');
+      else expect(target?.context).toBeUndefined();
+    }
+  }
+});

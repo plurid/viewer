@@ -1,3 +1,4 @@
+import { readCollectionFiles } from '../../explorer/collection-files';
 import { PathLabel } from '../PathLabel';
 import { useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -151,9 +152,11 @@ export function CollectionControls() {
             disabled={busy || !basket.length}
             onClick={() =>
               void run(async () => {
-                const entries = [];
-                for (const item of basket) entries.push(await window.viewer.stat(item.path));
-                basketEntries(entries);
+                const workspaceID = space.id;
+                const checked = await readCollectionFiles(basket.map((item) => item.path));
+                if (activeWorkspace().id !== workspaceID) return;
+                basketEntries(checked.entries);
+                if (checked.errors.length) setError(checked.errors.slice(0, 100).join('\n'));
               })
             }
           >

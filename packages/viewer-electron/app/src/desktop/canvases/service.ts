@@ -29,6 +29,7 @@ import { canvasScaffold } from '../../domain/canvases/scaffold';
 
 interface CanvasPorts {
   changed(owner: number, document: CanvasDocument): void;
+  disabled?(conversationID: string): void;
   action?(owner: number, event: CanvasActionEvent): void;
   libraries?: () => ReadonlyMap<string, string>;
   observe?: boolean;
@@ -165,7 +166,9 @@ export class Canvases<D extends CanvasDocument = CanvasDocument> {
       const document = await this.load(owner, id);
       if (document.revision !== revision)
         throw new Error('This tool changed. Refresh the library.');
-      return this.save(owner, this.revise(document, { title, enabled }));
+      const saved = await this.save(owner, this.revise(document, { title, enabled }));
+      if (!enabled) this.ports.disabled?.(saved.conversationID);
+      return saved;
     });
   }
   protected async save(
@@ -213,6 +216,12 @@ export class Canvases<D extends CanvasDocument = CanvasDocument> {
       ].slice(-canvasLimits.history),
     };
   }
+  private async editable(owner: number, id: string, signal?: AbortSignal) {
+    const document = await this.load(owner, id);
+    signal?.throwIfAborted();
+    if (document.enabled === false) throw new Error('Enable this tool before editing it.');
+    return document;
+  }
   write(
     owner: number,
     id: string,
@@ -220,9 +229,10 @@ export class Canvases<D extends CanvasDocument = CanvasDocument> {
     title: string,
     html: string,
     defaults: CanvasState,
+    signal?: AbortSignal,
   ): Promise<D> {
     return this.serial(async () => {
-      const current = await this.load(owner, id);
+      const current = await this.editable(owner, id, signal);
       if (current.revision !== expected)
         throw new Error('This canvas changed. Read its current revision before updating it.');
       const state = retainedCanvasState(current.state, canvasStateSchema.parse(defaults));
@@ -320,10 +330,11 @@ export class Canvases<D extends CanvasDocument = CanvasDocument> {
     id: string,
     file: string,
     validate?: (bytes: Uint8Array) => void,
+    signal?: AbortSignal,
   ): Promise<CanvasAsset> {
     const data = await readBounded(file, canvasLimits.assetBytes);
     validate?.(data);
-    return this.attach(owner, id, path.basename(file), data, file);
+    return this.attach(owner, id, path.basename(file), data, file, undefined, signal);
   }
   source(
     owner: number,
@@ -331,9 +342,10 @@ export class Canvases<D extends CanvasDocument = CanvasDocument> {
     expected: number,
     inspection: InspectionResult,
     sourceID?: string,
+    signal?: AbortSignal,
   ) {
     return this.serial(async () => {
-      const document = await this.load(owner, id);
+      const document = await this.editable(owner, id, signal);
       if (document.revision !== expected)
         throw new Error('The canvas changed. Review its current sources.');
       const existing = document.sources.find(
@@ -475,9 +487,10 @@ export class Canvases<D extends CanvasDocument = CanvasDocument> {
     bytes: Uint8Array,
     source?: string,
     provenance?: string,
+    signal?: AbortSignal,
   ): Promise<CanvasAsset> {
     return this.serial(async () => {
-      const document = await this.load(owner, id);
+      const document = await this.editable(owner, id, signal);
       if (bytes.length > canvasLimits.assetBytes)
         throw new Error('The canvas asset limit was reached.');
       const hash = createHash('sha256').update(bytes).digest('hex');
@@ -509,6 +522,7 @@ export class Canvases<D extends CanvasDocument = CanvasDocument> {
       const kept = await this.assetBytes(asset);
       if (kept.length !== bytes.length)
         throw new Error('A file saved with this canvas is missing or incomplete.');
+      signal?.throwIfAborted();
       await this.save(owner, this.revise(document, { assets: [...document.assets, asset] }));
       return asset;
     });

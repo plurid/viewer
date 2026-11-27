@@ -1,4 +1,5 @@
 import {
+  gitActionTarget,
   gitTerminalProfileID,
   readOnlyGitAction,
   type GitActionReply,
@@ -28,7 +29,10 @@ export async function runGitAction(
       { readonly: true, processLabel: 'Git' },
     );
     if (session.disposed) throw new Error('The Git terminal closed before launch.');
-    const reply = await window.viewer.gitAction(request);
+    const reply = await window.viewer.gitAction({
+      ...request,
+      target: gitActionTarget(request.kind, request.target),
+    });
     if (session.disposed) {
       await window.viewer.terminalClose(request.id);
       throw new Error('The Git terminal closed. Check the repository before running it again.');

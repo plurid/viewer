@@ -10,6 +10,9 @@ import { prepareOperationReview } from '../operations/OperationReview';
 import { errorMessage } from '../../../domain/errors';
 import { useWindowEvent } from '../../app/window-events';
 import { plural } from '../../../domain/plural';
+import { pathFromInput, pathInputText } from '../../../domain/files/path-label';
+import { useHome } from '../PathLabel';
+
 const labels: Record<ComparisonRow['status'], string> = {
   'left-only': 'Only on left',
   'right-only': 'Only on right',
@@ -20,6 +23,7 @@ const labels: Record<ComparisonRow['status'], string> = {
 };
 export function ComparisonControls() {
   const workspace = useWorkspace();
+  const home = useHome();
   const [open, setOpen] = useState(false);
   const [left, setLeft] = useState('');
   const [right, setRight] = useState('');
@@ -33,8 +37,8 @@ export function ComparisonControls() {
     setOpen(true);
     setError('');
     if (files.length) {
-      setLeft(files[0] ?? '');
-      setRight(files[1] ?? '');
+      setLeft(pathInputText(files[0] ?? '', home));
+      setRight(pathInputText(files[1] ?? '', home));
     }
   });
   if (!open) return null;
@@ -45,7 +49,7 @@ export function ComparisonControls() {
   const choose = async (side: 'left' | 'right') => {
     const root = await window.viewer.chooseFolder();
     if (root) {
-      (side === 'left' ? setLeft : setRight)(root);
+      (side === 'left' ? setLeft : setRight)(pathInputText(root, home));
       setResult(undefined);
     }
   };
@@ -54,7 +58,13 @@ export function ComparisonControls() {
     setRunning(id);
     setError('');
     try {
-      const value = await window.viewer.compare({ kind: 'run', id, left, right, hashes });
+      const value = await window.viewer.compare({
+        kind: 'run',
+        id,
+        left: pathFromInput(left, home),
+        right: pathFromInput(right, home),
+        hashes,
+      });
       if (value) {
         setResult(value);
         setSelected(
@@ -131,7 +141,7 @@ export function ComparisonControls() {
               </span>
               <input
                 aria-label={side + ' location'}
-                title={side === 'left' ? left : right}
+                title={pathFromInput(side === 'left' ? left : right, home)}
                 onBlur={(event) => {
                   event.currentTarget.scrollLeft = event.currentTarget.scrollWidth;
                 }}

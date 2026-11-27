@@ -11,7 +11,7 @@ import {
 import { activeLens, useLenses } from '../state/lenses';
 import { lensCommandID, lensMenuIDs } from '../commands/lenses';
 import { planeLayoutCommandIDs } from '../../domain/workspaces/plane-layout';
-import { focusFiles } from './sessions';
+import { focusPlane } from './sessions';
 import { useCommands, useCommandRevision } from '../commands/context';
 import type { CommandRequest } from '../commands/registry';
 import { Icon } from '../ui/Icon';
@@ -166,7 +166,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
             'done-editing',
           ].includes(command)
         )
-          focusFiles(id);
+          focusPlane(id, true);
       })
       .catch(report);
   };

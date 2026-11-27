@@ -198,8 +198,7 @@ export function NestingSettings({
                   className="nesting-format"
                 >
                   <span role="cell">{sheetName(format, units)}</span>
-                  <input
-                    role="cell"
+                  <span role="cell"><input
                     // a text field with no spin arrows; empty means any number of sheets
                     type="text"
                     inputMode="numeric"
@@ -215,14 +214,14 @@ export function NestingSettings({
                       })
                     }
                   />
-                  <NumberInput
-                    role="cell"
+                  </span><span role="cell"><NumberInput
+                    max={1e9}
                     kind="decimal"
                     min={0}
                     aria-label={`Price of a ${name} sheet`}
                     value={format.price}
                     onCommit={(price) => setFormat(index, { price })}
-                  />
+                  /></span>
                   <span role="cell">
                     <IconButton
                       icon="close"
@@ -389,14 +388,14 @@ export function NestingSettings({
             label="Thickness"
             unit="mm"
             value={choices.cutting.thickness}
-            set={(thickness) => setCutting({ thickness })}
+            set={(thickness) => setCutting({ thickness: Math.min(thickness,1000) })}
           />
           <NumberField
             label="Speed"
             unit={`${unit}/min`}
             units={units}
             value={choices.cutting.speed}
-            set={(speed) => setCutting({ speed: Math.max(1, speed) })}
+            set={(speed) => setCutting({ speed: Math.min(1_000_000, Math.max(1, speed)) })}
           />
           <NumberField
             label="Pierce"

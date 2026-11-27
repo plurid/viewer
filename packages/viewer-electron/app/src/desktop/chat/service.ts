@@ -244,11 +244,15 @@ export class Chats {
     if (problem) throw new Error(problem);
   }
 
+  cancelTurn(id: string): void {
+    this.running.get(id)?.abort.abort();
+  }
+
   async request(request: ChatRequest, owner: number, origin?: Origin): Promise<ChatReply> {
     if (this.closed) throw new Error('Conversations are closing.');
     if (request.kind === 'stop') {
       this.principal(request.id, owner);
-      this.running.get(request.id)?.abort.abort();
+      this.cancelTurn(request.id);
       await this.running.get(request.id)?.work;
       const current = await this.load(request.id);
       if (current.status === 'running' && !this.running.has(request.id))
@@ -715,6 +719,8 @@ export class Chats {
           sources: portableCanvasSources(canvas.sources),
           preview: canvases.previewObservation(canvas.id, canvas.revision),
         };
+      signal.throwIfAborted();
+      if (canvas.enabled === false) throw new Error('Enable this tool before using it.');
       if (step.kind === 'canvas_invoke') {
         const request = canvasInvocationSchema.parse(JSON.parse(step.text));
         const reply = await canvases.invoke(
@@ -752,6 +758,8 @@ export class Chats {
             canvas.id,
             canvas.revision,
             inspection,
+            undefined,
+            authorized,
           );
           return { source: portableCanvasSources([result.source])[0], revision: result.revision };
         });
@@ -770,7 +778,9 @@ export class Chats {
             const assets = [];
             for (const file of files) {
               authorized.throwIfAborted();
-              assets.push(await canvases.attachFile(principal.owner, canvas.id, file));
+              assets.push(
+                await canvases.attachFile(principal.owner, canvas.id, file, undefined, authorized),
+              );
             }
             const updated = await canvases.read(principal.owner, canvas.id);
             return { assets, revision: updated.revision };
@@ -791,6 +801,7 @@ export class Chats {
         title,
         step.text,
         Object.fromEntries(step.patches.map((patch) => [patch.path, patch.value])),
+        signal,
       );
       const preview = await canvases.waitForPreview(updated.id, updated.revision, signal);
       return {

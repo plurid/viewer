@@ -171,6 +171,9 @@ the views** (prefix **b** then **t**) always tours the saved views. **Edit Tour 
 | Is closed while its stop shows       | Says so, then goes on to the next stop                                                              |
 | Was made by a check or a model       | Shows the finding's grade: **Confirmed**, **Refuted** or **Unverified**                             |
 
+Use **Edit Text** to edit a tour or project definition. Opening a matching passage shows the
+definition at that passage.
+
 A stop never opens a tour or project file, so a tour cannot play another tour or install a project.
 When the tour moves on, the outline or highlight a stop drew in a file goes with it.
 
@@ -299,11 +302,12 @@ with line numbers. A broken document keeps the last valid copy in effect.
 
 Definitions accept terminal `command` fields. A waiting terminal shows the definition's current
 command when the plane at that index is still a terminal whose folder resolves to this pane's
-folder. **Run** runs that displayed command; **Shell only** starts a shell without it. Otherwise the
-panel says **This terminal changed in the definition.** and offers **Reset to Definition…** and
-**Shell only**. **Run all** skips changed terminals and reports their outcome on each plane. New or
-changed commands also need native approval. Plain terminal planes keep their normal behavior.
-Editing a definition never rearranges an open workspace.
+folder. **Run** runs that displayed command. **Shell only** starts a shell without it. An unchanged
+folder that is missing or inaccessible shows **Terminal folder unavailable**. When the terminal
+changes, the panel says **This terminal changed in the definition.** and offers **Reset to
+Definition…** and **Shell only**. **Run all** skips changed terminals and reports their outcome on
+each plane. New or changed commands also need native approval. Plain terminal planes keep their
+normal behavior. Editing a definition never rearranges an open workspace.
 
 | Term                             | What opening it does                                                                                                                                                                  |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -226,8 +226,9 @@ After review in Viewer and a native confirmation, Viewer creates the worktree an
 the task, its folder, a private note, a terminal and **Git changes**. The terminal stays stopped,
 and Git changes load only when you choose **Load Git changes**. The CLI runs no tests, shell, hooks,
 submodule commands or repository filters. Checkout writes Git objects directly: LFS pointers stay
-pointers, submodules stay uninitialized, and links leaving the working files or unsafe paths are
-refused.
+pointers and submodules stay uninitialized. Viewer checks relative links through other checkout
+links before creating them. It refuses cycles, ambiguous paths and links that reach outside the
+working files or into Git metadata.
 
 | Checkout limit | Value   |
 | -------------- | ------- |

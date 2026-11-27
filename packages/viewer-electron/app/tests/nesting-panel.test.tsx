@@ -332,6 +332,19 @@ it('draws no sheet and says why when the last sheet format is removed', async ()
   expect(screen.getAllByRole('img', { name: /^Sheet 1 · 1500 × 3000 · / })).toHaveLength(1);
 });
 
+it('keeps stock and price as textboxes and bounds cutting values',async () => {
+  mount();
+  await screen.findByLabelText('Quantity of Disc');
+  expect(screen.getByRole('textbox',{name:/in stock/})).toBeTruthy();
+  const price = screen.getByRole<HTMLInputElement>('textbox',{name:/Price of a/});
+  fireEvent.change(price,{target:{value:'1000000001'}});
+  fireEvent.blur(price);
+  expect(Number(price.value)).toBe(1e9);
+  const thickness = screen.getByLabelText<HTMLInputElement>('Thickness');
+  fireEvent.change(thickness,{target:{value:'1234'}});
+  fireEvent.blur(thickness);
+  expect(Number(thickness.value)).toBe(1000);
+});
 it('lists only the chosen formats and adds a custom size', async () => {
   mount();
   await screen.findByLabelText('Quantity of Disc');

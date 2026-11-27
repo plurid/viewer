@@ -259,7 +259,15 @@ it('returns content search evidence only for granted paths and rechecks a change
     evidence: [evidence(allowedFile), evidence(outsideFile)],
     more: false,
     indexed: true,
-    status: { running: false, count: 2, roots: [] },
+    scanLimited: true,
+    status: {
+      running: false,
+      count: 2,
+      roots: [
+        { path: files, status: 'paused' as const, count: 1, errors: 0 },
+        { path: secret, status: 'ready' as const, count: 1, errors: 0 },
+      ],
+    },
   };
   queryFiles.mockResolvedValue(result);
   const names = await call<{ evidence?: unknown }>('search_files', {
@@ -268,6 +276,15 @@ it('returns content search evidence only for granted paths and rechecks a change
     content: false,
   });
   expect(names.evidence).toBeUndefined();
+  expect(names).toMatchObject({
+    scanLimited: true,
+    coverage: {
+      state: 'partial',
+      reasons: expect.arrayContaining([expect.stringContaining('paused')]),
+      roots: [expect.objectContaining({ path: files })],
+    },
+  });
+  expect(JSON.stringify(names)).not.toContain(secret);
   const matches = await call<{ entries: { path: string }[]; evidence: { path: string }[] }>(
     'search_files',
     { query: 'content', root: files, content: true },

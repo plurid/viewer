@@ -87,6 +87,9 @@ export function TerminalPlane({ pane }: { pane: Pane }) {
                 session.terminal.cols,
                 session.terminal.rows,
               );
+            })
+            .finally(() => {
+              session.starting = undefined;
             });
           await session.starting;
         }

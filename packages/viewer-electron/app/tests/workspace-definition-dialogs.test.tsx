@@ -79,6 +79,40 @@ beforeEach(() => {
     },
   });
 });
+
+it('offers Open when the workspace with the same key came from discovery', () => {
+  activeWorkspace().definition = {
+    key: 'sample/project-0',
+    source: 'found',
+    basis: 'a'.repeat(64),
+  };
+  const view = render(
+    <WorkspacesDialog onClose={() => {}} onOpen={async () => {}} onAction={() => {}} />,
+  );
+  fireEvent.click(view.getByRole('tab', { name: 'Defined (60)' }));
+  const row = view.getByText('sample/project-0').closest('li')!;
+  expect(within(row).getByRole('button', { name: 'Open' })).toBeTruthy();
+});
+
+it('opens the first available definition from the full-width search field', async () => {
+  const definitions = getState().bootstrap.definitions!.definitions;
+  definitions.splice(
+    0,
+    definitions.length,
+    ...[true, false, false].map((hidden, i) =>
+      sampleDefinition('work/' + i, { hidden, rootState: i === 1 ? 'missing' : 'present' }),
+    ),
+  );
+  const view = render(
+    <WorkspacesDialog onClose={() => {}} onOpen={async () => {}} onAction={() => {}} />,
+  );
+  fireEvent.click(view.getByRole('tab', { name: 'Defined (3)' }));
+  const search = view.getByRole('searchbox', { name: 'Search definitions' });
+  fireEvent.change(search, { target: { value: 'work' } });
+  fireEvent.keyDown(search, { key: 'Enter' });
+  await waitFor(() => expect(actions.open).toHaveBeenCalledWith('work/2'));
+  expect(search.closest('.workspace-catalog-search')).toBeTruthy();
+});
 afterEach(async () => {
   cleanup();
   await flushState(false);

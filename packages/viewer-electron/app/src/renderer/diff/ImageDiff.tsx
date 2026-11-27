@@ -21,15 +21,15 @@ export default function ImageDiff({
   const limit = useViewer((state) => state.settings.settings.previews.maxImagePixels);
   const width = Math.max(left?.dimensions?.width ?? 0, right?.dimensions?.width ?? 0);
   const height = Math.max(left?.dimensions?.height ?? 0, right?.dimensions?.height ?? 0);
+  const missingDimensions = [left, right].some((resource) => resource && !resource.dimensions);
   const tooLarge =
-    [left, right].some(
-      (resource) => resource && (!resource.dimensions || resource.entry.size > 64 * 1024 * 1024),
-    ) || width * height * 3 > limit;
+    [left, right].some((resource) => resource && resource.entry.size > 64 * 1024 * 1024) ||
+    width * height * 3 > limit;
 
   useEffect(() => {
     setReady(false);
     setError('');
-    if (mode !== 'difference' || tooLarge) return;
+    if (mode !== 'difference' || missingDimensions || tooLarge) return;
     const controller = new AbortController();
     const worker = new Worker(new URL('./image-diff.worker.ts', import.meta.url), {
       type: 'module',
@@ -85,13 +85,20 @@ export default function ImageDiff({
       controller.abort();
       worker.terminate();
     };
-  }, [left, right, mode, width, height, limit, tooLarge]);
+  }, [left, right, mode, width, height, limit, tooLarge, missingDimensions]);
 
   if (tooLarge)
     return (
       <Empty
         title="Images too large to compare"
         detail="Use smaller images, or raise Image pixel limit in Settings → Previews."
+      />
+    );
+  if (missingDimensions)
+    return (
+      <Empty
+        title="Image dimensions unavailable"
+        detail="Viewer couldn’t measure this image for comparison."
       />
     );
   if (error) return <Empty title="Can't compare these images" detail={error} />;

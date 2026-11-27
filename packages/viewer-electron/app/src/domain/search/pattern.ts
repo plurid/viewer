@@ -4,6 +4,17 @@ export interface SearchPattern {
   test(value: string): boolean;
 }
 
+/** A selection glob matches the whole name. Only * and ? match non-line-break code points. */
+export function globPattern(word: string): SearchPattern {
+  const character = '[^\\n\\r\\x{2028}\\x{2029}]';
+  const source = Array.from(word, (unit) => {
+    if (unit === '*') return character + '*';
+    if (unit === '?') return character;
+    return RE2JS.quote(unit);
+  }).join('');
+  return RE2JS.compile('^' + source + '$', RE2JS.CASE_INSENSITIVE);
+}
+
 /** Escapes for a class of characters, which end a literal but carry nothing after them. */
 const classEscapes = new Set([...'dDwWsSbB']);
 const ascii = /^[\x00-\x7f]*$/;

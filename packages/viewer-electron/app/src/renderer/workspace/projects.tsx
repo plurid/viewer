@@ -26,6 +26,7 @@ import type {
   TaskPane,
   ReceiptPane,
 } from '../../domain/contracts';
+import type { Collection } from '../../domain/workspaces/collections';
 import type { DiffSource } from '../../domain/comparison/diff';
 import {
   activeWorkspace,
@@ -157,7 +158,11 @@ export function ProjectFileNotice() {
 }
 /** The folders a new project binds: each outside it that a plane shows, as `external-n`. A scratch
  * plane's folder is only where Save As starts, so it binds nothing. */
-export function projectBindings(root: string, panes: readonly Pane[]): Record<string, string> {
+export function projectBindings(
+  root: string,
+  panes: readonly Pane[],
+  collections: readonly Collection[] = [],
+): Record<string, string> {
   const bindings: Record<string, string> = {};
   const bind = (path: string, directory: boolean) => {
     try {
@@ -186,7 +191,14 @@ export function projectBindings(root: string, panes: readonly Pane[]): Record<st
       pane.type === 'overview'
     )
       continue;
-    bind(pane.path, pane.type === 'folder' || pane.type === 'git-changes');
+    bind(
+      pane.path,
+      pane.type === 'folder' ||
+        pane.type === 'git-changes' ||
+        pane.type === 'terminal' ||
+        pane.type === 'search' ||
+        pane.type === 'collection',
+    );
     if (pane.type === 'diff') {
       for (const source of [pane.left, pane.right]) {
         if (source.kind === 'file') bind(source.path, false);
@@ -194,12 +206,39 @@ export function projectBindings(root: string, panes: readonly Pane[]): Record<st
       }
     }
   }
+  for (const collection of collections)
+    for (const source of collection.sources) bind(source, collection.kind !== 'explicit');
   return bindings;
 }
 async function readProject(file: string): Promise<ProjectDocument> {
   const reply = await window.viewer.project({ kind: 'read', file });
   if (!reply || typeof reply !== 'object') throw new Error('The project could not be opened.');
   return reply;
+}
+function portableLayout(layout: ProjectLayout, known: ReadonlySet<string>): ProjectLayout {
+  const placements = layout.placements.filter((plane) => known.has(plane.id));
+  const placed = new Set(placements.map((plane) => plane.id));
+  return {
+    ...layout,
+    active: layout.active && placed.has(layout.active) ? layout.active : undefined,
+    docked: layout.docked && placed.has(layout.docked) ? layout.docked : undefined,
+    stacks: layout.stacks?.flatMap((stack) => {
+      const panes = stack.panes.filter((id) => placed.has(id));
+      return panes.length >= 2
+        ? [
+            {
+              ...stack,
+              panes,
+              previous: Object.fromEntries(panes.map((id) => [id, stack.previous[id]!])),
+            },
+          ]
+        : [];
+    }),
+    placements: placements.map((plane) => ({
+      ...plane,
+      parent: plane.parent && placed.has(plane.parent) ? plane.parent : undefined,
+    })),
+  };
 }
 function definition(project: ProjectAssociation, layout: ProjectLayout): ProjectDefinition {
   const space = activeWorkspace();
@@ -325,20 +364,14 @@ function definition(project: ProjectAssociation, layout: ProjectLayout): Project
         (collection) => !(space.collections ?? []).some((value) => value.id === collection.id),
       ),
     ],
-    layout: {
-      ...layout,
-      active: layout.active && known.has(layout.active) ? layout.active : undefined,
-      docked: layout.docked && known.has(layout.docked) ? layout.docked : undefined,
-      stacks: layout.stacks?.filter((stack) => stack.panes.every((id) => known.has(id))),
-      placements: placements.map((plane) => ({
-        ...plane,
-        parent: plane.parent && known.has(plane.parent) ? plane.parent : undefined,
-      })),
-    },
+    layout: portableLayout({ ...layout, placements }, known),
     arrangements: Object.fromEntries(
-      Object.entries(project.definition.arrangements).filter(([, arrangement]) =>
-        arrangement.placements.every((plane) => known.has(plane.id)),
-      ),
+      Object.entries(project.definition.arrangements).flatMap(([name, arrangement]) => {
+        const portable = portableLayout(arrangement, known);
+        return portable.placements.length || !arrangement.placements.length
+          ? [[name, portable]]
+          : [];
+      }),
     ),
   });
 }
@@ -415,7 +448,7 @@ export function ProjectControls() {
         });
         if (typeof file !== 'string' || !isCurrent()) return;
         const root = parentPath(file);
-        const bindings = projectBindings(root, current.panes);
+        const bindings = projectBindings(root, current.panes, current.collections);
         project = {
           file,
           root,

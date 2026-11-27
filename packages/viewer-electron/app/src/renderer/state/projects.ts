@@ -22,8 +22,11 @@ import { scopedPresentation } from './presentation';
 export async function installProject(
   document: ProjectDocument,
   bindings?: Record<string, string>,
+  origin?: string,
 ): Promise<void> {
   await flushState();
+  if (origin && activeWorkspace().id !== origin)
+    throw new Error('The workspace changed while the project opened. Open it again.');
   const existing = getState().saved.workspaces.find(
     (space) => space.project?.file === document.file,
   );

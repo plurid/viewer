@@ -144,6 +144,13 @@ export function pathInputText(path: string, home: string): string {
   return relative === '.' ? '~' : relative === undefined ? path : '~/' + relative;
 }
 
+/** Expands only the home marker in an editable path, leaving other text as typed. */
+export function pathFromInput(text: string, home: string): string {
+  if (!home || (text !== '~' && !text.startsWith('~/'))) return text;
+  if (text === '~' || text === '~/') return home;
+  return home.replace(/\/$/, '') + text.slice(1);
+}
+
 /** The whole path as a sentence or a choice names it, with home as `~`. */
 export function pathText(path: string, home: string, options: PathLabelOptions = {}): string {
   return pathLabelText(pathLabelParts(path, home, options));
@@ -231,7 +238,10 @@ export function middleName(
     const start = Math.ceil(count * 0.6);
     const kept = count - start;
     return (
-      stem.slice(0, start).join('') + ellipsis + (kept ? stem.slice(-kept).join('') : '') + end
+      stem.slice(0, start).join('').trimEnd() +
+      ellipsis +
+      (kept ? stem.slice(-kept).join('').trimStart() : '') +
+      end
     );
   };
   const longest = (make: (count: number) => string, total: number) => {
@@ -255,26 +265,32 @@ export function middleName(
 export function twoLineName(name: string, width: number, measure: TextMeasure): string {
   const whole = name.replace(/[\n\r\t]/g, ' ');
   const suffix = whole.slice(1).match(/\.[A-Za-z0-9]+$/)?.[0] ?? '';
-  const keepTogether = suffix.length > 0 && measure(suffix) <= width;
-  const split = (text: string): string | undefined => {
-    if (measure(text) <= width) return text;
-    const characters = graphemes(text);
-    let low = 0;
-    let high = characters.length - (keepTogether && text.endsWith(suffix) ? suffix.length : 1);
-    while (low < high) {
-      const middle = Math.ceil((low + high) / 2);
-      if (measure(characters.slice(0, middle).join('')) <= width) low = middle;
-      else high = middle - 1;
-    }
-    if (!low) return;
-    const first = characters.slice(0, low).join('');
-    if (measure(text.slice(first.length)) > width) return;
-    const space = first.lastIndexOf(' ') + 1;
-    const end = space && measure(text.slice(space)) <= width ? space : first.length;
-    return text.slice(0, end) + '\n' + text.slice(end);
-  };
-  const shown = middleName(whole, (text) => split(text) !== undefined, suffix);
-  return split(shown) ?? shown;
+  if (measure(whole) <= width) return whole;
+  const characters = graphemes(whole);
+  let low = 0;
+  let high = characters.length - (suffix && measure(suffix) <= width ? suffix.length : 1);
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (measure(characters.slice(0, middle).join('')) <= width) low = middle;
+    else high = middle - 1;
+  }
+  const prefix = characters.slice(0, low).join('');
+  if (!prefix) return middleName(whole, (text) => measure(text) <= width, suffix);
+  // Prefer a complete word on line one. Only an overlong first word splits by grapheme.
+  const boundary = /^\s/u.test(whole.slice(prefix.length))
+    ? prefix.length
+    : prefix.search(/\s+\S*$/u);
+  const first = boundary > 0 ? prefix.slice(0, boundary).trimEnd() : prefix;
+  const rest = whole.slice(first.length).trimStart();
+  // At a width that fits only the suffix, keep the whole extension on the second line.
+  const second =
+    suffix &&
+    measure(suffix) <= width &&
+    measure(ellipsis + suffix) > width &&
+    measure(rest) > width
+      ? suffix
+      : middleName(rest, (text) => measure(text) <= width, suffix);
+  return first + '\n' + second;
 }
 
 /** The deepest folder that holds every one of `paths`, or nothing when they share none. */

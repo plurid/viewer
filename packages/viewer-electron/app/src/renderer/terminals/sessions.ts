@@ -6,7 +6,7 @@ import { copyText, report } from '../state/store';
 import { terminalTheme } from './theme';
 import { terminalWindowOptions } from '../../domain/terminals/window-options';
 import './terminal-parking.css';
-import { deferTerminal } from './start-authority';
+import { deferTerminal, forgetTerminalStart } from './start-authority';
 export { allowTerminalStart, terminalStartDeferred } from './start-authority';
 export interface TerminalSession {
   terminal: Terminal;
@@ -59,6 +59,7 @@ export function retainTerminal(id: string): () => void {
   return () => preparing.delete(id);
 }
 export function closeTerminal(id: string): void {
+  forgetTerminalStart(id);
   preparing.delete(id);
   const pending = sessions.get(id);
   sessions.delete(id);

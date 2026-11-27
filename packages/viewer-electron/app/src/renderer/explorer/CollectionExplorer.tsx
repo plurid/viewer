@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { CollectionPane, FileEntry } from '../../domain/contracts';
 import {
   activeWorkspace,
@@ -14,15 +14,16 @@ import { useCommandSource, useCommands } from '../commands/context';
 import { routeExplorerInput } from './input';
 import { folderCommands } from '../commands/folder';
 import { useFileDialogs } from './FileDialogs';
-import { useFileSelection, useFileKeyboard } from './selection';
-import { ListView, type FileViewProps } from './views';
+import { blankFileSpace, useFileSelection, useFileKeyboard } from './selection';
+import { ListView, fileRowID, type FileViewProps } from './views';
 import { FileTable } from './FileTable';
 import { ContextMenu } from '../ui/ContextMenu';
 import type { CommandRequest } from '../commands/registry';
 import { Loading, Empty } from '../ui/primitives';
-import { isPackage, sortEntries } from '../../domain/files/entries';
-import { nativeOpening } from './opening';
+import { sortEntries } from '../../domain/files/entries';
+import { chooseOpening } from './opening';
 import { useContextPublish } from './context-publish';
+import { readCollectionFiles } from './collection-files';
 import { errorMessage } from '../../domain/errors';
 import { onWindowEvent } from '../app/window-events';
 import { Disclosure } from '../ui/Disclosure';
@@ -39,6 +40,7 @@ export function CollectionExplorer({ id }: { id: string }) {
     dialogs = useFileDialogs(),
     surface = useRef<HTMLDivElement>(null);
   const registry = useCommands();
+  const rowPrefix = useId();
   const [entries, setEntries] = useState<FileEntry[]>([]),
     [issues, setIssues] = useState<string[]>([]),
     [busy, setBusy] = useState(false),
@@ -70,20 +72,9 @@ export function CollectionExplorer({ id }: { id: string }) {
             throw new Error('Narrow this collection to at most 10,000 indexed matches.');
         }
       else {
-        let cursor = 0;
-        await Promise.all(
-          Array.from({ length: Math.min(8, collection.sources.length) }, async () => {
-            while (cursor < collection.sources.length) {
-              const file = collection.sources[cursor++];
-              if (file === undefined) break;
-              try {
-                items.push(await window.viewer.stat(file));
-              } catch (error) {
-                errors.push(file + ': ' + errorMessage(error));
-              }
-            }
-          }),
-        );
+        const checked = await readCollectionFiles(collection.sources);
+        items.push(...checked.entries);
+        errors.push(...checked.errors);
       }
       if (live) {
         setEntries(
@@ -132,12 +123,17 @@ export function CollectionExplorer({ id }: { id: string }) {
       stopRefresh();
     };
   }, [live]);
-  const selected = useMemo(
-    () => entries.filter((entry) => selection.includes(entry.path)),
-    [entries, selection],
-  );
+  const set = useMemo(() => new Set(selection), [selection]);
+  const selected = useMemo(() => entries.filter((entry) => set.has(entry.path)), [entries, set]);
+  const openEntry = (file: FileEntry, linked = false, another = false) =>
+    chooseOpening(
+      file,
+      opening,
+      linked,
+      () => void window.viewer.openExternal(file.path).catch(report),
+      () => workspace.open(file, id, { another }),
+    );
   useContextPublish(id, active === id, selected);
-  const set = new Set(selection);
   useCommandSource(
     'collection:' + id,
     {
@@ -155,12 +151,7 @@ export function CollectionExplorer({ id }: { id: string }) {
         folderCommands({
           ...dialogs.actions,
           open: (files, linked, another) =>
-            files.forEach((file) =>
-              // an application in a collection starts, as it does from its folder
-              isPackage(file) && nativeOpening(file, opening, linked)
-                ? void window.viewer.openExternal(file.path).catch(report)
-                : workspace.open(file, id, { another }),
-            ),
+            files.forEach((file) => openEntry(file, linked, another)),
           contents: (file) => workspace.open(file, id, { browse: true }),
           path: () => {},
           search: () => {},
@@ -170,7 +161,7 @@ export function CollectionExplorer({ id }: { id: string }) {
         }),
       valid: (context) => context.workspaceID === activeWorkspace().id,
     },
-    [selected, entries],
+    [selected, entries, opening],
   );
   const key = useFileKeyboard(id, (event) =>
     routeExplorerInput(event, {
@@ -184,6 +175,7 @@ export function CollectionExplorer({ id }: { id: string }) {
     }),
   );
   const props: FileViewProps = {
+    idPrefix: rowPrefix,
     paneID: id,
     entries,
     selection,
@@ -199,7 +191,7 @@ export function CollectionExplorer({ id }: { id: string }) {
       setActivePane(id);
       selecting.region(found, base);
     },
-    open: (entry) => workspace.open(entry, id),
+    open: openEntry,
     context: (entry, event) => {
       event.preventDefault();
       selecting.target(entry);
@@ -231,8 +223,23 @@ export function CollectionExplorer({ id }: { id: string }) {
       ref={surface}
       tabIndex={0}
       data-file-owner={id}
+      role="group"
+      aria-label={collection.name}
+      aria-activedescendant={session.cursor ? fileRowID(rowPrefix, session.cursor) : undefined}
       onFocus={() => setActivePane(id)}
       onKeyDownCapture={key}
+      onClick={(event) => {
+        if (
+          event.button === 0 &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.shiftKey &&
+          blankFileSpace(event.target)
+        ) {
+          selecting.clear();
+          surface.current?.focus({ preventScroll: true });
+        }
+      }}
     >
       <div className="search-row">
         <strong>{collection.name}</strong>

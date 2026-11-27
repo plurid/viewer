@@ -450,25 +450,24 @@ export class Lenses {
       directory = await this.prepareLocal(folder);
       local = true;
     }
-    const existing = (await readdir(directory).catch(() => [] as string[])).filter((file) =>
-      file.endsWith(lensSuffix),
-    );
-    if (existing.length >= lensLimits.lenses) throw new Error('This folder has too many lenses.');
-    const file = path.join(directory, lensFileName(name, existing));
-    const { lens, dropped } = applyLensOps(emptyLens(randomUUID(), name, existing.length), ops);
-    if (dropped.length) throw new Error(dropped[0]);
-    const created = await (local ? this.own : this.shared)
-      .update(file, (current) => {
-        if (current) throw new Error('Another lens was saved with this name. Try again.');
+    const createIn = async (destination: string, store: typeof this.own) => {
+      const existing = (await readdir(destination)).filter((file) => file.endsWith(lensSuffix));
+      if (existing.length >= lensLimits.lenses) throw new Error('This folder has too many lenses.');
+      const file = path.join(destination, lensFileName(name, existing));
+      const { lens, dropped } = applyLensOps(emptyLens(randomUUID(), name, existing.length), ops);
+      if (dropped.length) throw new Error(dropped[0]);
+      return store.update(file, (current) => {
+        if (current) throw new Error('Another lens was saved with this name. Try Again.');
         return { definition: lens, result: null };
-      })
-      .catch(async (error: unknown) => {
-        // A folder that refuses the file itself still gets a lens on this Mac.
+      });
+    };
+    const created = await createIn(directory, local ? this.own : this.shared).catch(
+      async (error: unknown) => {
         if (local || !unwritable.has(errorCode(error) ?? '')) throw error;
         local = true;
-        const fallback = path.join(await this.prepareLocal(folder), path.basename(file));
-        return this.own.update(fallback, () => ({ definition: lens, result: null }));
-      });
+        return createIn(await this.prepareLocal(folder), this.own);
+      },
+    );
     if (!created.document) throw new Error('The lens could not be created.');
     await this.remember(
       folder,

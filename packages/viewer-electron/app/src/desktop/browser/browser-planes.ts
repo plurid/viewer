@@ -15,6 +15,7 @@ interface Page {
   sending: boolean;
   transport: 'texture' | 'bitmap';
   lastPaint: number;
+  inputReady?: Promise<void>;
   error?: string;
   repaint?: boolean;
   /** Chromium reports the page hung: a reload ends its process first. */
@@ -47,6 +48,25 @@ export class BrowserPlanes {
       !page.window.isDestroyed() &&
       !page.window.webContents.isDestroyed()
     );
+  }
+  private async enableInput(page: Page): Promise<void> {
+    const contents = page.window.webContents;
+    if (contents.isDestroyed() || contents.isCrashed())
+      throw new Error('Reload the page to use it again.');
+    if (!contents.debugger.isAttached()) {
+      contents.debugger.attach('1.3');
+      page.inputReady = undefined;
+    }
+    if (!page.inputReady) {
+      const ready = contents.debugger
+        .sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true })
+        .then(() => {});
+      page.inputReady = ready;
+      void ready.catch(() => {
+        if (page.inputReady === ready) page.inputReady = undefined;
+      });
+    }
+    return page.inputReady;
   }
   private snapshot(page: Page): BrowserSnapshot {
     const contents = page.window.webContents;
@@ -240,7 +260,10 @@ export class BrowserPlanes {
       const changed = () => this.publish(page);
       contents.on('did-start-loading', changed);
       contents.on('did-stop-loading', changed);
-      contents.on('did-navigate', changed);
+      contents.on('did-navigate', () => {
+        page.inputReady = undefined;
+        changed();
+      });
       contents.on('did-navigate-in-page', changed);
       contents.on('page-title-updated', changed);
       contents.on('did-fail-load', (_event, code, description, _url, main) => {
@@ -251,6 +274,7 @@ export class BrowserPlanes {
       });
       contents.on('render-process-gone', (_event, details) => {
         page.unresponsive = false;
+        page.inputReady = undefined;
         page.error = `Page process stopped (${details.reason}). Reload to try again.`;
         this.publish(page);
       });
@@ -329,11 +353,8 @@ export class BrowserPlanes {
             }
           });
       });
-      contents.debugger.attach('1.3');
       this.navigate(page, request.url);
-      void contents.debugger
-        .sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true })
-        .catch(() => {});
+      void this.enableInput(page).catch(() => {});
       return this.snapshot(page);
     }
     const page = this.get(owner, request.id),
@@ -355,6 +376,7 @@ export class BrowserPlanes {
     if (request.kind === 'input') {
       const input = request.event;
       if (!page.visible) return;
+      await this.enableInput(page);
       if (input.type === 'text')
         await contents.debugger.sendCommand('Input.insertText', { text: input.text });
       else if (input.type === 'composition')

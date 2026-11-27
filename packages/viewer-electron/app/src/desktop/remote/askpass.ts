@@ -74,6 +74,8 @@ function abandoned(signal: AbortSignal): Promise<null> {
  */
 export class AskpassRelay {
   private server?: Server;
+  private folder?: string;
+  private retiring?: Promise<void>;
   private socketPath?: Promise<string>;
   private attempts = new Map<string, Attempt>();
   private sockets = new Set<Socket>();
@@ -87,30 +89,56 @@ export class AskpassRelay {
 
   private listen(): Promise<string> {
     this.socketPath ??= (async () => {
-      const folder = await privateSocketFolder(
+      await this.retiring;
+      if (this.closed) throw new Error('Server prompts have closed.');
+      const folder = (this.folder ??= await privateSocketFolder(
         'v-a-',
         'a',
         validateSocketPath,
         this.temporaryDirectory,
-      );
+      ));
       const socket = path.join(folder, 'a');
       validateSocketPath(socket);
       const server = createServer((client) => this.receive(client));
       this.server = server;
-      await new Promise<void>((resolve, reject) => {
-        server.once('error', reject);
-        server.listen(socket, () => {
-          server.removeListener('error', reject);
-          resolve();
+      let ready = false;
+      let startupError: Error | undefined;
+      const failed = (error: Error) => {
+        if (this.server !== server) return;
+        if (!ready) {
+          startupError = error;
+          return;
+        }
+        this.socketPath = undefined;
+        this.server = undefined;
+        for (const id of this.attempts.keys()) this.cancel(id, error);
+        for (const client of this.sockets) client.destroy();
+        this.retiring = new Promise<void>((resolve) => server.close(() => resolve()));
+      };
+      // Keep the error handler installed for the lifetime of this listener.
+      server.on('error', failed);
+      try {
+        await new Promise<void>((resolve, reject) => {
+          server.once('error', reject);
+          server.listen(socket, () => {
+            server.removeListener('error', reject);
+            resolve();
+          });
         });
-      });
-      await chmod(socket, 0o600);
-      if (this.closed) {
-        server.close();
-        throw new Error('Server prompts have closed.');
+        await chmod(socket, 0o600);
+        if (startupError) throw startupError;
+        if (this.closed) throw new Error('Server prompts have closed.');
+        ready = true;
+        return socket;
+      } catch (error) {
+        this.server = undefined;
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+        throw error;
       }
-      return socket;
-    })();
+    })().catch((error) => {
+      this.socketPath = undefined;
+      throw error;
+    });
     return this.socketPath;
   }
 
@@ -290,14 +318,13 @@ export class AskpassRelay {
     for (const socket of this.sockets) {
       socket.destroy();
     }
+    await this.socketPath?.catch(() => undefined);
+    await this.retiring;
     const server = this.server;
     if (server) {
       // Closing the listener unlinks its socket, which leaves the private folder empty.
       await new Promise<void>((resolve) => server.close(() => resolve()));
-      const socket = await this.socketPath?.catch(() => undefined);
-      if (socket) {
-        await removeSocketFolder(path.dirname(socket));
-      }
     }
+    if (this.folder) await removeSocketFolder(this.folder);
   }
 }

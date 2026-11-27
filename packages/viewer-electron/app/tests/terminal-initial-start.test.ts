@@ -337,3 +337,21 @@ describe('private initial input in the terminal service', () => {
     expect(terminals.profile('missing')).toBeUndefined();
   });
 });
+
+it('rejects a terminal start canceled during confirmation and completes quiescence', async () => {
+  let release!: () => void;
+  confirm.mockReturnValueOnce(
+    new Promise<void>((resolve) => {
+      release = resolve;
+    }),
+  );
+  const start = terminals.start(request(), 7);
+  await vi.waitFor(() => expect(confirm).toHaveBeenCalled());
+  const stopped = terminals.quiesce(root);
+  await Promise.resolve();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  release();
+  await expect(start).rejects.toThrow(/canceled/i);
+  await stopped;
+  expect(fake.launch).not.toHaveBeenCalled();
+});

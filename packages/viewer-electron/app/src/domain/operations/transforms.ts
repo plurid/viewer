@@ -105,6 +105,7 @@ export const pdfTransformSchema = z
     targetSize: optimizationTargetSchema.optional(),
   })
   .strict();
+export const agentTransformPlanSchema = z.discriminatedUnion('kind', [pdfPagesSchema, layoutTransformSchema, imageTransformSchema, mediaTransformSchema, pdfTransformSchema]);
 export const transformPlanSchema = z.discriminatedUnion('kind', [
   pdfPagesSchema,
   layoutTransformSchema,
@@ -197,7 +198,7 @@ export function validateTransform(value: unknown, sources: number): TransformPla
       (plan.kind === 'image' ? plan.quality : (plan.quality ?? (plan.preset === 'small' ? 65 : 85)))
   )
     throw new Error('Minimum quality must not exceed the starting quality.');
-  if (plan.kind === 'image' && plan.width && plan.height && plan.width * plan.height > 100_000_000)
+  if (plan.kind === 'image' && plan.fit !== 'inside' && plan.width && plan.height && plan.width * plan.height > 100_000_000)
     throw new Error('Choose output dimensions below 100 megapixels.');
   if (
     plan.kind === 'image' &&
