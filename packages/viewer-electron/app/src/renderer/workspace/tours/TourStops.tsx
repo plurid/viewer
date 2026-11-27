@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore } from 'react';
-import { describeAnchor, fileName, tourFileName } from '../../../domain/tours/tour';
+import { describeAnchor, fileName } from '../../../domain/tours/tour';
 import { activeWorkspace, report, useViewer } from '../../state/store';
 import { DictationButton } from '../../speech/DictationButton';
 import { countText } from '../../../domain/layout/nesting/format';
@@ -102,7 +102,7 @@ export function TourStops() {
           >
             {draft.file ? (
               <>
-                Save <FileName name={tourFileName(draft.file)} />
+                Save <FileName name={fileName(draft.file)} />
               </>
             ) : (
               'Save Tour'

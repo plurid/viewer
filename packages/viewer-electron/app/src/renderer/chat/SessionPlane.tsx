@@ -99,7 +99,7 @@ export default function SessionPlane({ pane }: { pane: ChatPane }) {
                             throw new Error(
                               'This session’s workspace changed. Open the file again from its link.',
                             );
-                          workspace.open(file, pane.id, {
+                          await workspace.open(file, pane.id, {
                             activate: true,
                             ...(link.line && !file.directory
                               ? {

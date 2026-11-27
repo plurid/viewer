@@ -4,12 +4,16 @@ import { describe, expect, it } from 'vitest';
 import { inspectImports } from '../tools/architecture/imports';
 import { inspectStatIdentity } from '../tools/architecture/file-identity';
 
+// These read every source file through the TypeScript compiler: about 25 seconds on a hosted
+// runner, past the suite's 15 second default.
+const wholeProgram = { timeout: 180_000 };
+
 describe('application module seams', () => {
-  it('keeps numeric Node stats out of identity consumers', () => {
+  it('keeps numeric Node stats out of identity consumers', wholeProgram, () => {
     const app = fileURLToPath(new URL('..', import.meta.url));
     expect(inspectStatIdentity(app)).toEqual([]);
   });
-  it('detects reverted namespace, imported and descriptor stat consumers', () => {
+  it('detects reverted namespace, imported and descriptor stat consumers', wholeProgram, () => {
     const app = fileURLToPath(new URL('..', import.meta.url));
     const file = path.join(app, 'src/desktop/actions/executions.ts');
     const source = [
@@ -26,27 +30,32 @@ describe('application module seams', () => {
     expect(violations).toHaveLength(4);
     expect(violations.every((value) => value.reason.includes('BigInt stat'))).toBe(true);
   });
-  it('detects destructured and bracket identity reads in every process project', () => {
-    const app = fileURLToPath(new URL('..', import.meta.url));
-    const files = [
-      'src/desktop/actions/executions.ts',
-      'src/renderer/workspace/agent-navigation.ts',
-      'src/preload.ts',
-    ];
-    const source = [
-      "import type { Stats } from 'node:fs';",
-      'export function probe(info: Stats) {',
-      '  const { dev, ino: inode } = info;',
-      "  return [dev, inode, info['ino']];",
-      '}',
-      'export function helper({ dev, ino }: Stats) { return [dev, ino]; }',
-    ].join('\n');
-    const report = inspectStatIdentity(
-      app,
-      new Map(files.map((file) => [path.join(app, file), source])),
-    );
-    for (const file of files) expect(report.filter((value) => value.file === file)).toHaveLength(5);
-  });
+  it(
+    'detects destructured and bracket identity reads in every process project',
+    wholeProgram,
+    () => {
+      const app = fileURLToPath(new URL('..', import.meta.url));
+      const files = [
+        'src/desktop/actions/executions.ts',
+        'src/renderer/workspace/agent-navigation.ts',
+        'src/preload.ts',
+      ];
+      const source = [
+        "import type { Stats } from 'node:fs';",
+        'export function probe(info: Stats) {',
+        '  const { dev, ino: inode } = info;',
+        "  return [dev, inode, info['ino']];",
+        '}',
+        'export function helper({ dev, ino }: Stats) { return [dev, ino]; }',
+      ].join('\n');
+      const report = inspectStatIdentity(
+        app,
+        new Map(files.map((file) => [path.join(app, file), source])),
+      );
+      for (const file of files)
+        expect(report.filter((value) => value.file === file)).toHaveLength(5);
+    },
+  );
   it('keeps platform adapters out of the domain and native services out of the renderer', async () => {
     const root = fileURLToPath(new URL('../src', import.meta.url));
     const report = await inspectImports(path.resolve(root));

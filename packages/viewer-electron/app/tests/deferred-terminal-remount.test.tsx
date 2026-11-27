@@ -48,8 +48,9 @@ describe('deferred terminal start authority', () => {
     render(<TerminalContent />);
     expect(screen.queryByRole('button', { name: 'Start Terminal' })).toBeNull();
     cleanup();
+    const epoch = activeWorkspace().epoch ?? 0;
     initStore();
-    activeWorkspace().epoch = 1;
+    activeWorkspace().epoch = epoch + 1;
     render(<TerminalContent />);
     expect(screen.getByRole('button', { name: 'Start Terminal' })).toBeTruthy();
   });

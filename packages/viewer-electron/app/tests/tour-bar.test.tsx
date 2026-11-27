@@ -289,9 +289,11 @@ it('fits the full file and tour names into their footer actions', () => {
       <TourStops />
     </WorkspaceContext.Provider>,
   );
-  for (const button of [
-    view.getByRole('button', { name: /^Add / }),
-    view.getByRole('button', { name: /^Save / }),
-  ])
-    expect(button.querySelector('[data-file-name]')).toBeTruthy();
+  for (const [action, filename] of [
+    [/^Add /, name],
+    [/^Save /, stem + '.viewer-tour.jsonc'],
+  ] as const) {
+    const button = view.getByRole('button', { name: action });
+    expect(button.querySelector('[data-file-name]')?.getAttribute('data-file-name')).toBe(filename);
+  }
 });

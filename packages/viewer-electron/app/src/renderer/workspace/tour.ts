@@ -133,7 +133,7 @@ function ports(workspace: WorkspaceController, timing: TourTiming, stage: TourSt
     open(entry, evidence) {
       if (isDefinitionFile(entry.name)) return;
       // the key is given even when empty: a plane already open loses the last stop's mark
-      workspace.open(entry, undefined, { evidence, frame: !stage.frames });
+      void workspace.open(entry, undefined, { evidence, frame: !stage.frames });
       const platform = getState().bootstrap.platform;
       const pane = activeWorkspace().panes.find((item) => item.id === getState().activePane);
       const paneID =

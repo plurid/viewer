@@ -26,6 +26,8 @@ import { HiddenPaths } from '../files/hidden-paths';
 import { searchExclusions, searchExclusionRules } from './exclusions';
 import { containsPath } from '../files/containment';
 const maxIndexedCharacters = 150_000;
+/** SQLite substr counts Unicode code points. JavaScript string length counts UTF-16 units. */
+const sqlLength = (value: string) => Array.from(value).length;
 
 interface IndexedEntry extends FileEntry {
   hiddenRoot?: string;
@@ -236,7 +238,7 @@ export class FileIndex {
   remove(file: string): void {
     const paths = this.db
       .prepare('SELECT path FROM files WHERE path=? OR substr(path,1,?)=?')
-      .all(file, file.length + 1, file + '/') as { path: string }[];
+      .all(file, sqlLength(file) + 1, file + '/') as { path: string }[];
     this.db.exec('BEGIN');
     try {
       for (const row of paths) {
@@ -263,7 +265,7 @@ export class FileIndex {
     for (const rule of rules.paths) {
       const prefix = rule.endsWith(path.sep) ? rule : rule + path.sep;
       where.push('NOT (files.path=? OR substr(files.path,1,?)=?)');
-      params.push(rule, prefix.length, prefix);
+      params.push(rule, sqlLength(prefix), prefix);
     }
     for (const rule of rules.names) {
       where.push('instr(?||files.path||?,?)=0');
@@ -371,10 +373,10 @@ export class FileIndex {
       const prefix = root.replace(/\/$/, '') + '/';
       if (request.recursive === false) {
         where.push("substr(files.path,1,?)=? AND instr(substr(files.path,?),'/')=0");
-        params.push(prefix.length, prefix, prefix.length + 1);
+        params.push(sqlLength(prefix), prefix, sqlLength(prefix) + 1);
       } else {
         where.push('(files.path=? OR substr(files.path,1,?)=?)');
-        params.push(root, prefix.length, prefix);
+        params.push(root, sqlLength(prefix), prefix);
       }
     }
     if (!request.showHidden) {
@@ -384,7 +386,7 @@ export class FileIndex {
         where.push(
           "(files.hidden=0 OR (json_extract(files.data,'$.hiddenRoot') IS NOT NULL AND substr(json_extract(files.data,'$.hiddenRoot'),1,?)<>?))",
         );
-        params.push(prefix.length, prefix);
+        params.push(sqlLength(prefix), prefix);
       } else where.push('files.hidden=0');
     }
     let join = '';
@@ -649,13 +651,32 @@ export class FileIndex {
     for (const root of config.roots) {
       const prefix = root.replace(/\/$/, '') + '/';
       deniedPaths.push('NOT (path=? OR substr(path,1,?)=?)');
-      deniedArgs.push(root, prefix.length, prefix);
+      deniedArgs.push(root, sqlLength(prefix), prefix);
     }
     const where = deniedPaths.length ? deniedPaths.join(' AND ') : '1';
     this.db
       .prepare('DELETE FROM names WHERE rowid IN (SELECT rowid FROM files WHERE ' + where + ')')
       .run(...deniedArgs);
     this.db.prepare('DELETE FROM files WHERE ' + where).run(...deniedArgs);
+    // A narrower configured folder can still cover rows owned by a removed root, even offline.
+    if (config.roots.length) {
+      const owners = [...config.roots].sort((a, b) => b.length - a.length);
+      const cases = owners.map(() => 'WHEN path=? OR substr(path,1,?)=? THEN ?').join(' ');
+      const params = owners.flatMap((root) => {
+        const prefix = root.endsWith(path.sep) ? root : root + path.sep;
+        return [root, sqlLength(prefix), prefix, root];
+      });
+      const placeholders = owners.map(() => '?').join(',');
+      this.db
+        .prepare(
+          'UPDATE files SET root=CASE ' +
+            cases +
+            ' ELSE root END WHERE root NOT IN (' +
+            placeholders +
+            ')',
+        )
+        .run(...params, ...owners);
+    }
     // Excluded folders and names, which a crawl skips but an earlier configuration indexed.
     const rules = searchExclusionRules(config.exclusions);
     const excluded: string[] = [],
@@ -663,7 +684,7 @@ export class FileIndex {
     for (const rule of rules.paths) {
       const prefix = rule.endsWith(path.sep) ? rule : rule + path.sep;
       excluded.push('(path=? OR substr(path,1,?)=?)');
-      excludedArgs.push(rule, prefix.length, prefix);
+      excludedArgs.push(rule, sqlLength(prefix), prefix);
     }
     for (const rule of rules.names) {
       excluded.push('instr(?||path||?,?)>0');
@@ -682,7 +703,7 @@ export class FileIndex {
     for (const root of config.contentRoots) {
       const prefix = root.replace(/\/$/, '') + '/';
       denied.push('NOT (path=? OR substr(path,1,?)=?)');
-      args.push(root, prefix.length, prefix);
+      args.push(root, sqlLength(prefix), prefix);
     }
     this.db.prepare("UPDATE names SET content='' WHERE " + denied.join(' AND ')).run(...args);
     this.db.exec(
@@ -828,7 +849,7 @@ export class FileIndex {
     };
     let after = 0;
     while (generation === this.generation) {
-      const stale = unseen.all(ownerRoot, seen, prefix.length, prefix, after) as {
+      const stale = unseen.all(ownerRoot, seen, sqlLength(prefix), prefix, after) as {
         rowid: number;
         path: string;
       }[];
@@ -852,6 +873,7 @@ export class FileIndex {
       }
       await new Promise((resolve) => setImmediate(resolve));
     }
+    if (generation !== this.generation) return;
     this.count = undefined;
     root.status = 'ready';
     this.emit(this.status());

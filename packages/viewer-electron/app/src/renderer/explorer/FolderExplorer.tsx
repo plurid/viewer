@@ -269,7 +269,7 @@ export const FolderExplorer = memo(function FolderExplorer({ id }: { id: string 
                 activeWorkspace().id === origin &&
                 activeWorkspace().panes.some((pane) => pane.id === id && pane.path === path)
               )
-                workspace.open(entry, id, {
+                return workspace.open(entry, id, {
                   another,
                   link,
                   ...(edit ? { activate: true, edit: true } : {}),

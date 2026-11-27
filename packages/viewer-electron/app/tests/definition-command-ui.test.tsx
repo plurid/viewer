@@ -766,6 +766,15 @@ describe('definition commands in workspace planes', () => {
     expect(activeWorkspace().panes[0]!.path).toBe(panes[0]!.path);
   });
 
+  it('identifies a missing terminal folder without offering a reset or starting a command', async () => {
+    fake.inspect.mockResolvedValue({ kind: 'folder-unavailable' });
+    const view = await show();
+    expect(view.getByText('Terminal folder unavailable')).toBeTruthy();
+    expect(view.queryByRole('button', { name: 'Reset to Definition…' })).toBeNull();
+    expect(view.getByRole('button', { name: 'Run' }).hasAttribute('disabled')).toBe(true);
+    expect(fake.start).not.toHaveBeenCalled();
+  });
+
   it('marks swapped command folders changed, offers Reset and Shell only, and skips them in Run all', async () => {
     panes[0]!.path = '/projects/one';
     panes[1]!.path = '/projects/two';

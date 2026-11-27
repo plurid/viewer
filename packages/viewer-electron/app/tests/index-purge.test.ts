@@ -94,6 +94,8 @@ async function rows(index: FileIndex, names: string[]) {
       directory: false,
       kind: 'file' as const,
       name: path.basename(name),
+      extension: path.extname(name).slice(1),
+      parent: path.dirname(path.join(files(), name)),
       path: path.join(files(), name),
     })),
     files(),
@@ -101,6 +103,28 @@ async function rows(index: FileIndex, names: string[]) {
 }
 const found = (index: FileIndex, query: string) =>
   index.query({ query, root: files() }).entries.map((item) => path.relative(files(), item.path));
+
+it.each(['retained', 'retained-📚'])(
+  'retains matches in narrowed root %s while paused and drops data outside it',
+  async (folder) => {
+    const index = new FileIndex(':memory:');
+    try {
+      await index.configure(search());
+      await index.settled();
+      await rows(index, [folder + '/keep.txt', 'outside.txt']);
+      expect(index.query({ query: 'ext:txt' }).entries).toHaveLength(2);
+      const narrower = path.join(files(), folder);
+      await index.configure({ ...search(), roots: [narrower] });
+      await index.settled();
+      expect(index.query({ query: 'ext:txt' }).entries.map((item) => item.name)).toEqual([
+        'keep.txt',
+      ]);
+      expect(index.status().count).toBe(1);
+    } finally {
+      await index.close();
+    }
+  },
+);
 
 it('purges rows a new exclusion names, and counts by root alone', async () => {
   const index = new FileIndex(':memory:');

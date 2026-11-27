@@ -105,7 +105,8 @@ it('tells an editing plane instead, which keeps unsaved edits', async () => {
   const off = registerEditingPlane('plane', { dirty: () => true, changedOnDisk });
   onDisk = entry(2, 2048);
   await changed();
-  expect(changedOnDisk).toHaveBeenCalledOnce();
+  // the plane is told once the changed entry has been read, a turn or more after the event
+  await waitFor(() => expect(changedOnDisk).toHaveBeenCalledOnce());
   // the footer shows the file as it is now, not as it was opened
   await waitFor(() =>
     expect(view.container.querySelector('.preview-file-details')?.textContent).toContain(

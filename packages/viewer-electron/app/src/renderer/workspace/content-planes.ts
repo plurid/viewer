@@ -327,7 +327,7 @@ export function contentPlaneActions({
       // Search hits also carry transient coverage metadata. Persist only the
       // navigation contract so one result cannot block all workspace saves.
       const before = new Set(activeWorkspace().panes.map((pane) => pane.id));
-      controller().open(entry, parentPaneID, {
+      void controller().open(entry, parentPaneID, {
         frame: options?.frame,
         evidence: {
           path: evidence.path,

@@ -24,7 +24,6 @@ import { sortEntries } from '../../domain/files/entries';
 import { chooseOpening } from './opening';
 import { useContextPublish } from './context-publish';
 import { readCollectionFiles } from './collection-files';
-import { errorMessage } from '../../domain/errors';
 import { onWindowEvent } from '../app/window-events';
 import { Disclosure } from '../ui/Disclosure';
 import { plural } from '../../domain/plural';
