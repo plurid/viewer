@@ -167,6 +167,15 @@ function titleMatches(written: string, shown: string): boolean {
 /** Which scenes show each catalog entry: what scenes declare, the commands their steps ran and
  * the dialogs their captures had open. */
 export function coverage(catalog: Catalog, scenes: readonly SceneResult[]): Coverage {
+  const completed = scenes
+    .filter((scene) => !scene.blocked)
+    .map((scene) => ({
+      ...scene,
+      captures: scene.captures.filter(
+        (capture) => capture.image && !capture.error && !capture.newerBuild,
+      ),
+    }))
+    .filter((scene) => scene.captures.length > 0);
   const entries = (
     list: CatalogEntry[],
     shown: (entry: CatalogEntry, scene: SceneResult) => boolean,
@@ -174,10 +183,7 @@ export function coverage(catalog: Catalog, scenes: readonly SceneResult[]): Cove
     list.map((entry): CoverageEntry => ({
       id: entry.id,
       label: entry.label,
-      // a scene that was not captured covers nothing
-      scenes: scenes
-        .filter((scene) => !scene.blocked && shown(entry, scene))
-        .map((scene) => scene.id),
+      scenes: completed.filter((scene) => shown(entry, scene)).map((scene) => scene.id),
     }));
   // letter case aside: labels move between title and sentence case
   const ran = (scene: SceneResult) =>

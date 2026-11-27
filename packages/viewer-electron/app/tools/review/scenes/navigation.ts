@@ -95,9 +95,10 @@ const dialogDropdown: Scene = {
   async steps(page) {
     await page.select(page.path(deepFolder, longName('jpg')));
     await page.palette('Image tools…');
-    await page.waitFor('dialog[open][aria-label^="image tools" i]');
-    // the first choice in the form: Format
-    await page.clickFirst('dialog[open] button[aria-haspopup]');
+    await page.clickFirst(
+      'dialog[open].image-tools-dialog button[aria-label="Image output format"]',
+    );
+    await page.waitFor('.choice-menu[aria-label="Image output format"] .context-menu');
     await page.settle(500);
   },
 };

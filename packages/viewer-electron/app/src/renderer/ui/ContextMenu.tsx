@@ -19,6 +19,8 @@ export function ContextMenu({
   anchor,
   lead,
   workspaceSwitcher = false,
+  choiceList = false,
+  initialID,
 }: {
   position: { x: number; y: number };
   request: CommandRequest;
@@ -28,6 +30,8 @@ export function ContextMenu({
   /** The commands of what the plane header could not show: first, in the header's order. */
   lead?: HeaderLead;
   workspaceSwitcher?: boolean;
+  choiceList?: boolean;
+  initialID?: string;
 }) {
   const registry = useCommands();
   useCommandRevision();
@@ -95,6 +99,10 @@ export function ContextMenu({
         onClose={onClose}
         recent={recent}
         focused={!!request.ids}
+        choiceList={choiceList}
+        initialID={initialID}
+        listLabel={choiceList ? label : undefined}
+        searchLabel={choiceList ? label : undefined}
         suggested={suggested}
         lead={lead}
         workspaceIDs={workspaceSwitcher ? recentWorkspaceIDs(saved) : undefined}

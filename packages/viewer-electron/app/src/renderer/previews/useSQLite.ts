@@ -1,5 +1,5 @@
+import { previewProblem } from './preview-problem';
 import { useEffect, useState } from 'react';
-import { errorMessage } from '../../domain/errors';
 import type { SQLiteReply, SQLiteRequest } from '../../domain/previews/data/sqlite';
 import type { PreviewContext } from './contracts';
 
@@ -43,7 +43,7 @@ export function useSQLite(
     void read(resource, request).then(
       (reply) => settle({ reply }),
       (error: unknown) =>
-        settle({ error: errorMessage(error) || 'The database could not be read.' }),
+        settle({ error: previewProblem(error, "Viewer couldn't read this database.") }),
     );
     return () => {
       alive = false;

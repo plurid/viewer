@@ -1,3 +1,4 @@
+import { previewProblem } from '../preview-problem';
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import {
@@ -175,7 +176,7 @@ export default function PDFPreview(
         setPDF(document);
       })
       .catch((error) => {
-        if (!signal.aborted) setError(error.message);
+        if (!signal.aborted) setError(previewProblem(error, "Viewer couldn't read this PDF page."));
       });
     return () => {
       void task.destroy();
@@ -256,7 +257,8 @@ export default function PDFPreview(
         await layer.render();
       })
       .catch((error) => {
-        if (!cancelled && error.name !== 'RenderingCancelledException') setError(error.message);
+        if (!cancelled && error.name !== 'RenderingCancelledException')
+          setError(previewProblem(error, "Viewer couldn't read this PDF page."));
       });
     return () => {
       cancelled = true;
@@ -300,7 +302,7 @@ export default function PDFPreview(
         }
       })().catch((error) => {
         if (!cancelled) {
-          setError(error.message);
+          setError(previewProblem(error, "Viewer couldn't read this PDF page."));
           setSearching(false);
         }
       });

@@ -128,17 +128,20 @@ describe('PostScript preview composition and explicit rendering', () => {
     expect(screen.getByText('Two squares')).toBeTruthy();
     expect(screen.getByText('Existing text viewer')).toBeTruthy();
   });
-  it('keeps the described preview after a rendering failure', async () => {
-    const f = fixture();
-    f.services.renderPostscript.mockRejectedValueOnce(
-      new Error('Ghostscript exceeded the rendering time limit.'),
-    );
-    render(<PostScriptPreview {...f.context} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Render Pages' }));
-    expect(await screen.findByText('Ghostscript exceeded the rendering time limit.')).toBeTruthy();
-    expect(screen.getByText('Two squares')).toBeTruthy();
-    expect(screen.getByText('Existing text viewer')).toBeTruthy();
-  });
+  it.each(['Ghostscript', 'Ghostscript 10.99.1'])(
+    'keeps the described preview and %s limit after a rendering failure',
+    async (engine) => {
+      const f = fixture();
+      f.services.renderPostscript.mockRejectedValueOnce(
+        new Error(`${engine} exceeded the rendering time limit.`),
+      );
+      render(<PostScriptPreview {...f.context} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Render Pages' }));
+      expect(await screen.findByText(`${engine} exceeded the rendering time limit.`)).toBeTruthy();
+      expect(screen.getByText('Two squares')).toBeTruthy();
+      expect(screen.getByText('Existing text viewer')).toBeTruthy();
+    },
+  );
   it.each([
     [{ kind: 'missing' }, 'Install Ghostscript (brew install ghostscript) to show the pages.'],
     [{ kind: 'store' }, "The App Store edition can't render pages with Ghostscript."],

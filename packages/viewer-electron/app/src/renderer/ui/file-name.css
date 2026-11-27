@@ -10,12 +10,7 @@
   white-space: nowrap;
 }
 .file-name-label[data-fit='two-lines'] {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow-wrap: anywhere;
-  white-space: normal;
+  white-space: pre;
 }
 .file-name-label[data-fit='wrap'] {
   overflow-wrap: anywhere;

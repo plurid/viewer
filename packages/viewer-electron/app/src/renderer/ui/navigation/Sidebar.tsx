@@ -351,10 +351,6 @@ export function Sidebar({ paneID }: { paneID?: string }) {
                       void finishDrop(event, section, item.path).catch(report);
                     }}
                     onClick={(event) => {
-                      if (item.path === trashLocation) {
-                        sendWindowEvent('viewer:trash');
-                        return;
-                      }
                       if (item.path === '/Volumes' && bootstrap.platform === 'darwin') {
                         sendWindowEvent('viewer:volumes');
                         return;

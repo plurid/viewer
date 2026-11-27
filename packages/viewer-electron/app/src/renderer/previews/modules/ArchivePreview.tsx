@@ -1,3 +1,4 @@
+import { previewProblem } from '../preview-problem';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ArchiveListing, Resource } from '../../../domain/contracts';
@@ -11,7 +12,6 @@ import { PreviewFailure } from '../PreviewFailure';
 import { plural } from '../../../domain/plural';
 import { Icon } from '../../ui/Icon';
 import { FileName } from '../../ui/FileName';
-import { errorMessage } from '../../../domain/errors';
 
 /** An archive entry's own name, `Button.tsx` for `src/components/Button.tsx/`. */
 function entryBase(name: string): string {
@@ -42,7 +42,14 @@ export default function ArchivePreview(context: PreviewContext) {
         if (!signal.aborted) setListing(value);
       })
       .catch((error) => {
-        if (!signal.aborted) setError(error.message);
+        if (!signal.aborted)
+          setError(
+            previewProblem(error, "Viewer couldn't read the list of files in this archive.", [
+              'Viewer can’t open a ZIP archive split into several files.',
+              'Viewer can’t open ZIP64 archives.',
+              'Compressed TAR preview is limited to 64 MB.',
+            ]),
+          );
       });
     return () => {
       if (selected.current) void services.release(selected.current.id);
@@ -140,7 +147,10 @@ export default function ArchivePreview(context: PreviewContext) {
                     listScroll.current = ref.current?.scrollTop ?? 0;
                     setChild(value);
                   } catch (error) {
-                    if (!signal.aborted) setEntryError(errorMessage(error));
+                    if (!signal.aborted)
+                      setEntryError(
+                        previewProblem(error, "Viewer couldn't read this file from the archive."),
+                      );
                   } finally {
                     if (!signal.aborted) setOpening(false);
                   }

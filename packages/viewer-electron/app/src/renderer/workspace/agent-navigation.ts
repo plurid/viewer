@@ -1,3 +1,4 @@
+import { trashLocation, trashPersonOnly } from '../../domain/files/trash';
 import { sameCapturedItem } from '../../domain/files/entries';
 import type { AgentNavigation } from '../../domain/agents/requests';
 import type { CapturedTarget } from '../../domain/automation/actions';
@@ -87,6 +88,7 @@ export async function executeAgentNavigation(
     return;
   }
   if (request.kind === 'open-path') {
+    if (request.path === trashLocation) throw new Error(trashPersonOnly);
     const entry = await withAgentDispatch(dispatchID, () => window.viewer.stat(request.path));
     checkDeadline();
     origin();

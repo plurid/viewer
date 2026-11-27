@@ -82,11 +82,10 @@ export function ChoiceMenu({
         recent={[]}
         focused
         blankIcons
-        searchable={choices.length > 8}
+        choiceList
         // a label lowered to read in a sentence mangles names (“python version”): the field says
         // only “Search”, and its accessible name gives the label as written
         searchLabel={label}
-        searchPlaceholder="Search"
         listLabel={label}
         empty="No matching choices"
         none="No choices"

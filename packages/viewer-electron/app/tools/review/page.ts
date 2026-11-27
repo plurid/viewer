@@ -12,25 +12,42 @@ import { pageCall } from '../../tests/native/runtime/page-function';
 import type { Connection } from '../docs/record';
 import { checkSelectors, markLayoutBoxes, movedLayout } from './checks';
 import type { Finding, Variant } from './types';
+import type { ReviewVisibility } from './visibility';
+import { visibilityCall } from './visibility';
 
 type OwnedApp = Awaited<ReturnType<typeof ownedApp>>;
 
 /** CDP modifier bits. */
 export const modifiers = { alt: 1, control: 2, command: 4, shift: 8 } as const;
 
-/** The first enabled button in `scope` whose text or accessible name is `label`; presses it when
- * asked. */
-function labelledButton(label: string, scope: string | null, press: boolean): boolean {
-  const root = scope === null ? document : document.querySelector(scope);
-  const button = [
-    ...(root?.querySelectorAll<HTMLElement>('button, [role="button"], [role="menuitem"]') ?? []),
-  ].find(
-    (item) =>
-      (item.textContent.trim() === label || item.getAttribute('aria-label') === label) &&
-      !(item as HTMLButtonElement).disabled,
-  );
-  if (press) button!.click();
-  return !!button;
+type ClickTarget = { selector: string; index: number } | { label: string; scope: string | null };
+
+async function clickTarget(target: ClickTarget, press: boolean): Promise<boolean> {
+  let element: HTMLElement | undefined;
+  if ('selector' in target) {
+    element = document.querySelectorAll<HTMLElement>(target.selector)[target.index];
+  } else {
+    const root = target.scope ? document.querySelector(target.scope) : document;
+    element = [
+      ...(root?.querySelectorAll<HTMLElement>(
+        'button, [role="button"], [role="menuitem"], summary',
+      ) ?? []),
+    ].find(
+      (item) =>
+        (item.textContent.trim() === target.label ||
+          item.getAttribute('aria-label') === target.label) &&
+        !(item as HTMLButtonElement).disabled,
+    );
+  }
+  if (element && press) {
+    element.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+    // An ancestor scroll dismisses a popover. Deliver that event before opening the menu.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    element.click();
+  }
+  return !!element;
 }
 
 /** Selects one row, as a click does, and gives it focus for the keys that follow. */
@@ -76,63 +93,55 @@ function settled(): Promise<boolean> {
   );
 }
 
-/** The box of the first element `selector` matches, in CSS pixels, and its text. `right` and
- * `bottom` are its distances from the window's edges, or from `within`'s when given. */
-function boxOf(selector: string, within: string | null = null) {
-  const element = document.querySelector(selector);
+/** The first shown match and its box. Edges are relative to the viewport or to `within`. */
+function boxOf(
+  visibility: ReviewVisibility,
+  selector: string,
+  within: string | null = null,
+  contentEdge = false,
+) {
+  const element = [...document.querySelectorAll(selector)].find(
+    (match) => (!within || match.closest(within)) && visibility.boxVisible(match),
+  );
   if (!element) return null;
   const rect = element.getBoundingClientRect();
-  const container = within ? element.closest(within)?.getBoundingClientRect() : undefined;
+  const holder = within ? element.closest(within) : null;
+  const container = holder?.getBoundingClientRect();
   // The space scales a plane to frame it: sizes and distances are read in the plane's own CSS
   // pixels, as DESIGN gives them, not in the window's.
   const layoutWidth = (element as HTMLElement).offsetWidth;
   const scale = layoutWidth ? rect.width / layoutWidth : 1;
+  let right = ((container?.right ?? innerWidth) - rect.right) / scale;
+  if (contentEdge && holder) {
+    const style = getComputedStyle(holder);
+    right -= Number.parseFloat(style.paddingRight) + Number.parseFloat(style.borderRightWidth);
+  }
   return {
     x: rect.x,
     y: rect.y,
     width: rect.width / scale,
     height: rect.height / scale,
-    right: ((container ? container.right : innerWidth) - rect.right) / scale,
+    right,
     bottom: ((container ? container.bottom : innerHeight) - rect.bottom) / scale,
     left: (rect.left - (container ? container.left : 0)) / scale,
     top: (rect.top - (container ? container.top : 0)) / scale,
-    text: (element.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 160),
+    text: visibility.readLabels(element).filter(Boolean).join(' ').slice(0, 160),
   };
 }
 
-/** How far a field's right edge stops short of its container's content edge, in CSS pixels. */
-function shortOf(field: string, container: string): number | null {
-  const element = document.querySelector(field);
-  const holder = element?.closest(container);
-  if (!element || !holder) return null;
-  const style = getComputedStyle(holder);
-  const rect = holder.getBoundingClientRect();
-  const layoutWidth = (holder as HTMLElement).offsetWidth;
-  const scale = layoutWidth ? rect.width / layoutWidth : 1;
-  const inner =
-    rect.right -
-    (Number.parseFloat(style.paddingRight) + Number.parseFloat(style.borderRightWidth)) * scale;
-  return (inner - element.getBoundingClientRect().right) / scale;
-}
-
-/** Clicks the `index`th element `selector` matches, counting from 0. */
-function clickNth(selector: string, index: number): boolean {
-  const element = document.querySelectorAll<HTMLElement>(selector)[index];
-  element?.click();
-  return !!element;
-}
-
 /** Whether the page's visible text contains `text`. */
-function showsText(text: string): boolean {
-  return document.body.innerText.includes(text);
+function showsText(visibility: ReviewVisibility, text: string): boolean {
+  return visibility.readLabels(document.body).some((label) => label.includes(text));
 }
 
 /** Moves the pointer onto the first element `selector` matches: where to dispatch it. */
-function centreOf(selector: string) {
+function centreOf(selector: string, requireHit = false) {
   const element = document.querySelector(selector);
   if (!element) return null;
   const rect = element.getBoundingClientRect();
-  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  const point = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  if (requireHit && !element.contains(document.elementFromPoint(point.x, point.y))) return null;
+  return point;
 }
 
 type MeasuredBox = NonNullable<ReturnType<typeof boxOf>>;
@@ -163,6 +172,8 @@ export class ReviewPage {
   readonly findings: Finding[] = [];
   /** Command palette labels the steps ran. */
   readonly commands: string[] = [];
+  /** Settles work started by the scene once the screenshot and checks are complete. */
+  readonly afterCapture: (() => Promise<void>)[] = [];
 
   constructor(
     private readonly app: OwnedApp,
@@ -215,6 +226,17 @@ export class ReviewPage {
     );
   }
 
+  /** Reveals a field in a scrollable form without changing focus or its text selection. */
+  async scrollIntoView(selector: string): Promise<void> {
+    await this.waitFor(selector);
+    await this.evaluate(
+      pageCall((selector: string) => {
+        document.querySelector(selector)!.scrollIntoView({ block: 'center' });
+      }, selector),
+    );
+    await this.settle();
+  }
+
   /** Clicks the one element `selector` matches. */
   async click(selector: string): Promise<void> {
     await this.until(
@@ -222,37 +244,24 @@ export class ReviewPage {
       (found) => found === 1,
       'One element for ' + selector,
     );
-    await this.evaluate(
-      pageCall((selector: string) => {
-        const element = document.querySelector<HTMLElement>(selector)!;
-        element.scrollIntoView({ block: 'nearest' });
-        element.click();
-      }, selector),
-    );
+    await this.evaluate(pageCall(clickTarget, { selector, index: 0 }, true));
     await this.settle();
   }
 
   /** Clicks the first element `selector` matches, waiting for one. */
   async clickFirst(selector: string): Promise<void> {
-    await this.waitFor(selector);
-    await this.evaluate(
-      pageCall((selector: string) => {
-        const element = document.querySelector<HTMLElement>(selector)!;
-        element.scrollIntoView({ block: 'nearest' });
-        element.click();
-      }, selector),
-    );
-    await this.settle();
+    await this.clickNth(selector, 0);
   }
 
-  /** Presses the enabled button whose text or accessible name is `label`. */
+  /** Presses the enabled button or disclosure whose text or accessible name is `label`. */
   async button(label: string, scope?: string): Promise<void> {
+    const target = { label, scope: scope ?? null };
     await this.until(
-      () => this.evaluate(pageCall(labelledButton, label, scope ?? null, false)),
+      () => this.evaluate(pageCall(clickTarget, target, false)),
       Boolean,
       'Button ' + label,
     );
-    await this.evaluate(pageCall(labelledButton, label, scope ?? null, true));
+    await this.evaluate(pageCall(clickTarget, target, true));
     await this.settle();
   }
 
@@ -406,7 +415,7 @@ export class ReviewPage {
     options: { within?: string; tolerance?: number } = {},
   ): Promise<void> {
     const tolerance = options.tolerance ?? 1;
-    const box = await this.evaluate(pageCall(boxOf, selector, options.within ?? null));
+    const box = await this.evaluate(visibilityCall(boxOf, selector, options.within ?? null));
     if (!box) return this.measured(selector, emptyBox, what + ': it is not there.');
     const misses = (Object.keys(expected) as (keyof BoxExpectation)[])
       .filter((key) => Math.abs(box[key] - expected[key]!) > tolerance)
@@ -416,7 +425,7 @@ export class ReviewPage {
 
   /** Records a measurement finding unless `selector`'s width is between `minimum` and `maximum`. */
   async expectWidth(selector: string, minimum: number, maximum: number, what: string) {
-    const box = await this.evaluate(pageCall(boxOf, selector, null));
+    const box = await this.evaluate(visibilityCall(boxOf, selector, null));
     if (!box) return this.measured(selector, emptyBox, what + ': it is not there.');
     if (box.width < minimum - 1 || box.width > maximum + 1)
       this.measured(selector, box, what + ': it is ' + Math.round(box.width) + ' px wide.');
@@ -424,7 +433,7 @@ export class ReviewPage {
 
   /** Records a measurement finding unless `selector` stays `margin` pixels inside the window. */
   async expectInsideWindow(selector: string, margin: number, what: string): Promise<void> {
-    const box = await this.evaluate(pageCall(boxOf, selector, null));
+    const box = await this.evaluate(visibilityCall(boxOf, selector, null));
     if (!box) return this.measured(selector, emptyBox, what + ': it is not there.');
     const sides = (['left', 'top', 'right', 'bottom'] as const).filter(
       (side) => box[side] < margin - 1,
@@ -442,7 +451,7 @@ export class ReviewPage {
 
   /** Records a measurement finding unless the field reaches its container's right edge. */
   async expectFills(field: string, container: string, what: string): Promise<void> {
-    const box = await this.evaluate(pageCall(boxOf, field, container));
+    const box = await this.evaluate(visibilityCall(boxOf, field, container));
     if (!box) return this.measured(field, emptyBox, what + ': it is not there.');
     if (box.right > 2)
       this.measured(field, box, what + ': it stops ' + Math.round(box.right) + ' px short.');
@@ -450,11 +459,11 @@ export class ReviewPage {
 
   /** Records a measurement finding unless the field reaches its container's content edge. */
   async expectFillsRow(field: string, container: string, what: string): Promise<void> {
-    const short = await this.evaluate(pageCall(shortOf, field, container));
-    const box = await this.evaluate(pageCall(boxOf, field, null));
-    if (short === null || !box) return this.measured(field, emptyBox, what + ': it is not there.');
-    if (short > 2)
-      this.measured(field, box, what + ': it stops ' + Math.round(short) + ' px short.');
+    const box = await this.evaluate(visibilityCall(boxOf, field, container, true));
+    if (!box)
+      return this.measured(field, emptyBox, what + ': the field or row is hidden or missing.');
+    if (box.right > 2)
+      this.measured(field, box, what + ': it stops ' + Math.round(box.right) + ' px short.');
   }
 
   /** Records a finding unless the page shows `text`, as DESIGN or a checklist words it. */
@@ -468,27 +477,27 @@ export class ReviewPage {
       });
   }
 
-  /** Records a finding unless `selector` is on the page. */
+  /** Records a finding unless the page shows a match for `selector`. */
   async expectPresent(selector: string, what: string): Promise<void> {
-    if (!(await this.evaluate(exists(selector))))
+    if (!(await this.evaluate(visibilityCall(boxOf, selector))))
       this.findings.push({
         check: 'measure',
         selector,
         text: '',
-        detail: what + ': it is missing.',
+        detail: what + ': it is hidden or missing.',
       });
   }
 
-  /** Records a finding when `selector` is on the page. */
+  /** Records a finding when the page shows a match for `selector`. */
   async expectNone(selector: string, what: string): Promise<void> {
-    const box = await this.evaluate(pageCall(boxOf, selector, null));
+    const box = await this.evaluate(visibilityCall(boxOf, selector, null));
     if (box) this.measured(selector, box, what + ': it shows.');
   }
 
   /** Records a finding unless two elements share an edge within a pixel. */
   async expectAligned(first: string, second: string, side: 'right' | 'left', what: string) {
-    const one = await this.evaluate(pageCall(boxOf, first, null));
-    const two = await this.evaluate(pageCall(boxOf, second, null));
+    const one = await this.evaluate(visibilityCall(boxOf, first, null));
+    const two = await this.evaluate(visibilityCall(boxOf, second, null));
     if (!one || !two) return this.measured(first, emptyBox, what + ': it is not there.');
     if (Math.abs(one[side] - two[side]) > 1)
       this.measured(
@@ -506,13 +515,13 @@ export class ReviewPage {
   /** Clicks the `index`th match of `selector`, counting from 0. */
   async clickNth(selector: string, index: number): Promise<void> {
     await this.waitFor(selector, index + 1);
-    await this.evaluate(pageCall(clickNth, selector, index));
+    await this.evaluate(pageCall(clickTarget, { selector, index }, true));
     await this.settle();
   }
 
   /** Whether the page shows `text` anywhere. */
   async shows(text: string): Promise<boolean> {
-    return this.evaluate(pageCall(showsText, text));
+    return this.evaluate(visibilityCall(showsText, text));
   }
 
   /** Puts the pointer over the first element `selector` matches. */
@@ -524,11 +533,25 @@ export class ReviewPage {
     await this.settle(400);
   }
 
+  /** Presses a control where it stands, including when a menu is open above it. */
+  async pressAt(selector: string): Promise<void> {
+    const point = await this.evaluate(pageCall(centreOf, selector, true));
+    if (!point) throw new Error('The pointer cannot reach ' + selector);
+    for (const type of ['mousePressed', 'mouseReleased'])
+      await this.command('Input.dispatchMouseEvent', {
+        type,
+        ...point,
+        button: 'left',
+        clickCount: 1,
+      });
+    await this.settle();
+  }
+
   /** Records a measurement finding unless `layer` sits `gap` pixels from `anchor`, below it or
    * above it, without covering it. */
   async expectGap(layer: string, anchor: string, gap: number, what: string): Promise<void> {
-    const outer = await this.evaluate(pageCall(boxOf, layer, null));
-    const inner = await this.evaluate(pageCall(boxOf, anchor, null));
+    const outer = await this.evaluate(visibilityCall(boxOf, layer, null));
+    const inner = await this.evaluate(visibilityCall(boxOf, anchor, null));
     if (!outer || !inner) return this.measured(layer, emptyBox, what + ': it is not there.');
     const below = outer.y - (inner.y + inner.height);
     const above = inner.y - (outer.y + outer.height);
@@ -539,11 +562,16 @@ export class ReviewPage {
 
   /** Runs `change` and records a layout shift when `selector` moves or resizes because of it. */
   async expectStill(selector: string, change: () => Promise<void>, what: string): Promise<void> {
-    const before = await this.evaluate(pageCall(boxOf, selector, null));
+    const before = await this.evaluate(visibilityCall(boxOf, selector, null));
     await change();
     await this.settle(400);
-    const after = await this.evaluate(pageCall(boxOf, selector, null));
-    if (!before || !after) return;
+    const after = await this.evaluate(visibilityCall(boxOf, selector, null));
+    if (!before || !after)
+      return this.measured(
+        selector,
+        before ?? after ?? emptyBox,
+        what + ': it is hidden or missing.',
+      );
     const moved = (['x', 'y', 'width', 'height'] as const).filter(
       (key) => Math.abs(after[key] - before[key]) > 1,
     );

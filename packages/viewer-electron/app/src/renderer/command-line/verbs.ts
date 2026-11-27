@@ -1,3 +1,4 @@
+import { trashLocation, trashPersonOnly } from '../../domain/files/trash';
 import { namedLayout } from '../../domain/workspaces/layout-templates';
 import { inheritedWindowPreferences } from '../state/effective-ui';
 import { operationOutcome } from '../operations/outcome';
@@ -59,6 +60,12 @@ const places = (host: LineHost) => {
   };
 };
 const pathOf = (word: Word, host: LineHost) => expandPath(word, places(host));
+function openTrashWord(word: Word | undefined, host: LineHost): Promise<void> | undefined {
+  if (word?.text !== trashLocation) return;
+  if (host.agent?.id || host.agent?.modelRequest) throw new Error(trashPersonOnly);
+  const { paneID, workspaceID } = host.context();
+  return host.workspace.openPath(trashLocation, { paneID, workspaceID });
+}
 const statPath = async (path: string) => {
   try {
     return await window.viewer.stat(path);
@@ -222,6 +229,8 @@ export const verbRuns: Record<string, VerbRun> = {
     await verbRuns.quit!({ ...input, bang: false }, host);
   },
   edit: async ({ args }, host) => {
+    const trash = openTrashWord(args[0], host);
+    if (trash) return trash;
     const entry = await statPath(pathOf(args[0]!, host));
     const context = host.context();
     await host.workspace.openPath(entry.path, {
@@ -232,6 +241,8 @@ export const verbRuns: Record<string, VerbRun> = {
     });
   },
   cd: async ({ args }, host) => {
+    const trash = openTrashWord(args[0], host);
+    if (trash) return trash;
     const pane = activeWorkspace().panes.find((item) => item.id === host.context().paneID);
     if (pane?.type !== 'folder') throw new Error(':cd needs a files plane.');
     const entry = await statPath(args[0] ? pathOf(args[0], host) : getState().bootstrap.home);
@@ -502,6 +513,8 @@ async function changeSession(binding: SessionBinding): Promise<void> {
   );
 }
 async function split(host: LineHost, direction: 'right' | 'down', word?: Word): Promise<void> {
+  const trash = openTrashWord(word, host);
+  if (trash) return trash;
   let add: (() => string | undefined) | undefined;
   if (word) {
     const entry = await statPath(pathOf(word, host));

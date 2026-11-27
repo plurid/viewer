@@ -33,10 +33,12 @@ export const lensGroupMenuIDs = [
   'lens.expand-all',
   'lens.delete-group',
 ];
+export const lensCommandID = (id: string) => 'group.lens.' + id;
+
 /** The lens picker in a files plane's header. */
 export function lensMenuIDs(data: LensFolder | null): string[] {
   return [
-    ...(data?.lenses ?? []).map((document) => 'group.lens.' + document.lens.id),
+    ...(data?.lenses ?? []).map((document) => lensCommandID(document.lens.id)),
     'lens.new',
     'lens.new-group',
     'lens.rename',
@@ -67,7 +69,7 @@ export function lensCommands(actions: LensCommandActions): CommandDefinition[] {
   const lensGroups = () => actions.document()?.lens.groups ?? [];
   const commands: CommandDefinition[] = [
     ...(actions.data()?.lenses ?? []).map((document): CommandDefinition => ({
-      id: 'group.lens.' + document.lens.id,
+      id: lensCommandID(document.lens.id),
       label: `Group by “${document.lens.name}”`,
       group: 'View',
       icon: 'lens',

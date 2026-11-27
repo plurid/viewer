@@ -1,5 +1,7 @@
+import { previewProblem, reportPreviewProblem } from './preview-problem';
 import { useEffect, useState } from 'react';
 import type { Resource } from '../../domain/contracts';
+import { officeLayoutRecovery } from '../../domain/previews/documents/layout';
 import type { OfficeLayoutMetadata } from '../../domain/previews/documents/layout';
 import type { PreviewContext } from './contracts';
 
@@ -19,6 +21,7 @@ export function useOfficeLayout(context: PreviewContext, sheet?: string) {
   const key = JSON.stringify([context.resource.id, sheet, attempt]);
   const { services, signal, active } = context;
   const id = context.resource.id;
+  const extension = context.resource.entry.extension;
   useEffect(() => {
     if (!active || !services.officeLayout || signal.aborted) return;
     const abort = new AbortController();
@@ -42,15 +45,23 @@ export function useOfficeLayout(context: PreviewContext, sheet?: string) {
         setLoad({ key, signal: abort.signal, resource });
       })
       .catch((error) => {
-        if (!abort.signal.aborted)
-          setLoad({ key, signal: abort.signal, error: String(error.message || error) });
+        if (abort.signal.aborted) return;
+        const recovery = officeLayoutRecovery(error?.code, extension);
+        if (recovery) reportPreviewProblem(error);
+        setLoad({
+          key,
+          signal: abort.signal,
+          error:
+            recovery ??
+            previewProblem(error, "Viewer couldn't lay out the pages in this document."),
+        });
       });
     return () => {
       cancel();
       signal.removeEventListener('abort', cancel);
       if (owned) void services.release(owned.id).catch(() => {});
     };
-  }, [key, id, sheet, services, signal, active]);
+  }, [key, id, extension, sheet, services, signal, active]);
   const current = load?.key === key && !load.signal.aborted;
   return {
     resource: current ? load.resource : undefined,

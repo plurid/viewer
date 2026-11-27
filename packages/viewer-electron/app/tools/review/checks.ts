@@ -20,11 +20,13 @@
  * - `layout-shift` (markLayout and layoutMoves): toolbars, footers and list columns that move when
  *   the selection changes.
  *
- * Page functions travel as source text (tests/native/runtime/page-function.ts), so each one below
- * keeps every helper inside its own body.
+ * Page functions travel as source text. visibilityCall supplies the geometry helpers in the
+ * captured window.
  */
 import { pageCall } from '../../tests/native/runtime/page-function';
 import type { Box, CheckID } from './types';
+import type { ReviewVisibility, VisibleLabel } from './visibility';
+import { visibilityCall } from './visibility';
 
 export interface PageCheckOptions {
   /** The app's home folder as a path may spell it: shown paths must start with `~` instead. */
@@ -110,7 +112,7 @@ export const checkSelectors = {
   } satisfies LayoutParts,
 };
 
-function pageChecks(options: PageCheckOptions): PageFinding[] {
+function pageChecks(visibility: ReviewVisibility, options: PageCheckOptions): PageFinding[] {
   const findings: PageFinding[] = [];
   const width = innerWidth;
   const height = innerHeight;
@@ -325,33 +327,43 @@ function pageChecks(options: PageCheckOptions): PageFinding[] {
   };
   const pastWindow = (edges: { left: number; right: number }) =>
     edges.right > width + 1 || edges.left < -1;
-
   // One pass over the visible text: wrapping, clipping and window edges.
-  const groups = new Map<Element, { control: Element; boxes: DOMRect[] }>();
-  const sentences = new Set<Element>();
+  const groups = new Map<Element, { control: Element; boxes: DOMRect[]; limit: number }>();
+  const gridNameSelector = '.file-tile > .file-linked-label > .file-name-label';
+  const texts: VisibleLabel[] = [];
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const text = node as Text;
     const parent = text.parentElement;
-    if (!parent || !text.data.trim() || parent.closest('script, style, noscript, template'))
+    if (!parent || parent.closest('script, style, noscript, template, textarea')) continue;
+    const container = lineContainer(parent);
+    if (
+      inContent(parent) ||
+      parent.closest('.visually-hidden') ||
+      style(parent).visibility === 'hidden' ||
+      !shown(style(parent).display === 'contents' ? container : parent)
+    )
       continue;
-    if (inContent(parent) || !shown(parent)) continue;
     const boxes = lineBoxes(text);
     if (!boxes.length) continue;
     const edges = union(boxes);
     if (edges.right <= 0 || edges.left >= width || edges.bottom <= 0 || edges.top >= height)
       continue;
-    const container = lineContainer(parent);
-    // a sentence split into several text nodes is read whole
-    sentences.add(container);
+    // Read inline fragments together without putting hidden descendants back into the sentence.
+    const cut = cutBy(parent, edges);
+    visibility.appendText(texts, text, boxes);
+    if (!text.data.trim()) continue;
     const control = parent.closest(singleLine);
     if (control) {
-      const group = groups.get(container) ?? { control, boxes: [] };
+      const gridName = control.matches('.file-tile[role="option"]')
+        ? parent.closest(gridNameSelector)
+        : null;
+      const label = gridName ?? container;
+      const group = groups.get(label) ?? { control, boxes: [], limit: gridName ? 2 : 1 };
       group.boxes.push(...boxes);
-      groups.set(container, group);
+      groups.set(label, group);
     }
     // the text's own element may be the one that cuts it
-    const cut = cutBy(parent, edges);
     if (cut === 'scrolls') continue;
     if (cut) {
       const ellipsis = cut.container === container && style(container).textOverflow === 'ellipsis';
@@ -370,11 +382,11 @@ function pageChecks(options: PageCheckOptions): PageFinding[] {
   }
   for (const [container, group] of groups) {
     const lines = lineCount(group.boxes);
-    if (lines > 1 && first('wrap', group.control))
+    if (lines > group.limit && first('wrap', group.control))
       report(
         'wrap',
         group.control,
-        'A one-line control takes ' +
+        (group.limit === 2 ? 'A Grid file name takes ' : 'A one-line control takes ') +
           lines +
           ' lines' +
           (container === group.control ? '.' : ' in ' + describe(container) + '.'),
@@ -527,15 +539,14 @@ function pageChecks(options: PageCheckOptions): PageFinding[] {
   }
 
   // What the visible text says, line by line, fields included.
-  const texts: { element: Element; text: string }[] = [...sentences].map((element) => ({
-    element,
-    text: element.textContent ?? '',
-  }));
   for (const field of document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
     'input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="range"], [type="color"]), textarea',
   ))
-    if (!inContent(field) && shown(field))
-      texts.push({ element: field, text: field.value || field.placeholder });
+    if (!inContent(field) && visibility.boxVisible(field))
+      texts.push({
+        element: field,
+        text: visibility.fieldText(field),
+      });
   const homes = options.homes.filter(Boolean);
   const plural = /(?<![\d.,])1 ([A-Za-z]{3,}s)\b/;
   const singularEndings = /(ss|us|is|as|ics|ies|ws)$/i;
@@ -738,6 +749,6 @@ function layoutMoves(): PageFinding[] {
 }
 
 /** The page expressions: built here, beside the functions they send. */
-export const runChecks = (options: PageCheckOptions) => pageCall(pageChecks, options);
+export const runChecks = (options: PageCheckOptions) => visibilityCall(pageChecks, options);
 export const markLayoutBoxes = (parts: LayoutParts) => pageCall(markLayout, parts);
 export const movedLayout = () => pageCall(layoutMoves);

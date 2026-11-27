@@ -1,3 +1,4 @@
+import { DXFReadError } from './decode';
 import DxfParser, { type IDxf } from 'dxf-parser';
 import type { IEntity } from 'dxf-parser/dist/entities/geomtry';
 
@@ -87,7 +88,7 @@ function boundsOf(points: Point[]): Bounds {
     max = { x: -Infinity, y: -Infinity };
   for (const p of points) {
     if (!validPoint(p))
-      throw new Error('The drawing contains invalid or excessively large coordinates.');
+      throw new DXFReadError('The drawing contains invalid or excessively large coordinates.');
     min.x = Math.min(min.x, p.x);
     min.y = Math.min(min.y, p.y);
     max.x = Math.max(max.x, p.x);
@@ -159,13 +160,15 @@ function plainText(text: string): string {
 }
 export function parseDrawing(source: string): Drawing {
   if (source.startsWith('AutoCAD Binary DXF'))
-    throw new Error('Binary DXF is not supported yet. Export an ASCII DXF from your CAD app.');
+    throw new DXFReadError(
+      'Binary DXF is not supported yet. Export an ASCII DXF from your CAD app.',
+    );
   if (!source.trim() || !/\bSECTION\b/.test(source) || !/\bEOF\s*$/.test(source))
-    throw new Error('This is not a complete ASCII DXF drawing.');
+    throw new DXFReadError('This is not a complete ASCII DXF drawing.');
   if (source.length > DXF_MAX_BYTES || source.split('\n').length > 1200000)
-    throw new Error('Viewer shows drawings up to 32 MB or 600,000 group codes.');
+    throw new DXFReadError('Viewer shows drawings up to 32 MB or 600,000 group codes.');
   const parsed = new DxfParser().parseSync(source);
-  if (!parsed) throw new Error('The DXF drawing could not be parsed.');
+  if (!parsed) throw new DXFReadError('The DXF drawing could not be parsed.');
   return drawingFrom(parsed, source);
 }
 function drawingFrom(data: IDxf, source: string): Drawing {
@@ -214,7 +217,8 @@ function drawingFrom(data: IDxf, source: string): Drawing {
     depth: number,
     ancestry: Set<string>,
   ): void => {
-    if (++visits > 100000) throw new Error("This drawing's blocks repeat too often to show.");
+    if (++visits > 100000)
+      throw new DXFReadError("This drawing's blocks repeat too often to show.");
     if (depth > 16) {
       warnings.add('Block nesting exceeds 16 levels.');
       return;
@@ -262,13 +266,13 @@ function drawingFrom(data: IDxf, source: string): Drawing {
         sx === 0 ||
         sy === 0
       )
-        throw new Error('A block has an invalid transform.');
+        throw new DXFReadError('A block has an invalid transform.');
       const position = raw.type === 'DIMENSION' ? { x: 0, y: 0 } : (raw.position ?? { x: 0, y: 0 });
       const base = block.position ?? { x: 0, y: 0 };
       const rows = raw.rowCount || 1,
         columns = raw.columnCount || 1;
       if (rows * columns > 10000 || rows < 1 || columns < 1)
-        throw new Error('A block array is too large to show.');
+        throw new DXFReadError('A block array is too large to show.');
       for (let row = 0; row < rows; row++)
         for (let column = 0; column < columns; column++) {
           const local: Matrix = [
@@ -304,7 +308,8 @@ function drawingFrom(data: IDxf, source: string): Drawing {
     const snap = (point: Point, kind: DrawingEntity['snaps'][number]['kind']) =>
       snaps.push({ point, kind });
     if (['CIRCLE', 'ARC', 'ELLIPSE'].includes(raw.type)) {
-      if (!raw.center || !validPoint(raw.center)) throw new Error('A curve has an invalid center.');
+      if (!raw.center || !validPoint(raw.center))
+        throw new DXFReadError('A curve has an invalid center.');
       const major = raw.type === 'ELLIPSE' ? raw.majorAxisEndPoint : { x: raw.radius ?? 0, y: 0 };
       const ratio = raw.type === 'ELLIPSE' ? (raw.axisRatio ?? 1) : 1;
       if (
@@ -314,11 +319,11 @@ function drawingFrom(data: IDxf, source: string): Drawing {
         ratio <= 0 ||
         !Number.isFinite(ratio)
       )
-        throw new Error('A curve has invalid dimensions.');
+        throw new DXFReadError('A curve has invalid dimensions.');
       const start = raw.type === 'CIRCLE' ? 0 : (raw.startAngle ?? 0),
         end = raw.type === 'CIRCLE' ? tau : (raw.endAngle ?? tau);
       if (!Number.isFinite(start) || !Number.isFinite(end))
-        throw new Error('A curve has invalid angles.');
+        throw new DXFReadError('A curve has invalid angles.');
       const delta = sweep(start, end);
       closed = Math.abs(delta - tau) < 1e-9;
       points = curve(raw.center, major, ratio, start, delta);
@@ -356,7 +361,8 @@ function drawingFrom(data: IDxf, source: string): Drawing {
     } else if (['LINE', 'LWPOLYLINE', 'POLYLINE', 'SOLID', '3DFACE'].includes(raw.type)) {
       const vertices = raw.vertices ?? [];
       if (vertices.length < 2) return;
-      if (vertices.length > maxPoints) throw new Error('An object has too many points to show.');
+      if (vertices.length > maxPoints)
+        throw new DXFReadError('An object has too many points to show.');
       closed = !!raw.shape || raw.type === 'SOLID' || raw.type === '3DFACE';
       const ordered =
         raw.type === 'SOLID' && vertices.length === 4
@@ -369,10 +375,10 @@ function drawingFrom(data: IDxf, source: string): Drawing {
         const a = ordered[i],
           b = ordered[(i + 1) % ordered.length];
         if (!a || !b || !validPoint(a) || !validPoint(b) || !Number.isFinite(a.bulge ?? 0))
-          throw new Error('A polyline has invalid vertices.');
+          throw new DXFReadError('A polyline has invalid vertices.');
         const arc = bulgeArc(a, b, a.bulge ?? 0);
         if (pointCount + points.length + arc.points.length > maxPoints)
-          throw new Error('A polyline has too many points to show.');
+          throw new DXFReadError('A polyline has too many points to show.');
         points.push(...arc.points.slice(i ? 1 : 0));
         length += arc.length;
         curvedArea += arc.area;
@@ -402,7 +408,7 @@ function drawingFrom(data: IDxf, source: string): Drawing {
         controls: (raw.controlPoints ?? []).filter(validPoint),
       };
       if (spline.controls.length > maxPoints)
-        throw new Error('An object has too many points to show.');
+        throw new DXFReadError('An object has too many points to show.');
       points = validSpline(spline)
         ? splinePoints(spline, 1e-4 * extent(spline.controls), maxPoints - pointCount)
         : (raw.fitPoints ?? []).filter(validPoint).map((p) => ({ x: p.x, y: p.y }));
@@ -465,7 +471,7 @@ function drawingFrom(data: IDxf, source: string): Drawing {
     }
     pointCount += transformed.length;
     if (entities.length >= maxEntities || pointCount > maxPoints)
-      throw new Error('Viewer shows drawings up to 50,000 objects or 1,000,000 points.');
+      throw new DXFReadError('Viewer shows drawings up to 50,000 objects or 1,000,000 points.');
     const color =
       raw.colorIndex === 0 || raw.colorIndex === 256
         ? rawLayers[layer]?.color

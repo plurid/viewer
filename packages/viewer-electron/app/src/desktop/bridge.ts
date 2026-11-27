@@ -1,3 +1,5 @@
+import { ZodError } from 'zod';
+import type { IpcMainInvokeEvent } from 'electron';
 import { createTaskLabel } from '../domain/agents/review';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { realpath } from 'node:fs/promises';
@@ -53,6 +55,7 @@ import { Ghostscript } from './previews/postscript-renderer';
 import { createSearchHandlers } from './ipc/search-handlers';
 import { createSettingHandlers } from './ipc/setting-handlers';
 import { createTerminalHandlers } from './ipc/terminal-handlers';
+import { requestActions } from './ipc/request-actions';
 import { createWindowHandlers } from './ipc/window-handlers';
 import { createDefinitionHandlers } from './ipc/definition-handlers';
 import { DefinitionCommands } from './workspaces/definition-commands';
@@ -110,7 +113,7 @@ import type { AgentProposal } from '../domain/agents/requests';
 import { isFinalProposalStatus } from '../domain/agents/requests';
 import { FileServices } from './files/file-services';
 import { Applications } from './native/applications';
-import { SettingsService } from './preferences/settings';
+import { InvalidConfigurationFile, SettingsService } from './preferences/settings';
 import { Credentials, Providers } from './models/providers';
 import { ModelPermissions } from './models/model-permissions';
 import { macFiles } from './native/macos-files';
@@ -1438,45 +1441,62 @@ export class Desktop {
         return file ?? null;
       },
     });
-    ipcMain.handle(
-      'viewer:request',
-      async (
-        event,
-        method: unknown,
-        args: unknown,
-        dispatchID?: unknown,
-      ): Promise<ApiResult<unknown>> => {
-        try {
-          if (
-            !this.windows.has(event.sender.id) ||
-            event.senderFrame !== event.sender.mainFrame ||
-            !this.allowedURL(event.senderFrame.url)
-          )
-            throw new Error('Untrusted IPC sender.');
-          if (typeof method !== 'string' || !Object.hasOwn(schemas, method))
-            throw new Error('Unknown Viewer API method.');
-          const name = method as ApiMethod;
-          const role = this.requireRecord(event.sender.id).role;
-          const allowed = methodWindows[name];
-          if (role === 'settings' && allowed === 'viewer')
-            throw new Error('The Settings window can’t do this. Use a workspace window.');
-          if (role !== 'settings' && allowed === 'settings')
-            throw new Error('Manage credentials in Settings.');
-          return {
-            ok: true,
-            value: await performanceMeter.measure(name, args, async () =>
-              this.call(name, args, event.sender.id, dispatchID),
-            ),
-          };
-        } catch (error) {
-          return {
-            ok: false,
-            error: errorMessage(error),
-            code: (error as NodeJS.ErrnoException).code || 'VIEWER_ERROR',
-          };
-        }
-      },
+    ipcMain.handle('viewer:request', this.request.bind(this));
+  }
+
+  private async request(
+    event: IpcMainInvokeEvent,
+    method: unknown,
+    args: unknown,
+    dispatchID?: unknown,
+  ): Promise<ApiResult<unknown>> {
+    try {
+      if (
+        !this.windows.has(event.sender.id) ||
+        event.senderFrame !== event.sender.mainFrame ||
+        !this.allowedURL(event.senderFrame.url)
+      )
+        throw new Error('Untrusted IPC sender.');
+      if (typeof method !== 'string' || !Object.hasOwn(schemas, method))
+        throw new Error('Unknown Viewer API method.');
+      const name = method as ApiMethod;
+      const role = this.requireRecord(event.sender.id).role;
+      const allowed = methodWindows[name];
+      if (role === 'settings' && allowed === 'viewer')
+        throw new Error('The Settings window can’t do this. Use a workspace window.');
+      if (role !== 'settings' && allowed === 'settings')
+        throw new Error('Manage credentials in Settings.');
+      return {
+        ok: true,
+        value: await performanceMeter.measure(name, args, async () =>
+          this.call(name, args, event.sender.id, dispatchID),
+        ),
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: this.requestFailure(method, error, event.sender.id),
+        code: (error as NodeJS.ErrnoException)?.code || 'VIEWER_ERROR',
+      };
+    }
+  }
+
+  private requestFailure(method: unknown, error: unknown, sender: number): string {
+    if (!(error instanceof ZodError) && !(error instanceof InvalidConfigurationFile))
+      return errorMessage(error);
+    const detail =
+      error instanceof InvalidConfigurationFile
+        ? (error.cause ?? error.message)
+        : errorMessage(error);
+    void this.handlerTable?.diagnosticReport([`Refused ${method} request: ${detail}`], sender);
+    if (error instanceof InvalidConfigurationFile) return error.message;
+    const reason = error.issues.find(
+      (issue) => issue.code === 'custom' && issue.params?.userFacing === true,
     );
+    if (reason) return reason.message;
+    if (typeof method !== 'string' || !Object.hasOwn(requestActions, method))
+      return "Viewer couldn't recognize the requested action.";
+    return `Viewer couldn't ${requestActions[method as ApiMethod]}.`;
   }
   /** The record of a window that is still open: an await can outlive the window that asked. */
   private requireRecord(owner: number): WindowRecord {

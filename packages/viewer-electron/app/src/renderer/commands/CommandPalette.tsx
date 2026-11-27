@@ -4,7 +4,8 @@ import {
   searchableDefinition,
 } from '../../domain/workspaces/definitions/query';
 import { errorMessage } from '../../domain/errors';
-import { homeText } from '../../domain/files/path-label';
+import { trashLocation } from '../../domain/files/trash';
+import { homeText, pathInputText } from '../../domain/files/path-label';
 import { matchesQuery, topWords, withoutTopWords } from '../../domain/search/query';
 import { savedSearchProblem, searchName, searchNameLength } from '../../domain/search/saved';
 import { useFileQuery } from '../explorer/useFileQuery';
@@ -40,7 +41,7 @@ import { LineFinder } from '../command-line/LineFinder';
 import { PromptFinder } from '../command-line/PromptFinder';
 import { QuickCommand } from '../terminals/QuickCommand';
 import { lineHint } from '../command-line/hints';
-import { quoteWord } from '../../domain/command-line/lex';
+import { escapeWord, quoteWord } from '../../domain/command-line/lex';
 import type { LineHost } from '../command-line/host';
 import {
   choicesPrefix,
@@ -508,24 +509,27 @@ function useSmartRows(
   }, [listed]);
   const open =
     (path: string, folderOnly = false) =>
-    async () => {
+    async (invocation: CommandContext) => {
+      const target = {
+        paneID: context.paneID,
+        workspaceID: context.workspaceID,
+        modelRequest: invocation.modelRequest,
+      };
+      if (!folderOnly || path === trashLocation) return workspace.openPath(path, target);
       let entry: FileEntry;
       try {
         entry = await window.viewer.stat(path);
-        if (folderOnly && !entry.directory) throw new Error('This folder was moved or deleted.');
+        if (!entry.directory) throw new Error('This folder was moved or deleted.');
       } catch (error) {
         const missing = /^(?:ENOENT|ENOTDIR|ENODEV|ENXIO)|^This folder was moved or deleted\./.test(
           errorMessage(error),
         );
-        if (!folderOnly || !missing) throw error;
+        if (!missing) throw error;
         offerToForgetFolder(path);
         return;
       }
       if (activeWorkspace().id !== context.workspaceID) return;
-      await workspace.openPath(entry.path, {
-        paneID: context.paneID,
-        workspaceID: context.workspaceID,
-      });
+      await workspace.openPath(entry.path, target);
     };
   const sourceID = useMemo(() => `smart:${crypto.randomUUID()}`, []);
   const row = (
@@ -600,7 +604,7 @@ function useSmartRows(
         row('go', {
           label: `Go to ${homeText(name, home)}`,
           // Quoted words suppress tilde expansion in the command line.
-          detail: `:e ${quoteWord(name)}`,
+          detail: `:e ${escapeWord(pathInputText(name, home))}`,
           group: 'Go',
           icon: 'folder',
           run: open(name),

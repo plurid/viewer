@@ -320,6 +320,24 @@ describe('a model opened again', () => {
     expect(modelGeometryCache.snapshot().entries).toBe(1);
   });
 
+  it('explains truncated STL data and sends the parser detail only to diagnostics', async () => {
+    const diagnosticReport = vi.fn(async () => {});
+    const original = window.viewer;
+    Object.assign(window, { viewer: { ...original, diagnosticReport } });
+    try {
+      const detail = 'Offset is outside the bounds of the DataView';
+      vi.mocked(importMesh).mockRejectedValueOnce(new Error(detail));
+      const preview = render(<ModelPreview {...context(entry('stl'))} />);
+      await screen.findByText('The file ends before all of its model data can be read.');
+      expect(preview.queryByText(detail)).toBeNull();
+      expect(diagnosticReport).toHaveBeenCalledWith(
+        expect.objectContaining({ detail: expect.stringContaining(detail) }),
+      );
+    } finally {
+      Object.assign(window, { viewer: original });
+    }
+  });
+
   it('remembers no failed, cancelled or unshowable parse', async () => {
     vi.mocked(importCad).mockRejectedValueOnce(new Error('No geometry could be read.'));
     const failed = render(<ModelPreview {...context(entry('step'))} />);

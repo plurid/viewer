@@ -1,8 +1,16 @@
 import type { FileEntry } from '../../domain/contracts';
-import { LineError, expandPath } from '../../domain/command-line/lex';
-import { findVerb, verbName, verbs, type CompleteKind } from '../../domain/command-line/verbs';
+import {
+  LineError,
+  escapeWord,
+  expandPath,
+  parseLine,
+  quoteWord,
+} from '../../domain/command-line/lex';
+import type { CompleteKind } from '../../domain/command-line/verbs';
+import { findVerb, verbName, verbs } from '../../domain/command-line/verbs';
 import { settingByName, settingNames, settingText } from '../../domain/command-line/set';
 import { overridable } from '../../domain/preferences/overrides';
+import { trashLocation } from '../../domain/files/trash';
 import { tileLayouts } from '../../domain/workspaces/tiling';
 
 export interface Completion {
@@ -118,14 +126,60 @@ export function lineCompletions(text: string, sources: CompletionSources): LineC
   }
   const verb = findVerb(name);
   if (!verb?.complete) return { completions: [] };
+  if (verb.complete === 'path' || verb.complete === 'location')
+    return completePath(text, start, verb.complete, sources);
   const rest = text.slice(start + matched.length);
   const cut = Math.max(rest.lastIndexOf(' ') + 1, 0);
   const partial = rest.slice(cut);
   const prefix = before + name + bang + gap + rest.slice(0, cut);
   return complete(verb.complete, partial, prefix, sources);
 }
+function completePath(
+  text: string,
+  start: number,
+  kind: 'path' | 'location',
+  sources: CompletionSources,
+): LineCompletions {
+  try {
+    const last = parseLine(text.slice(start))[0]?.words.at(-1);
+    const word = last && start + last.end === text.length ? last : undefined;
+    const path = word?.text ?? '';
+    const slash = path.lastIndexOf('/');
+    if (kind === 'location' && slash >= 0 && trashLocation.startsWith(path))
+      return { completions: [] };
+
+    const prefix = word ? text.slice(0, start + word.at) : text;
+    const folder = path.slice(0, slash + 1);
+    const base = path.slice(slash + 1);
+    const directory = expandPath({ text: folder || '.', quoted: !!word?.quoted }, sources.places);
+    if (sources.listing?.directory !== directory) return { directory, completions: [] };
+    const entries = sources.listing.entries.filter(
+      (entry) =>
+        entry.name.startsWith(base) && (base.startsWith('.') || !entry.name.startsWith('.')),
+    );
+    return {
+      directory,
+      completions: entries
+        .sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name))
+        .slice(0, limit)
+        .map((entry) => {
+          const label = entry.name + (entry.directory ? '/' : '');
+          const target = folder + label;
+          return {
+            label,
+            detail: entry.directory ? 'Folder' : undefined,
+            insert: prefix + (word?.quoted ? quoteWord(target, true) : escapeWord(target)),
+          };
+        }),
+    };
+  } catch (error) {
+    if (error instanceof LineError) return { completions: [] };
+    throw error;
+  }
+}
+
 function complete(
-  kind: CompleteKind,
+  kind: Exclude<CompleteKind, 'path' | 'location'>,
   partial: string,
   prefix: string,
   sources: CompletionSources,
@@ -137,41 +191,6 @@ function complete(
       .map((name) => ({ label: name, detail: detail?.(name), insert: prefix + escaped(name) })),
   });
   switch (kind) {
-    case 'path': {
-      const slash = partial.lastIndexOf('/');
-      const folderPart = partial.slice(0, slash + 1);
-      const base = partial.slice(slash + 1).replace(/\\(.)/g, '$1');
-      let directory: string;
-      try {
-        directory = expandPath(
-          { text: folderPart.replace(/\\(.)/g, '$1') || '.', quoted: false },
-          sources.places,
-        );
-      } catch (error) {
-        if (error instanceof LineError) return { completions: [] };
-        throw error;
-      }
-      const entries =
-        sources.listing?.directory === directory
-          ? sources.listing.entries.filter(
-              (entry) =>
-                entry.name.startsWith(base) &&
-                (base.startsWith('.') || !entry.name.startsWith('.')),
-            )
-          : [];
-      return {
-        directory,
-        completions: entries
-          .slice()
-          .sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name))
-          .slice(0, limit)
-          .map((entry) => ({
-            label: entry.name + (entry.directory ? '/' : ''),
-            detail: entry.directory ? 'Folder' : undefined,
-            insert: prefix + folderPart + escaped(entry.name) + (entry.directory ? '/' : ''),
-          })),
-      };
-    }
     case 'setting':
     case 'local-setting': {
       const local = kind === 'local-setting';

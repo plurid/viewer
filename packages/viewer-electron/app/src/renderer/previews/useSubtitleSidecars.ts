@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { PreviewContext } from './contracts';
 import { usePreviewState } from './state';
-import { errorMessage } from '../../domain/errors';
+import { previewProblem } from './preview-problem';
 import { formatBytes } from '../../domain/files/entries';
 import { baseName, parentPath } from '../../domain/workspaces/planes';
 import {
@@ -104,7 +104,11 @@ export function useSubtitleSidecars(context: PreviewContext): VideoSubtitles {
         void release(sidecar.id).catch(() => {});
       }
     })().catch((error) => {
-      if (live) setLoad({ path, problem: `${name} could not be read. ${errorMessage(error)}` });
+      if (live)
+        setLoad({
+          path,
+          problem: previewProblem(error, `Viewer couldn't read the subtitles in ${name}.`),
+        });
     });
     return () => {
       live = false;

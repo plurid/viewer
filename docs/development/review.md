@@ -33,11 +33,10 @@ A full run takes about 12 minutes with three hidden apps at once. Narrow it whil
 
 A run never shows a window on your screen. Each capture starts the app in hidden offscreen windows,
 out of the Dock and never active, on a new profile and a generated sample home. Up to three apps run
-at once, each on its own profile; each capture is a fresh launch, so no capture inherits another's
-state. It never opens your profile, your folders or your Trash; Columns lists only the system
-folders above the sample home. One run at a time: `out/review/review.lock` names the run in
-progress. If the app does not start or does not quit cleanly, the run stops at once and the sheet
-says why; it never retries.
+at once. Each capture has its own profile. Captures in the same run share the sample files. It never
+opens your profile, your folders or your Trash; Columns lists only the system folders above the
+sample home. One run at a time: `out/review/review.lock` names the run in progress. If the app does
+not start or does not quit cleanly, the run stops at once and the sheet says why; it never retries.
 
 A scene that shows a feature the build under review does not have reports **Needs a newer build**
 with what is missing, instead of failing.
@@ -66,8 +65,8 @@ The sheet groups scenes by area. Each scene shows:
   that run.
 
 The filters show only scenes with problems or scenes that changed. **Coverage**, at the end, lists
-every registry command, dialog, Settings section and preview kind, marked covered or not covered by
-a scene.
+every registry command, dialog, Settings section and preview kind. A scene earns coverage when at
+least one variant completes its steps and records a screenshot successfully.
 
 Look at every capture yourself. The checks find wrapped labels, clipped text, overflow, long paths,
 layout shift and the sizes a scene measures; they do not judge spacing, alignment or color.
@@ -91,25 +90,28 @@ reports the same text.
 
 ## What the checks catch
 
-The checks run in the page right after each capture.
+The checks run in the page right after each capture. Text checks read rendered labels, details and
+field text. They read a control's visible label across inline or flex items. For an input or text
+area, they check the portion of its value or placeholder that is in view at its current scroll
+position. Hidden content includes the full path a shortened path label keeps for screen readers.
 
-| Check                    | Flags                                                                                                                                                                                                   |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Label wraps              | A one-line control whose text takes more than one line: buttons, menu items, tabs, chips, segmented controls, toolbar and footer items, dialog titles. A toolbar or footer whose items sit on two rows. |
-| Clipped                  | Text or a control cut by its container's edge with no ellipsis. Text wholly outside its container is hidden on purpose and not counted.                                                                 |
-| Past the window          | An element, dialog, menu or the plane in view that runs past the window's edge.                                                                                                                         |
-| Scrolls sideways         | A container that scrolls sideways although it is not listed as a horizontal scroller.                                                                                                                   |
-| Dialog scrolls sideways  | A horizontal scroll bar inside a dialog.                                                                                                                                                                |
-| Menu covers its button   | An open menu or popover over the control that opened it.                                                                                                                                                |
-| Search on a short list   | An open menu of 8 or fewer choices with a search field; such a list moves by type-ahead.                                                                                                                |
-| Full home path           | Visible text or a field showing the home folder as a full path instead of `~`.                                                                                                                          |
-| Em dash                  | An em dash in visible text.                                                                                                                                                                             |
-| Broken value             | `undefined`, `NaN` or `[object Object]` in visible text.                                                                                                                                                |
-| One with a plural        | A count of one with a plural noun, such as "1 files".                                                                                                                                                   |
-| Name loses its extension | A file name cell cut at its end, so its extension does not show, or a file name field that opens a long name at its start.                                                                              |
-| Layout shift             | The title bar, a toolbar, a footer or list columns that move or resize when a scene changes the selection, or an element a scene clicks that moves.                                                     |
-| Wrong size or place      | A box, gap or text a scene measures against DESIGN.md or a checklist: a footer's height, a menu's gap from its button, a field that stops short of its row.                                             |
-| Wording                  | A retry button that does not read Try Again, or a raw code such as `ENOENT` or `mkdir` in visible text.                                                                                                 |
+| Check                    | Flags                                                                                                                                               |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Label wraps              | A one-line control that wraps, a Grid filename that takes more than two lines, or a toolbar or footer whose controls sit on two rows.               |
+| Clipped                  | Text or a control cut by its container's edge with no ellipsis. Text wholly outside its container is hidden on purpose and not counted.             |
+| Past the window          | An element, dialog, menu or the plane in view that runs past the window's edge.                                                                     |
+| Scrolls sideways         | A container that scrolls sideways although it is not listed as a horizontal scroller.                                                               |
+| Dialog scrolls sideways  | A horizontal scroll bar inside a dialog.                                                                                                            |
+| Menu covers its button   | An open menu or popover over the control that opened it.                                                                                            |
+| Search on a short list   | An open menu of 8 or fewer choices with a search field; such a list moves by type-ahead.                                                            |
+| Full home path           | Visible text or a field showing the home folder as a full path instead of `~`.                                                                      |
+| Em dash                  | An em dash in visible text.                                                                                                                         |
+| Broken value             | `undefined`, `NaN` or `[object Object]` in visible text.                                                                                            |
+| One with a plural        | A count of one with a plural noun, such as "1 files".                                                                                               |
+| Name loses its extension | A file name cell cut at its end, so its extension does not show, or a file name field that opens a long name at its start.                          |
+| Layout shift             | The title bar, a toolbar, a footer or list columns that move or resize when a scene changes the selection, or an element a scene clicks that moves. |
+| Wrong size or place      | A visible box, gap or text that differs from the scene's expectation. A hidden element counts as absent.                                            |
+| Wording                  | A retry button that does not read Try Again, or a raw code such as `ENOENT` or `mkdir` in visible text.                                             |
 
 Text inside a file's own content, such as a PDF page, an editor or a terminal, is left out. Planes
 the camera leaves partly outside the window are framing, not layout, and are left out of the window
@@ -129,13 +131,17 @@ A change to the interface adds or updates the scenes that show it.
    - `id`: lowercase words joined by hyphens, unique in the catalog.
    - `title` and `mustBeTrue`: what a person must see, in plain words, taken from
      [DESIGN.md](../../DESIGN.md) and the rules below.
-   - `setup`: the folder, view, sidebar, title bar, Recent folders, a second workspace or a project
-     the profile starts with.
+   - `setup`: the folder, view, sidebar, title bar, Recent folders, workspaces, project and custom
+     commands the profile starts with.
    - `steps(page, variant)`: the actions that reach the state. Run commands by their palette label
      with `page.palette`, select files with `page.select(page.path(...))`, press keys with
-     `page.key`, and wait on what the page shows with `page.waitFor`. Wrap a selection change in
-     `page.layoutShift` to check that nothing moves. `page.settings(category)` opens Settings at a
-     section and captures that window from then on.
+     `page.key`, and wait on what the page shows with `page.waitFor`. Reveal a field below the fold
+     with `page.scrollIntoView`. To check a second press on a menu button, use `page.pressAt` while
+     the menu is open. It checks what receives the pointer at the button's center. Wrap a selection
+     change in `page.layoutShift` to check that nothing moves. `page.settings(category)` opens
+     Settings at a section and captures that window from then on.
+   - `page.afterCapture`: settle work the scene started before the app quits. The replacement
+     confirmation scene cancels its own paused copy after recording the dialog.
    - `variants`: the four standard ones by default; `across('name', ['short', 'long'])` adds a
      scene's own choice, read from `variant.data`.
    - `covers`: the command ids, dialog components, Settings sections and preview kinds it shows, for
@@ -174,6 +180,14 @@ with `~`. The folder lies in `/tmp` because Columns lists every folder above the
 It also holds one file for each preview kind from the [playground](playground.md) (a system font for
 fonts), models with each axis convention and one that cannot be read, a 2400 × 900 picture, a
 picture with a 200-character name and a generated `.Trash`.
+
+The Settings scenes show a list with every custom command kind and expanded editors for a shell
+command and a two-step workflow. License needs a configured direct build. Dialog scenes use a sample
+project, a Git repository and a folder with a lens. The batch rename, Basket copy, replacement and
+Trash confirmation scenes stop before applying the proposed change. The Journal scene creates a
+folder in the sample home's `Projects/Journal events` for each variant so it has an event to export.
+The Dictate scene opens a sample note with local speech and no installed model to show the setup
+error and the **Open Speech Settings** button.
 
 ## What the app does in the QA runtime
 

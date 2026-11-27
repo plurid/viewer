@@ -1,21 +1,38 @@
 /**
  * A rebuild trashes the previous build: Forge deletes `.vite` and its output folder before
- * writing new ones, which AGENTS.md forbids. Packaging first moves exactly those two to the Trash, and
- * stops rather than delete anything when the Trash fails.
+ * writing new ones. After helper preparation succeeds, packaging moves exactly those two to the
+ * Trash and stops if the Trash fails.
  */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { lstat, mkdir, readFile, readdir, rename, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { localBuild, trashPreviousBuild } from '../tools/trash-previous-build';
 import { packageBuild, requireNewPackage } from '../tools/package-build';
 import manifest from '../package.json' with { type: 'json' };
 import { temporaryRoot, trashTemporary } from '../tools/temporary';
 
 let root: string, trash: string;
+const dependency = (name: string) => path.join(root, 'node_modules', name);
+const ptyFile = () => dependency('node-pty/src/unix/pty.cc');
 beforeEach(async () => {
   root = await temporaryRoot('viewer-rebuild-');
   trash = path.join(root, 'trash');
   await mkdir(trash);
+  for (const [name, metadata] of [
+    ['pdfjs-dist', {}],
+    ['@napi-rs/canvas', { optionalDependencies: { 'canvas-target': '1' } }],
+    ['canvas-target', { os: ['darwin'], cpu: ['arm64'], main: 'skia.node' }],
+    ['node-pty', {}],
+    ['node-addon-api', {}],
+  ] as const) {
+    await mkdir(dependency(name), { recursive: true });
+    await writeFile(dependency(name + '/package.json'), JSON.stringify({ name, ...metadata }));
+  }
+  await writeFile(dependency('canvas-target/skia.node'), '');
+  await mkdir(path.dirname(ptyFile()), { recursive: true });
+  await writeFile(ptyFile(), 'tcsetattr(slave, TCSANOW, termp); ioctl(slave, TIOCSWINSZ, winp);');
 });
 afterEach(async () => {
   await trashTemporary(root);
@@ -60,6 +77,187 @@ it.each(['make', 'package'] as const)(
       expect(environment.PATH).toBe('fixture');
       expect(Object.keys(environment).some((name) => name.includes('SIGNING_KEY'))).toBe(false);
     }
+  },
+);
+
+it.each(['make', 'package'])(
+  'keeps the previous build when %s helper preparation fails',
+  async (command) => {
+    await build();
+    const child = vi.fn(async () => {
+      throw new Error('Helper preparation failed');
+    });
+    const move = vi.fn(toTrash);
+    await expect(localBuild(app(), [command], 'darwin', 'arm64', {}, child, move)).rejects.toThrow(
+      'Helper preparation failed',
+    );
+    expect(move).not.toHaveBeenCalled();
+    expect(child).toHaveBeenCalledExactlyOnceWith(
+      'tsx',
+      ['tools/build-helpers.ts'],
+      expect.objectContaining({ VIEWER_PACKAGE_RUN: '1' }),
+    );
+    expect(await readFile(path.join(app(), '.vite/build/main.js'), 'utf8')).toBe('main');
+    expect(
+      (await lstat(path.join(app(), 'out/Viewer-darwin-arm64/Viewer.app'))).isDirectory(),
+    ).toBe(true);
+  },
+);
+
+it('checks make output again before Trash after the helpers finish', async () => {
+  await build();
+  const child = vi.fn(async (tool: string) => {
+    if (tool === 'tsx') {
+      const results = path.join(app(), 'out/make-results');
+      await mkdir(results);
+      await writeFile(path.join(results, 'previous.forge-make.json'), '{}', { flag: 'wx' });
+    }
+  });
+  const move = vi.fn(toTrash);
+  await expect(localBuild(app(), ['make'], 'darwin', 'arm64', {}, child, move)).rejects.toThrow(
+    'preserve',
+  );
+  expect(move).not.toHaveBeenCalled();
+  expect(child).toHaveBeenCalledOnce();
+});
+
+it.each([
+  ['zip,viewer-missing-maker', 'viewer-missing-maker'],
+  ['./local-maker.mjs', 'darwin'],
+  ['./incomplete-maker.mjs', 'maker'],
+  ['zip,./incomplete-maker.mjs', 'interface'],
+  ['zip,', 'maker'],
+])('keeps the previous build when make cannot use %s', async (targets, reason) => {
+  await build();
+  await writeFile(
+    path.join(app(), 'local-maker.mjs'),
+    `
+    export default class LocalMaker {
+      platforms = ['win32'];
+      isSupportedOnCurrentPlatform() { return true; }
+      ensureExternalBinariesExist() {}
+    }
+  `,
+  );
+  await writeFile(
+    path.join(app(), 'incomplete-maker.mjs'),
+    `
+    export default class IncompleteMaker {
+      platforms = ['darwin'];
+      isSupportedOnCurrentPlatform() { return true; }
+      ensureExternalBinariesExist() {}
+    }
+  `,
+  );
+  const move = vi.fn(toTrash);
+  const child = vi.fn();
+  await expect(
+    localBuild(app(), ['make', '--targets', targets], 'darwin', 'arm64', {}, child, move),
+  ).rejects.toThrow(reason);
+  expect(move).not.toHaveBeenCalled();
+  expect(child.mock.calls.some(([tool]) => tool === 'electron-forge')).toBe(false);
+  expect(await readFile(path.join(app(), '.vite/build/main.js'), 'utf8')).toBe('main');
+  expect((await lstat(path.join(app(), 'out/Viewer-darwin-arm64/Viewer.app'))).isDirectory()).toBe(
+    true,
+  );
+});
+
+it.each(['zip,./windows.mjs', './windows.mjs,zip'])(
+  'uses the macOS maker in the mixed target list %s',
+  async (targets) => {
+    await build();
+    await writeFile(
+      path.join(app(), 'windows.mjs'),
+      `export default class WindowsMaker {
+        platforms = ['win32'];
+        isSupportedOnCurrentPlatform() { throw new Error('Windows-only check'); }
+      }`,
+    );
+    const child = vi.fn();
+    const move = vi.fn(toTrash);
+    await localBuild(app(), ['make', '--targets', targets], 'darwin', 'arm64', {}, child, move);
+    expect(child).toHaveBeenLastCalledWith('electron-forge', ['make', '--targets', targets], expect.any(Object));
+    expect(move).toHaveBeenCalledTimes(2);
+  },
+);
+
+it('accepts a configured maker, an installed maker and a custom make target', async () => {
+  await build();
+  const installed = createRequire(import.meta.url).resolve('@electron-forge/maker-zip');
+  await writeFile(
+    path.join(app(), 'local-maker.mjs'),
+    `
+    import { writeFileSync } from 'node:fs';
+    import MakerZIP from ${JSON.stringify(pathToFileURL(installed).href)};
+    export default class LocalMaker extends MakerZIP {
+      ensureExternalBinariesExist() {
+        writeFileSync('maker-check.json', JSON.stringify(Object.keys(process.env).filter(key => key.includes('SIGNING_KEY'))));
+      }
+    }
+  `,
+  );
+  const targets = 'zip,@electron-forge/maker-zip,./local-maker.mjs';
+  const child = vi.fn();
+  const move = vi.fn(toTrash);
+  await localBuild(
+    app(),
+    ['make', '--targets=' + targets],
+    'darwin',
+    'arm64',
+    { VIEWER_UPDATE_SIGNING_KEY: 'fixture' },
+    child,
+    move,
+  );
+  expect(await readFile(path.join(app(), 'maker-check.json'), 'utf8')).toBe('[]');
+  expect(move).toHaveBeenCalledTimes(2);
+  expect(child).toHaveBeenLastCalledWith(
+    'electron-forge',
+    ['make', '--targets=' + targets],
+    expect.any(Object),
+  );
+});
+
+it.each([
+  ['canvas target', /canvas native dependency/],
+  ['canvas binary', /missing\.node/],
+  ['pty source', /node-pty sandbox compatibility/],
+] as const)('preserves both destinations with an incompatible %s', async (input, message) => {
+  await build();
+  if (input === 'canvas target')
+    await writeFile(
+      dependency('canvas-target/package.json'),
+      JSON.stringify({ os: ['darwin'], cpu: ['x64'] }),
+    );
+  else if (input === 'canvas binary')
+    await writeFile(
+      dependency('canvas-target/package.json'),
+      JSON.stringify({ os: ['darwin'], cpu: ['arm64'], main: 'missing.node' }),
+    );
+  else await writeFile(ptyFile(), 'tcsetattr(slave, TCSANOW, termp);');
+  const move = vi.fn(toTrash);
+  const child = vi.fn();
+  await expect(localBuild(app(), ['package'], 'darwin', 'arm64', {}, child, move)).rejects.toThrow(
+    message,
+  );
+  expect(move).not.toHaveBeenCalled();
+  expect(child.mock.calls.some(([tool]) => tool === 'electron-forge')).toBe(false);
+  expect(await readFile(path.join(app(), '.vite/build/main.js'), 'utf8')).toBe('main');
+  expect((await lstat(path.join(app(), 'out/Viewer-darwin-arm64/Viewer.app'))).isDirectory()).toBe(
+    true,
+  );
+});
+
+it.each(['make', 'package'])(
+  'rejects an invalid direct identity before %s moves either destination',
+  async (command) => {
+    await build();
+    const move = vi.fn(toTrash);
+    const child = vi.fn();
+    await expect(
+      localBuild(app(), [command], 'darwin', 'arm64', { VIEWER_DIRECT_IDENTITY: '-' }, child, move),
+    ).rejects.toThrow('Developer ID Application');
+    expect(move).not.toHaveBeenCalled();
+    expect(child).not.toHaveBeenCalled();
   },
 );
 
@@ -145,6 +343,31 @@ it('refuses an empty directory occupying a ZIP destination', async () => {
   expect(move).not.toHaveBeenCalled();
   expect((await lstat(directory)).isDirectory()).toBe(true);
 });
+
+it.each(['make', 'package'])(
+  'preserves the previous build when the %s Forge entry is missing',
+  async (command) => {
+    await build();
+    await mkdir(dependency('@electron-forge/cli'), { recursive: true });
+    await writeFile(
+      dependency('@electron-forge/cli/package.json'),
+      JSON.stringify({ bin: { 'electron-forge': 'missing.cjs' } }),
+    );
+    await mkdir(dependency('tsx'));
+    await writeFile(dependency('tsx/cli.js'), '');
+    const move = vi.fn(async () => {
+      throw new Error('Unexpected Trash request');
+    });
+    await expect(
+      localBuild(app(), [command], 'darwin', 'arm64', {}, undefined, move),
+    ).rejects.toThrow(/missing\.cjs/);
+    expect(move).not.toHaveBeenCalled();
+    expect(await readFile(path.join(app(), '.vite/build/main.js'), 'utf8')).toBe('main');
+    expect(
+      (await lstat(path.join(app(), 'out/Viewer-darwin-arm64/Viewer.app'))).isDirectory(),
+    ).toBe(true);
+  },
+);
 
 it.each(['make', 'package'])(
   'runs both %s child entry points with publisher variables removed',

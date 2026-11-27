@@ -1,3 +1,4 @@
+import { previewProblem } from '../preview-problem';
 import { useEffect, useState } from 'react';
 import type { ComponentType } from 'react';
 import type { Resource } from '../../../domain/contracts';
@@ -6,7 +7,6 @@ import { choosePreview, previewModules } from '../registry';
 import { preloadPreviewModule } from '../module-loading';
 import { Empty, Failure, Loading } from '../../ui/primitives';
 import { NativeOpenActions } from '../../ui/navigation/NativeOpenActions';
-import { errorMessage } from '../../../domain/errors';
 import {
   embeddedFactLimit,
   embeddedFacts,
@@ -87,7 +87,13 @@ export default function EmbeddedPreview(context: PreviewContext) {
       }
       if (live) setReading({ state: 'missing', facts });
     })().catch((error: unknown) => {
-      if (live) setReading({ state: 'failed', error: errorMessage(error) });
+      if (live)
+        setReading({
+          state: 'failed',
+          error: previewProblem(error, "Viewer couldn't read the preview stored in this file.", [
+            'This picture is not the PNG or JPEG it is named.',
+          ]),
+        });
     });
     return () => {
       live = false;

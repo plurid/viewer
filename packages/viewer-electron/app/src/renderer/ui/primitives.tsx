@@ -359,10 +359,10 @@ export function NameDialog({
     </Dialog>
   );
 }
-export class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
-  state = { error: null as string | null };
-  static getDerivedStateFromError(error: Error) {
-    return { error: error.message };
+export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
   }
   componentDidCatch(error: Error, info: { componentStack?: string | null }) {
     const failure = diagnosticFailure(error);
@@ -370,12 +370,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: s
     void window.viewer?.diagnosticReport?.(failure).catch(() => {});
   }
   render() {
-    return this.state.error ? (
-      <Failure
-        title="This view couldn't load"
-        detail={this.state.error}
-        onRetry={() => this.setState({ error: null })}
-      />
+    return this.state.failed ? (
+      <Failure title="This view couldn't load" onRetry={() => this.setState({ failed: false })} />
     ) : (
       this.props.children
     );

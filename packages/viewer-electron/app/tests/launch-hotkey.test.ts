@@ -77,6 +77,9 @@ function fixture(
 
 describe('Viewer shell arguments', () => {
   const parse = (...args: string[]) => parseLaunch(args, '/caller', '/home/person', path.resolve);
+  it('preserves the Trash location for the workspace', () => {
+    expect(parse('viewer://trash').paths).toEqual(['viewer://trash']);
+  });
   it('resolves paths in the invoking directory and preserves literal option-like names', () => {
     expect(
       parse('~/Documents', './two words', '--new-window', '--terminal', '--workspace', 'Research'),

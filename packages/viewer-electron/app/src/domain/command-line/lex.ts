@@ -159,10 +159,10 @@ export function withArguments(line: string, words: readonly string[], name: stri
   );
 }
 /** A word kept one word by backslashes, not quotes: `~` and `%` in it still expand. */
-const escapeWord = (text: string) => (text ? text.replace(/([\s'"\\|;$])/g, '\\$1') : "''");
-/** A word as a line would need it written: bare when it can be, quoted otherwise. */
-export function quoteWord(text: string): string {
-  if (/^[A-Za-z0-9._:=@/~%+,#-]+$/.test(text)) return text;
+export const escapeWord = (text: string) => (text ? text.replace(/([\s'"\\|;$])/g, '\\$1') : "''");
+/** Forced quoting keeps a literal path beginning with ~ or % from expanding. */
+export function quoteWord(text: string, forceQuotes = false): string {
+  if (!forceQuotes && /^[A-Za-z0-9._:=@/~%+,#-]+$/.test(text)) return text;
   if (!text.includes("'")) return `'${text}'`;
   return `"${text.replace(/["\\]/g, (character) => '\\' + character)}"`;
 }

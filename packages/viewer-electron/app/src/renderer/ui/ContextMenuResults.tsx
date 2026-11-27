@@ -78,12 +78,12 @@ export function ContextMenuResults({
   onSelect,
   onClose,
   searchLabel = 'actions',
-  searchPlaceholder = `Search ${searchLabel}…`,
-  searchable = true,
+  choiceList = false,
   listLabel = 'Actions',
   empty = 'No matching actions',
   none = 'No actions available',
   currentID,
+  initialID = currentID,
   blankIcons = false,
 }: {
   commands: readonly ResolvedCommand[];
@@ -99,10 +99,8 @@ export function ContextMenuResults({
   onClose(): void;
   /** What the search finds, in its label: “Search actions”, or a choice's name. */
   searchLabel?: string;
-  /** What the empty search field shows: “Search actions…”, or a choice list's “Search”. */
-  searchPlaceholder?: string;
   /** Short choice lists use type-ahead and Space in place of a search field. */
-  searchable?: boolean;
+  choiceList?: boolean;
   /** The list's name: “Actions”, or a choice's name. */
   listLabel?: string;
   /** What a search that finds nothing says: “No matching actions”, or “No matching choices”. */
@@ -114,9 +112,12 @@ export function ContextMenuResults({
    * With it, rows are radio items.
    */
   currentID?: string;
+  /** A menu that also contains actions can open on the active view without marking actions as radio items. */
+  initialID?: string;
   /** Rows without an icon keep its place blank, so a choice menu checks only the current one. */
   blankIcons?: boolean;
 }) {
+  const searchable = !choiceList || commands.length > 8;
   const [query, setQuery] = useState('');
   const [opened, setOpened] = useState<string[]>([]);
   const [active, setActive] = useState({ depth: 0, id: '' });
@@ -159,7 +160,7 @@ export function ContextMenuResults({
     : entries(levels[depth] ?? []);
   const current =
     rows.find((row) => row.id === active.id) ??
-    (searching ? undefined : rows.find((row) => row.id === currentID)) ??
+    (searching ? undefined : rows.find((row) => row.id === initialID)) ??
     rows[0];
   const cancelHover = () => {
     clearTimeout(timer.current);
@@ -215,7 +216,7 @@ export function ContextMenuResults({
   // A long list opens on its current choice, shown, as a native menu does. This runs after the
   // layer is placed, so the list already has its final height.
   useEffect(() => {
-    if (currentID) reveal(buttons.current.get(rowID(0, currentID)));
+    if (initialID) reveal(buttons.current.get(rowID(0, initialID)));
     // Once, as it opens: later the person moves through the list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -307,7 +308,7 @@ export function ContextMenuResults({
               ref={input}
               data-autofocus
               aria-label={`Search ${searchLabel}`}
-              placeholder={searchPlaceholder}
+              placeholder={choiceList ? 'Search' : `Search ${searchLabel}…`}
               role={searching ? 'combobox' : undefined}
               aria-autocomplete={searching ? 'list' : undefined}
               aria-expanded={searching ? true : undefined}

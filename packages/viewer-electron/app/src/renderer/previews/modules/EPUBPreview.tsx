@@ -1,3 +1,4 @@
+import { previewProblem } from '../preview-problem';
 import { useEffect, useMemo, useRef, useState, useLayoutEffect } from 'react';
 import type { PreviewContext } from '../contracts';
 import type { EPUBReference, EPUBChapter } from '../../../domain/previews/documents/epub';
@@ -64,8 +65,9 @@ export default function EPUBPreview(context: PreviewContext) {
         (result) => {
           if (!abort.signal.aborted) setFound({ query, ...result });
         },
-        (error: Error) => {
-          if (!abort.signal.aborted) setSearchError(error.message);
+        (error: unknown) => {
+          if (!abort.signal.aborted)
+            setSearchError(previewProblem(error, "Viewer couldn't search the text in this book."));
         },
       );
     }, 180);

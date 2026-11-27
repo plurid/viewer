@@ -1,10 +1,15 @@
 import { expect, it, vi } from 'vitest';
-import { writeFile } from 'node:fs/promises';
+import { open, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Resources } from '../src/desktop/previews/resources';
 import { DerivedPreviews, type Decoder } from '../src/desktop/previews/derived';
 import { temporaryRoot } from '../tools/temporary';
-import { officeLayoutRequestSchema } from '../src/domain/previews/documents/layout';
+import { fileStat } from '../src/desktop/files/stats';
+import { extractOffice } from '../src/desktop/previews/office';
+import {
+  officeLayoutRecovery,
+  officeLayoutRequestSchema,
+} from '../src/domain/previews/documents/layout';
 import { officeRequestAllowed } from '../src/desktop/previews/office-renderer';
 import { officeMain, officeThread } from '../src/desktop/previews/office-page';
 import { defaultSettings } from '../src/domain/services';
@@ -24,6 +29,13 @@ it('bounds source reads to the captured size and checks cancellation before allo
   });
   const source = { info: { size: 4, isFile: () => true }, handle: { read } } as unknown as Source;
   expect((await officeInput(source, new AbortController().signal)).toString()).toBe('AAAA');
+  const tooLarge = {
+    ...source,
+    info: { ...source.info, size: 64_000_001, isFile: () => true },
+  } as typeof source;
+  await expect(officeInput(tooLarge, new AbortController().signal)).rejects.toMatchObject({
+    code: 'OFFICE_LAYOUT_INPUT_LIMIT',
+  });
   expect(read.mock.calls[0]![2]).toBe(4);
   read.mockClear();
   const abort = new AbortController();
@@ -31,6 +43,27 @@ it('bounds source reads to the captured size and checks cancellation before allo
   await expect(officeInput(source, abort.signal)).rejects.toThrow();
   expect(read).not.toHaveBeenCalled();
 });
+
+it.each(['docx', 'xlsx'])(
+  'offers the original app when both readers refuse an oversized %s',
+  async (extension) => {
+    const root = await temporaryRoot('viewer-office-input-limit-');
+    const file = path.join(root, 'Oversized.' + extension);
+    const handle = await open(file, 'wx+');
+    try {
+      await handle.write(Buffer.from([0]), 0, 1, 64_000_000);
+      const source = { file, handle, info: await fileStat(handle) };
+      await expect(extractOffice(file)).rejects.toThrow('within 64 MB');
+      await expect(
+        officeInput(source, new AbortController().signal).catch((error) =>
+          officeLayoutRecovery(error.code, extension),
+        ),
+      ).resolves.toBe('The document exceeds the 64 MB layout limit. Open it in its own app.');
+    } finally {
+      await handle.close();
+    }
+  },
+);
 
 it('opens every Office format in Viewer on new settings and advertises alternate file associations', () => {
   const policy = defaultSettings('/fixture').fileOpening;

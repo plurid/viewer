@@ -4,6 +4,7 @@ import { boundedEditDistance } from '../search/approximate';
 /** What a verb's argument completes from. */
 export type CompleteKind =
   | 'path'
+  | 'location'
   | 'setting'
   | 'local-setting'
   | 'workspace'
@@ -81,7 +82,7 @@ export const verbs: readonly Verb[] = [
     names: ['e[dit]'],
     usage: '{path}',
     args: [1, 1],
-    complete: 'path',
+    complete: 'location',
     help: 'Open a path as a plane, a text file for editing',
   },
   {
@@ -89,7 +90,7 @@ export const verbs: readonly Verb[] = [
     names: ['cd', 'chd[ir]'],
     usage: '[path]',
     args: [0, 1],
-    complete: 'path',
+    complete: 'location',
     help: 'Show a folder in this files plane; home without one',
   },
   { key: 'pwd', names: ['pw[d]'], help: 'Show this plane’s folder' },
@@ -98,7 +99,7 @@ export const verbs: readonly Verb[] = [
     names: ['sp[lit]'],
     usage: '[path]',
     args: [0, 1],
-    complete: 'path',
+    complete: 'location',
     help: 'Split Down: a tile below, showing the path',
   },
   {
@@ -106,7 +107,7 @@ export const verbs: readonly Verb[] = [
     names: ['vs[plit]'],
     usage: '[path]',
     args: [0, 1],
-    complete: 'path',
+    complete: 'location',
     help: 'Split Right: a tile beside, showing the path',
   },
   {
@@ -114,7 +115,7 @@ export const verbs: readonly Verb[] = [
     names: ['split-window', 'splitw'],
     usage: '[-h] [-c path]',
     flags: { h: 'switch', v: 'switch', c: 'value' },
-    complete: 'path',
+    complete: 'location',
     help: 'Split Down, or Split Right with -h',
     tmux: true,
   },

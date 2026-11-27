@@ -1,3 +1,4 @@
+import { previewProblem } from '../preview-problem';
 import { useContext, useEffect, useId, useMemo, useState } from 'react';
 import type { ComponentType } from 'react';
 import type { ArchiveEntry, FileEntry, Resource } from '../../../domain/contracts';
@@ -7,7 +8,6 @@ import { choosePreview } from '../registry';
 import { preloadPreviewModule } from '../module-loading';
 import { Empty, Failure, Loading } from '../../ui/primitives';
 import { NativeOpenActions } from '../../ui/navigation/NativeOpenActions';
-import { errorMessage } from '../../../domain/errors';
 import { formatBytes } from '../../../domain/files/entries';
 import { gzipLimits, gzipMember } from '../../../domain/files/containers';
 
@@ -76,7 +76,14 @@ export default function CompressedPreview(context: PreviewContext) {
       };
       if (live) setExpansion({ state: 'shown', shown, Viewer });
     })().catch((error) => {
-      if (live) setExpansion({ state: 'failed', error: errorMessage(error) });
+      if (live)
+        setExpansion({
+          state: 'failed',
+          error: previewProblem(error, "Viewer couldn't read the compressed data in this file.", [
+            'This file expands beyond the 8 MB preview limit.',
+            'This gzip file holds no file.',
+          ]),
+        });
     });
     return () => {
       live = false;

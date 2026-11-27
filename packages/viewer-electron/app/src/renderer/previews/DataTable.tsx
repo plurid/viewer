@@ -1,3 +1,4 @@
+import { previewProblem } from './preview-problem';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   moveTableCell,
@@ -147,7 +148,12 @@ export function DataTable({
           if (!abort.signal.aborted) setFiltered({ rows, query, indices });
         },
         (error) => {
-          if (!abort.signal.aborted) setFiltered({ rows, query, error: errorMessage(error) });
+          if (!abort.signal.aborted)
+            setFiltered({
+              rows,
+              query,
+              error: previewProblem(error, "Viewer couldn't search the rows in this table."),
+            });
         },
       );
     }, 0);
@@ -775,12 +781,18 @@ export function DelimitedTable({
         (error) => {
           if (live) {
             owned.close();
-            setLoaded({ request, error: errorMessage(error) });
+            setLoaded({
+              request,
+              error: previewProblem(error, "Viewer couldn't read the rows in this file."),
+            });
           }
         },
       );
     } catch (error) {
-      setLoaded({ request, error: errorMessage(error) });
+      setLoaded({
+        request,
+        error: previewProblem(error, "Viewer couldn't read the rows in this file."),
+      });
     }
     return () => {
       live = false;

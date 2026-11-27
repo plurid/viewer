@@ -24,6 +24,15 @@ import { importChanges } from './import-changes';
 // the workspace window's own view and presentation: domain/preferences/catalog.ts
 const workspaceMayPatch = workspaceMayChange;
 const invalidAgentConfiguration = 'Fix the configuration in Settings before proposing changes.';
+export class InvalidConfigurationFile extends Error {
+  readonly code = 'SETTINGS_INVALID';
+  constructor(diagnostic: string, agent: boolean) {
+    super(
+      agent ? invalidAgentConfiguration : 'Fix config.jsonc in Settings before saving changes.',
+      agent ? undefined : { cause: diagnostic },
+    );
+  }
+}
 const configSchema = z
   .object({
     $schema: z.literal('config.schema.json').default('config.schema.json'),
@@ -322,10 +331,8 @@ export class SettingsService {
       .then(async () => {
         await this.load();
         await this.readChanges();
-        if (this.store.diagnostics.length) {
-          const message = scope === 'agent' ? invalidAgentConfiguration : this.store.diagnostics[0];
-          throw Object.assign(new Error(message), { code: 'SETTINGS_INVALID' });
-        }
+        if (this.store.diagnostics.length)
+          throw new InvalidConfigurationFile(this.store.diagnostics[0]!, scope === 'agent');
         let parsed: ReturnType<typeof validated>;
         try {
           const next = structuredClone(this.document);

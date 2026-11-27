@@ -36,6 +36,7 @@ export interface StructuredData {
   nodes: DataNode[];
   roots: string[];
   error?: string;
+  diagnostic?: string;
   limited: boolean;
 }
 const pointer = (key: string) => key.replace(/~/g, '~0').replace(/\//g, '~1');
@@ -133,7 +134,23 @@ export function inspectStructured(
     }
     if (pending.length) result.limited = true;
   } catch (error) {
-    result.error = String(errorMessage(error) || error);
+    const message = errorMessage(error);
+    if (
+      [
+        'Files over 1 MB show as text only.',
+        'Files with over 100 YAML documents show as text only.',
+        'XML this large shows as text only.',
+        'XML declarations and external entities are not supported.',
+      ].includes(message)
+    ) {
+      result.error = message;
+    } else {
+      const location =
+        /\bline (\d+),? column (\d+)\b/i.exec(message) ?? /\bat (\d+):(\d+)\b/.exec(message);
+      const at = location ? ` at line ${location[1]}, column ${location[2]}` : '';
+      result.error = `Invalid ${extension.toUpperCase()}${at}. Source is shown below.`;
+      result.diagnostic = message;
+    }
   }
   return result;
 }

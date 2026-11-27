@@ -83,13 +83,54 @@ it('cancels a closed view and releases a late child without releasing its source
   await waitFor(() => expect(services.release).toHaveBeenCalledWith('late'));
   expect(services.release).not.toHaveBeenCalledWith('source');
 });
+it.each([
+  ['OFFICE_LAYOUT_TIMEOUT', 'docx', 'Office layout exceeded 45 seconds. Try Reading view.'],
+  [
+    'OFFICE_LAYOUT_CONVERSION',
+    'xlsx',
+    'Viewer couldn’t lay out this document. It may be protected or damaged. Try Sheet view.',
+  ],
+  [
+    'OFFICE_LAYOUT_INPUT_LIMIT',
+    'xls',
+    'The document exceeds the 64 MB layout limit. Open it in its own app.',
+  ],
+  [
+    'OFFICE_LAYOUT_INPUT_LIMIT',
+    'docx',
+    'The document exceeds the 64 MB layout limit. Open it in its own app.',
+  ],
+  [
+    'OFFICE_LAYOUT_INPUT_LIMIT',
+    'xlsx',
+    'The document exceeds the 64 MB layout limit. Open it in its own app.',
+  ],
+  [
+    'OFFICE_LAYOUT_OUTPUT_LIMIT',
+    'docx',
+    'The generated PDF exceeds the 32 MB layout limit. Try Reading view.',
+  ],
+])('shows the recovery for %s on a %s document', async (code, extension, message) => {
+  const { context, services, values, child } = fixture(extension);
+  values.set('office.mode', 'layout');
+  services.officeLayout
+    .mockRejectedValueOnce(Object.assign(new Error('Engine detail'), { code }))
+    .mockResolvedValueOnce(child('retry'));
+  render(<OfficePreview {...context} />);
+  await screen.findByText("Can't lay out this document");
+  expect(screen.getByText(message)).toBeTruthy();
+  expect(screen.queryByText('Engine detail')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
+  await screen.findByText('Rendered retry');
+});
+
 it('offers a retry after a render failure and detects all six Office extensions', async () => {
   const { context, services, child } = fixture('doc');
   services.officeLayout
     .mockRejectedValueOnce(new Error('Protected document'))
     .mockResolvedValueOnce(child('retry'));
   render(<OfficePreview {...context} />);
-  await screen.findByText('Protected document');
+  await screen.findByText('The file is protected. Open it in its own app.');
   fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
   await screen.findByText('Rendered retry');
   const office = previewModules.find((module) => module.id === 'office')!;

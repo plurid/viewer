@@ -25,6 +25,21 @@ export function nodePtyFileUsed(relative: string, platform: string, arch: string
   return true;
 }
 
+/** Both PTY endpoints share termios and window size. The Store sandbox permits these ioctls
+ * on the owned master. Only the packaged source gets the replacements. */
+export async function patchedNodePtySource(file: string): Promise<string> {
+  let code = await readFile(file, 'utf8');
+  for (const [before, after] of [
+    ['tcsetattr(slave, TCSANOW, termp)', 'tcsetattr(*master, TCSANOW, termp)'],
+    ['ioctl(slave, TIOCSWINSZ, winp)', 'ioctl(*master, TIOCSWINSZ, winp)'],
+  ] as const) {
+    if (!code.includes(before))
+      throw new Error('Review the node-pty sandbox compatibility patch after updating node-pty.');
+    code = code.replace(before, after);
+  }
+  return code;
+}
+
 /** An XML property list without the given keys and their string values. */
 export function withoutPlistStrings(text: string, keys: readonly string[]): string {
   return keys.reduce(

@@ -1,3 +1,4 @@
+import { previewProblem } from './preview-problem';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Resource } from '../../domain/contracts';
 
@@ -58,8 +59,8 @@ export function useResource(
           if (!abort.signal.aborted)
             setLoad({
               signal: abort.signal,
-              error: String(error.message || error),
-              code: error.code || '',
+              error: previewProblem(error, "Viewer couldn't open this file for preview."),
+              code: error?.code || '',
             });
         })
         .finally(() => clearTimeout(timer));

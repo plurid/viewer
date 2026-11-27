@@ -1,4 +1,7 @@
 import type { FileEntry } from '../../domain/contracts';
+import { trashLocation, trashPersonOnly } from '../../domain/files/trash';
+import { currentAgentDispatch } from '../app/agent-dispatch';
+import { sendWindowEvent } from '../app/window-events';
 import { needsFolderAccess } from '../../domain/files/access';
 import { activeWorkspace, getState, navigate } from '../state/store';
 import { requestRefresh } from '../state/refresh';
@@ -20,6 +23,11 @@ export async function openWorkspacePath(
     return !paneID || (!!pane && pane.path === origin?.path);
   };
   if (!current()) return false;
+  if (path === trashLocation) {
+    if (currentAgentDispatch() || target?.modelRequest) throw new Error(trashPersonOnly);
+    sendWindowEvent('viewer:trash');
+    return true;
+  }
   let entry: FileEntry;
   try {
     entry = await window.viewer.stat(path);

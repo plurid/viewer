@@ -143,6 +143,9 @@ describe('terminal CLI over the MCP relay', () => {
 });
 
 describe('terminal command contract', () => {
+  it('refuses the Trash location for agent navigation', () => {
+    expect(() => parseCLI(['plane', 'open', 'viewer://trash'], resolve)).toThrow(/Trash/);
+  });
   it('offers no token verb or option that starts a definition command', async () => {
     const call = vi.fn<CLICall>(async () => wrap({}));
     for (const args of [

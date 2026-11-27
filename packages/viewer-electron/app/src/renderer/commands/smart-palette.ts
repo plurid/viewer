@@ -3,6 +3,8 @@
  * folder's contents, `=` calculates, `z` and a name jumps to a frecent folder (as zoxide does), and a
  * command takes its argument after its name: `new folder Drafts`, `rename notes.md`, `go ~/Downloads`.
  */
+import { trashLocation } from '../../domain/files/trash';
+
 export type PaletteIntent =
   | { kind: 'path'; directory: string; partial: string }
   | { kind: 'calc'; expression: string }
@@ -20,6 +22,7 @@ const verbs: readonly [RegExp, Extract<PaletteIntent, { kind: 'argument' }>['com
 ];
 /** A typed path made absolute: `~` is home, `./` and `../` start in the current folder. */
 function absolute(path: string, home: string, current: string): string {
+  if (path === trashLocation) return path;
   const joined =
     path === '~' || path.startsWith('~/')
       ? home + path.slice(1)

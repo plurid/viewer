@@ -124,6 +124,8 @@ export const layoutTemplateSchema = z
     main: z.number().min(0.2).max(0.8),
   })
   .strict();
+/** Only fixed instructions authored by the settings schema can be shown after validation. */
+const readableSettingIssue = { userFacing: true };
 export const settingsSchema = z
   .object({
     toolbars: toolbarsSchema,
@@ -286,11 +288,13 @@ export const settingsSchema = z
           .refine(
             (provider) => !provider.effort || providerTakesEffort(provider.kind, provider.effort),
             {
+              params: readableSettingIssue,
               message: 'This provider does not take that reasoning effort.',
               path: ['effort'],
             },
           )
           .refine((provider) => !provider.segmentation || provider.kind === 'local', {
+            params: readableSettingIssue,
             message:
               'Only a local provider names a SAM model; Meta outlines with SAM 3.1 itself, and other providers do not outline.',
             path: ['segmentation'],
@@ -338,12 +342,14 @@ export const settingsSchema = z
     if (value.browsing.emptyWorkspaceLocation === 'custom' && !value.browsing.emptyWorkspacePath)
       context.addIssue({
         code: 'custom',
+        params: readableSettingIssue,
         path: ['browsing', 'emptyWorkspacePath'],
         message: 'Choose the folder to open in an empty workspace.',
       });
     if (value.browsing.newPlaneLocation === 'custom' && !value.browsing.newPlanePath)
       context.addIssue({
         code: 'custom',
+        params: readableSettingIssue,
         path: ['browsing', 'newPlanePath'],
         message: 'Choose the folder to open in new planes.',
       });
@@ -356,7 +362,12 @@ export const settingsSchema = z
       ['terminalProfiles', value.terminals.profiles],
     ] as const)
       if (new Set(items.map((item) => item.id)).size !== items.length)
-        context.addIssue({ code: 'custom', path: [key], message: 'IDs must be unique.' });
+        context.addIssue({
+          code: 'custom',
+          params: readableSettingIssue,
+          path: [key],
+          message: 'IDs must be unique.',
+        });
     // a command's name runs one sequence
     const named = value.customActions.flatMap((action) =>
       action.executor.kind === 'sequence' && action.executor.command
@@ -366,12 +377,14 @@ export const settingsSchema = z
     if (new Set(named).size !== named.length)
       context.addIssue({
         code: 'custom',
+        params: readableSettingIssue,
         path: ['customActions'],
         message: 'Two sequences have the same command name.',
       });
     if (!value.terminals.profiles.some((profile) => profile.id === value.terminals.profileID))
       context.addIssue({
         code: 'custom',
+        params: readableSettingIssue,
         path: ['terminals', 'profileID'],
         message: 'Choose an existing terminal profile.',
       });
@@ -395,6 +408,7 @@ export const settingsSchema = z
     if (shortcuts.some((shortcut) => !validShortcut(shortcut)))
       context.addIssue({
         code: 'custom',
+        params: readableSettingIssue,
         message: 'Use Cmd or Ctrl plus a key, with optional Alt and Shift.',
       });
     for (const item of value.recipes) {
@@ -412,6 +426,7 @@ export const settingsSchema = z
       )
         context.addIssue({
           code: 'custom',
+          params: readableSettingIssue,
           path: ['recipes'],
           message: 'The filename template contains an unknown field.',
         });
@@ -419,6 +434,7 @@ export const settingsSchema = z
     if (shortcutClash(value))
       context.addIssue({
         code: 'custom',
+        params: readableSettingIssue,
         message: 'A shortcut is assigned to more than one action.',
       });
   });

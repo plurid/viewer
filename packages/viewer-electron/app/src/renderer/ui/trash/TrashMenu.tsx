@@ -51,7 +51,7 @@ export function TrashMenu({
         recent={[]}
         focused
         // a short menu moves by type-ahead, as a native one: no search field
-        searchable={commands.length > 8}
+        choiceList
         onClose={onClose}
         onSelect={(command) => {
           onClose();

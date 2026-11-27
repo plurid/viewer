@@ -1,6 +1,6 @@
+import { previewProblem } from '../preview-problem';
 import { useEffect, useState } from 'react';
 import type { HtmlPreview } from '../../../domain/previews/web';
-import { errorMessage } from '../../../domain/errors';
 import { htmlCapability } from '../../../domain/previews/html-address';
 import { report } from '../../state/core';
 import type { PreviewContext } from '../contracts';
@@ -76,7 +76,12 @@ export function useHtmlPreview(
       })
       .catch((error: unknown) => {
         if (!cancelled && !signal.aborted)
-          accept({ status: 'error', message: errorMessage(error) });
+          accept({
+            status: 'error',
+            message: previewProblem(error, "Viewer couldn't read this page.", [
+              'This property list holds no saved web page.',
+            ]),
+          });
       });
     return () => {
       signal.removeEventListener('abort', abort);

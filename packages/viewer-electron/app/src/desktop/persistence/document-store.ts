@@ -3,11 +3,7 @@ import { constants } from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { discardOwnTemporaryFile } from '../operations/removal';
-import {
-  coordinateMetadata,
-  publishMetadata,
-  requireNoInterruptedPublication,
-} from './metadata-publication';
+import { coordinateMetadata, publishMetadata, recoverMetadata } from './metadata-publication';
 import { syncParentDirectory } from './directory-sync';
 /** Publishes complete application-owned documents. Revision-bound writers retain displaced
  * bytes until the replacement directory entry is durable. */
@@ -21,18 +17,23 @@ export class DocumentStore<T> {
   async load(): Promise<T | null> {
     await this.writes.catch(() => undefined);
     const bytes = await this.readBytes();
-    return bytes && this.validate(JSON.parse(bytes.toString('utf8')));
+    return bytes ? this.parseBytes(bytes) : (await this.loadSnapshot()).value;
   }
   async loadSnapshot(): Promise<{ value: T | null; revision: string | null }> {
     await this.writes.catch(() => undefined);
-    return coordinateMetadata(path.dirname(this.file), async () => {
-      const bytes = await this.readBytes();
+    return coordinateMetadata(path.dirname(this.file), async (locked) => {
+      const bytes =
+        (await this.readBytes()) ??
+        (await recoverMetadata(this.file, this.maxBytes, locked, (kept) => this.parseBytes(kept)));
       if (!bytes) return { value: null, revision: null };
       return {
-        value: this.validate(JSON.parse(bytes.toString('utf8'))),
+        value: this.parseBytes(bytes),
         revision: createHash('sha256').update(bytes).digest('hex'),
       };
     });
+  }
+  private parseBytes(bytes: Buffer): T {
+    return this.validate(JSON.parse(bytes.toString('utf8')));
   }
   private async readBytes(): Promise<Buffer | null> {
     try {
@@ -63,10 +64,7 @@ export class DocumentStore<T> {
         await handle.close();
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        await requireNoInterruptedPublication(this.file);
-        return null;
-      }
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
       throw error;
     }
   }
@@ -92,8 +90,8 @@ export class DocumentStore<T> {
             published?.(createHash('sha256').update(text).digest('hex'));
             await syncParentDirectory(this.file);
           } else {
-            await coordinateMetadata(path.dirname(this.file), () =>
-              publishMetadata(this.file, temporary, expected, this.maxBytes, () =>
+            await coordinateMetadata(path.dirname(this.file), (locked) =>
+              publishMetadata(this.file, temporary, expected, this.maxBytes, locked, () =>
                 published?.(createHash('sha256').update(text).digest('hex')),
               ),
             );

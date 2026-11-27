@@ -128,11 +128,11 @@ function withDatabase(file: string, read: (database: DatabaseSync) => SQLiteRepl
     return read(database);
   } catch (error) {
     if (!damaged(error)) throw error;
-    const message = [
+    console.warn('SQLite could not read the database:', errorMessage(error));
+    return unreadable(
+      'damaged',
       'Viewer could not read this database. It may be damaged or encrypted.',
-      `SQLite reported: ${errorMessage(error)}`,
-    ].join(' ');
-    return unreadable('damaged', message);
+    );
   } finally {
     database?.close();
   }
@@ -147,7 +147,8 @@ function openReadOnly(file: string): DatabaseSync {
     database = new DatabaseSync(location, { readOnly: true });
   } catch (error) {
     if (damaged(error)) throw error;
-    throw new Error(`Viewer could not open this database. SQLite reported: ${errorMessage(error)}`);
+    console.warn('SQLite could not open the database:', errorMessage(error));
+    throw new Error('Viewer could not open this database.');
   }
   try {
     database.setAuthorizer(authorize);
@@ -203,7 +204,8 @@ function problem(error: unknown): string {
   if (damaged(error)) return 'This table is damaged.';
   if (resultCode(error) === SQLITE_AUTH)
     return 'Reading this table would run a query stored in the database, which Viewer does not do.';
-  return `Viewer cannot read this table. SQLite reported: ${errorMessage(error)}`;
+  console.warn('SQLite could not read the table:', errorMessage(error));
+  return 'Viewer cannot read this table.';
 }
 
 /** A name as one SQL identifier: doubling its quotes keeps any name a single identifier. */

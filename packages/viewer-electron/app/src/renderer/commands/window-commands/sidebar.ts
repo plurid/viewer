@@ -27,6 +27,7 @@ export function sidebarCommands({
         actions.workspace.openPath(context.sidebar!.path!, {
           paneID: context.paneID,
           workspaceID: context.workspaceID,
+          modelRequest: context.modelRequest,
           directory: true,
         }),
     },

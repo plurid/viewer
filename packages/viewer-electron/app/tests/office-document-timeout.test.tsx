@@ -120,6 +120,8 @@ it('keeps the Office layout switch reachable when content extraction fails', asy
     },
   } as unknown as PreviewContext;
   render(<OfficePreview {...context} />);
-  expect(await screen.findByText('Could not read workbook content.')).toBeTruthy();
+  expect(
+    await screen.findByText("Viewer couldn't read the contents of this document."),
+  ).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Print Layout' })).toBeTruthy();
 });

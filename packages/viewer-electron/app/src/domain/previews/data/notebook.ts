@@ -79,7 +79,8 @@ export interface Notebook {
   total: number;
 }
 
-export type NotebookReading = { ok: true; notebook: Notebook } | { ok: false; reason: string };
+export type NotebookReading =
+  { ok: true; notebook: Notebook } | { ok: false; reason: string; diagnostic?: unknown };
 
 export interface NotebookLimits {
   cells: number;
@@ -281,8 +282,7 @@ export function parseNotebook(source: string, limits = notebookLimits): Notebook
   try {
     value = JSON.parse(source);
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    return { ok: false, reason: `The file is not valid JSON. ${detail}` };
+    return { ok: false, reason: 'The file is not valid JSON.', diagnostic: error };
   }
   if (!isObject(value)) return { ok: false, reason: 'The file is not a notebook object.' };
   const major = value.nbformat;

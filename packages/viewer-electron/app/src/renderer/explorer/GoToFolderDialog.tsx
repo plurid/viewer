@@ -2,6 +2,8 @@ import { FolderHistoryRecovery } from '../ui/FolderHistoryRecovery';
 import { subscribeFolderRemaps } from './folder-availability';
 import { pathMapper } from '../../domain/files/changes';
 import { useEffect, useId, useRef, useState } from 'react';
+import { pathInputText } from '../../domain/files/path-label';
+import { trashLocation } from '../../domain/files/trash';
 import { errorMessage } from '../../domain/errors';
 import { baseName } from '../../domain/workspaces/planes';
 import { getState, useViewer } from '../state/core';
@@ -24,14 +26,13 @@ export function GoToFolderDialog({
   onOpen(path: string): Promise<unknown>;
   onClose(): void;
 }) {
-  const [query, setQuery] = useState(
-    () =>
-      initial ??
-      getState()
-        .saved.workspaces.find((space) => space.id === getState().saved.activeWorkspace)
-        ?.panes.find((pane) => pane.id === getState().activePane && pane.type === 'folder')?.path ??
-      getState().bootstrap.home,
-  );
+  const [query, setQuery] = useState(() => {
+    const { bootstrap, saved, activePane } = getState();
+    const current = saved.workspaces
+      .find((space) => space.id === saved.activeWorkspace)
+      ?.panes.find((pane) => pane.id === activePane && pane.type === 'folder');
+    return pathInputText(initial ?? current?.path ?? bootstrap.home, bootstrap.home);
+  });
   const [edited, setEdited] = useState(false);
   const [selected, setSelected] = useState('');
   const [error, setError] = useState('');
@@ -51,7 +52,7 @@ export function GoToFolderDialog({
     () => subscribeFolderRemaps((changes) => setSelected((path) => pathMapper(changes)(path))),
     [],
   );
-  const typedPath = /^(?:[/~]|\.{1,2}\/|[a-z]:[\\/])/i.test(query);
+  const typedPath = query === trashLocation || /^(?:[/~]|\.{1,2}\/|[a-z]:[\\/])/i.test(query);
   const index = selected ? paths.indexOf(selected) : edited && !typedPath && paths.length ? 0 : -1;
   const choice = paths[index];
   useEffect(() => {
@@ -91,10 +92,14 @@ export function GoToFolderDialog({
           incomplete ? incompleteText : 'No matching folders. Type a path such as ~/Documents.',
         );
       // Recheck on selection: a volume may have disappeared after the suggestions arrived.
-      const entry = await window.viewer.stat(path);
-      if (!entry?.directory) throw new Error("That's a file, not a folder.");
+      let destination = path;
+      if (path !== trashLocation) {
+        const entry = await window.viewer.stat(path);
+        if (!entry?.directory) throw new Error("That's a file, not a folder.");
+        destination = entry.path;
+      }
       if (!live.current) return;
-      await onOpen(entry.path);
+      await onOpen(destination);
       if (live.current) onClose();
     } catch (cause) {
       if (live.current) {

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { middleName } from '../../domain/files/path-label';
+import { middleName, twoLineName } from '../../domain/files/path-label';
 import { measurerFor, watchFit } from './text-fit';
 import './file-name.css';
 
@@ -47,13 +47,12 @@ export function FileName({
             )
           : undefined;
       if (!measure) return;
-      // Two lines that break anywhere hold all but the part of a character carried to the next
-      // line: one font size of slack keeps the cut text inside them.
-      const room =
-        fit === 'two-lines' ? width * 2 - (Number.parseFloat(style.fontSize) || 0) : width;
       // Layout rounds a box's width, the canvas does not: a pixel of slack keeps a box sized by
       // its own text from cutting a little more on every refit.
-      const text = middleName(name, (candidate) => measure(candidate) <= room + 1);
+      const text =
+        fit === 'two-lines'
+          ? twoLineName(name, width, measure)
+          : middleName(name, (candidate) => measure(candidate) <= width + 1);
       setFitted((previous) =>
         previous.name === name && previous.text === text ? previous : { name, text },
       );
@@ -62,7 +61,7 @@ export function FileName({
     return watchFit(element, refit);
   }, [name, fit]);
   const text = fit !== 'wrap' && fitted.name === name ? fitted.text : name;
-  const cut = text !== name;
+  const cut = (fit === 'two-lines' ? text.replace('\n', '') : text) !== name;
   return (
     <span
       ref={root}
@@ -72,7 +71,7 @@ export function FileName({
       data-file-name={name}
       title={cut ? name : undefined}
     >
-      {cut ? (
+      {text !== name ? (
         <>
           <span aria-hidden="true">{text}</span>
           <span className="visually-hidden">{name}</span>

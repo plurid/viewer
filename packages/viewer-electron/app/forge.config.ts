@@ -1,5 +1,5 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
-import { MakerZIP } from '@electron-forge/maker-zip';
+import { directMakers } from './tools/make-targets';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
@@ -21,11 +21,12 @@ import { speechRuntimeName } from './src/desktop/speech/runtime-manifest';
 import { applicationCopyright } from './src/desktop/release';
 import { macOSMinimum } from './tools/native-build/macos-target';
 import { directBuildNumber } from './tools/build-number';
-import { nodePtyFileUsed, trimElectronTemplate } from './tools/bundle-trim';
+import { nodePtyFileUsed, patchedNodePtySource, trimElectronTemplate } from './tools/bundle-trim';
 import {
   assertMacPackagingArch,
   assertMakeOutputAvailable,
   assertRetainedNotarization,
+  directSigningIdentity,
 } from './tools/trash-previous-build';
 const require = createRequire(import.meta.url);
 const appRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -34,14 +35,7 @@ const storeConfig = storeConfiguration.parse(store);
 const inputs = channel === 'direct' ? undefined : storeInputs(process.env, channel);
 const version = alphaVersionSchema.parse(manifest.version);
 const directIdentity =
-  channel === 'direct' ? process.env.VIEWER_DIRECT_IDENTITY?.trim() : undefined;
-if (
-  directIdentity &&
-  (directIdentity === '-' ||
-    (!/^[A-Fa-f0-9]{40}$/.test(directIdentity) &&
-      !directIdentity.startsWith('Developer ID Application:')))
-)
-  throw new Error('VIEWER_DIRECT_IDENTITY must identify a Developer ID Application certificate.');
+  channel === 'direct' ? directSigningIdentity(process.env.VIEWER_DIRECT_IDENTITY) : undefined;
 const storeSigning = inputs
   ? {
       identity: inputs.identity,
@@ -178,7 +172,7 @@ const config: ForgeConfig = {
     // modules for Node resolution, Electron's rebuild and ASAR unpacking.
     packageAfterCopy: async (_config, buildPath, electronVersion, platform, arch) => {
       await prepareNativeRebuild({ appRoot, electronVersion, arch });
-      await copyPDFRuntime(buildPath, platform, arch);
+      await copyPDFRuntime(buildPath, platform, arch, require);
       for (const dependency of ['node-pty', 'node-addon-api']) {
         const source = path.dirname(require.resolve(dependency + '/package.json'));
         await fs.cp(source, path.join(buildPath, 'node_modules', dependency), {
@@ -189,26 +183,11 @@ const config: ForgeConfig = {
             nodePtyFileUsed(path.relative(source, file), platform, arch),
         });
       }
-      // macOS App Sandbox permits termios/resize ioctls on the owned PTY
-      // master, but not on its slave device. Both endpoints share termios and
-      // window size. Keep this small compatibility patch in the packaged copy;
-      // Forge then rebuilds it for Electron. Never edit the installed package.
       const source = path.join(buildPath, 'node_modules/node-pty/src/unix/pty.cc');
-      let code = await fs.readFile(source, 'utf8');
-      for (const [before, after] of [
-        ['tcsetattr(slave, TCSANOW, termp)', 'tcsetattr(*master, TCSANOW, termp)'],
-        ['ioctl(slave, TIOCSWINSZ, winp)', 'ioctl(*master, TIOCSWINSZ, winp)'],
-      ]) {
-        if (!code.includes(before))
-          throw new Error(
-            'Review the node-pty sandbox compatibility patch after updating node-pty.',
-          );
-        code = code.replace(before, after);
-      }
-      await fs.writeFile(source, code);
+      await fs.writeFile(source, await patchedNodePtySource(source));
     },
   },
-  makers: channel === 'direct' ? [new MakerZIP({}, ['darwin'])] : [],
+  makers: channel === 'direct' ? directMakers() : [],
   plugins: [
     new VitePlugin({
       build: [

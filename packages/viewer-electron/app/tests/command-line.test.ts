@@ -3,6 +3,7 @@
  * are; verbs by vim's names and tmux's; `set` by fixed setting names.
  */
 import { describe, expect, it } from 'vitest';
+import type { FileEntry } from '../src/domain/contracts';
 import type { Word } from '../src/domain/command-line/lex';
 import { expandPath, LineError, parseLine, quoteWord } from '../src/domain/command-line/lex';
 import {
@@ -220,6 +221,46 @@ describe('set', () => {
   });
 });
 import { lineCompletions } from '../src/renderer/command-line/complete';
+
+it.each([':e viewer:/', ':e viewer://tr', ':e viewer://trash', ':cd "viewer://trash"'])(
+  'keeps virtual place completion out of the filesystem for %s',
+  (line) => {
+    expect(
+      lineCompletions(line, {
+        commands: [],
+        family: () => [],
+        workspaces: [],
+        value: () => undefined,
+        places: { home: '/home', folder: '/work' },
+      }),
+    ).toEqual({ completions: [] });
+  },
+);
+
+it.each([
+  [':e viewer:/notes/F', '/work/viewer:/notes', 'Field.txt'],
+  [':e ./viewer:/notes/F', '/work/viewer:/notes', 'Field.txt'],
+  [':e viewer://tracks/F', '/work/viewer:/tracks', 'Field.txt'],
+  [':e viewer://trash/F', '/work/viewer:/trash', 'Field.txt'],
+  [':e "viewer:/my notes/F"', '/work/viewer:/my notes', 'Field notes.txt'],
+  [':e "~/viewer:/F"', '/work/~/viewer:', 'Field.txt'],
+  [':write viewer://tr', '/work/viewer:', 'track.txt'],
+])('completes the local path in %s and retains its meaning on Enter', (line, directory, name) => {
+  const places = { home: '/home', folder: '/work' };
+  const listing = { directory, entries: [{ name, directory: false } as FileEntry] };
+  const result = lineCompletions(line, {
+    commands: [],
+    family: () => [],
+    workspaces: [],
+    value: () => undefined,
+    places,
+    listing,
+  });
+  expect(result.directory).toBe(directory);
+  expect(result.completions.map((row) => row.label)).toEqual([name]);
+  const completed = parseLine(result.completions[0]!.insert)[0]!.words[0]!;
+  expect(expandPath(completed, places)).toBe(directory + '/' + name);
+});
 
 it.each(['e %/', 'cd %:h/'])('offers no completion without a current path for %s', (line) => {
   expect(

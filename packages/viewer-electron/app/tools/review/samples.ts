@@ -8,6 +8,9 @@ import path from 'node:path';
 import { chooseFilePreview, filePreviewModules } from '../../src/domain/previews/formats';
 import type { BuiltInPreviewKind } from '../../src/domain/previews/formats';
 import type { FileEntry } from '../../src/domain/contracts';
+import type { ActionInput, CustomAction } from '../../src/domain/automation/actions';
+import { lensFolder, lensSchema, lensSubfolder, lensSuffix } from '../../src/domain/files/lenses';
+import { projectDefinitionSchema } from '../../src/domain/workspaces/project';
 import { fieldNotesPDF } from '../docs/sample';
 import { localSamples } from '../playground/catalog';
 import { modelSamples } from '../playground/samples/models';
@@ -26,6 +29,31 @@ export const sampleFolders = {
   /** A model for each axis convention, and one that cannot be read. */
   models: 'Models',
 } as const;
+
+export const workspaceName = 'Field work';
+export const lensSample = {
+  folder: path.join(sampleFolders.projects, 'Lens sample'),
+  name: 'Field notes by kind',
+  groupID: 'gnotes',
+} as const;
+export const gitSample = path.join(sampleFolders.projects, 'Git sample');
+export const journalSample = path.join(sampleFolders.projects, 'Journal events');
+
+export function sampleProject(bindings: Record<string, string>) {
+  return projectDefinitionSchema.parse({
+    version: 1,
+    id: '6f1f0f5e-6b1a-4e3c-9d4e-2f6a1c0b7d21',
+    name: workspaceName,
+    bindings: Object.entries(bindings).map(([name, relative]) => ({
+      name,
+      label: path.basename(relative),
+    })),
+    planes: [],
+    folders: [],
+    layout: { placements: [] },
+    arrangements: {},
+  });
+}
 
 /** The wide picture the preview checklists name: 2400 × 900 pixels. */
 export const widePicture = path.join('Pictures', 'Wide picture 2400x900.png');
@@ -92,6 +120,61 @@ export const sampleFiles = {
 } as const;
 
 export type SampleKind = keyof typeof sampleFiles;
+
+function sampleCommand(
+  kind: string,
+  name: string,
+  executor: CustomAction['executor'],
+  inputs?: ActionInput[],
+): CustomAction {
+  return {
+    id: 'review-' + kind,
+    name,
+    aliases: [],
+    icon: 'command',
+    shortcut: '',
+    order: 0,
+    pinned: false,
+    when: { target: 'any', extensions: [], min: 0, max: 10000 },
+    executor,
+    ...(inputs ? { inputs } : {}),
+  };
+}
+
+/** Harmless commands for Settings. The scenes open editors and parameter forms. */
+export const reviewActions = [
+  sampleCommand('refresh', 'Refresh Files', { kind: 'builtin', command: 'refresh' }),
+  sampleCommand('sequence', 'Refresh and Select', {
+    kind: 'sequence',
+    commands: ['refresh', 'select-all'],
+  }),
+  sampleCommand('workflow', 'Review Workflow', {
+    kind: 'workflow',
+    steps: [
+      { kind: 'command', line: 'refresh' },
+      { kind: 'action', actionID: 'review-program' },
+    ],
+  }),
+  sampleCommand('recipe', 'Rename Field Notes', { kind: 'recipe', recipeID: 'batch-rename' }),
+  sampleCommand('terminal', 'Open Login Shell', { kind: 'terminal', profileID: 'login' }),
+  sampleCommand('program', 'Print a Caption', {
+    kind: 'executable',
+    executable: '/usr/bin/printf',
+    args: ['%s\\n', 'Field work'],
+    perItem: false,
+  }),
+  sampleCommand(
+    'shell',
+    'Print a Folder Label',
+    {
+      kind: 'shell',
+      executable: '/bin/zsh',
+      script: 'printf "%s\\n" "$VIEWER_INPUT_LABEL"',
+      perItem: false,
+    },
+    [{ name: 'label', label: 'Folder label', kind: 'text', required: true, initial: 'Field work' }],
+  ),
+];
 
 /** Names in scripts that are not Latin, each with its own file. */
 export const scriptNames = [
@@ -192,6 +275,46 @@ export async function createSamples(home: string, appRoot: string): Promise<void
     path.join(home, sampleFolders.samples, sampleFiles.text),
     path.join(projects, 'Brief.txt'),
   );
+  await writeFile(
+    path.join(projects, workspaceName + '.viewer-project'),
+    JSON.stringify(sampleProject({})),
+    { flag: 'wx' },
+  );
+  const lensDirectory = path.join(home, lensSample.folder, lensFolder, lensSubfolder);
+  await mkdir(lensDirectory, { recursive: true });
+  await writeFile(
+    path.join(lensDirectory, 'field-notes' + lensSuffix),
+    JSON.stringify(
+      lensSchema.parse({
+        version: 1,
+        kind: 'viewer-lens',
+        id: '3c0afc67-cc91-499d-8736-c176cf8bce58',
+        name: lensSample.name,
+        order: 0,
+        groups: [
+          {
+            id: lensSample.groupID,
+            name: 'Notes',
+            order: 0,
+            rules: [{ kind: 'extension', values: ['txt'] }],
+          },
+        ],
+        members: [],
+      }),
+    ),
+    { flag: 'wx' },
+  );
+  await writeFile(path.join(home, lensSample.folder, sampleFiles.text), sources.text, {
+    flag: 'wx',
+  });
+  const git = path.join(home, gitSample, '.git');
+  // A repository with an unborn branch is enough to list its worktree and open the commit form.
+  await mkdir(path.join(git, 'objects'), { recursive: true });
+  await mkdir(path.join(git, 'refs', 'heads'), { recursive: true });
+  await writeFile(path.join(git, 'HEAD'), 'ref: refs/heads/main\n', { flag: 'wx' });
+  await writeFile(path.join(home, gitSample, sampleFiles.text), sources.text, { flag: 'wx' });
+  await mkdir(path.join(home, journalSample));
+  await writeFile(path.join(home, journalSample, sampleFiles.text), sources.text, { flag: 'wx' });
   const copies = path.join(home, sampleFolders.copies);
   await mkdir(copies);
   for (const name of [

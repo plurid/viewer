@@ -39,5 +39,7 @@ it('bounds expansion and handles aliases, cycles, unusual keys and invalid synta
   expect(bounded.nodes.length).toBeLessThanOrEqual(100);
   expect(bounded.limited).toBe(true);
   expect(inspectStructured('a: [', 'yaml').error).toContain('line');
-  expect(inspectStructured('{ "a": nope }', 'jsonc').error).toContain('line 1');
+  const invalid = inspectStructured('{ "a": nope }', 'jsonc');
+  expect(invalid.error).toBe('Invalid JSONC at line 1, column 8. Source is shown below.');
+  expect(invalid.diagnostic).toContain('InvalidSymbol');
 });

@@ -120,6 +120,27 @@ describe('notebook preview', () => {
     await waitFor(() => expect(view.getByRole('heading', { name: 'Sales' })).toBeTruthy());
   });
 
+  it('keeps a malformed notebook’s JSON exception in diagnostics and its source available', async () => {
+    const diagnosticReport = vi.fn(async () => {});
+    const viewer = window.viewer;
+    vi.stubGlobal('viewer', { ...viewer, diagnosticReport });
+    try {
+      const source = '{"cells": nope}';
+      const view = show(NotebookPreview, 'broken.ipynb', source);
+      await waitFor(() => expect(view.getByLabelText('File text').textContent).toContain(source));
+      expect(view.container.querySelector('.inline-warning')?.textContent).toBe(
+        "Viewer couldn't read this notebook. The file is not valid JSON.",
+      );
+      expect(diagnosticReport).toHaveBeenCalledWith(
+        expect.objectContaining({
+          detail: expect.stringMatching(/Unexpected token|JSON/i),
+        }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('shows invalid and oversized notebooks as text with a note', async () => {
     const invalid = show(NotebookPreview, 'broken.ipynb', '{"cells": [');
     await waitFor(() =>

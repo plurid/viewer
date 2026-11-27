@@ -9,7 +9,7 @@ import {
   useViewer,
 } from '../state/store';
 import { activeLens, useLenses } from '../state/lenses';
-import { lensMenuIDs } from '../commands/lenses';
+import { lensCommandID, lensMenuIDs } from '../commands/lenses';
 import { planeLayoutCommandIDs } from '../../domain/workspaces/plane-layout';
 import { focusFiles } from './sessions';
 import { useCommands, useCommandRevision } from '../commands/context';
@@ -51,7 +51,7 @@ function LensButton({
   path: string;
   map: boolean;
   open: boolean;
-  onOpen(event: React.MouseEvent<HTMLButtonElement>, ids: string[]): void;
+  onOpen(event: React.MouseEvent<HTMLButtonElement>, ids: string[], initialID?: string): void;
 }) {
   const { data } = useLenses(path);
   const presentation = useFolderPresentation(path);
@@ -69,7 +69,7 @@ function LensButton({
       title={current ? `Lens: ${current.lens.name}` : 'Lenses'}
       aria-haspopup="dialog"
       aria-expanded={open}
-      onClick={(event) => onOpen(event, ids)}
+      onClick={(event) => onOpen(event, ids, current && lensCommandID(current.lens.id))}
     >
       <Icon name="lens" size={15} />
       {current && <span className="plane-lens-name">{current.lens.name}</span>}
@@ -116,6 +116,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
     x: number;
     y: number;
     request: CommandRequest;
+    initialID?: string;
   } | null>(null);
   // Pinned, the plane's content floats in the pinned layer and this header stays behind in the
   // space, hidden: a format's tools then stand in its content, as where a plane has no header.
@@ -173,6 +174,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
     event: React.MouseEvent<HTMLButtonElement>,
     ids?: string[],
     kind: 'view' | 'actions' | 'lens' | 'layout' = ids ? 'view' : 'actions',
+    initialID?: string,
   ) => {
     if (menu?.kind === kind) {
       setMenu(null);
@@ -184,6 +186,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
     const target = registry.context(id);
     setMenu({
       kind,
+      initialID: kind === 'view' && pane?.type === 'folder' ? 'view-' + pane.mode : initialID,
       anchor: event.currentTarget,
       x: rect.left,
       y: rect.bottom + 5,
@@ -332,7 +335,7 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
             path={pane.path}
             map={pane.mode === 'map'}
             open={menu?.kind === 'lens'}
-            onOpen={(event, ids) => openMenu(event, ids, 'lens')}
+            onOpen={(event, ids, current) => openMenu(event, ids, 'lens', current)}
           />
           {controls.search && (
             <IconButton
@@ -417,7 +420,13 @@ export function PlaneHeader({ context }: { context: PluridPlaneChromeContext }) 
           request={menu.request}
           anchor={menu.anchor}
           onClose={() => setMenu(null)}
-          label={menu.kind === 'layout' ? 'Layout' : 'Plane actions'}
+          choiceList={menu.kind !== 'actions'}
+          initialID={menu.initialID}
+          label={
+            { view: 'View mode', lens: 'Lenses', layout: 'Layout', actions: 'Plane actions' }[
+              menu.kind
+            ]
+          }
           lead={menu.kind === 'actions' ? lead : undefined}
         />
       )}

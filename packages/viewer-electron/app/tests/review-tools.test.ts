@@ -1,8 +1,11 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { customActionSchema } from '../src/desktop/actions/automation-schema';
+import { workflowProgram } from '../src/domain/automation/actions';
 import { applyAllowances } from '../tools/review/allowlist';
 import type { Allowance } from '../tools/review/allowlist';
+import type { ReviewPage } from '../tools/review/page';
 import { coverage, readCatalog } from '../tools/review/coverage';
 import { comparePictures, decodePNG, encodePNG } from '../tools/review/png';
 import type { Picture } from '../tools/review/png';
@@ -80,6 +83,132 @@ describe('review samples and scenes', () => {
       [1600, 'light'],
     ]);
   });
+
+  it('seeds every custom command kind and gives the workflow a built-in line and a program', () => {
+    const scenes = reviewAreas.flatMap((area) => area.scenes);
+    const actions = scenes.find(({ id }) => id === 'settings-actions')!.setup.customActions!;
+    expect(actions.map(({ executor }) => executor.kind).sort()).toEqual([
+      'builtin',
+      'executable',
+      'recipe',
+      'sequence',
+      'shell',
+      'terminal',
+      'workflow',
+    ]);
+    for (const action of actions) expect(customActionSchema.parse(action)).toEqual(action);
+    const workflow = actions.find(({ executor }) => executor.kind === 'workflow')?.executor;
+    expect(workflow?.kind).toBe('workflow');
+    if (workflow?.kind !== 'workflow') throw new Error('Missing workflow fixture');
+    expect(workflow.steps).toEqual([
+      { kind: 'command', line: 'refresh' },
+      { kind: 'action', actionID: 'review-program' },
+    ]);
+    expect(workflowProgram(actions, 'review-program').executor.kind).toBe('executable');
+    for (const id of ['settings-shell-command', 'settings-workflow-editor'])
+      expect(scenes.find((scene) => scene.id === id)?.setup.customActions).toEqual(actions);
+  });
+
+  it('declares reachable scenes for the uncovered dialogs and the License page', () => {
+    const scenes = reviewAreas.flatMap((area) => area.scenes).filter((scene) => !scene.blocked);
+    const covered = new Set(scenes.flatMap((scene) => scene.covers?.dialogs ?? []));
+    expect([...covered]).toEqual(
+      expect.arrayContaining([
+        'ActionHub',
+        'CommitDialog',
+        'ConfigureTask',
+        'DefinedRows',
+        'ExportDialog',
+        'MoveDialog',
+        'NetworkSharingDialog',
+        'OperationReviewControls',
+        'OperationsPanel',
+        'Parameters',
+        'ProjectControls',
+        'RulesDialog',
+        'TrashConfirmation',
+        'TrashLensDialog',
+        'TrashNoteDialog',
+        'TrashPreview',
+        'useConfirmation',
+        'WorktreesDialog',
+      ]),
+    );
+    expect(scenes.find(({ id }) => id === 'settings-license')?.covers?.settings).toEqual([
+      'License',
+    ]);
+  });
+
+  it('keeps the selectable native Share scene alongside the sample Network Sharing dialog', () => {
+    const scenes = reviewAreas.flatMap((area) => area.scenes);
+    const native = scenes.find(({ id }) => id === 'dialog-share');
+    expect(native?.blocked).toContain('macOS share panel');
+    expect(native?.covers?.commands).toContain('share');
+    const network = scenes.find(({ id }) => id === 'dialog-network-sharing');
+    expect(network?.blocked).toBeUndefined();
+    expect(network?.covers?.dialogs).toContain('NetworkSharingDialog');
+  });
+
+  it('cancels the sample collision after the replacement confirmation is captured', async () => {
+    const scene = reviewAreas
+      .flatMap((area) => area.scenes)
+      .find(({ id }) => id === 'dialog-replace-existing')!;
+    const afterCapture: (() => Promise<void>)[] = [];
+    const evaluate = vi.fn().mockResolvedValueOnce('sample-copy').mockResolvedValue(undefined);
+    const page = {
+      afterCapture,
+      evaluate,
+      path: (...parts: string[]) => path.join('/sample-home', ...parts),
+      button: vi.fn(),
+      waitFor: vi.fn(),
+      until: vi.fn(),
+    };
+
+    await scene.steps(page as unknown as ReviewPage, standardVariants[0]!);
+    expect(page.button).toHaveBeenCalledExactlyOnceWith(
+      'Replace',
+      '.operations-panel .collision-actions',
+    );
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(afterCapture).toHaveLength(1);
+
+    await afterCapture[0]!();
+    expect(evaluate).toHaveBeenCalledWith(expect.stringContaining('window.viewer.cancelJob'));
+    expect(evaluate).toHaveBeenLastCalledWith(expect.stringContaining('sample-copy'));
+  });
+
+  it('waits for the folder-only workspace to close before opening its remembered planes', async () => {
+    const scene = reviewAreas
+      .flatMap((area) => area.scenes)
+      .find(({ id }) => id === 'dialog-forget-remembered-planes')!;
+    const manager = 'dialog[open].workspaces-dialog';
+    const page = {
+      evaluate: vi.fn().mockResolvedValue(true),
+      palette: vi.fn(),
+      type: vi.fn(),
+      gone: vi.fn(),
+      click: vi.fn(),
+      waitFor: vi.fn(),
+      button: vi.fn(async (name: string) => {
+        if (name === 'Close Workspace')
+          throw new Error('Folder-only workspaces close automatically');
+      }),
+    };
+    await scene.steps(page as unknown as ReviewPage, standardVariants[0]!);
+    expect(page.waitFor).toHaveBeenCalledWith(manager);
+    expect(
+      page.palette.mock.calls.filter(([label]) => label === 'Manage Workspaces…'),
+    ).toHaveLength(1);
+    expect(page.gone).toHaveBeenCalledWith(manager + ' [data-workspace-id="review"]');
+    expect(page.gone).toHaveBeenCalledBefore(page.click);
+    expect(page.button).toHaveBeenLastCalledWith(
+      'Forget remembered planes for Field work',
+      manager,
+    );
+    expect(page.waitFor).toHaveBeenLastCalledWith(
+      'dialog[open][aria-label="Forget remembered planes?" i]',
+    );
+  });
 });
 
 describe('review findings', () => {
@@ -130,6 +259,7 @@ describe('review coverage and sheet', () => {
           variant: standardVariants[0]!,
           findings: [],
           milliseconds: 1,
+          image: 'image-tools/wide-dark.png',
           commands: ['Image tools…'],
           dialogs: ['image tools · Forest.jpg'],
         },
@@ -146,6 +276,50 @@ describe('review coverage and sheet', () => {
     );
     expect(result.commands[0]!.scenes).toEqual(['image-tools']);
     expect(result.dialogs[0]!.scenes).toEqual(['image-tools']);
+  });
+
+  it('credits only completed screenshots, including mixed outcomes and unconfigured License', () => {
+    const license = reviewAreas
+      .flatMap((area) => area.scenes)
+      .find(({ id }) => id === 'settings-license')!;
+    const sample = {
+      variant: standardVariants[0]!,
+      findings: [],
+      milliseconds: 1,
+      commands: [],
+      dialogs: [],
+    };
+    const failed = {
+      ...sample,
+      image: 'failure.png',
+      error: 'Missing target',
+      commands: ['Export'],
+      dialogs: ['Export'],
+    };
+    const good = { ...sample, image: 'license.png' };
+    const scene: SceneResult = {
+      ...license,
+      area: 'settings',
+      covers: license.covers!,
+      captures: [],
+    };
+    const newerBuild = 'A direct build with License configured.';
+    const entry = { id: 'License', label: 'License', source: '' };
+    const observed = { ...entry, id: 'Export', label: 'Export' };
+    const result = coverage(
+      { settings: [entry], dialogs: [observed], commands: [observed], previews: [] },
+      [
+        { ...scene, newerBuild, captures: [{ ...sample, newerBuild }] },
+        { ...scene, id: 'empty' },
+        { ...scene, id: 'no-image', captures: [sample] },
+        { ...scene, id: 'failure', captures: [failed] },
+        { ...scene, id: 'blocked', blocked: 'Native window', captures: [good] },
+        { ...scene, id: 'configured', captures: [good, failed] },
+      ],
+    );
+    expect(result.settings[0]?.scenes).toEqual(['configured']);
+    expect(result.commands[0]?.scenes).toEqual([]);
+    expect(result.dialogs[0]?.scenes).toEqual([]);
   });
 
   it('writes a sheet whose data cannot end its script element', async () => {

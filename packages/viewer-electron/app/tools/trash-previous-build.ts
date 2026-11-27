@@ -1,10 +1,13 @@
 import { execFileSync } from 'node:child_process';
+import { constants } from 'node:fs';
 import { createRequire } from 'node:module';
-import { readdir } from 'node:fs/promises';
+import { open, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { buildDirectory, packageBuild } from './package-build';
+import { patchedNodePtySource } from './bundle-trim';
+import { pdfRuntimeManifests } from './pdf-runtime';
+import { buildDirectory, packageBuild, requireNewPackage } from './package-build';
 import { execRelease, releaseEnvironment } from './release-environment';
 
 export function assertMacPackagingArch(arch: string, nativeArch: string): void {
@@ -14,6 +17,17 @@ export function assertMacPackagingArch(arch: string, nativeArch: string): void {
     throw new Error(
       `The packaging architecture ${arch} does not match the native resources (${nativeArch}).`,
     );
+}
+
+export function directSigningIdentity(input: string | undefined) {
+  const identity = input?.trim();
+  if (
+    identity &&
+    !/^[A-Fa-f0-9]{40}$/.test(identity) &&
+    !identity.startsWith('Developer ID Application:')
+  )
+    throw new Error('VIEWER_DIRECT_IDENTITY must identify a Developer ID Application certificate.');
+  return identity;
 }
 
 export function assertRetainedNotarization(profile: string | undefined): void {
@@ -41,10 +55,8 @@ export async function assertMakeOutputAvailable(out: string): Promise<void> {
 }
 
 /**
- * A rebuild trashes the previous build. Forge deletes `.vite` and its output folder before
- * writing new ones, which AGENTS.md forbids, so each rebuild waited for those two to be trashed by
- * hand. Packaging now first moves exactly those two to the system Trash (AGENTS.md names this
- * exception). A link in their place, or a Trash that fails, stops the build: nothing is deleted.
+ * Forge clears these two destinations. The local macOS wrapper preserves them in the Trash
+ * after its helpers succeed and before Forge starts.
  */
 export async function trashPreviousBuild(
   appRoot: string,
@@ -75,18 +87,14 @@ type BuildChild = (
   env: NodeJS.ProcessEnv,
 ) => Promise<void>;
 
-function buildChild(root: string): BuildChild {
-  const require = createRequire(path.join(root, 'package.json'));
-  return async (tool, args, env) => {
-    const entry =
-      tool === 'tsx'
-        ? require.resolve('tsx/cli')
-        : path.resolve(
-            path.dirname(require.resolve('@electron-forge/cli/package.json')),
-            require('@electron-forge/cli/package.json').bin['electron-forge'],
-          );
-    execFileSync(process.execPath, [entry, ...args], { cwd: root, env, stdio: 'inherit' });
-  };
+async function checkForgeEntry(entry: string) {
+  const script = await open(entry, constants.O_RDONLY | constants.O_NONBLOCK);
+  try {
+    if (!(await script.stat()).isFile())
+      throw new Error(`Expected a Forge CLI script at ${entry}.`);
+  } finally {
+    await script.close();
+  }
 }
 
 async function moveToTrash(file: string) {
@@ -100,7 +108,7 @@ export async function localBuild(
   platform: string,
   arch: string,
   environment: NodeJS.ProcessEnv,
-  child: BuildChild = buildChild(root),
+  child?: BuildChild,
   trash: (file: string) => Promise<void> = moveToTrash,
 ) {
   const [command, ...args] = argv;
@@ -124,7 +132,20 @@ export async function localBuild(
     },
   });
   const env = releaseEnvironment(environment);
-  if (values.help || values.version) return child('electron-forge', [command, ...args], env);
+  const require = createRequire(path.join(root, 'package.json'));
+  const forge = child
+    ? undefined
+    : path.resolve(
+        path.dirname(require.resolve('@electron-forge/cli/package.json')),
+        require('@electron-forge/cli/package.json').bin['electron-forge'],
+      );
+  const runChild: BuildChild =
+    child ??
+    (async (tool, args, env) => {
+      const entry = tool === 'tsx' ? require.resolve('tsx/cli') : forge!;
+      execFileSync(process.execPath, [entry, ...args], { cwd: root, env, stdio: 'inherit' });
+    });
+  if (values.help || values.version) return runChild('electron-forge', [command, ...args], env);
   if (
     positionals.length > 1 ||
     (positionals.length && path.resolve(root, positionals[0]!) !== root)
@@ -140,21 +161,35 @@ export async function localBuild(
     assertMacPackagingArch(arch, env.VIEWER_BUILD_ARCH ?? arch);
     assertMacPackagingArch(targetArch, arch);
   }
+  directSigningIdentity(env.VIEWER_DIRECT_IDENTITY);
   assertRetainedNotarization(env.VIEWER_NOTARY_PROFILE);
   const fromPackage = !!(values['from-package'] || values['skip-package']);
   await packageBuild(
     root,
     platform,
     targetArch,
+    (run) => runChild('electron-forge', [command, ...args], { ...env, VIEWER_PACKAGE_RUN: run }),
     async (run) => {
-      const buildEnv = { ...env, VIEWER_PACKAGE_RUN: run };
-      if (!fromPackage) await child('tsx', ['tools/build-helpers.ts'], buildEnv);
-      await child('electron-forge', [command, ...args], buildEnv);
-    },
-    async () => {
       if (make) await assertMakeOutputAvailable(path.join(root, 'out'));
-      if (platform === 'darwin' && !fromPackage)
-        await trashPreviousBuild(root, { platform, arch: targetArch, trash });
+      if (fromPackage) return;
+      if (platform !== 'darwin') await requireNewPackage(root, platform, targetArch);
+      await runChild('tsx', ['tools/build-helpers.ts'], { ...env, VIEWER_PACKAGE_RUN: run });
+      if (platform === 'darwin') {
+        await pdfRuntimeManifests(platform, targetArch, require);
+        require.resolve('node-addon-api/package.json');
+        const pty = path.dirname(require.resolve('node-pty/package.json'));
+        await patchedNodePtySource(path.join(pty, 'src/unix/pty.cc'));
+        if (make) {
+          // Maker modules run with the same filtered environment as Forge.
+          const checker = fileURLToPath(new URL('./make-targets.ts', import.meta.url));
+          await execRelease(process.execPath, [checker, platform, String(values.targets ?? '')], {
+            cwd: root,
+            env: { ...env, VIEWER_PACKAGE_RUN: run },
+          });
+        }
+        if (forge) await checkForgeEntry(forge);
+        await trashPreviousBuild(root, { platform, arch: targetArch, trash, make });
+      }
     },
     fromPackage,
   );

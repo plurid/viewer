@@ -9,6 +9,7 @@ import type { WorkflowStep } from '../src/domain/automation/actions';
 import { customActionSchema } from '../src/desktop/actions/automation-schema';
 import { windowCommandInvoke } from '../src/renderer/commands/invoke';
 import { programCommands } from '../src/renderer/commands/programs';
+import { lineCompletions } from '../src/renderer/command-line/complete';
 import { runLine } from '../src/renderer/command-line/run';
 import type { LineHost } from '../src/renderer/command-line/host';
 import {
@@ -128,6 +129,31 @@ beforeEach(() => {
 });
 
 describe('a line', () => {
+  it.each([
+    ':e viewer://trash',
+    ':e viewer\\://trash',
+    ':cd view"er:"//trash',
+    ':pwd | e viewer:\\/\\/trash',
+  ])(
+    'opens the typed Trash location directly and refuses a model requesting it for %s',
+    async (line) => {
+      const runtime = host();
+      expect(
+        lineCompletions(line, {
+          commands: [],
+          family: () => [],
+          workspaces: [],
+          value: () => undefined,
+          places: { home: '/home', folder: '/work' },
+        }),
+      ).toEqual({ completions: [] });
+      expect((await runLine(line, runtime)).ok).toBe(true);
+      expect(workspace.openPath).toHaveBeenCalledWith('viewer://trash', expect.anything());
+      expect(viewer.stat).not.toHaveBeenCalled();
+      expect((await runLine(line, runtime, true)).ok).toBe(false);
+      expect(workspace.openPath).toHaveBeenCalledTimes(1);
+    },
+  );
   it('opens a typed task form without touching files or running a process; requests cannot be pipelined', async () => {
     const open = vi.fn(),
       runtime = host([command('frame-all')]);

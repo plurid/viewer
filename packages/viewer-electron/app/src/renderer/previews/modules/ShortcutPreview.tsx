@@ -1,9 +1,9 @@
+import { previewProblem } from '../preview-problem';
 import { useEffect, useMemo, useState } from 'react';
 import type { PreviewContext } from '../contracts';
 import type { ShortcutFacts } from '../../../domain/previews/data/shortcuts';
 import { isBinaryPlist } from '../../../domain/previews/data/plist';
 import { readShortcut, shortcutLimit } from '../../../domain/previews/data/shortcuts';
-import { errorMessage } from '../../../domain/errors';
 import { Loading } from '../../ui/primitives';
 import { PreviewFailure } from '../PreviewFailure';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
@@ -49,7 +49,13 @@ export default function ShortcutPreview(context: PreviewContext) {
         });
       })
       .catch((error: unknown) => {
-        if (live && !signal.aborted) setReading({ status: 'failed', message: errorMessage(error) });
+        if (live && !signal.aborted)
+          setReading({
+            status: 'failed',
+            message: previewProblem(error, "Viewer couldn't read the address in this shortcut.", [
+              'This file is too large to be a shortcut.',
+            ]),
+          });
       });
     return () => {
       live = false;

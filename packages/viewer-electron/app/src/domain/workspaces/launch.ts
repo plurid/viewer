@@ -1,3 +1,4 @@
+import { trashLocation } from '../files/trash';
 import { z } from 'zod';
 
 export interface ShellCommandStatus {
@@ -55,7 +56,7 @@ export function parseLaunch(
         : argument.startsWith('~/')
           ? home.replace(/[\\/]$/, '') + argument.slice(1)
           : argument;
-    request.paths.push(resolve(cwd, expanded));
+    request.paths.push(expanded === trashLocation ? trashLocation : resolve(cwd, expanded));
   }
   return launchRequestSchema.parse(request);
 }

@@ -1,3 +1,4 @@
+import { previewProblem } from '../preview-problem';
 import { useEffect, useId, useMemo, useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import type { PreviewContext } from '../contracts';
@@ -15,7 +16,6 @@ import {
   keyLimits,
   nameText,
 } from '../../../domain/previews/keys/certificates';
-import { errorMessage } from '../../../domain/errors';
 import { Loading } from '../../ui/primitives';
 import { PreviewFailure } from '../PreviewFailure';
 import { plural } from '../../../domain/plural';
@@ -303,7 +303,8 @@ function HandedOn(context: PreviewContext) {
         if (live) setPreview(() => value);
       },
       (error: unknown) => {
-        if (live) setFailed(errorMessage(error));
+        if (live)
+          setFailed(previewProblem(error, "Viewer couldn't load the preview for this file."));
       },
     );
     return () => {

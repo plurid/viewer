@@ -1,3 +1,4 @@
+import { previewProblem } from './preview-problem';
 import { useEffect, useState } from 'react';
 import type { DocumentData } from '../../domain/services';
 import type { WorksheetWindow } from '../../domain/previews/documents/office';
@@ -62,7 +63,12 @@ export function useOfficeDocument(context: PreviewContext, worksheet?: Worksheet
         })
         .catch((error) => {
           clearTimeout(timer);
-          if (alive && !context.signal.aborted) fail(String(error.message || error));
+          if (alive && !context.signal.aborted)
+            fail(
+              previewProblem(error, "Viewer couldn't read the contents of this document.", [
+                'The message headers exceed the reader limit.',
+              ]),
+            );
         });
     return () => {
       alive = false;

@@ -1,5 +1,6 @@
 /** The shapes a review run shares between its scenes, the runner, the checks and the report. */
 import type { Look, ViewMode } from '../../src/domain/contracts';
+import type { CustomAction } from '../../src/domain/automation/actions';
 import type { ReviewPage } from './page';
 
 export type { Look };
@@ -75,6 +76,8 @@ export interface SceneSetup {
   otherWorkspace?: string;
   /** This many more workspaces, for long switcher lists. */
   extraWorkspaces?: number;
+  /** Sample commands local to this capture's configuration. */
+  customActions?: readonly CustomAction[];
   /** A project for the workspace: its folder and its outside folders by binding name, relative
    * to the sample home. */
   project?: { root: string; bindings: Readonly<Record<string, string>> };

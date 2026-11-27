@@ -1,10 +1,13 @@
 import { setTimeout as wait } from 'node:timers/promises';
 import { constants } from 'node:fs';
-import { link, open, readdir, rename } from 'node:fs/promises';
+import { link, lstat, mkdir, open, readdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { versionIdentity } from '../../domain/files/item-identity';
+import { fileStat } from '../files/stats';
 import { discardOwnTemporaryFile } from '../operations/removal';
-import { inspectReviewedFile } from '../native/reviewed-file';
+import { inspectReviewedFile, sameReviewedFile, verifyReviewedFile } from '../native/reviewed-file';
+import type { InspectedFile, ReviewedFile } from '../native/reviewed-file';
 import { syncParentDirectory } from './directory-sync';
 
 const pending = new Map<string, Promise<unknown>>();
@@ -29,7 +32,10 @@ async function lockDirectory(directory: string) {
   }
 }
 
-export function coordinateMetadata<T>(directory: string, work: () => Promise<T>): Promise<T> {
+export function coordinateMetadata<T>(
+  directory: string,
+  work: (locked: boolean) => Promise<T>,
+): Promise<T> {
   const key = path.resolve(directory);
   const previous = pending.get(key) ?? Promise.resolve();
   const task = previous
@@ -37,7 +43,7 @@ export function coordinateMetadata<T>(directory: string, work: () => Promise<T>)
     .then(async () => {
       const lock = await lockDirectory(directory);
       try {
-        return await work();
+        return await work(!!lock);
       } finally {
         await lock?.close();
       }
@@ -51,19 +57,214 @@ export function coordinateMetadata<T>(directory: string, work: () => Promise<T>)
 
 const previousPrefix = (file: string) => path.basename(file) + '.publishing-';
 
+function historyDirectory(file: string, name: string) {
+  const generation = name.slice(previousPrefix(file).length).replace(/\.verifying$/, '');
+  return file + '.history-' + generation;
+}
+
+async function requireHistoryDirectory(directory: string) {
+  const info = await lstat(directory);
+  if (!info.isDirectory() || info.uid !== process.getuid?.() || info.mode & 0o077)
+    throw new Error(`Expected a private metadata history directory at ${directory}.`);
+}
+
+async function isArchived(
+  source: string,
+  destination: string,
+  limit: number,
+  locked: boolean,
+  linking?: ReviewedFile,
+) {
+  const directory = path.dirname(destination);
+  const prefix = source.endsWith('.verifying') ? 'verification.sha256-' : 'predecessor.sha256-';
+  const markers = (await readdir(directory)).filter((name) => name.startsWith(prefix));
+  const archived = await inspectReviewedFile(destination, limit).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  });
+  if (!archived) {
+    if (markers.length) throw interrupted(path.basename(source));
+    return false;
+  }
+  const current = await inspectReviewedFile(source, limit);
+  const marker = prefix + archived.reviewed.sha256;
+  if (
+    current.reviewed.sha256 !== archived.reviewed.sha256 ||
+    (linking && (!sameReviewedFile(linking, current.reviewed) || !sameReviewedFile(linking, archived.reviewed))) ||
+    markers.some((name) => name !== marker)
+  )
+    throw interrupted(path.basename(source));
+  // A directory copy can give each hard link its own inode. Keep the verified digest in
+  // an empty file's name so recording it cannot leave a partially written digest.
+  if (markers.length) await inspectReviewedFile(path.join(directory, marker), 0);
+  else if (locked) await writeFile(path.join(directory, marker), '', { flag: 'wx', mode: 0o600, flush: true });
+  return true;
+}
+
 /** An interrupted replacement must never look like a new empty permission or update store. */
-export async function requireNoInterruptedPublication(file: string) {
+async function publicationLeftovers(file: string, limit: number, locked: boolean) {
   const entries = await readdir(path.dirname(file)).catch((error: NodeJS.ErrnoException) => {
     if (error.code === 'ENOENT') return [];
     throw error;
   });
   const prefix = previousPrefix(file);
-  const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
-  const previous = entries.find(
-    (name) => name.startsWith(prefix) && uuid.test(name.slice(prefix.length)),
-  );
-  if (previous)
-    throw new Error('An interrupted metadata save retained the previous file as ' + previous + '.');
+  const publication =
+    /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}(?:\.verifying)?$/;
+  const present = new Set(entries);
+  const pending: string[] = [];
+  for (const name of entries) {
+    if (!name.startsWith(prefix) || !publication.test(name.slice(prefix.length))) continue;
+    const archive = historyDirectory(file, name);
+    if (present.has(path.basename(archive))) {
+      await requireHistoryDirectory(archive);
+      const archived = path.join(archive, name);
+      if (await isArchived(path.join(path.dirname(file), name), archived, limit, locked)) {
+        // Finish any directory sync interrupted after the archival link was created.
+        await syncParentDirectory(archived);
+        await syncParentDirectory(file);
+        continue;
+      }
+    }
+    pending.push(name);
+  }
+  return pending;
+}
+
+function interrupted(previous: string, cause?: unknown) {
+  return new Error('An interrupted metadata save retained the previous file as ' + previous + '.', {
+    cause,
+  });
+}
+
+function allowExisting(error: NodeJS.ErrnoException) {
+  if (error.code !== 'EEXIST') throw error;
+}
+
+type RecoveryCopyState = 'staging' | 'complete' | 'witnessed';
+
+async function syncRecoveryCopy(copy: string, kept: InspectedFile, state: RecoveryCopyState) {
+  const access = state === 'staging'
+    ? constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND
+    : constants.O_RDONLY;
+  const handle = await open(copy, access | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
+  try {
+    const info = await fileStat(handle);
+    const identity = versionIdentity(info);
+    if (
+      !info.isFile() ||
+      (info.mode & 0o777) !== 0o600 ||
+      info.uid !== process.getuid?.() ||
+      identity === kept.reviewed.version.identity ||
+      (state === 'witnessed' ? info.nlink < 2 : info.nlink !== 1)
+    )
+      throw new Error('Expected an independent private recovery file.');
+    const { reviewed, bytes } = await inspectReviewedFile(copy, kept.bytes.length);
+    if (reviewed.version.identity !== identity) throw new Error('The recovery copy changed.');
+    if (state === 'staging' && bytes.length < kept.bytes.length &&
+      bytes.equals(kept.bytes.subarray(0, bytes.length))) {
+      await handle.writeFile(kept.bytes.subarray(bytes.length));
+    } else if (reviewed.sha256 !== kept.reviewed.sha256) {
+      throw new Error('The recovery copy changed.');
+    }
+    await handle.sync();
+    return identity;
+  } finally {
+    await handle.close();
+  }
+}
+
+async function prepareRecoveryWitness(snapshot: string, witness: string, kept: InspectedFile) {
+  const entries = await readdir(path.dirname(snapshot));
+  const prefix = path.basename(snapshot) + '.writing-';
+  const stagingName = prefix + kept.reviewed.sha256;
+  // A short write can leave even an empty file. Its name binds all retries to the first
+  // verified contents, and only the missing suffix may be appended.
+  if (entries.some((entry) => entry.startsWith(prefix) && entry !== stagingName))
+    throw new Error('The predecessor changed during recovery.');
+  if (entries.includes(path.basename(snapshot))) {
+    await syncRecoveryCopy(snapshot, kept, 'complete');
+    await link(snapshot, witness);
+  } else {
+    const staging = path.join(path.dirname(snapshot), stagingName);
+    await syncRecoveryCopy(staging, kept, 'staging');
+    await link(staging, witness);
+  }
+}
+
+/** Only a directory lock held across the missing-name check rules out another live publisher. */
+export async function recoverMetadata(
+  file: string,
+  limit: number,
+  locked: boolean,
+  validate: (bytes: Buffer) => void,
+) {
+  const pending = await publicationLeftovers(file, limit, locked);
+  const generations = new Set(pending.map((entry) => entry.replace(/\.verifying$/, '')));
+  const [name] = generations;
+  if (!name) return null;
+  if (!locked || generations.size !== 1) throw interrupted(name);
+  const directory = path.dirname(file);
+  const previous = path.join(directory, name);
+  const witness = previous + '.verifying';
+  try {
+    const kept = await inspectReviewedFile(previous, limit);
+    validate(kept.bytes);
+    const witnessed = pending.includes(name + '.verifying');
+    const generation = name.slice(previousPrefix(file).length);
+    const snapshot = file + '.recovery-' + generation + '.bak';
+    if (!witnessed) await prepareRecoveryWitness(snapshot, witness, kept);
+    const identity = await syncRecoveryCopy(witness, kept, 'witnessed');
+    // A recovery started with a randomly named backup can resume from its verifying link.
+    await link(witness, snapshot).catch(allowExisting);
+    if ((await syncRecoveryCopy(snapshot, kept, 'witnessed')) !== identity)
+      throw new Error('The recovery copy no longer matches its verification file.');
+    await syncParentDirectory(snapshot);
+    await verifyReviewedFile(kept.reviewed, limit);
+    // Publish the private snapshot. Replacing the predecessor's name after verification
+    // cannot substitute different bytes at the current name.
+    try {
+      await link(snapshot, file);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      return (await inspectReviewedFile(file, limit)).bytes;
+    }
+    await syncParentDirectory(file);
+    try {
+      await archivePredecessors(file, [name, name + '.verifying'], limit);
+    } catch (error) {
+      console.warn(
+        'Restored the metadata. Its recovery history will be retried at the next save.',
+        error,
+      );
+    }
+    return kept.bytes;
+  } catch (error) {
+    throw interrupted(name, error);
+  }
+}
+
+/** While the verified current name still exists, retire any preceding interrupted publication.
+ * Sync both directories before opening another gap, including after a crash during recovery. */
+async function archivePredecessors(file: string, pending: string[], limit: number) {
+  for (const name of pending) {
+    const source = path.join(path.dirname(file), name);
+    const archive = historyDirectory(file, name);
+    const destination = path.join(archive, name);
+    try {
+      const { reviewed } = await inspectReviewedFile(source, limit);
+      await mkdir(archive, { mode: 0o700 }).catch(allowExisting);
+      await requireHistoryDirectory(archive);
+      // An external writer can replace the source after inspection. Linking leaves that
+      // path in place even when a directory or symlink appears in the meantime.
+      await link(source, destination);
+      if (!(await isArchived(source, destination, limit, true, reviewed)))
+        throw interrupted(name);
+      await syncParentDirectory(destination);
+      await syncParentDirectory(file);
+    } catch (error) {
+      throw interrupted(name, error);
+    }
+  }
 }
 
 /** A writer outside the lock can replace the entry after inspection. Claim the actual entry,
@@ -73,10 +274,12 @@ export async function publishMetadata(
   temporary: string,
   expected: string | null,
   limit: number,
+  locked: boolean,
   published: () => void,
 ) {
   if (expected === null) {
-    await requireNoInterruptedPublication(file);
+    const [previous] = await publicationLeftovers(file, limit, locked);
+    if (previous) throw interrupted(previous);
     await link(temporary, file);
     published();
     await syncParentDirectory(file);
@@ -84,6 +287,7 @@ export async function publishMetadata(
   }
   const changed = () => new Error('Application metadata changed on disk. Reopen it before saving.');
   if ((await inspectReviewedFile(file, limit)).reviewed.sha256 !== expected) throw changed();
+  if (locked) await archivePredecessors(file, await publicationLeftovers(file, limit, locked), limit);
   const previous = path.join(path.dirname(file), previousPrefix(file) + randomUUID());
   // Exercise exclusive linking on this volume and reserve our own recovery name before
   // displacing anything. A backend that cannot link leaves the current document in place.

@@ -113,6 +113,19 @@ describe('PostScript identities and registry', () => {
 });
 
 describe('bounded document comments', () => {
+  it('stops scanning bare newlines after 65,536 lines', () => {
+    const bytes = new Uint8Array(131_072).fill(10);
+    let furthest = -1;
+    const observed = new Proxy(bytes, {
+      get(target, key) {
+        if (typeof key === 'string' && /^\d+$/.test(key))
+          furthest = Math.max(furthest, Number(key));
+        return Reflect.get(target, key, target);
+      },
+    });
+    expect(postscriptMetadata(observed)).toEqual({});
+    expect(furthest).toBe(65_535);
+  });
   it('reads only stated facts, including dates and sizes', () => {
     expect(postscriptMetadata(Buffer.from(postscriptSample))).toEqual({
       title: 'Two squares',

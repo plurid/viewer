@@ -2,7 +2,7 @@ import { createElement, useEffect, useMemo, useRef, useState } from 'react';
 import type { WordInline, WordParagraph, WordTable } from '../../domain/previews/documents/office';
 import type { Resource } from '../../domain/contracts';
 import type { PreviewContext } from './contracts';
-import { errorMessage } from '../../domain/errors';
+import { previewProblem } from './preview-problem';
 type Image = Extract<WordInline, { kind: 'image' }>;
 function WordImage({ image, context }: { image: Image; context: PreviewContext }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -42,7 +42,8 @@ function WordImage({ image, context }: { image: Image; context: PreviewContext }
         setResource(value);
       })
       .catch((value) => {
-        if (live) setError(errorMessage(value));
+        if (live)
+          setError(previewProblem(value, "Viewer couldn't read this picture in the document."));
       });
     return () => {
       live = false;

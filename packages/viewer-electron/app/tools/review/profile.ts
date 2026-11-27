@@ -7,10 +7,8 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { sampleFolders } from './samples';
+import { sampleFolders, sampleProject, workspaceName } from './samples';
 import type { SceneSetup, Variant } from './types';
-
-export const workspaceName = 'Field work';
 
 type JSONObject = Record<string, unknown>;
 
@@ -86,8 +84,10 @@ export async function writeProfile(
   setKnown(settings, ['appearance'], variant.look);
   setKnown(settings, ['hotkey', 'enabled'], false);
   setKnown(settings, ['providers'], []);
+  if (setup.customActions) setKnown(settings, ['customActions'], setup.customActions);
   setKnown(settings, ['updates', 'checkAtLaunch'], false);
   setKnown(settings, ['browsing', 'findWorkspaces'], false);
+  setKnown(settings, ['browsing', 'confirmTrash'], true);
   setKnown(settings, ['search', 'roots'], [home]);
   setKnown(settings, ['search', 'contentRoots'], []);
   // a folder's view is kept by its path
@@ -106,7 +106,6 @@ export async function writeProfile(
   ];
   if (setup.project) {
     const root = path.join(home, setup.project.root);
-    const names = Object.keys(setup.project.bindings);
     // an unsaved project draft, as Create project leaves it before its first save
     workspaces[0]!.project = {
       file: path.join(root, workspaceName + '.viewer-project'),
@@ -120,19 +119,7 @@ export async function writeProfile(
       ),
       folders: {},
       dirty: true,
-      definition: {
-        version: 1,
-        id: '6f1f0f5e-6b1a-4e3c-9d4e-2f6a1c0b7d21',
-        name: workspaceName,
-        bindings: names.map((name) => ({
-          name,
-          label: path.basename(setup.project!.bindings[name]!),
-        })),
-        planes: [],
-        folders: [],
-        layout: { placements: [] },
-        arrangements: {},
-      },
+      definition: sampleProject(setup.project.bindings),
     };
   }
   for (let index = 1; index <= (setup.extraWorkspaces ?? 0); index++)

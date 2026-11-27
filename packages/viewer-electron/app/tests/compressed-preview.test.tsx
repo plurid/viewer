@@ -145,6 +145,14 @@ it('describes a kind with no text preview by name and expanded size, without exp
   expect(image.services.archiveEntry).not.toHaveBeenCalled();
 });
 
+it('describes an unreadable gzip file without showing the decoder exception', async () => {
+  const { context, services } = fixture('notes.txt.gz', {});
+  services.archiveEntry.mockRejectedValueOnce(new Error('Z_DATA_ERROR: invalid block type'));
+  render(<CompressedPreview {...context} />);
+  await screen.findByText("Viewer couldn't read the compressed data in this file.");
+  expect(screen.queryByText(/Z_DATA_ERROR/)).toBeNull();
+});
+
 it('describes text past the limit, and names a file refused while expanding', async () => {
   const large = fixture('huge.log.gz', { size: 9_000_000, previewable: false });
   render(<CompressedPreview {...large.context} />);

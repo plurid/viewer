@@ -298,6 +298,15 @@ async function captureVariant(
       .filter(Boolean)
       .join('\n');
   }
+  for (const finish of page?.afterCapture ?? []) {
+    try {
+      await finish();
+    } catch (error) {
+      capture.error = [capture.error, 'After capture: ' + (error as Error).message]
+        .filter(Boolean)
+        .join('\n');
+    }
+  }
   await quit(app, main);
   capture.milliseconds = Date.now() - started;
   return capture;

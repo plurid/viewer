@@ -5,7 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import type { PluridPlaneChromeContext } from '@plurid/plurid-data';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -28,7 +28,7 @@ import { PlaneHeader } from '../src/renderer/workspace/PlaneHeader';
 import { usePreviewControlsSlot } from '../src/renderer/previews/controls';
 import { RelatedPlanes } from '../src/renderer/workspace/RelatedPlanes';
 import { changeWorkspace } from '../src/renderer/state/core';
-import { initialize } from '../src/renderer/state/store';
+import { initialize, updateFolderPresentation } from '../src/renderer/state/store';
 import { setWorkspaceOverride } from '../src/renderer/state/workspaces';
 import { choiceLabel } from './support/choice-button';
 
@@ -176,7 +176,7 @@ describe('the header as this window shows it', () => {
     cleanup();
     vi.unstubAllGlobals();
   });
-  const header = () =>
+  const header = (registry = new CommandRegistry()) =>
     render(
       createElement(
         WorkspaceContext.Provider,
@@ -190,7 +190,7 @@ describe('the header as this window shows it', () => {
         },
         createElement(
           CommandsContext.Provider,
-          { value: new CommandRegistry() },
+          { value: registry },
           createElement(PlaneHeader, {
             context: {
               treePlane: {
@@ -206,6 +206,100 @@ describe('the header as this window shows it', () => {
     );
   const button = (view: ReturnType<typeof header>, name: string) =>
     view.queryByRole('button', { name });
+
+  it('opens the seven View choices on the current mode with type-ahead and no search field', () => {
+    Object.assign(window.viewer, { onEvent: () => () => {}, lens: async () => ({ lenses: [] }) });
+    const modes = ['list', 'grid', 'columns', 'gallery', 'map', 'side-by-side', 'stacked'];
+    initialize({
+      home: '/fixtures',
+      platform: 'darwin',
+      state: null,
+      locations: [],
+      openPaths: [],
+    });
+    changeWorkspace((space) => ({
+      ...space,
+      panes: space.panes.map((pane) =>
+        pane.type === 'folder' ? { ...pane, id: 'plane', mode: 'grid' } : pane,
+      ),
+    }));
+    const registry = new CommandRegistry();
+    registry.register('plane', {
+      context: () => ({
+        workspaceID: 'sample',
+        paneID: 'plane',
+        scope: 'folder',
+        selection: [],
+        jobs: [],
+        clipboard: null,
+      }),
+      definitions: () =>
+        modes.map((mode) => ({
+          id: 'view-' + mode,
+          label: mode,
+          group: 'View',
+          when: () => true,
+          run: vi.fn(),
+        })),
+    });
+    const view = header(registry);
+    fireEvent.click(view.getByRole('button', { name: 'View mode' }));
+    expect(view.queryByRole('textbox')).toBeNull();
+    const list = view.getByRole('menu');
+    const selected = () =>
+      document.getElementById(list.getAttribute('aria-activedescendant') ?? '')?.textContent;
+    expect(selected()).toContain('grid');
+    fireEvent.keyDown(list, { key: 'm' });
+    expect(selected()).toContain('map');
+  });
+
+  it('opens a searchable lens menu on the active lens and Enter keeps that lens', async () => {
+    const lenses = Array.from({ length: 10 }, (_, i) => ({
+      file: `lens-${i}.jsonc`,
+      local: true,
+      lens: { id: `lens-${i}`, name: `Lens ${i}` },
+    }));
+    Object.assign(window.viewer, { onEvent: () => () => {}, lens: async () => ({ lenses }) });
+    initialize({
+      home: '/fixtures',
+      platform: 'darwin',
+      state: null,
+      locations: [],
+      openPaths: [],
+    });
+    changeWorkspace((space) => ({
+      ...space,
+      panes: space.panes.map((pane) => ({ ...pane, id: 'plane' })),
+    }));
+    updateFolderPresentation('/fixtures', { group: 'lens', lens: 'lens-7' });
+    const registry = new CommandRegistry();
+    const choose = vi.fn();
+    registry.register('plane', {
+      context: () => ({
+        workspaceID: 'sample',
+        paneID: 'plane',
+        scope: 'folder',
+        selection: [],
+        jobs: [],
+        clipboard: null,
+      }),
+      definitions: () =>
+        lenses.map(({ lens }) => ({
+          id: 'group.lens.' + lens.id,
+          label: lens.name,
+          group: 'View',
+          when: () => true,
+          run: () => choose(lens.id),
+        })),
+    });
+    const view = header(registry);
+    fireEvent.click(await view.findByRole('button', { name: 'Lens: Lens 7' }));
+    const search = view.getByRole('textbox', { name: 'Search Lenses' });
+    const selected = document.getElementById(search.getAttribute('aria-activedescendant')!);
+    expect(selected?.textContent).toBe('Lens 7');
+    fireEvent.keyDown(search, { key: 'Enter' });
+    await waitFor(() => expect(choose).toHaveBeenCalledExactlyOnceWith('lens-7'));
+  });
 
   it('follows a workspace’s own controls and dragging over the general Essential ones', () => {
     const view = header();

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { folderCheckTimeout } from '../src/domain/files/folder-checks';
 import type { CheckedFolder } from '../src/domain/files/folder-checks';
 import type { WorkspaceDefinitionsPorts } from '../src/desktop/workspaces/definitions';
 import { WorkspaceDefinitions } from '../src/desktop/workspaces/definitions';
@@ -56,9 +57,10 @@ describe('background definition roots', () => {
   it('bounds the check of one selected root even when it never answers', async () => {
     const f = await fixture({ checkRoot: () => new Promise(() => {}) });
     await f.service.load();
-    const started = performance.now();
-    expect(await f.service.checkRoot('Sample/site')).toBe('unknown');
-    expect(performance.now() - started).toBeLessThan(1000);
+    vi.useFakeTimers();
+    const checked = f.service.checkRoot('Sample/site');
+    await vi.advanceTimersByTimeAsync(folderCheckTimeout);
+    expect(await checked).toBe('unknown');
   });
   it('does not enqueue 5,000 roots on load or an expired-cache reload and checks only search candidates', async () => {
     const f = await fixture();
@@ -71,21 +73,22 @@ describe('background definition roots', () => {
         })),
       ),
     );
+    vi.useFakeTimers();
     await f.service.load();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.advanceTimersByTimeAsync(0);
     expect(f.checkRoot).not.toHaveBeenCalled();
-    vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(Date.now() + 60_001);
     await f.service.reload();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.advanceTimersByTimeAsync(0);
     expect(f.checkRoot).not.toHaveBeenCalled();
     f.service.searchRoots('project-99', 1, 4);
-    await vi.waitFor(() => expect(f.checkRoot).toHaveBeenCalledTimes(4));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.checkRoot).toHaveBeenCalledTimes(4);
     expect(f.checkRoot.mock.calls.map(([file]) => file)).toHaveLength(4);
     f.service.clearRootSearch(1);
     const calls = f.checkRoot.mock.calls.length;
     f.service.refreshRoots();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.advanceTimersByTimeAsync(0);
     expect(f.checkRoot).toHaveBeenCalledTimes(calls);
   });
   it('keeps only two root checks in flight while the rest wait', async () => {
@@ -133,11 +136,7 @@ describe('background definition roots', () => {
     });
     const loaded = f.service.load();
     try {
-      const result = await Promise.race([
-        loaded.then(() => 'loaded'),
-        new Promise((resolve) => setTimeout(() => resolve('waiting on a root'), 1000)),
-      ]);
-      expect(result).toBe('loaded');
+      await loaded;
       expect(f.emit.mock.calls[0]![0].definitions[0].rootState).toBe('unknown');
       expect(f.service.entry('Sample/site')!.rootState).toBe('unknown');
       expect(checkRoot).not.toHaveBeenCalled();
@@ -162,6 +161,7 @@ describe('background definition roots', () => {
         return () => {};
       },
     });
+    vi.useFakeTimers();
     await f.service.load();
     f.service.searchRoots('site', 1);
     await vi.waitFor(() => expect(f.service.entry('Sample/site')!.rootState).toBe('missing'));
@@ -169,13 +169,11 @@ describe('background definition roots', () => {
     f.service.refreshRoots();
     await vi.waitFor(() => expect(f.service.entry('Sample/site')!.rootState).toBe('present'));
     checkRoot.mockResolvedValue({ directory: false, unchecked: true });
-    vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(Date.now() + 60_001);
     await f.service.reload();
     await vi.waitFor(() => expect(f.service.entry('Sample/site')!.rootState).toBe('unknown'));
     await vi.waitFor(() => expect(checkRoot).toHaveBeenCalledTimes(3));
-    // Let the preceding reload finish completely before changing the mount state.
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await vi.runOnlyPendingTimersAsync();
     const beforeMount = checkRoot.mock.calls.length;
     checkRoot.mockResolvedValue({ directory: true });
     mounted();

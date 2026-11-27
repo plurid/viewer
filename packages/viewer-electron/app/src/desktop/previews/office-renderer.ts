@@ -8,6 +8,7 @@ import path from 'node:path';
 import type { Decoder } from './derived';
 import {
   isOfficeFormat,
+  OfficeLayoutError,
   officeLayoutMetadataSchema,
   type OfficeLayoutMetadata,
 } from '../../domain/previews/documents/layout';
@@ -147,11 +148,9 @@ class OfficeEngine {
   ): Promise<{ data: Buffer; office: OfficeLayoutMetadata }> {
     const cancel = () =>
       this.fail(
-        new Error(
-          outer.aborted
-            ? 'The Office layout preview was canceled.'
-            : 'Office layout exceeded 45 seconds. Try Reading or Sheet view, or retry the layout.',
-        ),
+        outer.aborted
+          ? new Error('The Office layout preview was canceled.')
+          : new OfficeLayoutError('OFFICE_LAYOUT_TIMEOUT'),
       );
     signal.addEventListener('abort', cancel, { once: true });
     try {
@@ -216,7 +215,11 @@ class OfficeEngine {
       request.on('data', (chunk: Buffer) => {
         size += chunk.length;
         if (size > (name === 'result' ? officeOutputLimit : 256 * 1024)) {
-          this.fail(new Error('The Office layout exceeds its 32 MB output limit.'));
+          this.fail(
+            new OfficeLayoutError(
+              name === 'result' ? 'OFFICE_LAYOUT_OUTPUT_LIMIT' : 'OFFICE_LAYOUT_CONVERSION',
+            ),
+          );
           request.destroy();
         } else chunks.push(chunk);
       });
@@ -227,7 +230,7 @@ class OfficeEngine {
           try {
             this.metadata = officeLayoutMetadataSchema.parse(JSON.parse(bytes.toString()));
           } catch {
-            this.fail(new Error('The Office renderer returned invalid worksheet metadata.'));
+            this.fail(new OfficeLayoutError('OFFICE_LAYOUT_CONVERSION'));
           }
         } else if (
           name === 'result' &&
@@ -235,12 +238,7 @@ class OfficeEngine {
           bytes.subarray(0, 5).toString() === '%PDF-'
         )
           this.finish(bytes);
-        else
-          this.fail(
-            new Error(
-              'This document could not be rendered. It may be protected or damaged. Try the available Reading or Sheet view.',
-            ),
-          );
+        else this.fail(new OfficeLayoutError('OFFICE_LAYOUT_CONVERSION'));
       });
       return;
     }
@@ -332,10 +330,9 @@ export async function renderOffice(
   outer: AbortSignal,
   options: OfficeRenderOptions = {},
 ): Promise<{ data: Buffer; office: OfficeLayoutMetadata }> {
-  if (!isOfficeFormat(extension) || input.length > officeInputLimit)
-    throw new Error(
-      'Choose a Word, Excel or PowerPoint file smaller than 64 MB for layout preview.',
-    );
+  if (input.length > officeInputLimit) throw new OfficeLayoutError('OFFICE_LAYOUT_INPUT_LIMIT');
+  if (!isOfficeFormat(extension))
+    throw new Error('Choose a supported Office document for layout preview.');
   if (quitting) throw new Error(quittingMessage);
   const job = createOfficeJob(extension, options);
   const signal = AbortSignal.any([outer, AbortSignal.timeout(45000)]);
@@ -355,6 +352,9 @@ export async function renderOffice(
     await started;
     signal.throwIfAborted();
     return await engine.run({ input, extension, job }, signal, outer);
+  } catch (error) {
+    if (signal.aborted && !outer.aborted) throw new OfficeLayoutError('OFFICE_LAYOUT_TIMEOUT');
+    throw error;
   } finally {
     await engine.destroy();
   }
@@ -363,15 +363,12 @@ export async function renderOffice(
 export function officeDecoder(directory: string): Decoder {
   let verified: Promise<void> | undefined;
   return async (source, mode, signal, _size, sheet) => {
-    if (mode !== 'office' || source.info.size > officeInputLimit)
-      throw new Error(
-        'Office layout previews support Word, Excel and PowerPoint files up to 64 MB.',
-      );
+    if (mode !== 'office') throw new Error('Choose an Office layout preview.');
+    if (source.info.size > officeInputLimit)
+      throw new OfficeLayoutError('OFFICE_LAYOUT_INPUT_LIMIT');
     verified ??= verifyOfficeRuntime(directory).catch(() => {
       verified = undefined;
-      throw new Error(
-        'The bundled Office renderer is missing or damaged. Reading and Sheet views remain available.',
-      );
+      throw new OfficeLayoutError('OFFICE_LAYOUT_UNAVAILABLE');
     });
     await verified;
     signal.throwIfAborted();

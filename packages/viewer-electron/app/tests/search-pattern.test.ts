@@ -3,7 +3,7 @@
  * names took 640 ms. A literal the pattern requires now rejects most names first. That check
  * must never hide a real match, so it is compared with RE2 alone on many patterns and names.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { RE2JS } from 're2js';
 import { requiredLiteral, searchPattern } from '../src/domain/search/pattern';
 import { matchesQuery, parseFileQuery } from '../src/domain/search/query';
@@ -21,7 +21,7 @@ it('preserves unanchored, grouped, Unicode and case-insensitive name patterns', 
 });
 
 it('bounds previously catastrophic patterns without backtracking', () => {
-  const start = performance.now();
+  using matches = vi.spyOn(RE2JS.prototype, 'test');
   const query = parseFileQuery('~"(a+)+$"');
   expect(
     matchesQuery(query, {
@@ -34,7 +34,7 @@ it('bounds previously catastrophic patterns without backtracking', () => {
     }),
   ).toBe(false);
   expect(searchPattern('^(a|aa)+$').test('a'.repeat(20000) + '!')).toBe(false);
-  expect(performance.now() - start).toBeLessThan(1000);
+  expect(matches).toHaveBeenCalledTimes(2);
 });
 
 it('rejects unsupported or oversized patterns with an actionable query error', () => {
@@ -108,10 +108,12 @@ describe('the prefiltered pattern', () => {
   });
 
   it('rejects most names without the matcher', () => {
+    using matches = vi.spyOn(RE2JS.prototype, 'test');
     const pattern = searchPattern('^absent');
     const names = Array.from({ length: 20_000 }, (_, index) => `Item ${index}`);
-    const started = performance.now();
     expect(names.filter((name) => pattern.test(name))).toEqual([]);
-    expect(performance.now() - started).toBeLessThan(100);
+    expect(matches).not.toHaveBeenCalled();
+    expect(pattern.test('absent')).toBe(true);
+    expect(matches).toHaveBeenCalledExactlyOnceWith('absent');
   });
 });

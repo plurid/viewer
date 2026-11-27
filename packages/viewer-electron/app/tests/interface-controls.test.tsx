@@ -6,6 +6,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { createElement, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { twoLineName } from '../src/domain/files/path-label';
 import { FileName } from '../src/renderer/ui/FileName';
 import { NumberField, numberFromText } from '../src/renderer/ui/NumberField';
 import { typeAheadIndex, useListKeys } from '../src/renderer/ui/useListKeys';
@@ -51,6 +52,50 @@ describe('FileName', () => {
     expect(label.title).toBe('Quarterly report.xlsx');
     expect(label.querySelector('.visually-hidden')!.textContent).toBe('Quarterly report.xlsx');
   });
+
+  it.each([70, 98, 133])('fits the thumbnail name into two measured lines at %i px', (width) => {
+    const name =
+      'Quarterly engineering review of the assembly clearance final approved version.jpg';
+    vi.mocked(window.getComputedStyle).mockReturnValue({
+      width: width + 'px',
+      fontSize: '12px',
+      fontWeight: '400',
+      fontFamily: 'system-ui',
+      fontStyle: 'normal',
+    } as CSSStyleDeclaration);
+    const { container } = render(
+      <div className="file-tile">
+        <div className="tile-preview">
+          <img alt="" />
+        </div>
+        <span className="file-linked-label">
+          <FileName name={name} fit="two-lines" />
+        </span>
+      </div>,
+    );
+    const label = container.querySelector('.file-name-label')!;
+    const lines = label.querySelector('[aria-hidden="true"]')!.textContent!.split('\n');
+    expect(lines).toHaveLength(2);
+    expect(lines.every((line) => line.length * 7 <= width)).toBe(true);
+    expect(lines.join('')).toContain('…');
+    expect(lines[1]).toMatch(/\.jpg$/);
+    expect(label.getAttribute('title')).toBe(name);
+  });
+
+  it.each([
+    [126, '.mobileprovision'],
+    [98, '.webarchive'],
+    [126, '.provisionprofile'],
+  ] as const)(
+    'keeps the entire suffix that fits on the second tile line at %i px for %s',
+    (width, suffix) => {
+      const name = 'Quarterly engineering report for approval' + suffix;
+      const lines = twoLineName(name, width, (part) => part.length * 7).split('\n');
+      expect(lines).toHaveLength(2);
+      expect(lines[1]?.endsWith(suffix)).toBe(true);
+      expect(lines.every((line) => line.length * 7 <= width)).toBe(true);
+    },
+  );
 
   it('shows a name that fits as it is, with no tooltip', () => {
     const { container } = render(<FileName name="a.txt" />);

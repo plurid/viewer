@@ -1,3 +1,4 @@
+import { previewProblem } from '../preview-problem';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { headerItem } from '../../workspace/header-overflow';
@@ -52,7 +53,18 @@ export default function MediaPreview(context: PreviewContext) {
         setDerived(value);
       })
       .catch((value: Error) => {
-        if (live && pending.current === requestID) setError(value.message);
+        if (live && pending.current === requestID)
+          setError(
+            previewProblem(value, "Viewer couldn't convert this file for playback.", [
+              'This file has no supported video picture.',
+              'Local video conversion exceeded two minutes. Open the file in its original app.',
+              'The complete compatibility copy exceeds 64 MB. Open this video in its original app.',
+              'A compatible video copy could not be decoded. Open the file in its original app.',
+              /^The complete (?:video|recording) is too long for the 64 MB compatibility-preview limit\. Open it in its original app\.$/,
+              /^A complete compatibility copy could not be verified\. Open this (?:video|recording) in its original app\.$/,
+              /^The (?:video|recording) changed before conversion\. Reopen its preview\.$/,
+            ]),
+          );
       });
     return () => {
       live = false;

@@ -1,3 +1,4 @@
+import { previewProblem } from './preview-problem';
 import { createElement, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { PreviewContext } from './contracts';
@@ -227,8 +228,9 @@ function BookImage({ part, alt, context }: { part: string; alt: string; context:
         owned = value;
         setResource(value);
       },
-      (error: Error) => {
-        if (live) setError(error.message);
+      (error: unknown) => {
+        if (live)
+          setError(previewProblem(error, "Viewer couldn't read this illustration in the book."));
       },
     );
     return () => {

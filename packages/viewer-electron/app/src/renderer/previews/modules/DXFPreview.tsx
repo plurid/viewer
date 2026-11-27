@@ -1,3 +1,4 @@
+import { previewProblem, reportPreviewProblem } from '../preview-problem';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PreviewContext } from '../contracts';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
@@ -109,8 +110,15 @@ export default function DXFPreview(context: PreviewContext) {
     }, 20000);
     worker.onmessage = (event: MessageEvent<DrawingResult>) => {
       if (disposed || signal.aborted) return;
-      if (event.data.error) setError(event.data.error);
-      else setDrawing(event.data.drawing);
+      const result = event.data;
+      if (result.kind === 'drawing') setDrawing(result.drawing);
+      else if (result.kind === 'refused') {
+        reportPreviewProblem(result.message);
+        setError(result.message);
+      } else
+        setError(
+          previewProblem(result.message, "Viewer couldn't read the shapes in this drawing."),
+        );
       stop();
     };
     worker.onerror = () => {
@@ -141,7 +149,7 @@ export default function DXFPreview(context: PreviewContext) {
         context.state?.get('dxf.view') as DrawingView | undefined,
       );
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Viewer couldn't draw this file.");
+      setError(previewProblem(error, "Viewer couldn't draw this file."));
     }
     return () => {
       session.current?.dispose();

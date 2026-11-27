@@ -1,3 +1,4 @@
+import { previewProblem } from './preview-problem';
 import { sameCapturedItem } from '../../domain/files/entries';
 import { useState } from 'react';
 import type { FileEntry } from '../../domain/contracts';
@@ -48,7 +49,14 @@ export function PreviewRecovery({
                     throw new Error('The file changed as Viewer found it. Try again.');
                   await locate(latest);
                 })
-                .catch((error) => setProblem(String(error.message || error)))
+                .catch((error) =>
+                  setProblem(
+                    previewProblem(error, "Viewer couldn't find the renamed file in this folder.", [
+                      'Viewer found no single renamed file in this folder. Use Locate File… to choose it.',
+                      'The file changed as Viewer found it. Try again.',
+                    ]),
+                  ),
+                )
                 .finally(() => setBusy(false));
             }}
           >

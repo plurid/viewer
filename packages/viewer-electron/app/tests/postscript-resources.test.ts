@@ -144,12 +144,16 @@ describe('authorized PostScript inspection', () => {
   );
   it('bounds selection work for four megabytes of bare newlines', async () => {
     const file = path.join(root, 'newlines.ps');
-    await writeFile(file, '%!\n' + '\n'.repeat(previewTextLimit));
+    const boundary =
+      '%!\n' +
+      '\n'.repeat(65_536 - 2) +
+      '%%Title: Last scanned line\n%%Creator: Beyond the limit\n';
+    await writeFile(file, boundary.padEnd(previewTextLimit + 1, '\n'));
     const service = create();
     const resource = await service.grant(file);
-    const before = performance.now();
     const result = await service.inspectPostscript(resource.id, 'read');
-    expect(performance.now() - before).toBeLessThan(300);
+    expect(result.metadata.title).toBe('Last scanned line');
+    expect(result.metadata.creator).toBeUndefined();
     expect(result.source.text.length).toBe(previewTextLimit);
     expect(result.limited).toBe(true);
   });

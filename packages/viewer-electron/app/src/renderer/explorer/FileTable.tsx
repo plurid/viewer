@@ -234,6 +234,7 @@ export function FileTable({
         <ContextMenu
           position={menu}
           request={{ paneID, ids: columnCommandIDs }}
+          choiceList
           label="List columns"
           onClose={() => setMenu(undefined)}
         />

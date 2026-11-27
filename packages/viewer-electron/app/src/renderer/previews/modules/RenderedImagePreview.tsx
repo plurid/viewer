@@ -1,3 +1,4 @@
+import { previewProblem } from '../preview-problem';
 import { useEffect, useState } from 'react';
 import type { Resource } from '../../../domain/contracts';
 import type { PreviewContext } from '../contracts';
@@ -32,7 +33,8 @@ export default function RenderedImagePreview(context: PreviewContext) {
         setRendered(value);
       })
       .catch((value: Error) => {
-        if (live) setError(value.message);
+        if (live)
+          setError(previewProblem(value, "Viewer couldn't read the image data in this file."));
       });
     return () => {
       live = false;

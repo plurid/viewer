@@ -102,6 +102,7 @@ import { ContextMenu } from './ui/ContextMenu';
 import { OpenWithDialog } from './ui/navigation/OpenWithDialog';
 import { Volumes } from './ui/navigation/Volumes';
 import { Trash } from './ui/trash/Trash';
+import { trashLocation } from '../domain/files/trash';
 import { openWorkspacePath } from './workspace/open-path';
 import { requestRefresh } from './state/refresh';
 import { useWindowEvent } from './app/window-events';
@@ -515,6 +516,10 @@ function AppWindow() {
         for (const requested of request.paths.length
           ? request.paths
           : [windowContext().directory ?? getState().bootstrap.home]) {
+          if (requested === trashLocation) {
+            await controller.openPath(requested, { workspaceID: origin });
+            continue;
+          }
           const item = await window.viewer.stat(requested);
           if (getState().saved.activeWorkspace !== origin) return;
           controller.newTerminal({

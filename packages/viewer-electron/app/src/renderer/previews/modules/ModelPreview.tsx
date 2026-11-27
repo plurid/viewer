@@ -1,3 +1,4 @@
+import { previewProblem } from '../preview-problem';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -107,6 +108,19 @@ function disposeObject(object: THREE.Object3D): void {
     texture.dispose();
   }
 }
+const modelReaderMessages = [
+  'No geometry could be read.',
+  'This model has invalid geometry.',
+  'This model exceeds the geometry limit for previews.',
+  'This model exceeds the 128 MB decoded geometry limit.',
+  'This model exceeds the 128 MB decoded texture limit.',
+  'This CAD file exceeds the conversion limit (64 MB).',
+  'This mesh exceeds the 128 MB parsing limit.',
+  'This 3D format is not supported.',
+  'CAD conversion took too long. Try a simpler model or reopen the file.',
+  "This model loads files from the internet, which Viewer doesn't do. Put its textures next to the model file.",
+  "Couldn't read this model file. Check that it's still there, then try again.",
+];
 export default function ModelPreview(context: PreviewContext) {
   const { resource, signal, active, interactive, look } = context;
   const stage = useRef<HTMLDivElement>(null);
@@ -245,7 +259,10 @@ export default function ModelPreview(context: PreviewContext) {
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     } catch (error) {
       setError(
-        `3D graphics couldn't start: ${errorMessage(error)} Close other 3D previews, then try again.`,
+        previewProblem(
+          error,
+          "3D graphics couldn't start. Close other 3D previews, then try again.",
+        ),
       );
       setLoading(false);
       return;
@@ -428,7 +445,7 @@ export default function ModelPreview(context: PreviewContext) {
           viewCube.current?.update(camera);
         } catch (error) {
           graphicsFailed = true;
-          setError(errorMessage(error));
+          setError(previewProblem(error, "Viewer couldn't draw this model.", modelReaderMessages));
           setLoading(false);
           return;
         }
@@ -721,7 +738,18 @@ export default function ModelPreview(context: PreviewContext) {
     };
     const fail = (error: unknown) => {
       if (!disposed && !abort.signal.aborted) {
-        setError(errorMessage(error));
+        const incomplete =
+          resource.entry.extension === 'stl' &&
+          errorMessage(error) === 'Offset is outside the bounds of the DataView';
+        setError(
+          previewProblem(
+            error,
+            incomplete
+              ? 'The file ends before all of its model data can be read.'
+              : "Viewer couldn't read the shapes in this model.",
+            modelReaderMessages,
+          ),
+        );
         setLoading(false);
       }
     };

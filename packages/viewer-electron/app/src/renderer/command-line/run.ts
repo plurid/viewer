@@ -194,6 +194,7 @@ export async function runLine(text: string, host: LineHost, model = false): Prom
   const reviewedHost: LineHost = model
     ? {
         ...liveHost,
+        agent: { ...liveHost.agent, modelRequest: true },
         invoke: (id, remember, agent, invocation) => {
           if (id.startsWith('custom.') || id.startsWith('layout.')) {
             const problem = promptLineProblem(

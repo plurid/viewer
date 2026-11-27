@@ -43,6 +43,34 @@ describe('DXF geometry and measurements', () => {
     const bytes = new Uint8Array([...new TextEncoder().encode(r2000), 0xe9]);
     expect(decodeDXF(bytes)).toBe(r2000 + 'é');
   });
+  it('decodes text in the declared DOS page and honors the 2007 UTF-8 override', () => {
+    const text = dxf(entity('TEXT', [10, 0, 20, 0, 40, 1, 1, '@label'])).replace(
+      '0\nENDSEC',
+      '9\n$DWGCODEPAGE\n3\nDOS866\n0\nENDSEC',
+    );
+    const dos = Buffer.from(text.replace('AC1027', 'AC1015').replace('@label', '\x81'), 'latin1');
+    expect(parseDrawing(decodeDXF(dos)).entities[0]?.text?.value).toBe('Б');
+    const modern = text.replace('DOS866', 'DOS850').replace('@label', 'Café');
+    expect(parseDrawing(decodeDXF(new TextEncoder().encode(modern))).entities[0]?.text?.value).toBe(
+      'Café',
+    );
+  });
+
+  it('reads a late header declaration and ignores code page text outside the header', () => {
+    const padding = '999\n' + 'A'.repeat(17_000) + '\n';
+    const header = panelDrawing
+      .replace('AC1027', 'AC1015')
+      .replace('0\nENDSEC', padding + '9\n$DWGCODEPAGE\n3\nDOS850\n0\nENDSEC');
+    expect(() => decodeDXF(new TextEncoder().encode(header))).toThrow('Export a UTF-8 ASCII DXF');
+    const absent = panelDrawing.replace('AC1027', 'AC1015') + '$DWGCODEPAGE\n3\nANSI_9999\nCafé';
+    expect(decodeDXF(new TextEncoder().encode(absent))).toBe(absent);
+  });
+
+  it.each(['\r', '\r\n'])('reads a padded DXF code page with %j line endings', (end) => {
+    const source = '  9\n  $DWGCODEPAGE\n  3\nDOS866\n'.replaceAll('\n', end);
+    expect(decodeDXF(Buffer.from(source + '\x81', 'latin1'))).toBe(source + 'Б');
+  });
+
   it('uses radian ellipse parameters and preserves exact rotated endpoints', () => {
     const e = parseDrawing(
       dxf(entity('ELLIPSE', [10, 0, 20, -420, 11, 0, 21, 70, 40, 0.5, 41, 0, 42, Math.PI / 2])),

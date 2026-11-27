@@ -251,8 +251,10 @@ Previewing an archive never runs its contents. **Calculate Size**, **Find Duplic
 
 ## Trash and Put Back
 
-Open **Trash** in the sidebar to browse the system Trash. Select an item for Quick Preview, its
-original location when known, **Put Back** or **Put Back To…**. A folder lists up to 4,000 items.
+Choose **Trash** in the sidebar or in the command palette under **Places**. You can also open
+`viewer://trash` in **Go to Folder…**, with `:e viewer://trash`, or with `viewer viewer://trash`
+from your terminal. Select an item for Quick Preview, its original location when known, **Put Back**
+or **Put Back To…**. A folder lists up to 4,000 items.
 
 | Put Back rule           | Value                                              |
 | ----------------------- | -------------------------------------------------- |

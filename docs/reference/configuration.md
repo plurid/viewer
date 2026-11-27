@@ -67,6 +67,22 @@ A workspace window may change only its own presentation: `ui`, `settings.folders
 `settings.optimizationRecipes`, `settings.profiles` and `settings.theme`. Everything else changes
 only in Settings or in the file.
 
+Permissions and update state use separate private files. An existing current file takes precedence.
+When it is missing, Viewer checks for an interrupted save named `<filename>.publishing-<uuid>`. On
+macOS, Viewer locks the directory and checks that exactly one save is pending. It validates the
+file's contents and size, then restores the verified bytes under the vacant current name. Retries
+reuse the private `.bak` copy for that save. Recovery stops and leaves the evidence on disk if
+several saves are pending or the predecessor has changed or fails validation.
+
+Viewer records the predecessor and its verification copy as hard links in
+`<filename>.history-<uuid>`. Both original names stay in place. If writing history fails after
+restoration, the saved state is available immediately. The next revision-checked save must finish
+the history before replacing the current file. A directory or symlink in a pending file's place
+stops that save and stays at its original path.
+
+On Windows and Linux another process may still be saving. Viewer leaves the pending file in place
+and reports the interruption.
+
 ## Units
 
 | Quantity          | Unit                                                                      |

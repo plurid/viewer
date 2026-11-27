@@ -296,6 +296,14 @@ describe('the workspace offer in Suggested', () => {
   });
 });
 
+it('opens the virtual Trash through the Go to row', async () => {
+  const { type, view } = show();
+  type('go viewer://trash');
+  fireEvent.click(await view.findByRole('option', { name: /Go to/ }));
+  await waitFor(() => expect(openPath).toHaveBeenCalledWith('viewer://trash', expect.anything()));
+  expect(viewer.stat).not.toHaveBeenCalledWith('viewer://trash');
+});
+
 it('shows Go to and New File as commands and shortens home in the destination', async () => {
   const { type, view } = show();
   for (const [query, label] of [
@@ -305,6 +313,10 @@ it('shows Go to and New File as commands and shortens home in the destination', 
     type(query);
     const result = await view.findByText(label!);
     expect(result.closest('.file-name-label')).toBeNull();
+    if (query === 'go ~/Downloads')
+      expect(result.closest('[role=option]')?.querySelector('small')?.textContent).toBe(
+        ':e ~/Downloads',
+      );
   }
 });
 
@@ -331,6 +343,7 @@ it('opens the displayed Go to destination when its path needs quotes', async () 
   type('go ~/Job Files');
   const label = await view.findByText('Go to ~/Job Files');
   const hint = label.closest('[role=option]')!.querySelector('small')!.textContent!;
+  expect(hint).toMatch(/^:e ~\//);
   const word = parseCommandLine(hint)[0]!.words[0]!;
   expect(expandPath(word, { home: '/fixtures', folder: '/fixtures/work' })).toBe(
     '/fixtures/Job Files',

@@ -1,3 +1,4 @@
+import { previewProblem } from '../preview-problem';
 import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { PreviewContext } from '../contracts';
@@ -61,7 +62,7 @@ export default function FontPreview(context: PreviewContext) {
           await face.load();
         } catch {
           const { unread } = await details;
-          throw new Error(unread ? `${unloadable} ${unread}` : unloadable);
+          throw new FontError(unread ? `${unloadable} ${unread}` : unloadable);
         }
         if (abort.signal.aborted) return;
         document.fonts.add(face);
@@ -69,7 +70,8 @@ export default function FontPreview(context: PreviewContext) {
         if (!abort.signal.aborted) setLoad({ status: 'ready', url, family, info, unread });
       } catch (error) {
         if (abort.signal.aborted) return;
-        const detail = error instanceof Error ? error.message : unloadable;
+        const detail =
+          error instanceof FontError ? error.message : previewProblem(error, unloadable);
         setLoad({ status: 'failed', url, detail });
       }
     })();
@@ -206,7 +208,7 @@ async function fontBytes(url: string, signal: AbortSignal): Promise<Uint8Array<A
       const { value, done } = await reader.read();
       if (done) break;
       size += value.length;
-      if (size > fontByteLimit) throw new Error(oversized);
+      if (size > fontByteLimit) throw new FontError(oversized);
       chunks.push(value);
     }
   } finally {

@@ -20,7 +20,11 @@ function readNotebook(read: ResourceRead): ParsedText<Notebook> {
       notice: 'Notebooks over 4 MB show as text.',
     };
   const reading = parseNotebook(read.text);
-  if (!reading.ok) return { notice: `Viewer couldn't read this notebook. ${reading.reason}` };
+  if (!reading.ok)
+    return {
+      notice: `Viewer couldn't read this notebook. ${reading.reason}`,
+      diagnostic: reading.diagnostic,
+    };
   const { notebook } = reading;
   return {
     document: notebook,

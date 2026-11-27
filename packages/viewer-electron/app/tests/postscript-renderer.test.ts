@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { open, readFile, writeFile, realpath, readdir, stat, symlink } from 'node:fs/promises';
+import { open, readFile, writeFile, realpath, readdir, symlink } from 'node:fs/promises';
 import path from 'node:path';
+import { Readable } from 'node:stream';
+import { deferred } from './support/deferred';
 import { fileStat } from '../src/desktop/files/stats';
 import type * as Coordination from '../src/desktop/files/file-coordination';
 import type * as Processes from 'node:child_process';
@@ -9,6 +11,7 @@ import {
   Ghostscript,
   ghostscriptLocations,
   postscriptMemoryKiB,
+  postscriptTimeout,
 } from '../src/desktop/previews/postscript-renderer';
 import { Resources } from '../src/desktop/previews/resources';
 import { createResourceHandlers } from '../src/desktop/ipc/resource-handlers';
@@ -33,6 +36,21 @@ import {
 
 type FakeMode =
   'success' | 'timeout' | 'failure' | 'oversized' | 'impostor' | 'scratch' | 'wrapper' | 'tree';
+// Only the fixture holds the write end. EOF observes the last descendant exit even when
+// the renderer has already closed its own stdout and stderr streams.
+function observeRender() {
+  const ready = deferred();
+  const exited = deferred();
+  observePipe = (pipe) => {
+    pipe.once('data', ready.resolve);
+    pipe.once('end', () => {
+      exited.resolve();
+      ready.reject(new Error('Render exited before signaling readiness.'));
+    });
+  };
+  return { ready: ready.promise, exited: exited.promise };
+}
+let observePipe: ((pipe: Readable) => void) | undefined;
 const launched = vi.hoisted(() => vi.fn());
 vi.mock('node:child_process', async (importOriginal) => {
   const original = await importOriginal<typeof Processes>();
@@ -40,7 +58,15 @@ vi.mock('node:child_process', async (importOriginal) => {
     ...original,
     spawn: (...args: Parameters<typeof original.spawn>) => {
       launched(...args);
-      return original.spawn(...args);
+      const [file, argv, options] = args;
+      if (!observePipe || argv.includes('-h')) return original.spawn(...args);
+      if (!Array.isArray(options.stdio) || options.stdio.length !== 3)
+        throw new Error('Expected three render streams.');
+      const child = original.spawn(file, argv, { ...options, stdio: [...options.stdio, 'pipe'] });
+      const pipe = child.stdio[3];
+      if (!(pipe instanceof Readable)) throw new Error('Missing fixture pipe.');
+      observePipe(pipe);
+      return child;
     },
   };
 });
@@ -59,18 +85,21 @@ vi.mock('../src/desktop/files/file-coordination', async (importOriginal) => {
 let root: string;
 const resources: Resources[] = [];
 beforeEach(async () => {
+  // Subprocess scheduling must not consume the probe or render deadline.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   launched.mockClear();
+  observePipe = undefined;
   root = await realpath(await temporaryRoot('viewer-postscript-runner-'));
 });
 afterEach(async () => {
   await Promise.all(resources.map((resource) => resource.close()));
   resources.length = 0;
+  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
 
 interface FixtureOptions {
-  timeout?: number;
   source?: string;
 }
 async function fixture(mode: FakeMode = 'success', store = false, options: FixtureOptions = {}) {
@@ -78,7 +107,6 @@ async function fixture(mode: FakeMode = 'success', store = false, options: Fixtu
   const log = path.join(root, 'calls.jsonl');
   const signals = path.join(root, 'signals.jsonl');
   const input = path.join(root, 'stdin.bin');
-  const descendant = path.join(root, 'descendant.json');
   const source = path.join(root, 'drawing.eps');
   const sourceBytes = binaryEPSSample(options.source ?? postscriptSample);
   await writeFile(source, sourceBytes, { flag: 'wx' });
@@ -94,19 +122,29 @@ if (args.includes('-h')) {
   process.stdout.write(${JSON.stringify(mode === 'impostor' ? 'Another program 1.0' : 'GPL Ghostscript 10.99.1 (generated test program)\n')});
 } else {
   fs.writeFileSync(${JSON.stringify(input)}, fs.readFileSync(0));
-  if (${JSON.stringify(mode)} === 'timeout') setInterval(() => {}, 1000);
+  if (${JSON.stringify(mode)} === 'timeout') {
+    fs.writeSync(3, 'ready');
+    setInterval(() => {}, 1000);
+  }
   else if (${JSON.stringify(mode)} === 'failure') process.exitCode = 7;
   else if (${JSON.stringify(mode)} === 'oversized') process.stdout.write(Buffer.alloc(65536));
   else if (${JSON.stringify(mode)} === 'scratch') {
     fs.writeFileSync(require('node:path').join(process.env.TMPDIR, 'gs_fake'), Buffer.alloc(65536));
     setInterval(() => {}, 1000);
   } else {
+    const pdf = () => process.stdout.write(Buffer.from(${JSON.stringify(pdfSample().toString('base64'))}, 'base64'), () => process.exit(0));
     if (['wrapper', 'tree'].includes(${JSON.stringify(mode)})) {
-      const child = require('node:child_process').spawn(process.execPath, ['-e', 'process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)'], {stdio: ['ignore', process.stdout, process.stderr]});
-      fs.writeFileSync(${JSON.stringify(descendant)}, JSON.stringify({pid: child.pid}));
-    }
-    if (${JSON.stringify(mode)} === 'tree') setInterval(() => {}, 1000);
-    else process.stdout.write(Buffer.from(${JSON.stringify(pdfSample().toString('base64'))}, 'base64'), () => process.exit(0));
+      const child = require('node:child_process').spawn(process.execPath, ['-e', \`
+        process.on('SIGTERM', () => {});
+        process.send('ready');
+        setInterval(() => {}, 1000);
+      \`], {stdio: ['ignore', process.stdout, process.stderr, 3, 'ipc']});
+      child.once('message', (message) => {
+        if (message !== 'ready') throw new Error('Unexpected descendant message.');
+        fs.writeSync(3, 'ready');
+        if (${JSON.stringify(mode)} === 'wrapper') pdf();
+      });
+    } else pdf();
   }
 }
 `;
@@ -121,7 +159,6 @@ if (args.includes('-h')) {
     resolveExecutable,
     diagnose,
     store: () => store,
-    timeout: options.timeout ?? (mode === 'timeout' ? 400 : 5000),
     outputLimit: mode === 'oversized' ? 1024 : 1_000_000,
     scratchLimit: mode === 'scratch' ? 8192 : undefined,
   });
@@ -171,7 +208,6 @@ if (args.includes('-h')) {
     resolveExecutable,
     diagnose,
     input,
-    descendant,
   };
 }
 const expectedArgs = [
@@ -263,7 +299,6 @@ describe('explicit, bounded Ghostscript rendering', () => {
     expect(await f.calls()).toHaveLength(2);
   });
   it.each([
-    ['timeout', 'time limit'],
     ['failure', 'could not render'],
     ['oversized', 'output size limit'],
     ['impostor', 'did not identify itself'],
@@ -274,75 +309,72 @@ describe('explicit, bounded Ghostscript rendering', () => {
     expect((await f.service.inspectPostscript(f.granted.id, 'inspect')).metadata.title).toBe(
       'Two squares',
     );
-    if (mode === 'timeout' || mode === 'scratch')
+    if (mode === 'scratch') {
       expect(await f.signalRecords()).toEqual([
         { pid: (await f.calls())[1]!.pid, signal: 'SIGTERM' },
       ]);
-    if (mode === 'scratch') {
       expect(f.recording.trash).toHaveBeenCalledOnce();
       expect(path.basename(f.recording.retained[0]!)).toMatch(/^Viewer Ghostscript scratch /);
       expect(await readdir(f.recording.retained[0]!)).toEqual(['gs_fake']);
     }
   });
-  it('signals cancellation and waits for the owned process to exit', async () => {
-    const f = await fixture('timeout', false, { timeout: 60_000 });
-    const outcome = f.service
-      .renderPostscript(f.granted.id, 'render')
-      .catch((error: Error) => error);
-    await vi.waitFor(async () => expect(await f.calls()).toHaveLength(2));
-    f.service.cancelDocument(f.granted.id, 'render');
-    expect(await outcome).toBeInstanceOf(Error);
-    await vi.waitFor(async () =>
+  it.each(['timeout', 'cancel'] as const)(
+    'ends a ready render on %s and keeps inspection readable',
+    async (reason) => {
+      const f = await fixture('timeout');
+      const events = observeRender();
+      const render = f.service.renderPostscript(f.granted.id, 'render');
+      await Promise.race([events.ready, render]);
+      if (reason === 'timeout') vi.advanceTimersByTime(postscriptTimeout);
+      else f.service.cancelDocument(f.granted.id, 'render');
+      await expect(render).rejects.toThrow(reason === 'timeout' ? 'time limit' : /cancel/i);
+      await events.exited;
       expect(await f.signalRecords()).toEqual([
         { pid: (await f.calls())[1]!.pid, signal: 'SIGTERM' },
-      ]),
-    );
-    await f.service.close();
-    expect(f.recording.empty).toHaveLength(1);
-  });
+      ]);
+      expect((await f.service.inspectPostscript(f.granted.id, 'inspect')).metadata.title).toBe(
+        'Two squares',
+      );
+      await f.service.close();
+      expect(f.recording.empty).toHaveLength(1);
+    },
+  );
   it('kills descendants whose inherited output pipe outlives the wrapper', async () => {
     const f = await fixture('wrapper');
-    const before = Date.now();
-    await f.service.renderPostscript(f.granted.id, 'render');
-    expect(Date.now() - before).toBeLessThan(3000);
-    const { pid } = JSON.parse(await readFile(f.descendant, 'utf8')) as { pid: number };
-    await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), { timeout: 3000 });
+    const events = observeRender();
+    const output = f.service.renderPostscript(f.granted.id, 'render');
+    const [rendered] = await Promise.all([output, events.ready]);
+    expect(rendered.derivation).toEqual({ kind: 'postscript', decoder: 'Ghostscript 10.99.1' });
+    await events.exited;
   });
   it('cancels the entire process group including a descendant that ignores SIGTERM', async () => {
-    const f = await fixture('tree', false, { timeout: 60_000 });
-    const outcome = f.service
-      .renderPostscript(f.granted.id, 'render')
-      .catch((error: Error) => error);
-    let pid = 0;
-    await vi.waitFor(async () => {
-      pid = (JSON.parse(await readFile(f.descendant, 'utf8')) as { pid: number }).pid;
-      expect(pid).toBeGreaterThan(0);
-    });
+    const f = await fixture('tree');
+    const events = observeRender();
+    const render = f.service.renderPostscript(f.granted.id, 'render');
+    await Promise.race([events.ready, render]);
     f.service.cancelDocument(f.granted.id, 'render');
-    expect(await outcome).toBeInstanceOf(Error);
-    await vi.waitFor(async () =>
-      expect(await f.signalRecords()).toEqual([
-        { pid: (await f.calls())[1]!.pid, signal: 'SIGTERM' },
-      ]),
-    );
-    await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), { timeout: 3000 });
+    await expect(render).rejects.toThrow(/cancel/i);
+    await events.exited;
+    expect(await f.signalRecords()).toEqual([
+      { pid: (await f.calls())[1]!.pid, signal: 'SIGTERM' },
+    ]);
     await f.service.close();
   });
   it('cancels during discovery before queuing a process', async () => {
     const f = await fixture();
-    let finish!: (value: string) => void;
-    vi.spyOn(f.renderer, 'variant').mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve;
-        }),
-    );
+    const started = deferred();
+    const finish = deferred();
+    vi.spyOn(f.renderer, 'variant').mockImplementationOnce(async () => {
+      started.resolve();
+      await finish.promise;
+      return 'unused';
+    });
     const outcome = f.service
       .renderPostscript(f.granted.id, 'render')
       .catch((error: Error) => error);
-    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    await started.promise;
     f.service.cancelDocument(f.granted.id, 'render');
-    finish('unused');
+    finish.resolve();
     expect(await outcome).toBeInstanceOf(Error);
     expect(await f.calls()).toEqual([]);
   });
@@ -436,7 +468,7 @@ describe('explicit, bounded Ghostscript rendering', () => {
   it('reports a scratch Trash failure even when rendering was canceled', async () => {
     const executable = path.join(root, 'fake-gs-cancel');
     const source = path.join(root, 'cancel.eps');
-    const ready = path.join(root, 'scratch-ready');
+    const events = observeRender();
     await writeFile(source, binaryEPSSample(postscriptSample), { flag: 'wx' });
     const script = `#!${process.execPath}
 const fs = require('node:fs');
@@ -446,7 +478,7 @@ if (process.argv.slice(2).includes('-h')) {
 } else {
   fs.readFileSync(0);
   fs.writeFileSync(path.join(process.env.TMPDIR, 'gs_cancel'), Buffer.alloc(64));
-  fs.writeFileSync(${JSON.stringify(ready)}, 'ready');
+  fs.writeSync(3, 'ready');
   setInterval(() => {}, 1000);
 }
 `;
@@ -462,44 +494,22 @@ if (process.argv.slice(2).includes('-h')) {
         realpath(ghostscriptLocations.includes(file) ? executable : file),
       diagnose,
       store: () => false,
-      timeout: 5000,
     });
     const variant = await renderer.variant();
     const handle = await open(source, 'r');
     const info = await fileStat(handle);
     const controller = new AbortController();
-    let settled = false;
-    const outcome = renderer
-      .decode(
-        { file: source, handle, info, format: 'eps' },
-        'postscript',
-        controller.signal,
-        undefined,
-        variant,
-      )
-      .then(
-        () => {
-          settled = true;
-          return undefined;
-        },
-        (error: Error) => {
-          settled = true;
-          return error;
-        },
-      );
+    const render = renderer.decode(
+      { file: source, handle, info, format: 'eps' },
+      'postscript',
+      controller.signal,
+      undefined,
+      variant,
+    );
     try {
-      for (let attempt = 0; attempt < 200 && !settled; attempt++) {
-        const present = await stat(ready).then(
-          () => true,
-          () => false,
-        );
-        if (present) break;
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
+      await Promise.race([events.ready, render]);
       controller.abort();
-      const error = await outcome;
-      expect(error).toBeInstanceOf(Error);
-      expect(error?.message).toContain('could not be moved to Trash and was kept');
+      await expect(render).rejects.toThrow('could not be moved to Trash and was kept');
       expect(diagnose).toHaveBeenCalledWith(
         expect.stringContaining('PostScript scratch failure:'),
         expect.anything(),

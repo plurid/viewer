@@ -1,3 +1,4 @@
+import { trashLocation, trashPersonOnly } from '../files/trash';
 import { typoScore } from '../search/approximate';
 import { cliCommands, cliGlobalOptions, type CLICommand, type CLIOption } from './catalog';
 
@@ -162,6 +163,8 @@ export function parseCLI(
         'Missing ' + argument.name + '. Use viewer ' + command.name.join(' ') + ' --help.',
       );
     }
+    if (command.tool === 'propose_open_path' && value === trashLocation)
+      throw new CLIUsageError(trashPersonOnly);
     result.parameters[argument.name] =
       argument.kind === 'path'
         ? Array.isArray(value)

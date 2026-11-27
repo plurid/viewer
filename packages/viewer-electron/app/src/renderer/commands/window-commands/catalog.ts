@@ -149,7 +149,11 @@ export function catalogCommands({
       aliases: ['goto', 'location'],
       remember: false,
       when: windowScope,
-      run: () => actions.workspace.openPath(item.path, { directory: true }),
+      run: (context) =>
+        actions.workspace.openPath(item.path, {
+          directory: true,
+          modelRequest: context.modelRequest,
+        }),
     });
   for (const search of state.settings.settings.savedSearches)
     commands.push({

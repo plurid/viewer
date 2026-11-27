@@ -12,7 +12,7 @@ import {
   identifyProbe,
 } from '../../domain/files/signatures';
 import { headerDetails } from '../../domain/files/binary-headers';
-import { errorMessage } from '../../domain/errors';
+import { previewProblem } from './preview-problem';
 import { titleCase } from '../../domain/title-case';
 import { ErrorBoundary } from '../ui/primitives';
 import { getState, report, useViewer } from '../state/store';
@@ -170,7 +170,15 @@ export function UnknownFile(context: PreviewContext) {
         if (!signal.aborted) setShown({ resource: confirmed, Preview });
       },
       (error: unknown) => {
-        if (!signal.aborted) setRefusal(errorMessage(error));
+        if (!signal.aborted)
+          setRefusal(
+            previewProblem(error, "Viewer couldn't open this file in the chosen format.", [
+              'Only a file on disk can be shown as another format.',
+              'This preview file is no longer a regular file.',
+              `The contents of this file do not match .${target.entry.extension}.`,
+              `Show as cannot read a file as .${target.entry.extension}.`,
+            ]),
+          );
       },
     );
   };
@@ -182,12 +190,14 @@ export function UnknownFile(context: PreviewContext) {
       },
       (error: { code?: string }) => {
         if (signal.aborted) return;
-        const message = errorMessage(error);
-        setGuess(
-          error.code === 'MODEL_DATA_PERMISSION_REQUIRED'
-            ? { kind: 'refused', message }
-            : { kind: 'failed', message },
+        const refused = error?.code === 'MODEL_DATA_PERMISSION_REQUIRED';
+        const message = previewProblem(
+          error,
+          refused
+            ? 'Allow this provider to receive the selected data in Settings before asking it to identify this file.'
+            : "The model couldn't identify this file.",
         );
+        setGuess({ kind: refused ? 'refused' : 'failed', message });
       },
     );
   };

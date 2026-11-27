@@ -142,6 +142,7 @@ export interface WorkspaceController {
       linked?: boolean;
       another?: boolean;
       link?: string;
+      modelRequest?: boolean;
       /** Known folder destinations may request a native access grant. */
       directory?: boolean;
       /** A link followed: the plane it opens or shows becomes the active one. */

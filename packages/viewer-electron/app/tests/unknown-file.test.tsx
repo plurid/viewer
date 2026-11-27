@@ -246,6 +246,18 @@ describe('asking the prompt model', () => {
     expect(sqlite).toHaveBeenCalled();
   });
 
+  it('keeps an identification error out of the file card', async () => {
+    const detail = 'Unexpected token < in provider reply';
+    viewer.identifyFile.mockRejectedValueOnce(new Error(detail));
+    const { view } = preview();
+    fireEvent.click(await view.findByRole('button', { name: 'Ask Studio model' }));
+    expect((await view.findByRole('alert')).textContent).toBe(
+      "The model couldn't identify this file.",
+    );
+    expect(view.queryByText(detail)).toBeNull();
+    expect(view.getByRole('button', { name: 'Ask Again' })).toBeTruthy();
+  });
+
   it('shows a refusal with the way to Settings', async () => {
     // as the renderer's API boundary restores a refusal: an Error with its code
     viewer.identifyFile.mockRejectedValue(

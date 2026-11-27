@@ -1,12 +1,13 @@
 import type { Source } from './derived';
+import { OfficeLayoutError } from '../../domain/previews/documents/layout';
 import { officeInputLimit } from './office-runtime-manifest';
 
 /** Read only the captured size, even if another application grows the file.
  * DerivedPreviews rechecks its exact source version before publishing output. */
 export async function officeInput(source: Source, signal: AbortSignal): Promise<Buffer> {
   signal.throwIfAborted();
-  if (!source.info.isFile() || source.info.size > officeInputLimit)
-    throw new Error('Office layout previews support regular files up to 64 MB.');
+  if (!source.info.isFile()) throw new Error('Choose a regular file for Office layout.');
+  if (source.info.size > officeInputLimit) throw new OfficeLayoutError('OFFICE_LAYOUT_INPUT_LIMIT');
   const data = Buffer.alloc(source.info.size);
   let offset = 0;
   while (offset < data.length) {

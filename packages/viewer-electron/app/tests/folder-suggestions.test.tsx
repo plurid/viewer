@@ -64,6 +64,8 @@ import { catalogCommands } from '../src/renderer/commands/window-commands/catalo
 import { navigationCommands } from '../src/renderer/commands/window-commands/navigation';
 import { windowScopes } from '../src/renderer/commands/window-commands/scope';
 import type { WindowActions } from '../src/renderer/commands/window-commands/scope';
+import { openWorkspacePath } from '../src/renderer/workspace/open-path';
+import { withAgentDispatch } from '../src/renderer/app/agent-dispatch';
 import { Sidebar } from '../src/renderer/ui/navigation/Sidebar';
 
 HTMLDialogElement.prototype.showModal ??= function () {
@@ -244,6 +246,34 @@ describe('recording folder views', () => {
     expect(save.mock.calls.at(-1)?.[0].recents).toEqual(['/fixtures/Second', '/fixtures/First']);
   });
 
+  it('opens Trash from Places for a person and refuses model and agent navigation', async () => {
+    initialize({ ...getState().bootstrap, locations: [{ name: 'Trash', path: 'viewer://trash' }] });
+    const openPath: WorkspaceController['openPath'] = async (path, target) => {
+      await openWorkspacePath(path, target, { open: vi.fn(), focusPane: vi.fn() });
+    };
+    const scopes = windowScopes({
+      ready: true,
+      workspace: { openPath },
+    } as unknown as WindowActions);
+    const place = catalogCommands(scopes).find((item) => item.id === 'location:viewer://trash')!;
+    const opened = vi.fn();
+    window.addEventListener('viewer:trash', opened);
+    try {
+      const context = { scope: 'window', selection: [] } as unknown as CommandContext;
+      await place.run(context);
+      await expect(place.run({ ...context, modelRequest: true })).rejects.toThrow(
+        'Only the person',
+      );
+      await expect(withAgentDispatch('agent', () => place.run(context))).rejects.toThrow(
+        'Only the person',
+      );
+      expect(opened).toHaveBeenCalledOnce();
+      expect(stat).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('viewer:trash', opened);
+    }
+  });
+
   it('offers recents as Places and Clear recent folders in the palette and Recent section', async () => {
     remember('/fixtures/Documents');
     const scopes = windowScopes({
@@ -302,9 +332,9 @@ describe('Go to folder suggestions', () => {
   it('starts with the selected current path and shows top folders without claiming a choice', async () => {
     history();
     render(<GoToFolderDialog onOpen={open} onClose={close} />);
-    expect((field() as HTMLInputElement).value).toBe('/fixtures');
+    expect((field() as HTMLInputElement).value).toBe('~');
     expect((field() as HTMLInputElement).selectionStart).toBe(0);
-    expect((field() as HTMLInputElement).selectionEnd).toBe('/fixtures'.length);
+    expect((field() as HTMLInputElement).selectionEnd).toBe(1);
     await waitFor(() => expect(options()).toHaveLength(2));
     expect(options()[0]?.textContent).toContain('Drafts');
     expect(document.activeElement).toBe(field());
@@ -317,6 +347,26 @@ describe('Go to folder suggestions', () => {
     expect(getState().saved.visits?.['/Volumes/Offline/Design']).toBeDefined();
   });
 
+  it.each([
+    ['/fixtures/Job Files/דוגמה', '~/Job Files/דוגמה'],
+    ['/fixtures-other/Docs', '/fixtures-other/Docs'],
+  ])('opens the selected initial path exactly as entered for %s', async (path, shown) => {
+    available.add(path);
+    render(<GoToFolderDialog initial={path} onOpen={open} onClose={close} />);
+    const input = field() as HTMLInputElement;
+    expect(input.value).toBe(shown);
+    expect(input.selectionEnd).toBe(shown.length);
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(open).toHaveBeenCalledWith(path));
+  });
+
+  it('passes the typed Trash location to the workspace without inspecting it', async () => {
+    render(<GoToFolderDialog onOpen={open} onClose={close} />);
+    fireEvent.change(field(), { target: { value: 'viewer://trash' } });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+    await waitFor(() => expect(open).toHaveBeenCalledWith('viewer://trash'));
+    expect(stat).not.toHaveBeenCalledWith('viewer://trash');
+  });
   it('matches a parent fragment and a misspelled folder name', async () => {
     history();
     render(<GoToFolderDialog onOpen={open} onClose={close} />);

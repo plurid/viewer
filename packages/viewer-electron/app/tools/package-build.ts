@@ -36,7 +36,7 @@ export async function packageBuild(
   platform: string,
   arch: string,
   build: (run: string) => Promise<void>,
-  prepare?: () => Promise<void>,
+  prepare?: (run: string) => Promise<void>,
   fromPackage = false,
 ) {
   requireConcreteArch(arch);
@@ -60,7 +60,7 @@ export async function packageBuild(
     throw error;
   });
   try {
-    await prepare?.();
+    await prepare?.(run);
     if (!fromPackage) await requireNewPackage(root, platform, arch);
     await build(run);
   } finally {

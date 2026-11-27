@@ -12,6 +12,8 @@ import { previewContains } from './preview-work';
 import { runProcessor } from '../transforms/process';
 import { imageDimensions } from './image-dimensions';
 import { PreviewDerivation, type PreviewDerivationKind } from '../../domain/previews/derivations';
+import { OfficeLayoutError } from '../../domain/previews/documents/layout';
+import { officeInputLimit, officeOutputLimit } from './office-runtime-manifest';
 import type { OfficeLayoutMetadata } from '../../domain/previews/documents/layout';
 import { Slots } from './slots';
 
@@ -147,6 +149,8 @@ export class DerivedPreviews {
     const actual = await realpath(file);
     await this.access([actual]);
     const before = await lstat(actual);
+    if (mode === 'office' && before.isFile() && before.size > officeInputLimit)
+      throw new OfficeLayoutError('OFFICE_LAYOUT_INPUT_LIMIT');
     if (
       !before.isFile() ||
       before.size > (mode === 'video' ? 4 * 1024 * 1024 * 1024 : 256 * 1024 * 1024)
@@ -210,6 +214,8 @@ export class DerivedPreviews {
               abort.signal,
             );
             abort.signal.throwIfAborted();
+            if (mode === 'office' && value.data.length > officeOutputLimit)
+              throw new OfficeLayoutError('OFFICE_LAYOUT_OUTPUT_LIMIT');
             const limit = mode === 'video' ? 64 * 1024 * 1024 : 32 * 1024 * 1024;
             if (!value.data.length || value.data.length > limit)
               throw new Error('The derived preview exceeds its memory limit.');

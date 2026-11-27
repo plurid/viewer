@@ -95,6 +95,32 @@ export type OfficeContentFormat = keyof typeof officeContentTypes;
 export function readsOfficeContent(extension: string): extension is OfficeContentFormat {
   return Object.hasOwn(officeContentTypes, extension.toLowerCase());
 }
+const layoutFailures = {
+  OFFICE_LAYOUT_TIMEOUT: 'Office layout exceeded 45 seconds.',
+  OFFICE_LAYOUT_CONVERSION:
+    'Viewer couldn’t lay out this document. It may be protected or damaged.',
+  OFFICE_LAYOUT_INPUT_LIMIT: 'The document exceeds the 64 MB layout limit.',
+  OFFICE_LAYOUT_OUTPUT_LIMIT: 'The generated PDF exceeds the 32 MB layout limit.',
+  OFFICE_LAYOUT_UNAVAILABLE: 'The bundled Office renderer is unavailable.',
+} as const;
+type OfficeLayoutCode = keyof typeof layoutFailures;
+
+/** The preload carries the code across IPC. The source format determines which view is available. */
+export class OfficeLayoutError extends Error {
+  constructor(readonly code: OfficeLayoutCode) {
+    super(layoutFailures[code]);
+  }
+}
+
+export function officeLayoutRecovery(code: unknown, extension: string): string | undefined {
+  if (typeof code !== 'string' || !Object.hasOwn(layoutFailures, code)) return;
+  const reason = layoutFailures[code as OfficeLayoutCode];
+  if (code === 'OFFICE_LAYOUT_INPUT_LIMIT' || !readsOfficeContent(extension))
+    return reason + ' Open it in its own app.';
+  const view = officeFamily(extension) === 'workbook' ? 'Sheet' : 'Reading';
+  return reason + ` Try ${view} view.`;
+}
+
 export const officeLayoutRequestSchema = z
   .object({
     requestID: z.string().min(1).max(200),

@@ -54,6 +54,13 @@ afterEach(async () => {
 });
 
 describe('native folder navigation recovery', () => {
+  it('opens the Trash place without reading a file or changing the folder', async () => {
+    stat.mockRejectedValue(new Error('Cannot read a virtual location.'));
+    await openWorkspacePath('viewer://trash', target(), controller);
+    expect(dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'viewer:trash' }));
+    expect(stat).not.toHaveBeenCalled();
+    expect(activeWorkspace().panes[0].path).toBe('/home');
+  });
   it('requests access for Volumes and opens the actual folder selected by the user', async () => {
     stat.mockRejectedValueOnce(denied()).mockResolvedValueOnce(folder('/Volumes/Work'));
     chooseFolder.mockResolvedValue('/Volumes/Work');

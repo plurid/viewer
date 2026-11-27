@@ -221,18 +221,14 @@ const formatMenu: Scene = {
   async steps(page) {
     await page.select(page.path(widePicture));
     await page.palette('Image tools…');
-    await page.waitFor('dialog[open][aria-label^="image tools" i]');
-    await page.clickFirst('dialog[open] button[aria-haspopup]');
-    await page.waitFor('.context-menu');
-    await page.expectGap(
-      '.context-menu',
-      'dialog[open] button[aria-haspopup]',
-      4,
-      'The menu sits 4 px below its button',
-    );
+    const anchor = 'dialog[open].image-tools-dialog button[aria-label="Image output format"]';
+    const menu = '.choice-menu[aria-label="Image output format"] .context-menu';
+    await page.clickFirst(anchor);
+    await page.waitFor(menu);
+    await page.expectGap(menu, anchor, 4, 'The menu sits 4 px below its button');
     await page.expectAligned(
-      '.context-menu',
-      'dialog[open] button[aria-haspopup]',
+      menu,
+      anchor,
       'right',
       'The menu’s right edge lines up with its button’s',
     );
@@ -249,16 +245,11 @@ const metadataMenu: Scene = {
   async steps(page) {
     await page.select(page.path(widePicture));
     await page.palette('Image tools…');
-    await page.waitFor('dialog[open][aria-label^="image tools" i]');
-    // Format, Resize, then Metadata
-    await page.clickNth('dialog[open] button[aria-haspopup]', 2);
-    await page.waitFor('.context-menu');
-    await page.expectGap(
-      '.context-menu',
-      'dialog[open] button[aria-expanded="true"]',
-      4,
-      'The menu sits 4 px from its button',
-    );
+    const anchor = 'dialog[open].image-tools-dialog button[aria-label="Image metadata policy"]';
+    const menu = '.choice-menu[aria-label="Image metadata policy"] .context-menu';
+    await page.clickFirst(anchor);
+    await page.waitFor(menu);
+    await page.expectGap(menu, anchor, 4, 'The menu sits 4 px from its button');
   },
 };
 
@@ -304,13 +295,9 @@ const nameField: Scene = {
   async steps(page) {
     await page.select(page.path(longStemPicture));
     await page.palette('Image tools…');
-    await page.waitFor('dialog[open][aria-label^="image tools" i]');
-    await page.settle(600);
-    await page.expectFillsRow(
-      'dialog[open] input[aria-label*="filename" i]',
-      'label, .form-field',
-      'The file name field fills its row',
-    );
+    const field = 'dialog[open].image-tools-dialog .file-name-control';
+    await page.scrollIntoView(field);
+    await page.expectFillsRow(field, '.dialog-field', 'The file name field fills its row');
   },
 };
 
@@ -319,19 +306,21 @@ const speechLanguage: Scene = {
   title: 'Settings › Speech › Language menu',
   mustBeTrue: [
     'The menu opens with the chosen language highlighted and in view.',
-    'Its search field is at the top, with the placeholder “Search speech language…”.',
+    'Its search field is at the top, with the placeholder “Search”.',
   ],
   setup: { folder: sampleFolders.samples, view: 'list' },
   variants: [variant('wide', 'dark'), variant('narrow', 'light')],
   covers: { settings: ['Speech'] },
   async steps(page) {
     await page.settings('Speech');
-    await page.needs('button[aria-label="Speech language" i]', 'The speech language choice.');
-    await page.clickFirst('button[aria-label="Speech language" i]');
-    await page.waitFor('.context-menu');
+    const language = 'button[aria-label="Speech language" i]:enabled';
+    await page.needs(language, 'The enabled speech language choice.');
+    await page.clickFirst(language);
+    const menu = '.choice-menu[aria-label="Speech language" i]';
+    await page.waitFor(menu + ' .context-menu');
     await page.expectPresent(
-      '.context-menu input[placeholder="Search speech language…"]',
-      'The language search reads “Search speech language…”',
+      menu + ' input[aria-label="Search Speech language" i][placeholder="Search"]',
+      'The language search reads “Search”',
     );
   },
 };

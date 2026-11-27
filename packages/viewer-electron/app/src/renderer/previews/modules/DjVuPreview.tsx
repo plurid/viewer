@@ -1,3 +1,4 @@
+import { previewProblem } from '../preview-problem';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PreviewToolbar, usePreviewCommands } from '../controls';
 import { usePreviewState } from '../state';
@@ -87,7 +88,8 @@ export default function DjVuPreview(context: PreviewContext) {
         if (reply.kind === 'opened' && !signal.aborted) setPages(reply.pages);
       })
       .catch((value: Error) => {
-        if (!signal.aborted) setError(value.message);
+        if (!signal.aborted)
+          setError(previewProblem(value, "Viewer couldn't read this DjVu page."));
       });
     return () => connection.close();
   }, [resource.url, signal]);
@@ -137,7 +139,7 @@ export default function DjVuPreview(context: PreviewContext) {
         );
       setRenderedPage(`${page}:${zoom}`);
     })().catch((value: Error) => {
-      if (!cancelled) setError(value.message);
+      if (!cancelled) setError(previewProblem(value, "Viewer couldn't read this DjVu page."));
     });
     return () => {
       cancelled = true;
@@ -171,7 +173,7 @@ export default function DjVuPreview(context: PreviewContext) {
         setSearching(false);
       })().catch((value: Error) => {
         if (cancelled) return;
-        setError(value.message);
+        setError(previewProblem(value, "Viewer couldn't read this DjVu page."));
         setSearching(false);
       });
     }, 300);

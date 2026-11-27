@@ -1,3 +1,4 @@
+import { previewProblem, reportPreviewProblem } from './preview-problem';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { FileEntry, Resource, ResourceRead } from '../../domain/contracts';
@@ -12,13 +13,13 @@ import { PreviewFailure } from './PreviewFailure';
 import { editingPlane, registerEditingPlane } from '../editing/planes';
 import { continueEditing, continuesEditing } from '../editing/sessions';
 import { activeWorkspace, report, useViewer } from '../state/store';
-import { errorMessage } from '../../domain/errors';
 
 /** What a module made of a file's text. Without a document, the file is shown as text. */
 export interface ParsedText<T> {
   document?: T;
   /** Shown above the document, or above the text when there is none. */
   notice?: string;
+  diagnostic?: unknown;
 }
 
 /** Reads a file's text: the bounded resource read unless a module needs its own. */
@@ -81,7 +82,8 @@ export function ParsedDocument<T>({
         setRead(value);
       })
       .catch((reason: unknown) => {
-        if (live && !signal.aborted) setError(errorMessage(reason));
+        if (live && !signal.aborted)
+          setError(previewProblem(reason, "Viewer couldn't read the contents of this file."));
       });
     return () => {
       live = false;
@@ -91,6 +93,9 @@ export function ParsedDocument<T>({
     () => (read && !read.binary ? parse(read, resource.entry) : undefined),
     [parse, read, resource.entry],
   );
+  useEffect(() => {
+    if (parsed?.diagnostic !== undefined) reportPreviewProblem(parsed.diagnostic);
+  }, [parsed]);
   const document = parsed?.document;
   const name = document === undefined ? '' : typeof label === 'string' ? label : label(document);
   const editable = !!read && !read.binary && !read.truncated;

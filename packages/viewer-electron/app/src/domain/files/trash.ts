@@ -1,4 +1,5 @@
 export const trashLocation = 'viewer://trash';
+export const trashPersonOnly = 'Only the person using Viewer can browse the Trash.';
 export type DesktopPlatform = 'darwin' | 'win32' | 'linux';
 export const trashName = (platform: DesktopPlatform) =>
   platform === 'win32' ? 'Recycle Bin' : 'Trash';

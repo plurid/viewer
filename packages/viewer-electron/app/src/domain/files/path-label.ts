@@ -137,6 +137,13 @@ export function pathLabelText(
   return /[\\/]$/.test(anchor) ? start + body : start + separator + body;
 }
 
+/** An editable local path keeps literal characters, including names in right-to-left scripts. */
+export function pathInputText(path: string, home: string): string {
+  if (!home || hasRemoteLocationScheme(path)) return path;
+  const relative = within(home, path);
+  return relative === '.' ? '~' : relative === undefined ? path : '~/' + relative;
+}
+
 /** The whole path as a sentence or a choice names it, with home as `~`. */
 export function pathText(path: string, home: string, options: PathLabelOptions = {}): string {
   return pathLabelText(pathLabelParts(path, home, options));
@@ -214,10 +221,12 @@ function graphemes(text: string): string[] {
  * file or a dot inside words has no extension. When even `…` with the extension is too wide, the
  * extension goes too.
  */
-export function middleName(name: string, fits: (text: string) => boolean): string {
+export function middleName(
+  name: string,
+  fits: (text: string) => boolean,
+  extension = name.slice(1).match(extensionTail)?.[0] ?? '',
+): string {
   if (fits(name)) return name;
-  const tail = extensionTail.exec(name);
-  const extension = tail && tail.index > 0 ? tail[0] : '';
   const shorten = (stem: readonly string[], end: string) => (count: number) => {
     const start = Math.ceil(count * 0.6);
     const kept = count - start;
@@ -240,6 +249,32 @@ export function middleName(name: string, fits: (text: string) => boolean): strin
   if (fits(withExtension) || !extension) return withExtension;
   const whole = graphemes(name);
   return longest(shorten(whole, ''), whole.length);
+}
+
+/** The two measured lines of a tile name. An automatic line clamp could cut its extension. */
+export function twoLineName(name: string, width: number, measure: TextMeasure): string {
+  const whole = name.replace(/[\n\r\t]/g, ' ');
+  const suffix = whole.slice(1).match(/\.[A-Za-z0-9]+$/)?.[0] ?? '';
+  const keepTogether = suffix.length > 0 && measure(suffix) <= width;
+  const split = (text: string): string | undefined => {
+    if (measure(text) <= width) return text;
+    const characters = graphemes(text);
+    let low = 0;
+    let high = characters.length - (keepTogether && text.endsWith(suffix) ? suffix.length : 1);
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (measure(characters.slice(0, middle).join('')) <= width) low = middle;
+      else high = middle - 1;
+    }
+    if (!low) return;
+    const first = characters.slice(0, low).join('');
+    if (measure(text.slice(first.length)) > width) return;
+    const space = first.lastIndexOf(' ') + 1;
+    const end = space && measure(text.slice(space)) <= width ? space : first.length;
+    return text.slice(0, end) + '\n' + text.slice(end);
+  };
+  const shown = middleName(whole, (text) => split(text) !== undefined, suffix);
+  return split(shown) ?? shown;
 }
 
 /** The deepest folder that holds every one of `paths`, or nothing when they share none. */

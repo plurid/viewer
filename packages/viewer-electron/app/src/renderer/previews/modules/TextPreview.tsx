@@ -1,3 +1,4 @@
+import { previewProblem, reportPreviewProblem } from '../preview-problem';
 import { effectiveWindowSettings } from '../../state/effective-ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
@@ -216,7 +217,12 @@ export default function TextPreview(context: TextPreviewProps) {
         if (!signal.aborted) setData(value);
       })
       .catch((error) => {
-        if (!signal.aborted) setError(error.message);
+        if (!signal.aborted)
+          setError(
+            previewProblem(error, "Viewer couldn't read the text in this file.", [
+              'The property list is too large.',
+            ]),
+          );
       });
   }, [resource.id, resource.url, resource.entry, services, signal, reading]);
   const editable = !!paneID && !!data && !data.binary && !data.truncated && !data.decoded;
@@ -236,6 +242,9 @@ export default function TextPreview(context: TextPreviewProps) {
         : null,
     [data, resource.entry.extension],
   );
+  useEffect(() => {
+    if (structured?.diagnostic) reportPreviewProblem(structured.diagnostic);
+  }, [structured]);
   // a CSV or TSV shows as a table, which has no text size or line wrapping
   const table = ['csv', 'tsv'].includes(resource.entry.extension);
   usePreviewCommands(
@@ -447,9 +456,7 @@ export default function TextPreview(context: TextPreviewProps) {
           {structured?.error && !raw && (
             <p className="inline-warning">
               {/* a file too large for the tree says so alone; a broken one says where */}
-              {structured.error.endsWith(' as text only.')
-                ? structured.error
-                : `Invalid ${ext.toUpperCase()}: ${structured.error}`}
+              {structured.error}
             </p>
           )}
           <Code

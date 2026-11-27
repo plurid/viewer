@@ -1,10 +1,15 @@
+import { previewProblem } from './preview-problem';
 import { useEffect, useState } from 'react';
 import type { InspectedFile, InspectedKind } from '../../domain/previews/inspected';
 import type { PreviewContext } from './contracts';
 import { inspectedLimits } from '../../domain/previews/inspected';
 import { formatBytes } from '../../domain/files/entries';
-import { errorMessage } from '../../domain/errors';
 
+const inspectionProblems: Record<InspectedKind, string> = {
+  keys: "Viewer couldn't read the certificate or key data in this file.",
+  provision: "Viewer couldn't read the provisioning profile in this file.",
+  torrent: "Viewer couldn't read the torrent information in this file.",
+};
 export type Inspection<T> =
   { status: 'loading' } | { status: 'ready'; file: T } | { status: 'failed'; message: string };
 
@@ -43,7 +48,15 @@ export function useInspected<K extends InspectedKind>(
       },
       (error: unknown) => {
         if (live && !signal.aborted)
-          setInspection({ status: 'failed', message: errorMessage(error) });
+          setInspection({
+            status: 'failed',
+            message: previewProblem(error, inspectionProblems[kind], [
+              'The torrent file is not valid bencode.',
+              'This file has no torrent information.',
+              'This file holds no property list.',
+              'The property list is not a profile.',
+            ]),
+          });
       },
     );
     return () => {

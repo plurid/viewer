@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ApiHandlers } from '../src/desktop/ipc/schemas';
 import { methodWindows, schemas, settingsEvents } from '../src/desktop/ipc/schemas';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { temporaryRoot } from '../tools/temporary';
+import { SettingsService } from '../src/desktop/preferences/settings';
+import { createWindowHandlers } from '../src/desktop/ipc/window-handlers';
 import { Desktop } from '../src/desktop/bridge';
 import type { DesktopEvent } from '../src/domain/contracts';
 import { paneTypes } from '../src/domain/contracts';
@@ -11,7 +16,110 @@ import { createMediaHandlers } from '../src/desktop/ipc/media-handlers';
 import { createPasteboardHandlers } from '../src/desktop/ipc/pasteboard-handlers';
 import { createLicenseHandlers } from '../src/desktop/ipc/license-handlers';
 
+function requestFixture(handlers: Partial<ApiHandlers> = {}) {
+  const desktop = Object.create(Desktop.prototype) as Desktop;
+  const diagnose = vi.fn();
+  const windowHandlers = createWindowHandlers({ host: { diagnose } } as unknown as Parameters<
+    typeof createWindowHandlers
+  >[0]);
+  const windows = new Map();
+  Object.assign(desktop, {
+    handlerTable: { ...windowHandlers, ...handlers },
+    activity: { within: (_target: unknown, work: () => unknown) => work() },
+    options: { diagnose },
+    windows,
+    allowedURL: () => true,
+  });
+  const invoke = Reflect.get(desktop, 'request').bind(desktop);
+  const request = (method: string, args: unknown[], id = 1) => {
+    const frame = { url: 'viewer-app://app/index.html' };
+    windows.set(id, {
+      role: method === 'settingsPatch' ? 'settings' : 'viewer',
+      window: { isDestroyed: () => false },
+    });
+    return invoke({ sender: { id, mainFrame: frame }, senderFrame: frame }, method, args);
+  };
+  return { request, diagnose };
+}
+
 describe('IPC method table', () => {
+  it.each([
+    ['stat', ['viewer://trash'], "Viewer couldn't open this location."],
+    ['settingsPatch', [null], "Viewer couldn't save these settings."],
+    ['speech', [null], "Viewer couldn't complete this speech request."],
+    ['read', [null], "Viewer couldn't read the file contents."],
+    ['release', [null], "Viewer couldn't close the file preview."],
+    ['printPDF', [null], "Viewer couldn't print the PDF."],
+    ['terminalStart', [null], "Viewer couldn't start the terminal."],
+    ['trashRestore', [null], "Viewer couldn't put back the selected items."],
+  ] as const)(
+    'describes refused %s requests and logs their validation detail',
+    async (method, args, message) => {
+      const handler = vi.fn();
+      const { request, diagnose } = requestFixture({ [method]: handler });
+      const reply = await request(method, [...args]);
+      expect(reply).toMatchObject({ ok: false, error: message });
+      expect(handler).not.toHaveBeenCalled();
+      expect(diagnose.mock.calls[0]?.[0]).toContain(method);
+      expect(diagnose.mock.calls[0]?.[0]).toMatch(/Invalid|expected/i);
+    },
+  );
+
+  it.each(['saved file', 'shortcut conflict'])(
+    'explains a refused settings save for a %s',
+    async (kind) => {
+      const root = await temporaryRoot('viewer-ipc-settings-');
+      const saved = kind === 'saved file';
+      if (saved) await writeFile(join(root, 'config.jsonc'), '{"version":false}');
+      const settings = new SettingsService(root, root, () => false, vi.fn());
+      const { request, diagnose } = requestFixture({
+        settingsPatch: ([patches, revision]) => settings.patch(patches, revision),
+      });
+      try {
+        const patch = saved
+          ? { path: 'settings.appearance', value: 'dark' }
+          : {
+              path: 'settings.shortcuts',
+              value: { 'new-folder': 'Cmd+J', 'new-file': 'Cmd+J' },
+            };
+        const reply = await request('settingsPatch', [[patch], 0]);
+        expect(reply).toEqual({
+          ok: false,
+          code: 'SETTINGS_INVALID',
+          error: saved
+            ? 'Fix config.jsonc in Settings before saving changes.'
+            : 'A shortcut is assigned to more than one action.',
+        });
+        if (saved) expect(settings.snapshot().config?.diagnostics[0]).toMatch(/version/);
+        expect(diagnose.mock.calls[0]?.[0]).toContain(saved ? 'version' : 'shortcut');
+      } finally {
+        settings.close();
+      }
+    },
+  );
+
+  it('shares the diagnostic budget between renderer reports and refused requests per window', async () => {
+    const { request, diagnose } = requestFixture();
+    vi.useFakeTimers();
+    try {
+      for (let i = 0; i < 29; i++) await request('diagnosticReport', ['Reported failure']);
+      for (let i = 0; i < 4; i++)
+        expect(await request('stat', [null])).toMatchObject({
+          ok: false,
+          error: "Viewer couldn't open this location.",
+        });
+      await request('diagnosticReport', ['Over budget']);
+      expect(diagnose).toHaveBeenCalledTimes(30);
+      await request('stat', [null], 2);
+      expect(diagnose).toHaveBeenCalledTimes(31);
+      vi.advanceTimersByTime(60_000);
+      await request('stat', [null]);
+      expect(diagnose).toHaveBeenCalledTimes(32);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('accepts exact large server identities and rejects malformed or unmarked rounded values', () => {
     expect(
       schemas.localServerStart.safeParse(['/Folder', 'server', '12:9007199254740993:u64']).success,

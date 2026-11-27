@@ -287,7 +287,7 @@ describe('SQLite safety', () => {
     expect(await readSQLite(damaged, tablesRequest)).toMatchObject({
       kind: 'unreadable',
       reason: 'damaged',
-      message: expect.stringContaining('damaged or encrypted'),
+      message: 'Viewer could not read this database. It may be damaged or encrypted.',
     });
     const header = Buffer.from(bytes);
     header.writeUInt16BE(1000, 16);

@@ -126,8 +126,9 @@ content; results report partial coverage. Automatic indexing has a smaller input
 preview. Layout support does not automatically add content indexing for DOC, XLS or PPT.
 
 Reading or Sheet mode, the selected worksheet, the layout page, zoom and supported scroll positions
-are kept in preview history, checked against the file's version. Retry a failed layout, or switch to
-**Reading** or **Sheet** when the format has it.
+are kept in preview history, checked against the file's version. Open documents over 64 MB in their
+own app. For other layout failures, retry or switch to **Reading** or **Sheet** when the format has
+it.
 
 **Related:** [Read and inspect files](../guides/previews.md#read-a-spreadsheet) ·
 [Supported formats](formats.md) · [PDF tools](pdf.md) · [Search](search.md) ·

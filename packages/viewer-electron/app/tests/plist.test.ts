@@ -111,10 +111,17 @@ it('refuses binary plist DAGs that expand exponentially and rejects out-of-range
     view.setBigUint64(trailer + 24, BigInt(tableOffset));
     return bytes;
   };
-  const started = performance.now();
-  expect(() => decodeBinaryPlist(buildDag(18))).toThrow('too large');
-  expect(() => decodeBinaryPlist(buildDag(35))).toThrow('too large');
-  expect(performance.now() - started).toBeLessThan(500);
+  for (const depth of [18, 35]) {
+    const dag = buildDag(depth);
+    const slice = dag.subarray.bind(dag);
+    let reads = 0;
+    dag.subarray = (start, end) => {
+      // One header and at most 100,000 string leaves in the 200,000 visited objects.
+      if (++reads > 100_001) throw new Error('Exceeded the leaf read budget.');
+      return slice(start, end);
+    };
+    expect(() => decodeBinaryPlist(dag)).toThrow('too large');
+  }
 
   // Offset pointing past the offset table into the trailer
   const badOffset = Buffer.alloc(8 + 2 + 1 + 32);

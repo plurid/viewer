@@ -1,3 +1,4 @@
+import { previewProblem } from '../preview-problem';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
@@ -277,7 +278,8 @@ function useMailboxMessage(context: PreviewContext, message: number | undefined)
         if (alive && !signal.aborted) setResult({ key, data });
       },
       (error: Error) => {
-        if (alive && !signal.aborted) setResult({ key, error: error.message });
+        if (alive && !signal.aborted)
+          setResult({ key, error: previewProblem(error, "Viewer couldn't read this message.") });
       },
     );
     return () => {
